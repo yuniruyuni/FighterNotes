@@ -1,0 +1,102 @@
+use super::super::super::SpatialConfig;
+use super::super::motion::MotionRegion;
+use super::track::{from_region, ActorTrack};
+
+pub(super) fn initial_tracks(
+    regions: &[MotionRegion],
+    candidates: &[usize],
+    frame_index: u32,
+) -> Option<[ActorTrack; 2]> {
+    let mut ranked = candidates.to_vec();
+    ranked.sort_by(|&a, &b| {
+        regions[b]
+            .changed_cells
+            .cmp(&regions[a].changed_cells)
+            .then_with(|| regions[b].energy.cmp(&regions[a].energy))
+    });
+    let first = ranked[0];
+    let second = ranked
+        .iter()
+        .copied()
+        .skip(1)
+        .find(|&index| (regions[index].anchor().x - regions[first].anchor().x).abs() >= 0.12)?;
+    let (left, right) = if regions[first].anchor().x <= regions[second].anchor().x {
+        (first, second)
+    } else {
+        (second, first)
+    };
+    Some([
+        from_region(&regions[left], frame_index, 0.55),
+        from_region(&regions[right], frame_index, 0.55),
+    ])
+}
+
+pub(super) fn assign_regions(
+    tracks: [Option<&ActorTrack>; 2],
+    allow_discontinuity: [bool; 2],
+    allow_airborne: [bool; 2],
+    regions: &[MotionRegion],
+    candidates: &[usize],
+    config: &SpatialConfig,
+) -> [Option<usize>; 2] {
+    let mut scored: [Vec<(usize, f32)>; 2] = [Vec::new(), Vec::new()];
+    for side in 0..2 {
+        let Some(track) = tracks[side] else {
+            continue;
+        };
+        for &index in candidates {
+            let anchor = regions[index].anchor();
+            let dx = (anchor.x - track.anchor.x).abs();
+            let dy = (anchor.y - track.anchor.y).abs();
+            let leaves_ground =
+                track.anchor.y >= config.actor_ground_y && anchor.y < config.actor_ground_y;
+            if leaves_ground && !allow_airborne[side] && !allow_discontinuity[side] {
+                continue;
+            }
+            if !allow_discontinuity[side] && (dx > config.max_track_dx || dy > config.max_track_dy)
+            {
+                continue;
+            }
+            let discontinuity_penalty = if dx > config.max_track_dx { 0.18 } else { 0.0 };
+            let size_bonus = (regions[index].changed_cells as f32 / 200.0).min(0.12);
+            let ground_bonus = if regions[index].bounds.bottom >= 0.86 {
+                0.18
+            } else {
+                0.0
+            };
+            let score = dx * 1.8 + dy * 0.35 + discontinuity_penalty - size_bonus - ground_bonus;
+            scored[side].push((index, score));
+        }
+        scored[side].sort_by(|a, b| a.1.total_cmp(&b.1));
+    }
+    best_pair(&scored, allow_discontinuity)
+}
+
+fn best_pair(
+    scored: &[Vec<(usize, f32)>; 2],
+    allow_discontinuity: [bool; 2],
+) -> [Option<usize>; 2] {
+    let mut best = [None, None];
+    let mut best_score = f32::INFINITY;
+    let p1_options = std::iter::once(None).chain(scored[0].iter().copied().map(Some));
+    for p1_option in p1_options {
+        let p2_options = std::iter::once(None).chain(scored[1].iter().copied().map(Some));
+        for p2_option in p2_options {
+            if matches!((p1_option, p2_option), (Some((a, _)), Some((b, _))) if a == b) {
+                continue;
+            }
+            let p1_missing_penalty = if allow_discontinuity[0] { 2.0 } else { 0.55 };
+            let p2_missing_penalty = if allow_discontinuity[1] { 2.0 } else { 0.55 };
+            let score = p1_option.map_or(p1_missing_penalty, |(_, score)| score)
+                + p2_option.map_or(p2_missing_penalty, |(_, score)| score);
+            if score < best_score {
+                best_score = score;
+                best = [
+                    p1_option.map(|(index, _)| index),
+                    p2_option.map(|(index, _)| index),
+                ];
+            }
+        }
+    }
+    best
+}

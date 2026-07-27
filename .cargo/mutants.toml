@@ -1,0 +1,8 @@
+# Dependency crates are also exercised through the analyzer and WASM contract tests.
+test_workspace = true
+timeout_multiplier = 4.0
+minimum_test_timeout = 20
+gitignore = true
+
+# Examples are diagnostic programs rather than shipped library behavior.
+exclude_globs = ["crates/video-analyzer/examples/**/*.rs"]

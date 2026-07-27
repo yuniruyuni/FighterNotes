@@ -1,0 +1,192 @@
+:root {
+  /* SF6の雰囲気を参照した公式ライクなテーマカラー。クロームの主役は紫 */
+  --bg-0: #0d0d0f; /* 木炭色の地（グラフィティ壁の下地） */
+  --panel: rgba(10, 10, 14, 0.66); /* 半透明の黒パネル */
+  --line: rgba(255, 255, 255, 0.14);
+  --purple: #a55aff; /* カテゴリ文字・カード左罫のテーマ色 */
+  --magenta: #d32dcf; /* 公式ライクなCTAグラデーションの端 */
+  --deep-purple: #370587; /* 公式ライクなCTAグラデーションの中央 */
+  --glow-purple: rgba(140, 65, 162, 0.9); /* CTAの紫グロー */
+  --brand-yellow: #dfbc23; /* 微小ラベルと特設パネル用のテーマ色 */
+  --royal-blue: #002b98; /* 黄色面上の対比色 */
+  --text-hi: #ffffff;
+  --text: #cfcfd2;
+  --text-dim: #8c8c92;
+
+  /* HUD 層（解析データの意味色） */
+  --drive: #00e08c;
+  --sa: #3aa8ff;
+  --punish: #ff3d7a;
+  --od-gold: #ffc42d;
+  --burnout: #5c6b74;
+  --drive-dim: #003524;
+
+  /* シークバー（JS が --seek-track の gradient から参照する） */
+  --seek-rest: #2f2f34;
+  --seek-hi: var(--purple);
+
+  --font-body:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+    "Yu Gothic UI", "Yu Gothic", "Noto Sans CJK JP", sans-serif;
+  --font-head:
+    "Bahnschrift", "DIN Condensed", "Arial Narrow", "Aptos Narrow",
+    "Roboto Condensed", "DejaVu Sans Condensed", "Helvetica Neue", Arial,
+    system-ui, sans-serif;
+  /* 公式ライクな角落とし（左上と右下を深めに落とす） */
+  --cut-corners: polygon(
+    14px 0,
+    100% 0,
+    100% calc(100% - 10px),
+    calc(100% - 14px) 100%,
+    0 100%,
+    0 10px
+  );
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--bg-0);
+  /* モノクログラフィティ壁（手描き SVG タイル）+ 粒状ノイズ */
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='680' height='680'%3E%3Cg fill='none' stroke='%23ffffff' stroke-linecap='round'%3E%3Cpath d='M40 120 C120 40 180 160 260 80 S420 120 470 60' stroke-opacity='.034' stroke-width='7'/%3E%3Cpath d='M60 185 q40 60 90 10 t95 12' stroke-opacity='.025' stroke-width='9'/%3E%3Cpath d='M62 300 l88 92 M150 302 l-88 88' stroke-opacity='.03' stroke-width='6'/%3E%3Cpath d='M340 300 c60 -42 128 18 72 70 c-52 48 -132 -12 -72 -70' stroke-opacity='.03' stroke-width='6'/%3E%3Cpath d='M78 462 h122 l-26 -20 m26 20 l-26 20' stroke-opacity='.028' stroke-width='6'/%3E%3Cpath d='M420 408 l13 30 32 4 -24 22 6 32 -27 -15 -27 15 6 -32 -24 -22 32 -4 z' stroke-opacity='.022' stroke-width='5'/%3E%3Cpath d='M252 176 v42 m22 -42 v30 m20 -30 v18' stroke-opacity='.028' stroke-width='6'/%3E%3Cpath d='M300 470 c30 -36 70 -8 52 22 m-160 -36 c-16 30 24 52 44 28' stroke-opacity='.025' stroke-width='7'/%3E%3C/g%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.045'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  color: var(--text);
+  min-height: 100vh;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-body);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.page-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.page-layout-content {
+  flex: 1;
+}
+
+/* ─── サイトヘッダー（黒グラデ + 紫の帯） ────────── */
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1.4rem;
+  background: linear-gradient(rgb(0, 0, 0), rgba(0, 0, 0, 0.75));
+}
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+  font-family: var(--font-head);
+  font-stretch: condensed;
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-hi);
+}
+/* 公式ライクなヘッダーに添える黄の微小ラベル */
+.brand-tag {
+  font-weight: 400;
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  color: var(--brand-yellow);
+}
+.header-note {
+  font-family: var(--font-head);
+  font-stretch: condensed;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.header-strip {
+  height: 5px;
+  background: linear-gradient(
+    90deg,
+    #5312c9,
+    #8b3bf5 30%,
+    #6a19e8 70%,
+    #370587
+  );
+}
+
+/* ─── 共通フッター ──────────────────────────────── */
+.app-footer {
+  width: min(1150px, calc(100% - 2.8rem));
+  margin: 0 auto;
+  padding: 1rem 0 1.4rem;
+  border-top: 1px solid var(--line);
+  color: var(--text-dim);
+  font-family: var(--font-head);
+  font-stretch: condensed;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem 1.5rem;
+  text-align: left;
+}
+.app-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem 1.1rem;
+  margin-left: auto;
+  text-align: right;
+}
+.app-footer a {
+  color: var(--text-dim);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+.app-footer a:hover {
+  color: var(--brand-yellow);
+  border-bottom-color: var(--brand-yellow);
+}
+.app-footer-author {
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.app-footer--compact {
+  width: 100%;
+  margin: 0.35rem 0 0;
+  padding: 0.65rem 0.7rem 0.2rem;
+  border-top: 0;
+  align-items: stretch;
+  flex-direction: column;
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+}
+.app-footer--compact .app-footer-links {
+  gap: 0.3rem 0.65rem;
+  margin-left: 0;
+}
+
+@media (max-width: 640px) {
+  .app-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .app-footer-links {
+    margin-left: 0;
+  }
+}

@@ -1,0 +1,63 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: fighter-migration
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/container-dependencies: '{"migration":["db-tunnel"]}'
+    spec:
+      template:
+        spec:
+          serviceAccountName: fighter-migration@yuniruyuni-net.iam.gserviceaccount.com
+          maxRetries: 1
+          timeoutSeconds: 300
+          containers:
+            - name: migration
+              image: IMAGE_PLACEHOLDER
+              env:
+                - name: DB_USER
+                  value: fighter
+                - name: DB_NAME
+                  value: fighter
+                # NOTE: migration job は owner pw (DDL 必要)。-app- サフィックス付きの app user pw は使わない
+                - name: DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      key: latest
+                      name: fighter-db-password
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: "512Mi"
+            - name: db-tunnel
+              image: cloudflare/cloudflared:latest
+              args:
+                - access
+                - tcp
+                - --hostname
+                - db.yuniruyuni.net
+                - --url
+                - 0.0.0.0:5432
+              env:
+                - name: TUNNEL_SERVICE_TOKEN_ID
+                  valueFrom:
+                    secretKeyRef:
+                      key: latest
+                      name: fighter-migration-cf-db-access-client-id
+                - name: TUNNEL_SERVICE_TOKEN_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      key: latest
+                      name: fighter-migration-cf-db-access-client-secret
+              resources:
+                limits:
+                  cpu: "0.5"
+                  memory: "256Mi"
+              startupProbe:
+                tcpSocket:
+                  port: 5432
+                periodSeconds: 1
+                timeoutSeconds: 1
+                failureThreshold: 30

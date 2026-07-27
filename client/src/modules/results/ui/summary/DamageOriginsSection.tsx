@@ -1,0 +1,139 @@
+import { useMemo, useState } from "react";
+import type {
+  DamageBreakdown,
+  RoundSummary,
+} from "~/modules/analysis/contracts.js";
+import { summarizeDamageOrigins } from "../../domain/damage-origin.js";
+import type { SceneSelection } from "../../domain/scene-selection.js";
+import { DamageOriginDetails } from "./DamageOriginDetails.js";
+import { formatHpRatio, formatPercent } from "./damage-origin-format.js";
+
+interface DamageOriginsSectionProps {
+  breakdown: DamageBreakdown | undefined;
+  rounds: readonly RoundSummary[];
+  frameTimestamps: readonly number[];
+  onSceneChange(scene: Omit<SceneSelection, "key">): void;
+}
+
+export function DamageOriginsSection({
+  breakdown,
+  rounds,
+  frameTimestamps,
+  onSceneChange,
+}: DamageOriginsSectionProps) {
+  const [selectedRound, setSelectedRound] = useState<"all" | number>("all");
+  const roundNumbers = useMemo(
+    () =>
+      [
+        ...new Set([
+          ...rounds.map((round) => round.round_no),
+          ...(breakdown?.events ?? []).map((event) => event.round_no),
+        ]),
+      ].sort((a, b) => a - b),
+    [breakdown, rounds],
+  );
+  const summary = useMemo(
+    () => summarizeDamageOrigins(breakdown?.events ?? [], selectedRound),
+    [breakdown, selectedRound],
+  );
+
+  if (!breakdown) return null;
+
+  const scopeLabel =
+    selectedRound === "all"
+      ? roundNumbers.length > 0
+        ? `全${roundNumbers.length}R合計`
+        : "試合全体"
+      : `R${selectedRound}`;
+  const chartLabel = summary.rows
+    .map((row) => `${row.label} ${formatPercent(row.compositionPercent)}`)
+    .join("、");
+
+  return (
+    <section
+      className="summary-section damage-origins"
+      data-wm="Damage Sources"
+    >
+      <div className="damage-origin-heading">
+        <h2>被ダメージの起点</h2>
+        <fieldset className="damage-round-selector">
+          <legend>集計ラウンド</legend>
+          <button
+            type="button"
+            aria-pressed={selectedRound === "all"}
+            onClick={() => setSelectedRound("all")}
+          >
+            全体
+          </button>
+          {roundNumbers.map((round) => (
+            <button
+              type="button"
+              key={round}
+              aria-pressed={selectedRound === round}
+              onClick={() => setSelectedRound(round)}
+            >
+              R{round}
+            </button>
+          ))}
+        </fieldset>
+      </div>
+
+      {summary.totalHpLost <= 0 ? (
+        <p className="muted-note">被ダメージは検出されませんでした。</p>
+      ) : (
+        <>
+          <div className="damage-origin-overview">
+            <DamageMetric
+              value={formatHpRatio(summary.totalHpLost)}
+              label={`最大体力比・${scopeLabel}`}
+            />
+            <DamageMetric
+              value={Math.round(summary.totalHpLost * 10_000).toLocaleString(
+                "ja-JP",
+              )}
+              label="標準体力10,000換算"
+            />
+            <DamageMetric
+              value={formatPercent(summary.classifiedPercent)}
+              label="分類済みダメージ"
+            />
+            <DamageMetric
+              value={`${summary.rows.reduce((sum, row) => sum + row.events.length, 0)}件`}
+              label="被弾シーン"
+            />
+          </div>
+
+          <div
+            className="damage-origin-chart"
+            role="img"
+            aria-label={`${scopeLabel}の被ダメージ構成。${chartLabel}`}
+          >
+            {summary.rows.map((row) => (
+              <span
+                key={row.key}
+                data-origin={row.key}
+                style={{ width: `${row.compositionPercent}%` }}
+                title={`${row.label} ${formatPercent(row.compositionPercent)}`}
+              />
+            ))}
+          </div>
+
+          <DamageOriginDetails
+            rows={summary.rows}
+            frameTimestamps={frameTimestamps}
+            onSceneChange={onSceneChange}
+          />
+        </>
+      )}
+    </section>
+  );
+}
+
+function DamageMetric({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="damage-origin-metric">
+      <strong>{value}</strong>
+      <span>{label}</span>
+    </div>
+  );
+}

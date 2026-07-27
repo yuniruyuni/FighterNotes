@@ -1,0 +1,349 @@
+/* ─── セットアップ画面 ────────────────────────────── */
+#screen-setup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2.2rem 1.4rem 3rem;
+}
+
+/* 公式ライクなヒーロー: 巨大白レタリング + 背後の暗いエコー */
+.hero {
+  width: 100%;
+  max-width: 1150px;
+  margin-bottom: 2rem;
+}
+.hero-title {
+  position: relative;
+  z-index: 0;
+  font-family: var(--font-head);
+  font-stretch: condensed;
+  font-weight: 700;
+  font-size: clamp(3rem, 6.5vw, 4.8rem);
+  line-height: 0.98;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--text-hi);
+  width: fit-content;
+}
+.hero-title::before {
+  content: attr(data-echo);
+  position: absolute;
+  z-index: -1;
+  left: 0.12em;
+  top: -0.16em;
+  color: rgba(255, 255, 255, 0.05);
+  white-space: pre;
+}
+.hero-label {
+  margin-top: 0.7rem;
+  font-size: 0.95rem;
+  color: var(--text-hi);
+}
+.hero-label::before {
+  content: "\FF0F\3000";
+  color: rgba(255, 255, 255, 0.55);
+}
+.tagline {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  line-height: 1.7;
+  margin-top: 0.5rem;
+  max-width: 700px;
+}
+
+/* 2 ペイン: 左=投稿・設定 / 右=注意書き */
+.setup-columns {
+  display: flex;
+  gap: 1.75rem;
+  align-items: flex-start;
+  width: 100%;
+  max-width: 1150px;
+}
+.setup-main {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.setup-notes {
+  width: 370px;
+  flex-shrink: 0;
+}
+@media (max-width: 900px) {
+  .setup-columns {
+    flex-direction: column;
+  }
+  .setup-notes {
+    width: 100%;
+  }
+}
+
+/* 半透明の黒パネル（壁の上に置くカード） */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 1.4rem 1.5rem;
+  width: 100%;
+  margin-bottom: 1.4rem;
+}
+/* 見出しは公式ライクな「／　ラベル」構成 */
+.card h2 {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--text-hi);
+  margin-bottom: 0.9rem;
+}
+.card h2::before {
+  content: "\FF0F\3000";
+  color: var(--purple);
+  font-weight: 400;
+}
+
+/* JS が差し込む注記 */
+.muted-note {
+  color: var(--text-dim);
+  font-size: 0.88rem;
+}
+.analysis-warning {
+  color: #ffca59;
+  border-left: 3px solid #ffca59;
+  padding-left: 0.65rem;
+  margin-top: 0.65rem;
+  font-size: 0.88rem;
+}
+.count-note {
+  font-weight: normal;
+  color: var(--text-dim);
+}
+
+/* アップロードは黄を主役にした公式ライクな特設ブロック */
+.card--feature {
+  background: linear-gradient(115deg, #e8c92f, #cfa91d 55%, #ab8b10);
+  border: none;
+  color: #141414;
+}
+.card--feature h2 {
+  color: #141414;
+}
+.card--feature h2::before {
+  color: var(--royal-blue);
+}
+.card--feature .muted-note {
+  color: #4c4426;
+}
+
+#drop-zone {
+  display: block;
+  width: 100%;
+  background: transparent;
+  font-family: inherit;
+  border: 2px dashed rgba(0, 0, 0, 0.6);
+  padding: 2.8rem 1rem;
+  text-align: center;
+  color: #141414;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+#drop-zone:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+#drop-zone.drag-over {
+  border-style: solid;
+  border-color: var(--royal-blue);
+  background: rgba(0, 43, 152, 0.14);
+}
+.video-file-input {
+  display: none;
+}
+
+/* 公式ライクな白ボタン: 白地 + 黒のコンデンス体 + 角落とし */
+.file-label {
+  display: inline-block;
+  background: #fff;
+  color: #000;
+  font-family: var(--font-head);
+  font-stretch: condensed;
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  padding: 0.5rem 1.8rem;
+  clip-path: var(--cut-corners);
+  cursor: pointer;
+  margin-top: 0.75rem;
+  transition: background 0.15s;
+}
+#drop-zone:hover:not(:disabled) .file-label {
+  background: #e8e8e8;
+}
+
+/* プライバシー注記は黄×ロイヤルブルーの公式ライクな情報パネル */
+.privacy-note {
+  margin-top: 1rem;
+  padding: 0.7rem 1.1rem;
+  background: rgba(0, 43, 152, 0.93);
+  color: #fff;
+  clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  font-size: 0.84rem;
+  line-height: 1.65;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.privacy-note svg {
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
+}
+
+select,
+.field input[type="password"],
+.field input[type="text"] {
+  background: rgba(0, 0, 0, 0.5);
+  color: var(--text-hi);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 0.45rem 0.9rem;
+  font-size: 1rem;
+}
+.field small {
+  color: var(--text-dim);
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+
+/* 主CTAは公式ライクなマゼンタ→紫グラデ + 白フチ + 紫グロー */
+.analyze-btn {
+  display: block;
+  background: linear-gradient(
+    90deg,
+    var(--magenta),
+    var(--deep-purple) 25%,
+    var(--deep-purple) 75%,
+    var(--magenta)
+  );
+  border: 1px solid #fff;
+  color: #fff;
+  font-family: var(--font-head);
+  font-stretch: condensed;
+  font-weight: 500;
+  font-size: 1.05rem;
+  letter-spacing: 0.14em;
+  box-shadow: 0 0 8px var(--glow-purple);
+  padding: 0.7rem;
+  cursor: pointer;
+  margin-top: 1rem;
+  width: 100%;
+  transition: filter 0.15s;
+}
+.analyze-btn:hover:not(:disabled) {
+  filter: brightness(1.3);
+}
+.analyze-btn:disabled {
+  background: #232327;
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #66666c;
+  box-shadow: none;
+  cursor: default;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.field label {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+.row {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* 解析進捗はDriveゲージを想起させる斜めセグメント */
+progress {
+  width: 100%;
+  height: 14px;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.08);
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  margin-top: 0.5rem;
+}
+progress::-webkit-progress-bar {
+  background: rgba(255, 255, 255, 0.08);
+}
+progress::-webkit-progress-value {
+  background: repeating-linear-gradient(
+    -60deg,
+    var(--drive) 0 10px,
+    #013223 10px 13px
+  );
+}
+.status {
+  font-family: var(--font-head);
+  font-stretch: condensed;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  margin-top: 0.5rem;
+  color: var(--brand-yellow);
+}
+.analysis-error {
+  margin-top: 0.5rem;
+  color: #ff9ab8;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+#video-preview {
+  width: 100%;
+  margin-top: 0.75rem;
+  display: block;
+}
+.selected-file-name {
+  min-height: 1.3em;
+  margin-top: 0.75rem;
+}
+
+/* 注意書き: 公式ライクな紫の左罫 + コンデンス体カテゴリ + 白見出し */
+.bubble {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3.5px solid var(--purple);
+  padding: 1rem 1.2rem;
+  margin-bottom: 1.1rem;
+  font-size: 0.85rem;
+  color: var(--text);
+  line-height: 1.75;
+}
+.bcat {
+  display: block;
+  font-family: var(--font-head);
+  font-stretch: condensed;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--purple);
+  margin-bottom: 0.25rem;
+}
+.bubble h3 {
+  font-size: 0.95rem;
+  color: var(--text-hi);
+  margin-bottom: 0.45rem;
+}
+.bubble ul {
+  margin: 0.3rem 0 0 1.2rem;
+}
+.bubble li::marker {
+  color: var(--purple);
+}
+.bubble strong {
+  color: var(--text-hi);
+}
+.bubble .bubble-sub {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin-top: 0.5rem;
+}

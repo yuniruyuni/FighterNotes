@@ -1,0 +1,15 @@
+.git
+.github
+.env
+.env.*
+.DS_Store
+target
+client/static
+crates/wasm-bridge/pkg
+docs
+docker
+fixtures
+node_modules
+**/node_modules
+*.log
+*.mp4

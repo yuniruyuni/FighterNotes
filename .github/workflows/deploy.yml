@@ -1,0 +1,100 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+
+env:
+  GCP_REGION: us-west1
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  SERVICE_NAME: fighter
+  SHA: ${{ github.sha }}
+  TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+jobs:
+  build-app:
+    uses: ./.github/workflows/build-image.yml
+    with:
+      dockerfile: Dockerfile
+      image_name: fighter
+      build_args: FIGHTER_NOTES_BUILD_SHA=${{ github.sha }}
+    secrets: inherit
+
+  build-migration:
+    uses: ./.github/workflows/build-image.yml
+    with:
+      dockerfile: Dockerfile.migration
+      image_name: fighter-migration
+    secrets: inherit
+
+  migrate:
+    needs: [build-app, build-migration]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_DEPLOYER_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Run migration
+        run: |
+          MIGRATE_TAG="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/fighter/${SERVICE_NAME}-migration:${TAG}"
+          sed -i "s|IMAGE_PLACEHOLDER|$MIGRATE_TAG|g" cloudrun-job.yaml
+          gcloud run jobs replace cloudrun-job.yaml \
+            --region "$GCP_REGION" \
+            --project "$GCP_PROJECT_ID"
+          gcloud run jobs execute "${SERVICE_NAME}-migration" \
+            --region "$GCP_REGION" \
+            --project "$GCP_PROJECT_ID" \
+            --wait
+
+      - name: Install cleanup job
+        run: |
+          IMAGE_TAG="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/fighter/${SERVICE_NAME}:${TAG}"
+          sed -i "s|IMAGE_PLACEHOLDER|$IMAGE_TAG|g" cloudrun-cleanup-job.yaml
+          gcloud run jobs replace cloudrun-cleanup-job.yaml \
+            --region "$GCP_REGION" \
+            --project "$GCP_PROJECT_ID"
+
+  deploy:
+    needs: [build-app, migrate]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_DEPLOYER_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Deploy to Cloud Run
+        run: |
+          IMAGE_TAG="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/fighter/${SERVICE_NAME}:${TAG}"
+          sed -i "s|IMAGE_PLACEHOLDER|$IMAGE_TAG|g" cloudrun.yaml
+          gcloud run services replace cloudrun.yaml \
+            --region "$GCP_REGION" \
+            --project "$GCP_PROJECT_ID"
+
+      - name: Smoke test deployed service
+        run: curl --fail --silent --show-error https://fighter.yuniruyuni.net/health

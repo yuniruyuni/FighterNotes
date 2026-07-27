@@ -1,0 +1,41 @@
+# OS metadata
+.DS_Store
+
+# Local environment files and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Local tool state
+/.claude/
+/.playwright-mcp/
+/TaskList.md
+
+# Installed dependencies
+node_modules/
+
+# Build output
+/target/
+/crates/wasm-bridge/pkg/
+/client/static/
+/server/dist/
+
+# Local video inputs and analysis output
+/output/
+/video/
+
+# Test and mutation output
+/test-results/
+/.stryker-tmp/
+/mutants.out*/
+/reports/mutation/
+/mutation.diff
+/stryker.log
+
+# Temporary output created by the schema-plan workflow
+/plan_output.txt
+
+# Generated files required for reproducible builds and distribution are
+# intentionally versioned. Do not ignore THIRD_PARTY_NOTICES.md,
+# client/src/generated/, or crates/video-analyzer/data/*.json.

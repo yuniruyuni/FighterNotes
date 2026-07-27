@@ -1,0 +1,94 @@
+mod observation;
+mod reading;
+mod recording;
+mod replay;
+mod update;
+
+#[cfg(test)]
+mod tests;
+
+use std::collections::HashMap;
+
+use frame_meter::RowObs;
+
+use crate::model::MeterTimeline;
+
+pub(crate) type ReadEntry = (String, f64, bool);
+
+pub(crate) struct WinEntry {
+    pub(crate) vf: i64,
+    pub(crate) left: RowObs,
+    pub(crate) right: RowObs,
+    pub(crate) vote_ok: bool,
+    pub(crate) prev_abs: Option<i64>,
+}
+
+pub struct MeterTracker {
+    pub left: MeterTimeline,
+    pub right: MeterTimeline,
+    /// Maps a video frame to `(segment_id, absolute_game_frame)`.
+    pub video_map: HashMap<i64, (i32, i64)>,
+
+    pub(crate) segment_id: i32,
+    pub(crate) absolute_frame: Option<i64>,
+    pub(crate) reads: HashMap<String, HashMap<i64, ReadEntry>>,
+    pub(crate) dwell: HashMap<i64, [i64; 2]>,
+    pub(crate) emitted: HashMap<String, HashMap<i64, String>>,
+    pub(crate) previous: Option<(RowObs, RowObs)>,
+    pub(crate) divergence: i64,
+    pub(crate) still_frames: i64,
+    pub(crate) open_candidate: Option<i64>,
+    pub(crate) divergent_edge: Option<i64>,
+    pub(crate) window: Vec<WinEntry>,
+}
+
+impl MeterTracker {
+    pub fn new() -> Self {
+        let mut reads = HashMap::new();
+        reads.insert("left".to_string(), HashMap::new());
+        reads.insert("right".to_string(), HashMap::new());
+        let mut emitted = HashMap::new();
+        emitted.insert("left".to_string(), HashMap::new());
+        emitted.insert("right".to_string(), HashMap::new());
+        Self {
+            left: MeterTimeline {
+                side: "left".to_string(),
+                segments: vec![],
+            },
+            right: MeterTimeline {
+                side: "right".to_string(),
+                segments: vec![],
+            },
+            video_map: HashMap::new(),
+            segment_id: -1,
+            absolute_frame: None,
+            reads,
+            dwell: HashMap::new(),
+            emitted,
+            previous: None,
+            divergence: 0,
+            still_frames: 0,
+            open_candidate: None,
+            divergent_edge: None,
+            window: Vec::new(),
+        }
+    }
+
+    pub fn finish(&mut self) {
+        self.close_segment();
+    }
+
+    pub fn close(&mut self) {
+        self.close_segment();
+    }
+
+    pub fn suspend(&mut self) {
+        self.previous = None;
+    }
+}
+
+impl Default for MeterTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}

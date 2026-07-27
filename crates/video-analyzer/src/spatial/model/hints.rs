@@ -1,0 +1,24 @@
+use serde::{Deserialize, Serialize};
+
+use super::SpatialPoint;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ActorHint {
+    /// Initial or externally corrected foot/ground anchor.
+    pub anchor: Option<SpatialPoint>,
+    /// Permit a far-away region to replace the current track. Set this only
+    /// when meter/input evidence already indicates a teleport-like action.
+    pub allow_discontinuity: bool,
+    /// Permit a ground track to attach to an airborne motion region. Set this
+    /// from an already detected jump window; effects can otherwise pull a
+    /// ground anchor upward.
+    pub allow_airborne: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SpatialHints {
+    pub p1: ActorHint,
+    pub p2: ActorHint,
+}

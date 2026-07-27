@@ -1,0 +1,9 @@
+[package]
+name = "meter-tracker"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+frame-meter = { path = "../frame-meter" }
+serde = { workspace = true }

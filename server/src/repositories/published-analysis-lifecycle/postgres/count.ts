@@ -1,0 +1,24 @@
+import type { QueryResultRow } from "pg";
+import type { Database } from "../../../infra/db/database";
+import { sql } from "../../../infra/db/sql";
+import { compToSQL } from "../../../infra/db/sql-helpers";
+import type { PublishedAnalysisLifecycle } from "../../../models/published-analysis";
+import { lifecycleSpecToSQL } from "./common";
+
+interface CountRow extends QueryResultRow {
+  count: string;
+}
+
+export async function count(
+  db: Database,
+  spec: PublishedAnalysisLifecycle.Spec,
+): Promise<number> {
+  const where = compToSQL(spec, lifecycleSpecToSQL);
+  const row = await db.queryGet<CountRow>(sql`
+    SELECT count(*)::bigint AS count
+    FROM published_analyses
+    WHERE ${where}
+  `);
+  // Stryker disable next-line OptionalChaining: PostgreSQL COUNT(*) without GROUP BY always returns exactly one row.
+  return Number(row?.count ?? 0);
+}

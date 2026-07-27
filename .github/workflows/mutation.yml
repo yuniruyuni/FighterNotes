@@ -1,0 +1,175 @@
+name: Mutation testing
+
+on:
+  pull_request:
+    paths:
+      - .cargo/mutants.toml
+      - .github/workflows/mutation.yml
+      - Cargo.lock
+      - Cargo.toml
+      - bun.lock
+      - client/src/**
+      - crates/**
+      - package.json
+      - scripts/check-stryker-results.*
+      - server/src/models/**
+      - server/src/repositories/**
+      - stryker.*.config.mjs
+  schedule:
+    - cron: "17 18 * * 6"
+  workflow_dispatch:
+    inputs:
+      full_rust:
+        description: Run the sharded full Rust mutation inventory
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutation-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUN_VERSION: 1.3.11
+  CARGO_MUTANTS_VERSION: 27.0.0
+
+jobs:
+  client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Setup Bun
+        run: npm install -g bun@${BUN_VERSION}
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Mutate client domain and application code
+        run: bun run mutation:ts:client
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutation-client
+          path: reports/mutation/client.*
+          if-no-files-found: ignore
+
+  server-models:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Setup Bun
+        run: npm install -g bun@${BUN_VERSION}
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Mutate server models
+        run: bun run mutation:ts:server-models
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutation-server-models
+          path: reports/mutation/server-models.*
+          if-no-files-found: ignore
+
+  server-repositories:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: fighter_test
+          POSTGRES_PASSWORD: fighter_test
+          POSTGRES_DB: fighter_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fighter_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://fighter_test:fighter_test@localhost:5432/fighter_test
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Setup Bun
+        run: npm install -g bun@${BUN_VERSION}
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Mutate PostgreSQL repositories
+        run: bun run mutation:ts:server-repositories
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutation-server-repositories
+          path: reports/mutation/server-repositories.*
+          if-no-files-found: ignore
+
+  rust-core:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
+      - name: Mutate verified Rust core
+        run: bun run mutation:rust:core
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutation-rust-core
+          path: |
+            mutants.out-temporal/mutants.out/
+            mutants.out-frame-meter/mutants.out/
+            mutants.out-meter-tracker/mutants.out/
+          if-no-files-found: ignore
+
+  rust-full-inventory:
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.full_rust)
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
+      - name: Inventory full Rust workspace
+        run: >-
+          cargo mutants --jobs 2 --workspace
+          --shard '${{ matrix.shard }}/4'
+          --output 'mutants.out-full-${{ matrix.shard }}'
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutation-rust-full-${{ matrix.shard }}
+          path: mutants.out-full-${{ matrix.shard }}/mutants.out/
+          if-no-files-found: ignore

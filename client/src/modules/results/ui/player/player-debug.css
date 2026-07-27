@@ -1,0 +1,254 @@
+/* ─── ビデオビュー ──────────────── */
+#view-video {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ─── 認識デバッグビュー（機能画面なので装飾しない） ── */
+#view-debug {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.debug-canvas-area {
+  flex: 1;
+  min-height: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+#debug-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  display: block;
+}
+.debug-loading,
+.debug-error {
+  position: absolute;
+  color: var(--purple);
+  font-size: 0.95rem;
+}
+.debug-error {
+  color: #ff9ab8;
+}
+.debug-ui {
+  flex-shrink: 0;
+  padding: 0.5rem 0.9rem;
+  background: #0b0b0d;
+  border-top: 1px solid var(--line);
+}
+.debug-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+.debug-toggles {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.84rem;
+  color: var(--text);
+  flex-wrap: wrap;
+}
+.debug-toggles label {
+  cursor: pointer;
+  user-select: none;
+}
+.debug-hint {
+  color: var(--text-dim);
+  font-size: 0.76rem;
+  margin-left: auto;
+}
+
+/* 動画エリア */
+.video-area {
+  flex: 1;
+  min-height: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+#player-video {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  display: block;
+}
+
+/* コントロール */
+.player-ui {
+  flex-shrink: 0;
+  padding: 0.5rem 1rem;
+  background: #0b0b0d;
+  border-top: 1px solid var(--line);
+}
+
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+}
+#player-progress {
+  flex: 1;
+  height: 16px;
+  cursor: pointer;
+  appearance: none;
+  background: transparent;
+}
+/* トラック背景は JS が --seek-track に該当区間の gradient を設定する */
+#player-progress::-webkit-slider-runnable-track {
+  height: 5px;
+  background: var(--seek-track, var(--seek-rest));
+}
+#player-progress::-webkit-slider-thumb {
+  appearance: none;
+  width: 6px;
+  height: 16px;
+  background: #fff;
+  margin-top: -5.5px;
+}
+.player-time {
+  font-family: var(--font-head);
+  font-stretch: condensed;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 9em;
+  text-align: right;
+}
+
+.controls-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.pbtn {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  padding: 0.28rem 0.55rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: background 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.18rem;
+}
+.pbtn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+/* 再生 = 公式ライクなグラデーションCTAの小型版 */
+.pbtn.play {
+  background: linear-gradient(
+    90deg,
+    var(--magenta),
+    var(--deep-purple) 25%,
+    var(--deep-purple) 75%,
+    var(--magenta)
+  );
+  border-color: #fff;
+  color: #fff;
+  box-shadow: 0 0 7.5px var(--glow-purple);
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 0.28rem 0.95rem;
+}
+.pbtn.play:hover {
+  filter: brightness(1.3);
+  background: linear-gradient(
+    90deg,
+    var(--magenta),
+    var(--deep-purple) 25%,
+    var(--deep-purple) 75%,
+    var(--magenta)
+  );
+}
+/* ループ ON = 紫点灯 */
+.pbtn.loop.active {
+  background: rgba(165, 90, 255, 0.16);
+  border-color: var(--purple);
+  color: #dcc2ff;
+  box-shadow: 0 0 7.5px var(--glow-purple);
+}
+
+/* 改善ポイント */
+.clip-advice {
+  flex-shrink: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 0.75rem 1.5rem;
+  border-top: 1px solid var(--line);
+  background: #0a120d;
+  font-size: 0.83rem;
+  color: #8fdcb4;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+.clip-advice strong {
+  color: #b7e8cc;
+  font-size: 0.88rem;
+}
+
+.summary-badges {
+  margin-top: 0.6rem;
+}
+
+.route-status {
+  width: min(680px, calc(100% - 2rem));
+  margin: 3rem auto;
+  padding: 1.5rem;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  line-height: 1.7;
+}
+.route-status h1 {
+  color: var(--text-hi);
+  font-family: var(--font-head);
+  font-stretch: condensed;
+  font-size: 1.35rem;
+  margin-bottom: 0.75rem;
+}
+.route-status a {
+  color: var(--sa);
+}
+
+@media (max-width: 700px) {
+  .site-header {
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding-inline: 0.8rem;
+  }
+  .brand {
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.6rem;
+  }
+  .brand-tag {
+    flex-basis: 100%;
+    line-height: 1.4;
+  }
+  .header-note {
+    flex: 0 0 auto;
+    font-size: 0.62rem;
+  }
+}

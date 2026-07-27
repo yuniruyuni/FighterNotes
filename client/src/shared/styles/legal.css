@@ -1,0 +1,311 @@
+.legal-page {
+  width: 100%;
+  padding: 2.2rem 1.4rem 3.5rem;
+}
+
+.legal-document {
+  width: min(920px, 100%);
+  margin: 0 auto;
+  padding: clamp(1.4rem, 4vw, 2.8rem);
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.legal-eyebrow {
+  color: var(--purple);
+  font-family: var(--font-head);
+  font-stretch: condensed;
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.legal-document h1 {
+  margin-top: 0.35rem;
+  color: var(--text-hi);
+  font-family: var(--font-head);
+  font-stretch: condensed;
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  line-height: 1.05;
+}
+
+.legal-summary {
+  max-width: 720px;
+  margin-top: 1rem;
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.85;
+}
+
+.legal-updated {
+  margin-top: 0.6rem;
+  color: var(--text-dim);
+  font-size: 0.76rem;
+}
+
+.legal-document section {
+  margin-top: 2.3rem;
+  padding-top: 1.4rem;
+  border-top: 1px solid var(--line);
+}
+
+.legal-document h2 {
+  margin-bottom: 0.75rem;
+  color: var(--text-hi);
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+.legal-document h2::before {
+  content: "\FF0F\3000";
+  color: var(--purple);
+  font-weight: 400;
+}
+
+.legal-document p,
+.legal-document li,
+.legal-document dd {
+  line-height: 1.9;
+}
+
+.legal-document p + p {
+  margin-top: 0.8rem;
+}
+
+.legal-document ul {
+  margin-left: 1.4rem;
+}
+
+.legal-document li + li {
+  margin-top: 0.35rem;
+}
+
+.legal-document li::marker {
+  color: var(--purple);
+}
+
+.legal-document a {
+  color: #9fceff;
+  text-underline-offset: 0.18em;
+}
+
+.legal-document a:hover {
+  color: var(--text-hi);
+}
+
+.legal-document code {
+  overflow-wrap: anywhere;
+  color: var(--text-hi);
+  font-size: 0.78em;
+}
+
+.license-table-wrap {
+  overflow-x: auto;
+}
+
+.license-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  text-align: left;
+}
+
+.license-component-column {
+  width: 20%;
+}
+
+.license-version-column {
+  width: 10%;
+}
+
+.license-target-column {
+  width: 15%;
+}
+
+.license-name-column {
+  width: 22%;
+}
+
+.license-attribution-column {
+  width: 33%;
+}
+
+.license-table th,
+.license-table td {
+  padding: 0.75rem 0.65rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.license-table thead th {
+  color: var(--text-hi);
+  font-family: var(--font-head);
+  font-stretch: condensed;
+  letter-spacing: 0.06em;
+}
+
+.license-table tbody th {
+  color: var(--text);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.license-attribution-cell {
+  overflow-wrap: anywhere;
+}
+
+.license-table small {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--text-dim);
+  font-weight: 400;
+}
+
+.license-document-button,
+.license-text-close {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: #9fceff;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  font: inherit;
+}
+
+.license-document-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  line-height: inherit;
+  text-align: left;
+}
+
+.license-document-marker {
+  width: 0.48em;
+  height: 0.58em;
+  flex: none;
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  transform-origin: center;
+  transition: transform 140ms ease;
+}
+
+.license-document-button[aria-expanded="true"] .license-document-marker {
+  transform: rotate(90deg);
+}
+
+.license-document-label,
+.license-text-close {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.license-document-button:hover,
+.license-document-button[aria-expanded="true"],
+.license-text-close:hover {
+  color: var(--text-hi);
+}
+
+.license-document-button:focus-visible,
+.license-text-close:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--purple);
+  outline-offset: 3px;
+}
+
+.license-text-row > td {
+  padding: 0;
+  background: rgb(0 0 0 / 24%);
+}
+
+.license-text-panel {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-top: 0;
+}
+
+.license-text-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.license-text-heading h3 {
+  color: var(--text-hi);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.license-text-heading p {
+  margin-top: 0.2rem;
+  color: var(--text-dim);
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+.license-text-documents {
+  display: grid;
+  gap: 1rem;
+  margin-top: 0.9rem;
+}
+
+.license-text-document + .license-text-document {
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.license-text-document h4 {
+  color: var(--text-hi);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.license-template-note {
+  margin-top: 0.45rem;
+  padding: 0.55rem 0.7rem;
+  border-left: 2px solid var(--brand-yellow);
+  color: var(--text-dim);
+  background: rgb(255 255 255 / 4%);
+  font-size: 0.72rem;
+}
+
+.license-template-note code {
+  color: var(--text);
+}
+
+.license-text-document pre {
+  max-height: 38rem;
+  margin: 0.45rem 0 0;
+  padding: 1rem;
+  overflow: auto;
+  color: var(--text);
+  font-family:
+    ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, Monaco, Consolas,
+    monospace;
+  font-size: 0.72rem;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.legal-back-link {
+  margin-top: 2.5rem;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .legal-page {
+    padding: 1.2rem 0.8rem 2.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .license-document-marker {
+    transition: none;
+  }
+}

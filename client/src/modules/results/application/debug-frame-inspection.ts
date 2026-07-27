@@ -1,0 +1,93 @@
+export interface DebugMeterRowInspection {
+  states: string[];
+  bright: string[];
+  fresh_edge: number;
+  bgr: [number, number, number][];
+  v: number[];
+}
+
+export interface DebugMeterInspection {
+  left: DebugMeterRowInspection;
+  right: DebugMeterRowInspection;
+}
+
+export interface DebugHpInspection {
+  left_score: number;
+  right_score: number;
+  left_fill: number;
+  right_fill: number;
+  left_drive: number;
+  right_drive: number;
+  left_col_active: boolean[];
+  right_col_active: boolean[];
+  left_col_orange: boolean[];
+  right_col_orange: boolean[];
+  left_col_yellow: boolean[];
+  right_col_yellow: boolean[];
+  left_orange_fill: number;
+  right_orange_fill: number;
+  left_yellow_fill: number;
+  right_yellow_fill: number;
+}
+
+export interface DebugDriveSideInspection {
+  value: number;
+  burnout: boolean;
+  recovery: number;
+  uncertain: boolean;
+  roi: { x1: number; x2: number; y1: number; y2: number; slope: number };
+  cols: string;
+  runs: { c: string; s: number; e: number; w: number }[];
+}
+
+export interface DebugDriveInspection {
+  left: DebugDriveSideInspection;
+  right: DebugDriveSideInspection;
+}
+
+export interface DebugInputRowInspection {
+  count: number | null;
+  dir: string;
+  badges: string;
+  auto: boolean;
+  throw: boolean;
+  empty: boolean;
+  uncertain: boolean;
+}
+
+export interface DebugInputInspection {
+  p1: { side: string; rows: DebugInputRowInspection[] };
+  p2: { side: string; rows: DebugInputRowInspection[] };
+}
+
+export interface DebugHpParallelogram {
+  top_left: { x: number; y: number };
+  top_right: { x: number; y: number };
+  bottom_right: { x: number; y: number };
+  bottom_left: { x: number; y: number };
+}
+
+export interface DebugHpGeometry {
+  p1: DebugHpParallelogram;
+  p2: DebugHpParallelogram;
+}
+
+export interface DebugFrameInspector {
+  initialize(): Promise<DebugHpGeometry>;
+  inspectMeter(
+    rgba: Uint8Array,
+    width: number,
+    height: number,
+  ): DebugMeterInspection;
+  inspectHp(rgba: Uint8Array, width: number, height: number): DebugHpInspection;
+  inspectDrive(
+    rgba: Uint8Array,
+    width: number,
+    height: number,
+  ): DebugDriveInspection;
+  inspectInput(
+    rgba: Uint8Array,
+    width: number,
+    height: number,
+  ): DebugInputInspection;
+}

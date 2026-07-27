@@ -1,0 +1,68 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - DB_APP_NAME=template
+      - DB_PASSWORD=template
+      - PGUSER=fighter_app
+      - PGHOST=postgres
+      - PUBLIC_BASE_URL=http://localhost:3000
+      - SHARE_RESULTS_ENABLED=true
+      - SHARE_RETENTION_DAYS=30
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+    develop:
+      watch:
+        - action: rebuild
+          path: ./client/src
+        - action: rebuild
+          path: ./server/src
+        - action: rebuild
+          path: ./client/package.json
+        - action: rebuild
+          path: ./server/package.json
+
+  migration:
+    build:
+      context: .
+      dockerfile: Dockerfile.migration
+    environment:
+      - DB_USER=template
+      - DB_NAME=template
+      - DB_PASSWORD=template
+      - PGHOST=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: rebuild
+          path: ./schema
+
+  postgres:
+    image: postgres:18.4-alpine3.24@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: template
+      POSTGRES_PASSWORD: template
+      POSTGRES_DB: template
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U template"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    volumes:
+      # PostgreSQL 18+ stores data below a major-version-specific directory.
+      # Mount the parent so PGDATA (/var/lib/postgresql/18/docker) is persisted.
+      - pgdata:/var/lib/postgresql
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/10-fighter-roles.sql:ro
+
+volumes:
+  pgdata:

@@ -1,0 +1,2 @@
+# Table privileges are declared with the schema so a new table cannot be
+# deployed without an explicit runtime/cleanup access decision.

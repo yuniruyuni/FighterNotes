@@ -1,0 +1,16 @@
+{
+ "schema_version": 1,
+ "data_version": "2026-07-23.1",
+ "files": {
+  "frame_data.json": {
+   "sha256": "6cf05faab7cbeae192d3e4a1068a9d0925db5e0f39ef49c1a498b3a227733bd2",
+   "character_count": 30,
+   "move_count": 1605
+  },
+  "attack_data.json": {
+   "sha256": "4a18039e244fc76c861ec3e70143b83be0694c2f03ed540d9f287028b1ed9cef",
+   "character_count": 30,
+   "move_count": 1796
+  }
+ }
+}

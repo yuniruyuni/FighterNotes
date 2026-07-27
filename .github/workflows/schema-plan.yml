@@ -1,0 +1,115 @@
+name: Schema Plan
+
+on:
+  pull_request:
+    paths:
+      - schema/**
+      - .pgschemaignore
+      - Dockerfile.migration
+      - bin/migrate.sh
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: planuser
+          POSTGRES_PASSWORD: planpass
+          POSTGRES_DB: plandb
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Build migration toolchain
+        run: docker build -f Dockerfile.migration -t fighter-schema-plan .
+
+      - name: Prepare application role
+        env:
+          PGPASSWORD: planpass
+        run: |
+          docker run --rm --network host \
+            --env PGPASSWORD \
+            postgres:18 \
+            psql \
+            --host localhost \
+            --username planuser \
+            --dbname plandb \
+            --set ON_ERROR_STOP=1 \
+            --command "CREATE ROLE fighter_app NOLOGIN"
+
+      - name: Apply main branch schema (current state)
+        run: |
+          if git show origin/main:schema/main.sql > /dev/null 2>&1; then
+            mkdir -p /tmp/main_schema
+            git archive origin/main -- schema/ .pgschemaignore | tar -x -C /tmp/main_schema
+            docker run --rm --network host \
+              --entrypoint pgschema \
+              --workdir /work \
+              -v /tmp/main_schema/schema:/work/schema:ro \
+              -v /tmp/main_schema/.pgschemaignore:/work/.pgschemaignore:ro \
+              fighter-schema-plan apply \
+              --file /work/schema/main.sql \
+              --host localhost --port 5432 \
+              --user planuser --password planpass --db plandb \
+              --schema public --auto-approve --no-color --lock-timeout 30s
+            echo "Applied main branch schema as baseline."
+          else
+            echo "No schema/main.sql on main branch — planning against empty DB (initial migration)."
+          fi
+
+      - name: Plan PR schema changes (diff from main)
+        env:
+          WORKSPACE: ${{ github.workspace }}
+        run: |
+          docker run --rm --network host \
+            --entrypoint pgschema \
+            --workdir /work \
+            -v "${WORKSPACE}/schema:/work/schema:ro" \
+            -v "${WORKSPACE}/.pgschemaignore:/work/.pgschemaignore:ro" \
+            fighter-schema-plan plan \
+            --file /work/schema/main.sql \
+            --host localhost --port 5432 \
+            --user planuser --password planpass --db plandb \
+            --schema public --no-color \
+            > plan_output.txt 2>&1 || true
+
+      - name: Comment plan on PR
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          PLAN=$(cat plan_output.txt)
+          ALERT=""
+          if echo "$PLAN" | grep -qiE "DROP|GRANT|REVOKE|PRIVILEGES"; then
+            ALERT="> [!CAUTION]
+          > This migration includes destructive or privilege-related changes.
+          > Please review carefully before merging.
+
+          "
+          fi
+          BODY="<!-- fighter-pgschema-plan -->
+          ## pgschema plan
+          ${ALERT}\`\`\`sql
+          ${PLAN}
+          \`\`\`"
+
+          COMMENT_ID=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            --jq '.[] | select(.body | contains("<!-- fighter-pgschema-plan -->")) | .id' \
+            | head -1)
+
+          if [ -n "$COMMENT_ID" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}" \
+              -X PATCH -f body="$BODY"
+          else
+            gh pr comment "$PR_NUMBER" --body "$BODY"
+          fi

@@ -1,0 +1,96 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: fighter
+  annotations:
+    run.googleapis.com/ingress: internal
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "2"
+        run.googleapis.com/container-dependencies: '{"app":["db-tunnel"]}'
+    spec:
+      serviceAccountName: fighter-runtime@yuniruyuni-net.iam.gserviceaccount.com
+      containerConcurrency: 80
+      timeoutSeconds: 60
+      containers:
+        - name: app
+          image: IMAGE_PLACEHOLDER
+          ports:
+            - containerPort: 3000
+          resources:
+            limits:
+              cpu: "1"
+              memory: "256Mi"
+          # NOTE: PORT env var は Cloud Run が containerPort から自動注入するため設定禁止 (予約環境変数)
+          env:
+            - name: DB_APP_NAME
+              value: fighter
+            - name: PGUSER
+              value: fighter_app
+            - name: PUBLIC_BASE_URL
+              value: https://fighter.yuniruyuni.net
+            - name: SHARE_RESULTS_ENABLED
+              value: "true"
+            - name: SHARE_RETENTION_DAYS
+              value: "30"
+            - name: SHARE_CREATE_RATE_LIMIT_PER_MINUTE
+              value: "10"
+            - name: SHARE_GET_RATE_LIMIT_PER_MINUTE
+              value: "120"
+            - name: SHARE_DAILY_CREATE_LIMIT
+              value: "1000"
+            - name: SHARE_ACTIVE_LIMIT
+              value: "50000"
+            - name: SHARE_STORAGE_LIMIT_BYTES
+              value: "1073741824"
+            - name: PGPOOL_MAX
+              value: "5"
+            - name: PG_CONNECTION_TIMEOUT_MS
+              value: "5000"
+            - name: PG_IDLE_TIMEOUT_MS
+              value: "30000"
+            - name: PG_STATEMENT_TIMEOUT_MS
+              value: "15000"
+            - name: PG_LOCK_TIMEOUT_MS
+              value: "5000"
+            - name: PG_IDLE_IN_TRANSACTION_SESSION_TIMEOUT_MS
+              value: "30000"
+            # NOTE: service は app user pw (DML のみ)。owner pw (fighter-db-password) は migration job 側で使う
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: latest
+                  name: fighter-db-app-password
+        - name: db-tunnel
+          image: cloudflare/cloudflared:latest
+          args:
+            - access
+            - tcp
+            - --hostname
+            - db.yuniruyuni.net
+            - --url
+            - 0.0.0.0:5432
+          env:
+            - name: TUNNEL_SERVICE_TOKEN_ID
+              valueFrom:
+                secretKeyRef:
+                  key: latest
+                  name: fighter-runtime-cf-db-access-client-id
+            - name: TUNNEL_SERVICE_TOKEN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: latest
+                  name: fighter-runtime-cf-db-access-client-secret
+          resources:
+            limits:
+              cpu: "0.5"
+              memory: "128Mi"
+          startupProbe:
+            tcpSocket:
+              port: 5432
+            periodSeconds: 1
+            timeoutSeconds: 1
+            failureThreshold: 30
