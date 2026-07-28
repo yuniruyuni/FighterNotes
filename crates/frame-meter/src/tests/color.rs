@@ -1,4 +1,4 @@
-use crate::color::{bgr_to_hsv, dim_anchor, l2_dist, quantized_mode_mean};
+use crate::color::{bgr_to_hsv, dim_anchor, l2_dist, QuantizedModeScratch};
 
 use super::assert_close;
 
@@ -52,6 +52,23 @@ fn quantized_mode_uses_most_frequent_bucket_and_its_mean() {
         [18, 19, 20],
         [40, 40, 40],
     ];
-    assert_eq!(quantized_mode_mean(&pixels), [17.0, 18.0, 19.0]);
-    assert_eq!(quantized_mode_mean(&[]), [0.0; 3]);
+    let mut scratch = QuantizedModeScratch::new();
+    assert_eq!(scratch.mean(&pixels), [17.0, 18.0, 19.0]);
+    assert_eq!(scratch.mean(&[]), [0.0; 3]);
+}
+
+#[test]
+fn quantized_mode_ties_use_the_lowest_bgr_bucket() {
+    let pixels = [[248, 248, 248], [249, 249, 249], [0, 0, 0], [1, 1, 1]];
+    assert_eq!(QuantizedModeScratch::new().mean(&pixels), [0.5, 0.5, 0.5]);
+}
+
+#[test]
+fn quantized_mode_scratch_clears_counts_between_calls() {
+    let mut scratch = QuantizedModeScratch::new();
+    assert_eq!(scratch.mean(&[[8, 8, 8]; 3]), [8.0, 8.0, 8.0]);
+    assert_eq!(
+        scratch.mean(&[[8, 8, 8], [16, 16, 16], [17, 17, 17]]),
+        [16.5, 16.5, 16.5]
+    );
 }

@@ -19,6 +19,7 @@ mod pipeline_tests;
 #[path = "../tests/extraction_source.rs"]
 mod source_tests;
 
+use crate::color::QuantizedModeScratch;
 use crate::constants::{
     LEFT_ROW_Y1, LEFT_ROW_Y2, METER_STRIP_Y, RIGHT_ROW_Y1, RIGHT_ROW_Y2, STRIPE_REGION1_ROWS,
     STRIPE_REGION2_ROWS,
@@ -69,8 +70,9 @@ pub fn extract_row_obs_from_strip_with_digit_hint(
 }
 
 fn extract_rows(source: RowSource<'_>, digit_selection: DigitSelection) -> (RowObs, RowObs) {
-    let left = extract_row_parts(&source, LEFT_ROW_Y1, LEFT_ROW_Y2);
-    let right = extract_row_parts(&source, RIGHT_ROW_Y1, RIGHT_ROW_Y2);
+    let mut color_scratch = QuantizedModeScratch::new();
+    let left = extract_row_parts(&source, LEFT_ROW_Y1, LEFT_ROW_Y2, &mut color_scratch);
+    let right = extract_row_parts(&source, RIGHT_ROW_Y1, RIGHT_ROW_Y2, &mut color_scratch);
     let digit_hint = match digit_selection {
         DigitSelection::Full => return (left.finish_full(), right.finish_full()),
         DigitSelection::Tracker(digit_hint) => digit_hint,
@@ -98,10 +100,15 @@ fn extract_rows(source: RowSource<'_>, digit_selection: DigitSelection) -> (RowO
     (left.finish_sparse(valid), right.finish_sparse(valid))
 }
 
-fn extract_row_parts(source: &RowSource<'_>, y1: i32, y2: i32) -> cells::CellExtraction {
+fn extract_row_parts(
+    source: &RowSource<'_>,
+    y1: i32,
+    y2: i32,
+    color_scratch: &mut QuantizedModeScratch,
+) -> cells::CellExtraction {
     source
         .read_row(y1, y2, STRIPE_REGION1_ROWS, STRIPE_REGION2_ROWS)
-        .map(cells::extract_parts)
+        .map(|pixels| cells::extract_parts(pixels, color_scratch))
         .unwrap_or_else(cells::CellExtraction::empty)
 }
 

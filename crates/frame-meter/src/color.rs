@@ -1,6 +1,67 @@
-use std::collections::BTreeMap;
-
 pub(crate) type Bgr = [f32; 3];
+
+const QUANTIZED_CHANNEL_BITS: usize = 5;
+const QUANTIZED_CHANNEL_MASK: usize = (1 << QUANTIZED_CHANNEL_BITS) - 1;
+const QUANTIZED_BUCKET_COUNT: usize = 1 << (QUANTIZED_CHANNEL_BITS * 3);
+
+pub(crate) struct QuantizedModeScratch {
+    counts: Vec<u32>,
+    touched: Vec<u16>,
+}
+
+impl QuantizedModeScratch {
+    pub(crate) fn new() -> Self {
+        Self {
+            counts: vec![0; QUANTIZED_BUCKET_COUNT],
+            touched: Vec::new(),
+        }
+    }
+
+    pub(crate) fn mean(&mut self, pixels: &[[u8; 3]]) -> Bgr {
+        if pixels.is_empty() {
+            return [0.0, 0.0, 0.0];
+        }
+
+        let mut best_bucket = usize::MAX;
+        let mut best_count = 0u32;
+        for px in pixels {
+            let bucket = quantized_bucket(px);
+            let count = &mut self.counts[bucket];
+            if *count == 0 {
+                self.touched.push(bucket as u16);
+            }
+            *count += 1;
+            if *count > best_count || (*count == best_count && bucket < best_bucket) {
+                best_bucket = bucket;
+                best_count = *count;
+            }
+        }
+
+        let mut sum = [0.0f32; 3];
+        for px in pixels {
+            if quantized_bucket(px) == best_bucket {
+                sum[0] += px[0] as f32;
+                sum[1] += px[1] as f32;
+                sum[2] += px[2] as f32;
+            }
+        }
+        for bucket in self.touched.drain(..) {
+            self.counts[bucket as usize] = 0;
+        }
+
+        [
+            sum[0] / best_count as f32,
+            sum[1] / best_count as f32,
+            sum[2] / best_count as f32,
+        ]
+    }
+}
+
+fn quantized_bucket(px: &[u8; 3]) -> usize {
+    ((px[0] as usize >> 3) << (QUANTIZED_CHANNEL_BITS * 2))
+        | ((px[1] as usize >> 3) << QUANTIZED_CHANNEL_BITS)
+        | (px[2] as usize >> 3) & QUANTIZED_CHANNEL_MASK
+}
 
 pub(crate) fn dim_anchor(bgr: Bgr) -> Bgr {
     [
@@ -36,37 +97,4 @@ pub(crate) fn l2_dist(a: Bgr, b: Bgr) -> f32 {
     let dg = a[1] - b[1];
     let dr = a[2] - b[2];
     (db * db + dg * dg + dr * dr).sqrt()
-}
-
-pub(crate) fn quantized_mode_mean(pixels: &[[u8; 3]]) -> Bgr {
-    if pixels.is_empty() {
-        return [0.0, 0.0, 0.0];
-    }
-    let mut counts: BTreeMap<u32, usize> = BTreeMap::new();
-    for px in pixels {
-        let key = (px[0] as u32 / 8) * 10000 + (px[1] as u32 / 8) * 100 + (px[2] as u32 / 8);
-        *counts.entry(key).or_insert(0) += 1;
-    }
-    let max_count = *counts.values().max().expect("non-empty color counts");
-    let best_key = *counts
-        .iter()
-        .find(|(_, count)| **count == max_count)
-        .expect("mode color")
-        .0;
-    let mut sum = [0.0f32; 3];
-    let mut count = 0usize;
-    for px in pixels {
-        let key = (px[0] as u32 / 8) * 10000 + (px[1] as u32 / 8) * 100 + (px[2] as u32 / 8);
-        if key == best_key {
-            sum[0] += px[0] as f32;
-            sum[1] += px[1] as f32;
-            sum[2] += px[2] as f32;
-            count += 1;
-        }
-    }
-    [
-        sum[0] / count as f32,
-        sum[1] / count as f32,
-        sum[2] / count as f32,
-    ]
 }

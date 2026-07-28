@@ -1,5 +1,5 @@
 use crate::classification::classify_cell_pair;
-use crate::color::{quantized_mode_mean, Bgr};
+use crate::color::{Bgr, QuantizedModeScratch};
 use crate::constants::{BLACKISH_PATCH_V, HIGHLIGHT_V_MIN};
 use crate::model::{BrightClass, CellState};
 use crate::palette::state_quality;
@@ -22,11 +22,12 @@ pub(crate) fn classify(
     mean_value: f32,
     region1: &mut Vec<[u8; 3]>,
     region2: &mut Vec<[u8; 3]>,
+    color_scratch: &mut QuantizedModeScratch,
 ) -> ClassifiedCell {
     collect_region(region1, pixels, &pixels.region1_rows, bounds);
     collect_region(region2, pixels, &pixels.region2_rows, bounds);
-    let mut a_bgr = quantized_mode_mean(region1);
-    let mut b_bgr = quantized_mode_mean(region2);
+    let mut a_bgr = color_scratch.mean(region1);
+    let mut b_bgr = color_scratch.mean(region2);
     let (mut state, mut bright) = classify_cell_pair(a_bgr, b_bgr);
     if state == CellState::Empty && mean_value >= HIGHLIGHT_V_MIN {
         state = CellState::Other;

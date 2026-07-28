@@ -1,3 +1,4 @@
+use crate::color::QuantizedModeScratch;
 use crate::extraction::cell;
 use crate::extraction::metrics::CellBounds;
 use crate::extraction::source::RowPixels;
@@ -28,6 +29,7 @@ fn classify_regions(
         mean_value,
         &mut Vec::new(),
         &mut Vec::new(),
+        &mut QuantizedModeScratch::new(),
     )
 }
 

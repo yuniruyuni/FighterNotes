@@ -1,3 +1,4 @@
+use crate::color::QuantizedModeScratch;
 use crate::constants::{CELL_COUNT, DIGIT_TEMPLATE_H, DIGIT_TEMPLATE_W, HIGHLIGHT_V_MIN};
 use crate::digits::{digit_correlations, digit_correlations_for_compact_patches};
 use crate::edge::fresh_color_edge;
@@ -78,10 +79,13 @@ impl CellExtraction {
 
 #[cfg(test)]
 pub(crate) fn extract(pixels: RowPixels) -> RowObs {
-    extract_parts(pixels).finish_full()
+    extract_parts(pixels, &mut QuantizedModeScratch::new()).finish_full()
 }
 
-pub(crate) fn extract_parts(pixels: RowPixels) -> CellExtraction {
+pub(crate) fn extract_parts(
+    pixels: RowPixels,
+    color_scratch: &mut QuantizedModeScratch,
+) -> CellExtraction {
     let column_width = min_cell_patch_width(pixels.width);
     let mut columns = vec![0.0; CELL_COUNT * column_width];
     let mut region1 = Vec::new();
@@ -115,7 +119,14 @@ pub(crate) fn extract_parts(pixels: RowPixels) -> CellExtraction {
         write_column_means(&mut columns[start..start + column_width], &pixels, bounds);
         white_fractions.push(white_row_fraction(&pixels, bounds));
 
-        let classified = cell::classify(&pixels, bounds, value, &mut region1, &mut region2);
+        let classified = cell::classify(
+            &pixels,
+            bounds,
+            value,
+            &mut region1,
+            &mut region2,
+            color_scratch,
+        );
         stripes.push(classified.state.is_stripe());
         colors.push(classified.bgr);
         brightness.push(classified.bright);
