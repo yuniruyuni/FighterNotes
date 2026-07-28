@@ -25,11 +25,8 @@ import { WorkerFrameBridge } from "./worker-frame-bridge.js";
 /**
  * VideoDecoder（WebCodecs）+ Worker によるパイプライン解析。
  *
- * Main スレッド: drawImage + getImageData（2ms/f）
- * Worker スレッド: WASM 解析（5.6ms/f）
- *
- * 両者を重ねて実行することで、スループットを
- * 7.6ms/f → max(2ms, 5.6ms) ≈ 5.6ms/f に改善する。
+ * デコード、非同期ビットマップ抽出、Worker の WASM 解析を重ねて実行し、
+ * 最も遅い段の処理時間へスループットを近づける。
  *
  * データ転送: Transferable ArrayBuffer のピンポン（COOP/COEP 不要）
  * バッファを 2 スロット用意し、片方が Worker にある間に
@@ -85,7 +82,6 @@ export async function analyzeWithWebCodecs(
     let frameBridge!: WorkerFrameBridge;
     const frameDispatcher = new FrameDispatcher({
       extractor: new FrameStripExtractor(),
-      maxPendingBitmaps: 4,
       sendFrame: (frameIndex, pixels) => frameBridge.send(frameIndex, pixels),
       onError: fail,
     });
@@ -99,7 +95,7 @@ export async function analyzeWithWebCodecs(
     });
     const decodePump = new DecodePump<EncodedVideoChunk>({
       maxDecodeQueue: 12,
-      maxInflightFrames: 8,
+      maxOutstandingFrames: 12,
       onReadyToFlush() {
         const activeDecoder = decoder;
         if (!activeDecoder) {
@@ -151,13 +147,14 @@ export async function analyzeWithWebCodecs(
 
     // ── デコードのバックプレッシャー ─────────────────────────────────────
     // 全サンプルを一括投入するとデコーダがハードウェア速度で出力し、
-    // Worker（解析）が追いつかない場合にメインスレッドの処理チェーンへ
-    // ImageData（約 1.4MB/フレーム）が無制限に滞留して OOM でタブが落ちる。
-    // サンプルはキューに置き、「デコーダ待ち + Worker 未完了」が閾値未満の
-    // ときだけ投入する。再開契機は dequeue イベントと frameResult。
+    // Worker（解析）が追いつかない場合に VideoFrame とビットマップが
+    // 無制限に滞留して OOM でタブが落ちる。
+    // 「デコーダへ投入済み - Worker 完了」を最大 12 フレームに制限する。
+    // この上限にはデコーダ内部、ビットマップ抽出中、Worker 処理中の全段が
+    // 含まれる。再開契機は dequeue イベントと frameResult。
     function pumpDecoder() {
       if (settled) return;
-      decodePump.pump(decoder, frameIndex - frameBridge.completedFrames);
+      decodePump.pump(decoder, frameBridge.completedFrames);
     }
 
     async function configureDecoder(track: Mp4VideoTrack): Promise<void> {
@@ -179,7 +176,7 @@ export async function analyzeWithWebCodecs(
             try {
               frame.close();
             } catch {
-              // The synchronous path may already have released the frame.
+              // The dispatcher may already have released the frame.
             }
             fail(error);
           }

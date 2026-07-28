@@ -6,7 +6,7 @@ export interface DecodeQueue<T> {
 
 interface DecodePumpOptions {
   readonly maxDecodeQueue: number;
-  readonly maxInflightFrames: number;
+  readonly maxOutstandingFrames: number;
   readonly onReadyToFlush: () => void;
   readonly onError: (error: unknown) => void;
 }
@@ -31,13 +31,13 @@ export class DecodePump<T> {
     this.#queue.push(sample);
   }
 
-  pump(decoder: DecodeQueue<T> | undefined, inflightFrames: number): void {
+  pump(decoder: DecodeQueue<T> | undefined, completedFrames: number): void {
     if (decoder?.state !== "configured" || this.#flushing) return;
 
     while (
       this.#queue.length > 0 &&
       decoder.decodeQueueSize < this.#options.maxDecodeQueue &&
-      inflightFrames < this.#options.maxInflightFrames
+      this.#samplesFed - completedFrames < this.#options.maxOutstandingFrames
     ) {
       try {
         decoder.decode(this.#queue.shift()!);

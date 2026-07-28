@@ -44,14 +44,6 @@ export class FrameStripExtractor {
       input: drawBitmap(this.#input, bitmaps.input),
     };
   }
-
-  readFrame(frame: VideoFrame): StripPixels {
-    return {
-      hud: drawFrameStrip(this.#hud, frame, ANALYSIS_STRIPS.hud),
-      meter: drawFrameStrip(this.#meter, frame, ANALYSIS_STRIPS.meter),
-      input: drawFrameStrip(this.#input, frame, ANALYSIS_STRIPS.input),
-    };
-  }
 }
 
 export function copyStripPixels(
@@ -95,23 +87,4 @@ function drawBitmap(
     target.canvas.width,
     target.canvas.height,
   ).data;
-}
-
-function drawFrameStrip(
-  target: StripCanvas,
-  frame: VideoFrame,
-  strip: { readonly y: number; readonly height: number },
-): Uint8ClampedArray {
-  target.context.drawImage(
-    frame,
-    0,
-    strip.y,
-    ANALYSIS_WIDTH,
-    strip.height,
-    0,
-    0,
-    ANALYSIS_WIDTH,
-    strip.height,
-  );
-  return target.context.getImageData(0, 0, ANALYSIS_WIDTH, strip.height).data;
 }

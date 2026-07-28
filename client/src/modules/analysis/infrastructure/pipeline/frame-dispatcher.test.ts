@@ -29,11 +29,9 @@ describe("FrameDispatcher", () => {
     const extractor: StripFrameExtractor<FakeFrame, number> = {
       createBitmaps: (item) => item.id,
       readBitmaps: async () => pixels,
-      readFrame: () => pixels,
     };
     const dispatcher = new FrameDispatcher({
       extractor,
-      maxPendingBitmaps: 4,
       sendFrame: async (index) => {
         sent.push(index);
       },
@@ -51,22 +49,21 @@ describe("FrameDispatcher", () => {
     expect(frames.map((item) => item.closes)).toEqual([1, 1]);
   });
 
-  test("uses synchronous extraction when the bitmap limit is reached", async () => {
-    const modes: string[] = [];
+  test("starts asynchronous extraction for every frame in a burst", async () => {
+    const created: number[] = [];
+    const read: number[] = [];
     const extractor: StripFrameExtractor<FakeFrame, number> = {
-      createBitmaps: (item) => item.id,
-      readBitmaps: async () => {
-        modes.push("async");
-        return pixels;
+      createBitmaps: (item) => {
+        created.push(item.id);
+        return item.id;
       },
-      readFrame: () => {
-        modes.push("sync");
+      readBitmaps: async (pending) => {
+        read.push(pending);
         return pixels;
       },
     };
     const dispatcher = new FrameDispatcher({
       extractor,
-      maxPendingBitmaps: 1,
       sendFrame: async () => {},
       onError: (error) => {
         throw error;
@@ -74,10 +71,13 @@ describe("FrameDispatcher", () => {
       now: () => 0,
     });
 
-    dispatcher.dispatch(frame(1), 0);
-    dispatcher.dispatch(frame(2), 1);
+    for (let id = 1; id <= 6; id += 1) {
+      dispatcher.dispatch(frame(id), id - 1);
+    }
+    expect(created).toEqual([1, 2, 3, 4, 5, 6]);
+
     await dispatcher.drain();
 
-    expect(modes).toEqual(["sync", "async"]);
+    expect(read).toEqual([1, 2, 3, 4, 5, 6]);
   });
 });

@@ -18,7 +18,7 @@ function setup() {
   const events = { flushes: 0, errors: [] as unknown[] };
   const pump = new DecodePump<number>({
     maxDecodeQueue: 2,
-    maxInflightFrames: 3,
+    maxOutstandingFrames: 3,
     onReadyToFlush: () => {
       events.flushes += 1;
     },
@@ -28,20 +28,24 @@ function setup() {
 }
 
 describe("DecodePump", () => {
-  test("honors decoder and worker backpressure", () => {
+  test("bounds both the decoder queue and total outstanding work", () => {
     const { pump } = setup();
     const decoder = new FakeDecoder();
     pump.setTotalSamples(4);
     for (const sample of [1, 2, 3, 4]) pump.enqueue(sample);
-
-    pump.pump(decoder, 3);
-    expect(decoder.decoded).toEqual([]);
 
     pump.pump(decoder, 0);
     expect(decoder.decoded).toEqual([1, 2]);
 
     decoder.decodeQueueSize = 0;
     pump.pump(decoder, 0);
+    expect(decoder.decoded).toEqual([1, 2, 3]);
+
+    decoder.decodeQueueSize = 0;
+    pump.pump(decoder, 0);
+    expect(decoder.decoded).toEqual([1, 2, 3]);
+
+    pump.pump(decoder, 1);
     expect(decoder.decoded).toEqual([1, 2, 3, 4]);
   });
 
