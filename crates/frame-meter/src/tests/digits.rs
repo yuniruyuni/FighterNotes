@@ -36,6 +36,36 @@ fn shifted(template: &[f32], dy: i32, dx: i32) -> (Vec<f32>, f32) {
     (patch, energy / (rows * columns) as f32)
 }
 
+fn scalar_reference(patch: &[f32], templates: &[f32]) -> [f32; 10] {
+    let mut best = [-1.0f32; 10];
+    for dy in [-1i32, 0, 1] {
+        let source_y = dy.max(0) as usize;
+        let template_y = (-dy).max(0) as usize;
+        let rows = DIGIT_TEMPLATE_H - dy.unsigned_abs() as usize;
+        for dx in [-2i32, -1, 0, 1, 2] {
+            let source_x = dx.max(0) as usize;
+            let template_x = (-dx).max(0) as usize;
+            let columns = DIGIT_TEMPLATE_W - dx.unsigned_abs() as usize;
+            let area = (rows * columns) as f32;
+            for (digit, best_score) in best.iter_mut().enumerate() {
+                let mut dot = 0.0;
+                for row in 0..rows {
+                    for column in 0..columns {
+                        let source_index = (source_y + row) * DIGIT_TEMPLATE_W + source_x + column;
+                        let template_index = digit * STRIDE
+                            + (template_y + row) * DIGIT_TEMPLATE_W
+                            + template_x
+                            + column;
+                        dot += patch[source_index] * templates[template_index];
+                    }
+                }
+                *best_score = best_score.max(dot / area);
+            }
+        }
+    }
+    best
+}
+
 #[test]
 fn correlations_reject_wrong_patch_count() {
     assert_eq!(digit_correlations(&[]), None);
@@ -123,6 +153,35 @@ fn compact_patch_correlations_match_full_scan_for_requested_cells() {
     for (cell, scores) in compact_scores.iter().enumerate() {
         if !cells.contains(&cell) {
             assert_eq!(*scores, [UNCOMPUTED_CORRELATION; 10]);
+        }
+    }
+}
+
+#[test]
+fn pixel_major_correlations_are_bit_exact_with_scalar_reference() {
+    let templates = templates();
+    let cells = [0, 17, 79];
+    let mut patches = Vec::new();
+    let mut expected = Vec::new();
+    for patch_index in 0..cells.len() {
+        let patch = (0..STRIDE)
+            .map(|index| {
+                let value = (index * 37 + patch_index * 101) % 509;
+                (value as f32 - 254.0) / 127.0
+            })
+            .collect::<Vec<_>>();
+        expected.push(scalar_reference(&patch, &templates));
+        patches.extend_from_slice(&patch);
+    }
+
+    let actual = digit_correlations_for_compact_patches(&patches, &cells).unwrap();
+    for (patch_index, &cell) in cells.iter().enumerate() {
+        for digit in 0..10 {
+            assert_eq!(
+                actual[cell][digit].to_bits(),
+                expected[patch_index][digit].to_bits(),
+                "cell {cell}, digit {digit}",
+            );
         }
     }
 }
