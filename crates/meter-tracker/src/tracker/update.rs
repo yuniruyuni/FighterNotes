@@ -3,10 +3,12 @@ use crate::calibration::{
 };
 use frame_meter::RowObs;
 
-use super::{MeterTracker, WinEntry};
+use super::{MeterTracker, Shared, WinEntry};
 
 impl MeterTracker {
     pub fn update(&mut self, video_frame: i64, left: RowObs, right: RowObs) {
+        let left = Shared::new(left);
+        let right = Shared::new(right);
         let edge = self.select_edge(left.fresh_edge, right.fresh_edge);
         let changed = self.changed_cells(&left, &right);
         let vote_ok = self.wipe_count(&left, &right) < WIPE_GUARD_MIN_CELLS;
@@ -14,8 +16,8 @@ impl MeterTracker {
         let previous_absolute = self.absolute_frame;
         self.window.push(WinEntry {
             vf: video_frame,
-            left: left.clone(),
-            right: right.clone(),
+            left: Shared::clone(&left),
+            right: Shared::clone(&right),
             vote_ok,
             prev_abs: previous_absolute,
         });
@@ -33,16 +35,16 @@ impl MeterTracker {
                             let previous = &self.window[self.window.len() - 2];
                             let (vf, left, right, vote_ok) = (
                                 previous.vf,
-                                previous.left.clone(),
-                                previous.right.clone(),
+                                Shared::clone(&previous.left),
+                                Shared::clone(&previous.right),
                                 previous.vote_ok,
                             );
-                            self.record(vf, &left, &right, vote_ok, false);
+                            self.record(vf, left.as_ref(), right.as_ref(), vote_ok, false);
                         }
                         if edge != candidate {
                             self.absolute_frame = Some(edge);
                         }
-                        self.record(video_frame, &left, &right, vote_ok, false);
+                        self.record(video_frame, left.as_ref(), right.as_ref(), vote_ok, false);
                     } else {
                         self.open_candidate = Some(edge);
                     }
@@ -113,7 +115,7 @@ impl MeterTracker {
         };
 
         if reset {
-            self.previous = Some((left.clone(), right.clone()));
+            self.previous = Some((Shared::clone(&left), Shared::clone(&right)));
             self.reset_replay(edge);
             return;
         }
@@ -131,7 +133,13 @@ impl MeterTracker {
 
         let advanced = next_absolute != absolute;
         self.absolute_frame = Some(next_absolute);
-        self.record(video_frame, &left, &right, vote_ok, advanced);
+        self.record(
+            video_frame,
+            left.as_ref(),
+            right.as_ref(),
+            vote_ok,
+            advanced,
+        );
         self.previous = Some((left, right));
     }
 

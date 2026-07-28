@@ -1,4 +1,4 @@
-use crate::digits::digit_correlations;
+use crate::digits::{digit_correlations, digit_correlations_for_cells, UNCOMPUTED_CORRELATION};
 use crate::{CELL_COUNT, DIGIT_TEMPLATE_H, DIGIT_TEMPLATE_W};
 
 use super::assert_close;
@@ -72,4 +72,26 @@ fn correlations_align_templates_in_both_directions() {
         assert_close(scores[digit], energy);
     }
     assert_eq!(correlations[10], [0.0; 10]);
+}
+
+#[test]
+fn selective_correlations_match_full_scan_only_for_requested_cells() {
+    let templates = templates();
+    let mut cells = vec![0.0; CELL_COUNT * STRIDE];
+    for cell in 0..CELL_COUNT {
+        let digit = cell % 10;
+        cells[cell * STRIDE..(cell + 1) * STRIDE]
+            .copy_from_slice(&templates[digit * STRIDE..(digit + 1) * STRIDE]);
+    }
+
+    let full = digit_correlations(&cells).unwrap();
+    let selective = digit_correlations_for_cells(&cells, [0, 17, 79]).unwrap();
+    for cell in [0, 17, 79] {
+        assert_eq!(selective[cell], full[cell]);
+    }
+    for (cell, scores) in selective.iter().enumerate() {
+        if ![0, 17, 79].contains(&cell) {
+            assert_eq!(*scores, [UNCOMPUTED_CORRELATION; 10]);
+        }
+    }
 }

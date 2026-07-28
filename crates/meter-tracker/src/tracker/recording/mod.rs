@@ -33,9 +33,9 @@ impl MeterTracker {
             for (side, observation) in [("left", left), ("right", right)] {
                 let previous = self.previous.as_ref().map(|(left, right)| {
                     if side == "left" {
-                        left.clone()
+                        left.as_ref()
                     } else {
-                        right.clone()
+                        right.as_ref()
                     }
                 });
 
@@ -43,10 +43,7 @@ impl MeterTracker {
                 let covered = Self::digit_covered(observation, cell);
                 let rescued = observation.rescued[cell as usize];
                 let (state, covered) = if (raw_state == "other" || rescued) && advanced {
-                    (
-                        self.resolve_slab(observation, previous.as_ref(), cell, side),
-                        false,
-                    )
+                    (self.resolve_slab(observation, previous, cell, side), false)
                 } else {
                     (raw_state, covered)
                 };

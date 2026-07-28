@@ -1,6 +1,6 @@
 use frame_meter::{CellState, RowObs};
 
-use super::{insert_read, MeterTracker};
+use super::{insert_read, shared, MeterTracker};
 use crate::tracker::WinEntry;
 
 #[test]
@@ -41,22 +41,22 @@ fn reset_replay_rewinds_old_data_and_replays_divergent_window() {
     tracker.window = vec![
         WinEntry {
             vf: 10,
-            left: observation.clone(),
-            right: observation.clone(),
+            left: shared(observation.clone()),
+            right: shared(observation.clone()),
             vote_ok: true,
             prev_abs: Some(5),
         },
         WinEntry {
             vf: 11,
-            left: observation.clone(),
-            right: observation.clone(),
+            left: shared(observation.clone()),
+            right: shared(observation.clone()),
             vote_ok: true,
             prev_abs: Some(6),
         },
         WinEntry {
             vf: 12,
-            left: observation.clone(),
-            right: observation,
+            left: shared(observation.clone()),
+            right: shared(observation),
             vote_ok: true,
             prev_abs: Some(7),
         },

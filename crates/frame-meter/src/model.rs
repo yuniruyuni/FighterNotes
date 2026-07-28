@@ -1,4 +1,5 @@
 use crate::constants::CELL_COUNT;
+use crate::digits::UNCOMPUTED_CORRELATION;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum CellState {
@@ -136,5 +137,14 @@ impl RowObs {
             slab_pos: -1,
             slab_state: None,
         }
+    }
+
+    /// Returns digit scores when the cell was included in template matching.
+    pub fn digit_correlation(&self, index: usize) -> Option<&[f32; 10]> {
+        let correlation = self.digit_corr.as_ref()?.get(index)?;
+        if correlation[0] == UNCOMPUTED_CORRELATION {
+            return None;
+        }
+        Some(correlation)
     }
 }

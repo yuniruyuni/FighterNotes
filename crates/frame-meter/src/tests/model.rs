@@ -1,3 +1,4 @@
+use crate::digits::UNCOMPUTED_CORRELATION;
 use crate::{BrightClass, CellState, RowObs, CELL_COUNT};
 
 #[test]
@@ -65,4 +66,17 @@ fn empty_observation_has_neutral_values_and_missing_sentinels() {
     assert_eq!(row.digit_corr, None);
     assert_eq!(row.slab_pos, -1);
     assert_eq!(row.slab_state, None);
+}
+
+#[test]
+fn sparse_digit_correlations_hide_uncomputed_cells() {
+    let mut row = RowObs::empty();
+    let mut correlations = vec![[UNCOMPUTED_CORRELATION; 10]; CELL_COUNT];
+    correlations[7] = [-1.0; 10];
+    correlations[7][3] = 0.75;
+    row.digit_corr = Some(correlations);
+
+    assert_eq!(row.digit_correlation(7).map(|scores| scores[3]), Some(0.75));
+    assert_eq!(row.digit_correlation(8), None);
+    assert_eq!(row.digit_correlation(CELL_COUNT), None);
 }

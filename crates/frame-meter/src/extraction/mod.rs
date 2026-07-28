@@ -29,7 +29,7 @@ use source::RowSource;
 
 /// Extracts both players' frame-meter observations from a full RGBA frame.
 pub fn extract_row_obs(rgba: &[u8], width: u32, height: u32) -> (RowObs, RowObs) {
-    extract_rows(RowSource::new(rgba, width, height, 0))
+    extract_rows(RowSource::new(rgba, width, height, 0), None)
 }
 
 /// Extracts observations from the minimal frame-meter strip at `METER_STRIP_Y`.
@@ -40,25 +40,72 @@ pub fn extract_row_obs_from_strip(
 ) -> (RowObs, RowObs) {
     let scale_y = full_height as f32 / 1080.0;
     let strip_y = (METER_STRIP_Y as f32 * scale_y) as i32;
-    extract_rows(RowSource::new(
-        meter_strip,
-        full_width,
-        full_height,
-        strip_y,
-    ))
-}
-
-fn extract_rows(source: RowSource<'_>) -> (RowObs, RowObs) {
-    (
-        extract_row(&source, LEFT_ROW_Y1, LEFT_ROW_Y2),
-        extract_row(&source, RIGHT_ROW_Y1, RIGHT_ROW_Y2),
+    extract_rows(
+        RowSource::new(meter_strip, full_width, full_height, strip_y),
+        None,
     )
 }
 
-fn extract_row(source: &RowSource<'_>, y1: i32, y2: i32) -> RowObs {
+/// Extracts observations while limiting digit-template correlation to cells
+/// that the meter tracker can consume on this frame. A missing hint or missing
+/// cursor evidence falls back to the full 80-cell scan.
+pub fn extract_row_obs_from_strip_with_digit_hint(
+    meter_strip: &[u8],
+    full_width: u32,
+    full_height: u32,
+    digit_hint: Option<(usize, usize)>,
+) -> (RowObs, RowObs) {
+    let scale_y = full_height as f32 / 1080.0;
+    let strip_y = (METER_STRIP_Y as f32 * scale_y) as i32;
+    extract_rows(
+        RowSource::new(meter_strip, full_width, full_height, strip_y),
+        digit_hint,
+    )
+}
+
+fn extract_rows(source: RowSource<'_>, digit_hint: Option<(usize, usize)>) -> (RowObs, RowObs) {
+    let Some((current_cell, lookback)) = digit_hint else {
+        return (
+            extract_row_full(&source, LEFT_ROW_Y1, LEFT_ROW_Y2),
+            extract_row_full(&source, RIGHT_ROW_Y1, RIGHT_ROW_Y2),
+        );
+    };
+
+    let left = extract_row_parts(&source, LEFT_ROW_Y1, LEFT_ROW_Y2);
+    let right = extract_row_parts(&source, RIGHT_ROW_Y1, RIGHT_ROW_Y2);
+    let left_edge = left.observation.fresh_edge;
+    let right_edge = right.observation.fresh_edge;
+    if left_edge < 0 && right_edge < 0 {
+        return (left.finish_full(), right.finish_full());
+    }
+
+    let mut valid = [0u64; 2];
+    add_digit_window(&mut valid, current_cell, lookback);
+    add_digit_window(&mut valid, current_cell + 1, lookback);
+    for edge in [left_edge, right_edge] {
+        if edge >= 0 {
+            add_digit_window(&mut valid, edge as usize, lookback);
+        }
+    }
+    (left.finish_sparse(valid), right.finish_sparse(valid))
+}
+
+fn extract_row_full(source: &RowSource<'_>, y1: i32, y2: i32) -> RowObs {
+    extract_row_parts(source, y1, y2).finish_full()
+}
+
+fn extract_row_parts(source: &RowSource<'_>, y1: i32, y2: i32) -> cells::CellExtraction {
     source
         .read_row(y1, y2, STRIPE_REGION1_ROWS, STRIPE_REGION2_ROWS)
         .as_ref()
-        .map(cells::extract)
-        .unwrap_or_else(RowObs::empty)
+        .map(cells::extract_parts)
+        .unwrap_or_else(cells::CellExtraction::empty)
+}
+
+fn add_digit_window(valid: &mut [u64; 2], center: usize, lookback: usize) {
+    let center = center % crate::constants::CELL_COUNT;
+    for offset in 0..=lookback.min(crate::constants::CELL_COUNT - 1) {
+        let index = (center + crate::constants::CELL_COUNT - offset) % crate::constants::CELL_COUNT;
+        valid[index / 64] |= 1 << (index % 64);
+    }
 }

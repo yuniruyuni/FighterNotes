@@ -3,11 +3,15 @@ use meter_tracker::{MeterTimeline, MeterTracker, TimelineEntry, TimelineSegment}
 
 #[test]
 fn crate_root_keeps_the_tracker_api() {
+    fn assert_send<T: Send>() {}
+
+    assert_send::<MeterTracker>();
     let _: fn() -> MeterTracker = MeterTracker::new;
     let _: fn(&mut MeterTracker, i64, RowObs, RowObs) = MeterTracker::update;
     let _: fn(&mut MeterTracker) = MeterTracker::finish;
     let _: fn(&mut MeterTracker) = MeterTracker::close;
     let _: fn(&mut MeterTracker) = MeterTracker::suspend;
+    let _: fn(&MeterTracker) -> Option<(usize, usize)> = MeterTracker::digit_window_hint;
     let _: fn(&MeterTimeline, u32) -> Vec<bool> = MeterTimeline::stun_per_frame;
 
     let mut tracker = MeterTracker::default();

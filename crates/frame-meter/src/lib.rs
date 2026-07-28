@@ -21,5 +21,7 @@ pub use constants::{
     STRIPE_MIN_TRANSITIONS, STRIPE_WF_MIN,
 };
 pub use edge::fresh_color_edge;
-pub use extraction::{extract_row_obs, extract_row_obs_from_strip};
+pub use extraction::{
+    extract_row_obs, extract_row_obs_from_strip, extract_row_obs_from_strip_with_digit_hint,
+};
 pub use model::{BrightClass, CellState, RowObs};

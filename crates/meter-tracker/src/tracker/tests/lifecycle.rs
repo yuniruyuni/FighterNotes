@@ -1,6 +1,6 @@
 use frame_meter::RowObs;
 
-use super::{insert_read, MeterTracker};
+use super::{insert_read, shared_pair, MeterTracker};
 
 #[test]
 fn open_and_close_segment_reset_state_and_finalize_pending_reads() {
@@ -23,7 +23,7 @@ fn open_and_close_segment_reset_state_and_finalize_pending_reads() {
     insert_read(&mut tracker, "left", 4, "active", 0.8765, false);
     insert_read(&mut tracker, "right", 4, "stun", 1.0, false);
     tracker.dwell.insert(4, [10, 12]);
-    tracker.previous = Some((RowObs::empty(), RowObs::empty()));
+    tracker.previous = Some(shared_pair(RowObs::empty(), RowObs::empty()));
     tracker.close();
 
     assert_eq!(tracker.absolute_frame, None);
@@ -45,7 +45,7 @@ fn open_and_close_segment_reset_state_and_finalize_pending_reads() {
 fn suspend_forgets_only_previous_observation() {
     let mut tracker = MeterTracker::new();
     tracker.open_segment(3);
-    tracker.previous = Some((RowObs::empty(), RowObs::empty()));
+    tracker.previous = Some(shared_pair(RowObs::empty(), RowObs::empty()));
     tracker.suspend();
 
     assert!(tracker.previous.is_none());

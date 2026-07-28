@@ -7,6 +7,8 @@ mod replay;
 mod slab;
 mod update;
 
+use std::sync::Arc;
+
 use frame_meter::{BrightClass, CellState, RowObs, CELL_COUNT};
 
 use super::MeterTracker;
@@ -33,6 +35,14 @@ fn lit_observation(edge: i32) -> RowObs {
     observation.bright.fill(BrightClass::Fresh);
     observation.fresh_edge = edge;
     observation
+}
+
+fn shared(observation: RowObs) -> Arc<RowObs> {
+    Arc::new(observation)
+}
+
+fn shared_pair(left: RowObs, right: RowObs) -> (Arc<RowObs>, Arc<RowObs>) {
+    (shared(left), shared(right))
 }
 
 fn insert_read(

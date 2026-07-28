@@ -2,7 +2,7 @@ use frame_meter::{CellState, RowObs, CELL_COUNT};
 
 use crate::calibration::{READ_DIM_CONF, READ_EARLY_CONF, READ_FADE_CONF, READ_FRESH_CONF};
 
-use super::{insert_read, MeterTracker};
+use super::{insert_read, shared_pair, MeterTracker};
 
 fn columns_with<F>(mut value: F) -> Vec<f32>
 where
@@ -56,7 +56,7 @@ fn advanced_record_resolves_other_or_rescued_state_with_matching_previous_side()
     current_right.rescued[5] = true;
     current_right.cols = Some(columns_with(|cell| (cell * 40) as f32));
     current_right.cols_w = 1;
-    tracker.previous = Some((previous_left, previous_right));
+    tracker.previous = Some(shared_pair(previous_left, previous_right));
 
     tracker.record(10, &current_left, &current_right, true, true);
 

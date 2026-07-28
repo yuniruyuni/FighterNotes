@@ -16,6 +16,12 @@ impl MeterTracker {
         side: &str,
     ) -> Option<String> {
         let digit_correlations = observation.digit_corr.as_ref()?;
+        if ![2i64, 1, 0].into_iter().all(|offset| {
+            let position = (cell - offset).rem_euclid(CELL_COUNT as i64) as usize;
+            observation.digit_correlation(position).is_some()
+        }) {
+            return None;
+        }
         let (run, visible) = self.run_back_len(side);
         let run = run?;
         let with_current = visible + 1;

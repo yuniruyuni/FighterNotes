@@ -2,7 +2,7 @@ use frame_meter::RowObs;
 
 use crate::calibration::{CELL_COUNT_I64, RESET_DIVERGENCE};
 
-use super::MeterTracker;
+use super::{MeterTracker, Shared};
 
 impl MeterTracker {
     pub(crate) fn reset_replay(&mut self, edge: i64) {
@@ -39,13 +39,13 @@ impl MeterTracker {
         let start_cell = (edge - (window_length as i64 - 1)).rem_euclid(CELL_COUNT_I64);
         self.open_segment(start_cell);
 
-        let entries: Vec<(i64, RowObs, RowObs, bool)> = self.window[window_start..]
+        let entries: Vec<(i64, Shared<RowObs>, Shared<RowObs>, bool)> = self.window[window_start..]
             .iter()
             .map(|entry| {
                 (
                     entry.vf,
-                    entry.left.clone(),
-                    entry.right.clone(),
+                    Shared::clone(&entry.left),
+                    Shared::clone(&entry.right),
                     entry.vote_ok,
                 )
             })
@@ -54,7 +54,7 @@ impl MeterTracker {
             if index > 0 {
                 self.absolute_frame = self.absolute_frame.map(|absolute| absolute + 1);
             }
-            self.record(video_frame, &left, &right, vote_ok, false);
+            self.record(video_frame, left.as_ref(), right.as_ref(), vote_ok, false);
         }
     }
 

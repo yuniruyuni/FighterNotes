@@ -53,17 +53,16 @@ impl MeterTracker {
     }
 
     pub(crate) fn digit_covered(observation: &RowObs, cell: i64) -> bool {
-        let Some(correlations) = &observation.digit_corr else {
-            return false;
-        };
         let cell = cell.rem_euclid(CELL_COUNT as i64) as usize;
-        correlations.get(cell).is_some_and(|correlation| {
-            (correlation
-                .iter()
-                .copied()
-                .fold(f32::NEG_INFINITY, f32::max) as f64)
-                >= LABEL_DIGIT_MIN
-        })
+        observation
+            .digit_correlation(cell)
+            .is_some_and(|correlation| {
+                (correlation
+                    .iter()
+                    .copied()
+                    .fold(f32::NEG_INFINITY, f32::max) as f64)
+                    >= LABEL_DIGIT_MIN
+            })
     }
 
     pub(crate) fn better_read(

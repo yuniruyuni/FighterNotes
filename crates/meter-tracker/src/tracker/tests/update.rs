@@ -1,8 +1,31 @@
 use frame_meter::{CellState, RowObs};
+use std::sync::Arc;
 
 use crate::calibration::{FREEZE_TIMEOUT, RESET_DIVERGENCE, WIPE_GUARD_MIN_CELLS};
 
-use super::{lit_observation, MeterTracker};
+use super::{lit_observation, shared_pair, MeterTracker};
+
+#[test]
+fn digit_window_hint_tracks_the_wrapped_current_cell() {
+    let mut tracker = MeterTracker::new();
+    assert_eq!(tracker.digit_window_hint(), None);
+
+    tracker.open_segment(79);
+    assert_eq!(tracker.digit_window_hint(), Some((79, 12)));
+    tracker.absolute_frame = Some(80);
+    assert_eq!(tracker.digit_window_hint(), Some((0, 12)));
+}
+
+#[test]
+fn update_shares_observations_between_window_and_previous_frame() {
+    let mut tracker = MeterTracker::new();
+    tracker.update(0, lit_observation(-1), lit_observation(-1));
+
+    let window = tracker.window.last().unwrap();
+    let previous = tracker.previous.as_ref().unwrap();
+    assert!(Arc::ptr_eq(&window.left, &previous.0));
+    assert!(Arc::ptr_eq(&window.right, &previous.1));
+}
 
 #[test]
 fn update_opens_only_matching_or_consecutive_edge_candidate() {
@@ -54,7 +77,7 @@ fn update_rejects_vote_at_exact_wipe_guard_count() {
     let mut current = previous.clone();
     previous.v[..WIPE_GUARD_MIN_CELLS as usize].fill(100.0);
     current.v[..WIPE_GUARD_MIN_CELLS as usize].fill(0.0);
-    tracker.previous = Some((previous, lit_observation(-1)));
+    tracker.previous = Some(shared_pair(previous, lit_observation(-1)));
 
     tracker.update(0, current, lit_observation(-1));
     assert!(!tracker.window.last().unwrap().vote_ok);
@@ -66,13 +89,13 @@ fn update_advances_one_and_resyncs_small_positive_delta() {
     tracker.open_segment(79);
     tracker.divergence = 2;
     tracker.divergent_edge = Some(30);
-    tracker.previous = Some((lit_observation(79), lit_observation(-1)));
+    tracker.previous = Some(shared_pair(lit_observation(79), lit_observation(-1)));
     tracker.update(1, lit_observation(0), lit_observation(-1));
     assert_eq!(tracker.absolute_frame, Some(80));
     assert_eq!((tracker.divergence, tracker.divergent_edge), (0, None));
     assert_eq!(tracker.still_frames, 0);
 
-    tracker.previous = Some((lit_observation(0), lit_observation(-1)));
+    tracker.previous = Some(shared_pair(lit_observation(0), lit_observation(-1)));
     tracker.update(2, lit_observation(3), lit_observation(-1));
     assert_eq!(tracker.absolute_frame, Some(83));
 }
@@ -86,7 +109,7 @@ fn update_uses_changed_front_during_unconfirmed_positive_divergence() {
     current.fresh_edge = 15;
     current.v[11] = 120.0;
     current.states[11] = CellState::Counter;
-    tracker.previous = Some((previous, lit_observation(-1)));
+    tracker.previous = Some(shared_pair(previous, lit_observation(-1)));
 
     tracker.update(1, current, lit_observation(-1));
 
@@ -106,7 +129,7 @@ fn update_handles_negative_zero_and_missing_edges_with_vote() {
         current.fresh_edge = edge;
         current.v[11] = 120.0;
         current.states[11] = CellState::Counter;
-        tracker.previous = Some((previous, lit_observation(-1)));
+        tracker.previous = Some(shared_pair(previous, lit_observation(-1)));
 
         tracker.update(1, current, lit_observation(-1));
         assert_eq!(tracker.absolute_frame, Some(11), "edge={edge}");
@@ -127,7 +150,7 @@ fn update_does_not_use_negative_edge_change_when_vote_is_rejected() {
     current.fresh_edge = 9;
     current.v[..WIPE_GUARD_MIN_CELLS as usize].fill(0.0);
     current.states[11] = CellState::Counter;
-    tracker.previous = Some((previous, lit_observation(-1)));
+    tracker.previous = Some(shared_pair(previous, lit_observation(-1)));
 
     tracker.update(1, current, lit_observation(-1));
     assert_eq!(tracker.absolute_frame, Some(10));
@@ -142,7 +165,7 @@ fn update_uses_wrapped_predicted_cell_for_large_positive_divergence() {
     current.fresh_edge = 5;
     current.v[4] = 120.0;
     current.states[4] = CellState::Counter;
-    tracker.previous = Some((previous, lit_observation(-1)));
+    tracker.previous = Some(shared_pair(previous, lit_observation(-1)));
 
     tracker.update(1, current, lit_observation(-1));
     assert_eq!(tracker.absolute_frame, Some(80));
@@ -153,7 +176,7 @@ fn update_requires_both_sides_black_when_edge_is_missing() {
     let mut tracker = MeterTracker::new();
     tracker.open_segment(10);
     let observation = lit_observation(-1);
-    tracker.previous = Some((observation.clone(), RowObs::empty()));
+    tracker.previous = Some(shared_pair(observation.clone(), RowObs::empty()));
 
     tracker.update(1, observation, RowObs::empty());
     assert_eq!(tracker.absolute_frame, Some(10));
@@ -167,7 +190,7 @@ fn update_requires_vote_before_missing_edge_change_can_advance() {
     let mut current = previous.clone();
     current.v[..WIPE_GUARD_MIN_CELLS as usize].fill(0.0);
     current.states[31] = CellState::Counter;
-    tracker.previous = Some((previous, lit_observation(-1)));
+    tracker.previous = Some(shared_pair(previous, lit_observation(-1)));
 
     tracker.update(1, current, lit_observation(-1));
     assert_eq!(tracker.absolute_frame, Some(30));
@@ -184,7 +207,7 @@ fn update_passes_advanced_state_to_slab_resolution() {
     current.states[11] = CellState::Other;
     current.cols = Some((0..80).map(|cell| cell as f32).collect());
     current.cols_w = 1;
-    tracker.previous = Some((previous, lit_observation(-1)));
+    tracker.previous = Some(shared_pair(previous, lit_observation(-1)));
 
     tracker.update(1, current, lit_observation(-1));
 
@@ -195,7 +218,7 @@ fn update_passes_advanced_state_to_slab_resolution() {
 fn update_closes_on_black_frames_or_freeze_timeout() {
     let mut black = MeterTracker::new();
     black.open_segment(10);
-    black.previous = Some((lit_observation(10), lit_observation(-1)));
+    black.previous = Some(shared_pair(lit_observation(10), lit_observation(-1)));
     black.update(1, RowObs::empty(), RowObs::empty());
     assert_eq!(black.absolute_frame, None);
 
@@ -203,7 +226,7 @@ fn update_closes_on_black_frames_or_freeze_timeout() {
     frozen.open_segment(10);
     frozen.still_frames = FREEZE_TIMEOUT - 1;
     let observation = lit_observation(10);
-    frozen.previous = Some((observation.clone(), lit_observation(-1)));
+    frozen.previous = Some(shared_pair(observation.clone(), lit_observation(-1)));
     frozen.update(1, observation, lit_observation(-1));
     assert_eq!(frozen.absolute_frame, None);
     assert_eq!(frozen.still_frames, FREEZE_TIMEOUT);

@@ -4,7 +4,7 @@ use frame_meter::{BrightClass, CellState, RowObs};
 
 use crate::calibration::{BLACKISH_V_MAX, DIFF_V_MIN, DIFF_WF_MIN};
 
-use super::{tracker_at, MeterTracker};
+use super::{shared_pair, tracker_at, MeterTracker};
 
 #[test]
 fn changed_cells_requires_visual_and_classification_changes() {
@@ -17,7 +17,7 @@ fn changed_cells_requires_visual_and_classification_changes() {
     previous_left.wf[4] = 0.0;
     previous_left.wf[5] = 0.0;
     previous_left.wf[10] = 0.5;
-    tracker.previous = Some((previous_left.clone(), previous_right.clone()));
+    tracker.previous = Some(shared_pair(previous_left.clone(), previous_right.clone()));
 
     let mut left = previous_left;
     left.v[2] += DIFF_V_MIN;
@@ -66,7 +66,7 @@ fn wipe_count_uses_strict_brightness_boundaries_and_larger_side() {
     left.v[..4].copy_from_slice(&[24.0, 25.0, 24.0, 0.0]);
     previous_right.v[..3].fill(100.0);
     right.v[..3].fill(0.0);
-    tracker.previous = Some((previous_left, previous_right));
+    tracker.previous = Some(shared_pair(previous_left, previous_right));
 
     assert_eq!(tracker.wipe_count(&left, &right), 3);
 }
@@ -80,7 +80,7 @@ fn wipe_count_excludes_each_exact_boundary() {
     current.v[0] = 24.0;
     previous.v[1] = 71.0;
     current.v[1] = 25.0;
-    tracker.previous = Some((previous, RowObs::empty()));
+    tracker.previous = Some(shared_pair(previous, RowObs::empty()));
 
     assert_eq!(tracker.wipe_count(&current, &RowObs::empty()), 0);
 }

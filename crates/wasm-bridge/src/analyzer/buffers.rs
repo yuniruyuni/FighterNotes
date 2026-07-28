@@ -37,8 +37,12 @@ impl Analyzer {
 
     /// Updates the frame-meter tracker from the reusable meter strip buffer.
     pub fn analyze_meter_inplace(&mut self, full_width: u32, full_height: u32, video_frame: u32) {
-        let (left, right) =
-            frame_meter::extract_row_obs_from_strip(&self.meter_buf, full_width, full_height);
+        let (left, right) = frame_meter::extract_row_obs_from_strip_with_digit_hint(
+            &self.meter_buf,
+            full_width,
+            full_height,
+            self.tracker.digit_window_hint(),
+        );
         self.tracker.update(video_frame as i64, left, right);
     }
 }
