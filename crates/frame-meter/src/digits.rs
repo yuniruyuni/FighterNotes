@@ -84,6 +84,7 @@ pub(crate) fn digit_correlations(cells_vpatch: &[f32]) -> Option<Vec<[f32; 10]>>
     Some(best)
 }
 
+#[cfg(test)]
 pub(crate) fn digit_correlations_for_cells(
     cells_vpatch: &[f32],
     cell_indices: impl IntoIterator<Item = usize>,
@@ -96,11 +97,33 @@ pub(crate) fn digit_correlations_for_cells(
     if cells_vpatch.len() != CELL_COUNT * stride {
         return None;
     }
+    digit_correlations_for_cell_patches(cells_vpatch, &cells, false)
+}
+
+pub(crate) fn digit_correlations_for_compact_patches(
+    cells_vpatch: &[f32],
+    cell_indices: &[usize],
+) -> Option<Vec<[f32; 10]>> {
+    let stride = DIGIT_TEMPLATE_H * DIGIT_TEMPLATE_W;
+    if cell_indices.iter().any(|&index| index >= CELL_COUNT)
+        || cells_vpatch.len() != cell_indices.len() * stride
+    {
+        return None;
+    }
+    digit_correlations_for_cell_patches(cells_vpatch, cell_indices, true)
+}
+
+fn digit_correlations_for_cell_patches(
+    cells_vpatch: &[f32],
+    cells: &[usize],
+    compact: bool,
+) -> Option<Vec<[f32; 10]>> {
     let templates = digit_templates()?;
     let height = DIGIT_TEMPLATE_H;
     let width = DIGIT_TEMPLATE_W;
+    let stride = height * width;
     let mut best = vec![[UNCOMPUTED_CORRELATION; 10]; CELL_COUNT];
-    for &cell_index in &cells {
+    for &cell_index in cells {
         best[cell_index] = [-1.0; 10];
     }
 
@@ -131,8 +154,9 @@ pub(crate) fn digit_correlations_for_cells(
             }
 
             let area = (row_count * column_count) as f32;
-            for &cell_index in &cells {
-                let patch = &cells_vpatch[cell_index * stride..(cell_index + 1) * stride];
+            for (patch_position, &cell_index) in cells.iter().enumerate() {
+                let patch_index = if compact { patch_position } else { cell_index };
+                let patch = &cells_vpatch[patch_index * stride..(patch_index + 1) * stride];
                 for (template_index, best_score) in best[cell_index].iter_mut().enumerate() {
                     let mut dot = 0.0f32;
                     for row in 0..row_count {

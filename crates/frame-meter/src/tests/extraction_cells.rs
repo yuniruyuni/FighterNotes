@@ -21,7 +21,7 @@ fn uniform_pixels(width: usize, bgr: [u8; 3], value: f32) -> RowPixels {
 
 #[test]
 fn extraction_populates_columns_digits_and_classification_for_every_cell() {
-    let row = cells::extract(&uniform_pixels(1200, [146, 201, 19], 201.0));
+    let row = cells::extract(uniform_pixels(1200, [146, 201, 19], 201.0));
 
     assert_eq!(row.states, vec![CellState::Counter; CELL_COUNT]);
     assert_eq!(row.cols_w, 13);
@@ -32,7 +32,7 @@ fn extraction_populates_columns_digits_and_classification_for_every_cell() {
 
 #[test]
 fn extraction_uses_none_for_columns_and_digits_when_cells_do_not_fit() {
-    let row = cells::extract(&uniform_pixels(1, [23, 20, 23], 23.0));
+    let row = cells::extract(uniform_pixels(1, [23, 20, 23], 23.0));
 
     assert_eq!(row.states.len(), CELL_COUNT);
     assert_eq!(row.cols_w, 0);
@@ -42,16 +42,12 @@ fn extraction_uses_none_for_columns_and_digits_when_cells_do_not_fit() {
 
 #[test]
 fn slab_requires_other_state_and_highlight_value() {
-    let highlighted = cells::extract(&uniform_pixels(1200, [23, 20, 23], HIGHLIGHT_V_MIN));
+    let highlighted = cells::extract(uniform_pixels(1200, [23, 20, 23], HIGHLIGHT_V_MIN));
     assert_eq!(highlighted.slab_pos, 79);
 
-    let dim_other = cells::extract(&uniform_pixels(
-        1200,
-        [236, 233, 233],
-        HIGHLIGHT_V_MIN - 1.0,
-    ));
+    let dim_other = cells::extract(uniform_pixels(1200, [236, 233, 233], HIGHLIGHT_V_MIN - 1.0));
     assert_eq!(dim_other.slab_pos, -1);
 
-    let colored = cells::extract(&uniform_pixels(1200, [146, 201, 19], 201.0));
+    let colored = cells::extract(uniform_pixels(1200, [146, 201, 19], 201.0));
     assert_eq!(colored.slab_pos, -1);
 }

@@ -1,5 +1,5 @@
 use crate::constants::{CELL_COUNT, DIGIT_TEMPLATE_H, DIGIT_TEMPLATE_W, HIGHLIGHT_V_MIN};
-use crate::digits::{digit_correlations, digit_correlations_for_cells};
+use crate::digits::{digit_correlations, digit_correlations_for_compact_patches};
 use crate::edge::fresh_color_edge;
 use crate::model::{BrightClass, CellState, RowObs};
 
@@ -12,52 +12,78 @@ use super::source::RowPixels;
 
 pub(crate) struct CellExtraction {
     pub(crate) observation: RowObs,
-    digit_patches: Vec<f32>,
-    digit_patch_count: usize,
+    pixels: Option<RowPixels>,
 }
 
 impl CellExtraction {
     pub(crate) fn empty() -> Self {
         Self {
             observation: RowObs::empty(),
-            digit_patches: Vec::new(),
-            digit_patch_count: 0,
+            pixels: None,
         }
     }
 
     pub(crate) fn finish_full(mut self) -> RowObs {
-        if self.digit_patch_count == CELL_COUNT {
-            self.observation.digit_corr = digit_correlations(&self.digit_patches);
+        let cells = (0..CELL_COUNT).collect::<Vec<_>>();
+        if let Some(digit_patches) = self.digit_patches(&cells) {
+            self.observation.digit_corr = digit_correlations(&digit_patches);
         }
         self.observation
     }
 
     pub(crate) fn finish_sparse(mut self, valid: [u64; 2]) -> RowObs {
-        if self.digit_patch_count == CELL_COUNT {
-            let cells = (0..CELL_COUNT).filter(|&index| {
+        let cells = (0..CELL_COUNT)
+            .filter(|&index| {
                 let word = index / 64;
                 let bit = index % 64;
                 valid[word] & (1 << bit) != 0
-            });
-            if let Some(correlations) = digit_correlations_for_cells(&self.digit_patches, cells) {
-                self.observation.digit_corr = Some(correlations);
-            }
+            })
+            .collect::<Vec<_>>();
+        if let Some(digit_patches) = self.digit_patches(&cells) {
+            self.observation.digit_corr =
+                digit_correlations_for_compact_patches(&digit_patches, &cells);
         }
         self.observation
+    }
+
+    pub(crate) fn finish_without_digits(self) -> RowObs {
+        self.observation
+    }
+
+    fn digit_patches(&self, cells: &[usize]) -> Option<Vec<f32>> {
+        if cells.is_empty() {
+            return None;
+        }
+        let pixels = self.pixels.as_ref()?;
+        if pixels.patch_height < DIGIT_TEMPLATE_H || self.observation.cols_w < DIGIT_TEMPLATE_W {
+            return None;
+        }
+
+        let digit_stride = DIGIT_TEMPLATE_H * DIGIT_TEMPLATE_W;
+        let mut digit_patches = vec![0.0; cells.len() * digit_stride];
+        for (patch_index, &cell_index) in cells.iter().enumerate() {
+            let bounds = cell_bounds(pixels.width, cell_index)?;
+            let start = patch_index * digit_stride;
+            if !write_digit_patch(
+                &mut digit_patches[start..start + digit_stride],
+                pixels,
+                bounds,
+            ) {
+                return None;
+            }
+        }
+        Some(digit_patches)
     }
 }
 
 #[cfg(test)]
-pub(crate) fn extract(pixels: &RowPixels) -> RowObs {
+pub(crate) fn extract(pixels: RowPixels) -> RowObs {
     extract_parts(pixels).finish_full()
 }
 
-pub(crate) fn extract_parts(pixels: &RowPixels) -> CellExtraction {
+pub(crate) fn extract_parts(pixels: RowPixels) -> CellExtraction {
     let column_width = min_cell_patch_width(pixels.width);
     let mut columns = vec![0.0; CELL_COUNT * column_width];
-    let digit_stride = DIGIT_TEMPLATE_H * DIGIT_TEMPLATE_W;
-    let mut digit_patches = vec![0.0; CELL_COUNT * digit_stride];
-    let mut digit_patch_count = 0;
     let mut region1 = Vec::new();
     let mut region2 = Vec::new();
 
@@ -83,21 +109,13 @@ pub(crate) fn extract_parts(pixels: &RowPixels) -> CellExtraction {
             continue;
         };
 
-        let value = mean_value(pixels, bounds);
+        let value = mean_value(&pixels, bounds);
         values.push(value);
         let start = index * column_width;
-        write_column_means(&mut columns[start..start + column_width], pixels, bounds);
-        let digit_start = index * digit_stride;
-        if write_digit_patch(
-            &mut digit_patches[digit_start..digit_start + digit_stride],
-            pixels,
-            bounds,
-        ) {
-            digit_patch_count += 1;
-        }
-        white_fractions.push(white_row_fraction(pixels, bounds));
+        write_column_means(&mut columns[start..start + column_width], &pixels, bounds);
+        white_fractions.push(white_row_fraction(&pixels, bounds));
 
-        let classified = cell::classify(pixels, bounds, value, &mut region1, &mut region2);
+        let classified = cell::classify(&pixels, bounds, value, &mut region1, &mut region2);
         stripes.push(classified.state.is_stripe());
         colors.push(classified.bgr);
         brightness.push(classified.bright);
@@ -130,7 +148,6 @@ pub(crate) fn extract_parts(pixels: &RowPixels) -> CellExtraction {
             slab_pos,
             slab_state: None,
         },
-        digit_patches,
-        digit_patch_count,
+        pixels: Some(pixels),
     }
 }

@@ -48,15 +48,55 @@ fn hinted_strip_extraction_scores_only_tracker_and_observed_windows() {
 }
 
 #[test]
-fn hinted_strip_extraction_falls_back_to_all_digits_without_cursor_evidence() {
+fn hinted_strip_extraction_scores_tracker_window_without_observed_edge() {
     let width = 1920;
     let strip = vec![0; width * METER_STRIP_H as usize * 4];
 
     let (left, right) =
         extract_row_obs_from_strip_with_digit_hint(&strip, width as u32, 1080, Some((10, 12)));
 
+    for index in (78..CELL_COUNT).chain(0..=11) {
+        assert!(left.digit_correlation(index).is_some(), "left cell {index}");
+        assert!(
+            right.digit_correlation(index).is_some(),
+            "right cell {index}"
+        );
+    }
+    assert!(left.digit_correlation(40).is_none());
+    assert!(right.digit_correlation(40).is_none());
+}
+
+#[test]
+fn hinted_strip_extraction_skips_digits_without_hint_or_edge() {
+    let width = 1920;
+    let strip = vec![0; width * METER_STRIP_H as usize * 4];
+
+    let (left, right) =
+        extract_row_obs_from_strip_with_digit_hint(&strip, width as u32, 1080, None);
+
+    assert!(left.digit_corr.is_none());
+    assert!(right.digit_corr.is_none());
+}
+
+#[test]
+fn hinted_strip_extraction_scores_observed_edge_without_tracker_hint() {
+    let width = 1920;
+    let mut strip = vec![0; width * METER_STRIP_H as usize * 4];
+    fill_rows(&mut strip, width, 0, 38, [19, 201, 146, 255]);
+    fill_rows(&mut strip, width, 40, 78, [176, 20, 93, 255]);
+
+    let (full_left, full_right) = extract_row_obs_from_strip(&strip, width as u32, 1080);
+    let (sparse_left, sparse_right) =
+        extract_row_obs_from_strip_with_digit_hint(&strip, width as u32, 1080, None);
+
     for index in 0..CELL_COUNT {
-        assert!(left.digit_correlation(index).is_some());
-        assert!(right.digit_correlation(index).is_some());
+        assert_eq!(
+            sparse_left.digit_correlation(index),
+            full_left.digit_correlation(index)
+        );
+        assert_eq!(
+            sparse_right.digit_correlation(index),
+            full_right.digit_correlation(index)
+        );
     }
 }

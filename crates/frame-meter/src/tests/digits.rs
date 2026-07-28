@@ -1,4 +1,7 @@
-use crate::digits::{digit_correlations, digit_correlations_for_cells, UNCOMPUTED_CORRELATION};
+use crate::digits::{
+    digit_correlations, digit_correlations_for_cells, digit_correlations_for_compact_patches,
+    UNCOMPUTED_CORRELATION,
+};
 use crate::{CELL_COUNT, DIGIT_TEMPLATE_H, DIGIT_TEMPLATE_W};
 
 use super::assert_close;
@@ -94,4 +97,44 @@ fn selective_correlations_match_full_scan_only_for_requested_cells() {
             assert_eq!(*scores, [UNCOMPUTED_CORRELATION; 10]);
         }
     }
+}
+
+#[test]
+fn compact_patch_correlations_match_full_scan_for_requested_cells() {
+    let templates = templates();
+    let cells = [0, 17, 79];
+    let mut compact = Vec::new();
+    for &cell in &cells {
+        let digit = cell % 10;
+        compact.extend_from_slice(&templates[digit * STRIDE..(digit + 1) * STRIDE]);
+    }
+
+    let mut full_patches = vec![0.0; CELL_COUNT * STRIDE];
+    for (patch_index, &cell) in cells.iter().enumerate() {
+        full_patches[cell * STRIDE..(cell + 1) * STRIDE]
+            .copy_from_slice(&compact[patch_index * STRIDE..(patch_index + 1) * STRIDE]);
+    }
+    let full = digit_correlations(&full_patches).unwrap();
+    let compact_scores = digit_correlations_for_compact_patches(&compact, &cells).unwrap();
+
+    for cell in cells {
+        assert_eq!(compact_scores[cell], full[cell]);
+    }
+    for (cell, scores) in compact_scores.iter().enumerate() {
+        if !cells.contains(&cell) {
+            assert_eq!(*scores, [UNCOMPUTED_CORRELATION; 10]);
+        }
+    }
+}
+
+#[test]
+fn compact_patch_correlations_reject_mismatched_inputs() {
+    assert_eq!(
+        digit_correlations_for_compact_patches(&vec![0.0; STRIDE], &[0, 1]),
+        None
+    );
+    assert_eq!(
+        digit_correlations_for_compact_patches(&vec![0.0; STRIDE], &[CELL_COUNT]),
+        None
+    );
 }
