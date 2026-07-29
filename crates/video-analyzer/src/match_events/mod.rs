@@ -150,8 +150,9 @@ pub fn build_match_events_with_context(
     // レポート用は SA 停止をゲーム時間から除いて一連の被弾へまとめる。
     // コンタクトの hit/block 判定だけは従来の動画時間区切りを保持し、結合に
     // よって SA 後半の実ヒットがガードへ変わらないようにする。
-    let mut damage = extract_damage_sequences(features, &mono, &rounds, &freeze_spans);
-    let mut contact_damage = extract_damage_sequences(features, &mono, &rounds, &[]);
+    let mut damage =
+        extract_damage_sequences(features, &mono, &rounds, &freeze_spans, [p1_stun, p2_stun]);
+    let mut contact_damage = extract_damage_sequences(features, &mono, &rounds, &[], [&[], &[]]);
 
     // ── ラウンド妥当性フィルタ ───────────────────────────────────────────
     // 実ラウンドには必ず被弾が発生する。ダメージイベントが 1 件も無い

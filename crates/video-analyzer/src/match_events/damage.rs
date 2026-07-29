@@ -21,11 +21,14 @@ fn effective_gameplay_gap(from: u32, to: u32, freeze_spans: &[(u32, u32)]) -> u3
 
 /// HP の下降を、最後の下降から `DMG_GAP` 以内のまとまりへ変換する。
 /// `freeze_spans` を渡すと、その停止時間を間隔から除外する。
+/// `stun` が連続している間は、SA/CA 演出でフレームメーター自体が進んでも
+/// 被弾側に行動可能な切れ目がないため同じコンボとして扱う。
 pub(crate) fn extract_damage_sequences(
     features: &[FrameFeatures],
     hp: &[Vec<f32>; 2],
     rounds: &[RoundInfo],
     freeze_spans: &[(u32, u32)],
+    stun: [&[bool]; 2],
 ) -> Vec<DamageEvent> {
     let n = features.len();
     let mut damage = Vec::new();
@@ -59,7 +62,10 @@ pub(crate) fn extract_damage_sequences(
                     } else {
                         DMG_GAP as u32
                     };
-                    if gap > max_gap {
+                    let continuous_stun = stun[side]
+                        .get(last_drop..=j)
+                        .is_some_and(|span| span.iter().all(|value| *value));
+                    if gap > max_gap && !continuous_stun {
                         break;
                     }
                     if values[j] < values[j - 1] - DMG_EPS {

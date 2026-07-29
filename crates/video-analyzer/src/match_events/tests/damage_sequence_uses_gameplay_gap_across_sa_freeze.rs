@@ -49,3 +49,39 @@ fn damage_sequence_uses_gameplay_gap_across_sa_freeze() {
         "片側だけの長時間表示は演出停止として結合しない"
     );
 }
+
+#[test]
+fn damage_sequence_stays_joined_while_the_victim_never_becomes_actionable() {
+    let mut fs: Vec<_> = (0..500u32).map(|i| feat(i, 1.0, 1.0)).collect();
+    for i in 190..195u32 {
+        fs[i as usize] = feat(i, 1.0 - 0.02 * (i - 189) as f32, 1.0);
+    }
+    for i in 195..310u32 {
+        fs[i as usize] = feat(i, 0.9, 1.0);
+    }
+    for i in 310..315u32 {
+        fs[i as usize] = feat(i, 0.9 - 0.02 * (i - 309) as f32, 1.0);
+    }
+    for i in 315..500u32 {
+        fs[i as usize] = feat(i, 0.8, 1.0);
+    }
+
+    // 各 game frame が1 video frameずつ進むため、長い dwell による
+    // freeze 判定には該当しない。それでも被弾側は一度も stun を抜けず、
+    // SA/CA の一連のコンボである。
+    let victim = synth_timeline(synth_run(0, "stun", 190, 315));
+    let attacker = synth_timeline(synth_run(0, "active", 190, 315));
+    let events = build_match_events(&fs, &[], &[], Some((&victim, &attacker)), "p1");
+    let taken: Vec<_> = events.damage.iter().filter(|d| d.victim == 1).collect();
+    assert_eq!(taken.len(), 1, "連続 stun の被弾を分割しない: {taken:?}");
+    assert!((taken[0].drop - 0.2).abs() < 0.03);
+
+    // 次の被弾までに行動可能な区間があれば、動画時間が同じでも別の被弾。
+    let recovered = synth_timeline(synth_run(0, "stun", 190, 250));
+    let events = build_match_events(&fs, &[], &[], Some((&recovered, &attacker)), "p1");
+    assert_eq!(
+        events.damage.iter().filter(|d| d.victim == 1).count(),
+        2,
+        "stun が切れた後の被弾は結合しない"
+    );
+}
