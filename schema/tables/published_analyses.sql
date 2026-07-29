@@ -58,14 +58,15 @@ CREATE TABLE IF NOT EXISTS published_analysis_findings (
   analysis_id TEXT NOT NULL
     REFERENCES published_analyses (id) ON DELETE CASCADE,
   ordinal SMALLINT NOT NULL
-    CHECK (ordinal BETWEEN 0 AND 18),
+    CHECK (ordinal BETWEEN 0 AND 19),
   kind TEXT NOT NULL
     CHECK (kind IN (
       'layered_defense', 'teleport_defense', 'anti_air', 'own_jumps',
       'burnout', 'committed_button_vs_di', 'mashing',
       'press_while_minus', 'throw_while_minus',
       'guard_break', 'reversal_punished', 'punish_fail', 'punish_missed',
-      'low_conversion', 'throw_whiff_punished', 'throw_loop',
+      'low_conversion', 'throw_interrupted_by_invincible',
+      'throw_whiff_punished', 'throw_loop',
       'early_hits', 'lead_loss', 'big_hits'
     )),
   -- ruleset v3-v5の既存行はNULL。読み出し時に当時の規則から復元する。
@@ -94,14 +95,15 @@ ALTER TABLE published_analysis_findings
     'burnout', 'committed_button_vs_di', 'mashing',
     'press_while_minus', 'throw_while_minus',
     'guard_break', 'reversal_punished', 'punish_fail', 'punish_missed',
-    'low_conversion', 'throw_whiff_punished', 'throw_loop',
+    'low_conversion', 'throw_interrupted_by_invincible',
+    'throw_whiff_punished', 'throw_loop',
     'early_hits', 'lead_loss', 'big_hits'
   ));
 ALTER TABLE published_analysis_findings
   DROP CONSTRAINT IF EXISTS published_analysis_findings_ordinal_check;
 ALTER TABLE published_analysis_findings
   ADD CONSTRAINT published_analysis_findings_ordinal_check
-  CHECK (ordinal BETWEEN 0 AND 18);
+  CHECK (ordinal BETWEEN 0 AND 19);
 GRANT SELECT, INSERT ON published_analysis_findings TO fighter_app;
 
 CREATE TABLE IF NOT EXISTS published_analysis_tactics (

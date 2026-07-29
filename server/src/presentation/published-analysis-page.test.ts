@@ -177,6 +177,7 @@ describe("published analysis presentation", () => {
       "reversal_punished",
       "punish_fail",
       "low_conversion",
+      "throw_interrupted_by_invincible",
       "throw_whiff_punished",
       "throw_loop",
     ] as const;

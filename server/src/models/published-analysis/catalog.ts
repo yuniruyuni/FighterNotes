@@ -48,6 +48,7 @@ export const FINDING_KINDS = [
   "punish_fail",
   "punish_missed",
   "low_conversion",
+  "throw_interrupted_by_invincible",
   "throw_whiff_punished",
   "throw_loop",
   "early_hits",

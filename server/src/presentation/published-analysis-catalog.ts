@@ -106,16 +106,16 @@ export const FINDING_PRESENTATIONS: Record<FindingKind, FindingPresentation> = {
     tone: "resource",
   },
   committed_button_vs_di: {
-    title: "通常技をDIに繰り返し取られている",
+    title: "通常技の実行中にDIを繰り返し受けている",
     description:
       "通常技の実行中に相手DIがヒットした場面が複数確認されています。",
     practice:
-      "同じ距離から相手の前進とDIをランダム再生し、キャンセル可能な技か様子見を混ぜます。",
+      "技が出始めた時点とDI演出開始の順序、その技のDIキャンセル可否を確認します。",
     observation: {
-      title: "通常技をDIに取られた場面",
-      description: `通常技の実行中に相手DIがヒットした事実です。単発では技を置く判断かDIへの反応が原因かを${OBSERVATION_REVIEW_CAVEAT}。`,
+      title: "通常技の実行中にDIを受けた場面",
+      description: `通常技の実行中に相手DIがヒットした事実です。単発では相手が技の出始めを見てDIしたのか、先に選んだDIとかみ合ったのかを${OBSERVATION_REVIEW_CAVEAT}。`,
       practice:
-        "スロー再生でDIの演出前に技を出し切っていたかを確認し、技を置く距離とDI返しを分けて練習します。",
+        "スロー再生で技とDI演出の開始順、その技のDIキャンセル可否を確認し、置く距離とDI返しを分けて練習します。",
     },
     tone: "warning",
   },
@@ -219,6 +219,20 @@ export const FINDING_PRESENTATIONS: Record<FindingKind, FindingPresentation> = {
       description: `確反は成功したもののダメージが小さかった事実です。ゲージ温存・位置・KO状況による選択かもしれないため、リターン不足の癖とは${OBSERVATION_REVIEW_CAVEAT}。`,
       practice:
         "残り体力・ゲージ・位置を確認し、意図した温存でなければ短い基本コンボを確認します。",
+    },
+    tone: "warning",
+  },
+  throw_interrupted_by_invincible: {
+    title: "投げに無敵技を繰り返し合わせられている",
+    description:
+      "投げを実行した直後に相手の無敵技が始まり、被弾した場面が複数確認されています。",
+    practice:
+      "同じ起き攻めで投げ・様子見・後退の選択率を確認し、投げに偏っている場合だけ無敵技を待つ選択を混ぜます。",
+    observation: {
+      title: "投げが相手の無敵技に負けた場面",
+      description: `投げ実行直後に相手の無敵技が始まり、被弾した事実です。単発では投げ選択が不適切だったのか、無敵技がかみ合った読み負けかを${OBSERVATION_REVIEW_CAVEAT}。`,
+      practice:
+        "直前の起き攻めまで戻り、投げ・様子見・後退のどれを普段選んでいるか見比べます。",
     },
     tone: "warning",
   },
