@@ -13,6 +13,8 @@ const THROW_DEDUP_WINDOW: u32 = 18;
 const THROW_CONTACT_WINDOW: usize = 10;
 const THROW_TECH_WINDOW: usize = 80;
 const THROW_MAX_STARTUP_TO_ACTIVE: usize = 12;
+const THROW_INVINCIBLE_LOOKBACK: usize = 3;
+const THROW_INTERRUPT_DAMAGE_WINDOW: u32 = 90;
 const DI_CONTACT_BACK: u32 = 4;
 const DI_CONTACT_FWD: u32 = 14;
 const DI_RESULT_WINDOW: u32 = 80;
@@ -121,8 +123,32 @@ pub(crate) fn extract_throw_actions(
                             && meter_state[side_index][frame] == MeterState::Invincible
                             && meter_state[1 - side_index][frame] == MeterState::Invincible
                     });
+                    let invincible_start = active.saturating_sub(THROW_INVINCIBLE_LOOKBACK);
+                    let opponent_invincible = (invincible_start..=contact_end).any(|frame| {
+                        meter_epoch[1 - side_index][frame] == epoch
+                            && meter_state[1 - side_index][frame] == MeterState::Invincible
+                    });
+                    let damage_to_thrower: f32 = damage
+                        .iter()
+                        .filter(|event| {
+                            event.victim == thrower
+                                && event.round_no == round_no
+                                && event.start_frame >= active_u32.saturating_sub(2)
+                                && event.start_frame <= active_u32 + THROW_INTERRUPT_DAMAGE_WINDOW
+                        })
+                        .map(|event| event.drop)
+                        .sum();
                     if damage_amount >= THROW_MIN_DROP && (opponent_stunned || contact_seen) {
                         (ThrowOutcome::Hit, damage_amount, EventConfidence::High)
+                    } else if throw_animation_confirmed
+                        && opponent_invincible
+                        && damage_to_thrower >= THROW_MIN_DROP
+                    {
+                        (
+                            ThrowOutcome::InterruptedByInvincible,
+                            0.0,
+                            EventConfidence::High,
+                        )
                     } else if mutual_invincibility && damage_amount < THROW_MIN_DROP {
                         (ThrowOutcome::Teched, 0.0, EventConfidence::High)
                     } else if throw_animation_confirmed && !opponent_stunned && !contact_seen {

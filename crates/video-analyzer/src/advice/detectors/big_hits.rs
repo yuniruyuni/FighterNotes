@@ -27,7 +27,7 @@ fn evidence_window(card_id: &str, evidence: &EvidenceClip) -> Option<(u32, u32)>
         }
         "guard_break" => Some((evidence.frame.saturating_sub(10), evidence.frame + 30)),
         "throw_loop" => Some((evidence.frame, evidence.frame.saturating_add(120))),
-        "throw_whiff_punished" => evidence
+        "throw_whiff_punished" | "throw_interrupted_by_invincible" => evidence
             .end_frame
             .map(|end_frame| (evidence.frame, end_frame)),
         _ => None,

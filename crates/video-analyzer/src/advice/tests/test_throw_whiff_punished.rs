@@ -60,6 +60,40 @@ fn unpunished_or_unconfirmed_throw_whiffs_do_not_emit_advice() {
         .all(|card| card.id != "throw_whiff_punished"));
 }
 
+#[test]
+fn throw_interrupted_by_invincible_has_neutral_advice_and_is_not_a_whiff() {
+    let mut events = empty_events();
+    events.throw_actions.push(ThrowActionEvent {
+        thrower: 1,
+        input_frame: 100,
+        startup_frame: Some(103),
+        active_frame: Some(105),
+        outcome: ThrowOutcome::InterruptedByInvincible,
+        damage: 0.0,
+        approach: ThrowApproach::Unknown,
+        confidence: EventConfidence::High,
+        round_no: 1,
+    });
+    events.damage.push(damage(109, 170, 0.20));
+
+    let report = build_report(&[], &events, "p1", None);
+    let card = report
+        .cards
+        .iter()
+        .find(|card| card.id == "throw_interrupted_by_invincible")
+        .expect("無敵技に負けた投げは専用カードへ分ける");
+
+    assert_eq!(card.kind, AdviceKind::Observation);
+    assert!(card
+        .description
+        .contains("投げ間合いの空振りではありません"));
+    assert_invites_user_review(card);
+    assert!(report
+        .cards
+        .iter()
+        .all(|card| card.id != "throw_whiff_punished" && card.id != "big_hits"));
+}
+
 fn whiff(input_frame: u32, active_frame: u32) -> ThrowActionEvent {
     ThrowActionEvent {
         thrower: 1,

@@ -18,6 +18,10 @@ fn detectors_abstain_without_relevant_events() {
         ("press_while_minus", detect_press_while_minus(&events, 1)),
         ("throw_while_minus", detect_throw_while_minus(&events, 1)),
         (
+            "throw_interrupted_by_invincible",
+            detect_throw_interrupted_by_invincible(&events, 1),
+        ),
+        (
             "throw_whiff_punished",
             detect_throw_whiff_punished(&events, 1),
         ),

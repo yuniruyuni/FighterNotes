@@ -16,6 +16,83 @@ struct PunishedWhiffGroup<'a> {
     whiffs: Vec<&'a ThrowActionEvent>,
 }
 
+/// 投げ入力と実行は確認できたが、相手の無敵技に割り込まれて被弾した場面。
+///
+/// 投げ間合いの空振りとは分け、単発の読み負けから投げ選択の良否を断定しない。
+pub(crate) fn detect_throw_interrupted_by_invincible(
+    events: &MatchEvents,
+    own: u8,
+) -> Option<AdviceCard> {
+    let mut exchanges: Vec<_> = events
+        .throw_actions
+        .iter()
+        .filter(|event| {
+            event.thrower == own
+                && event.outcome == ThrowOutcome::InterruptedByInvincible
+                && event.confidence == EventConfidence::High
+        })
+        .filter_map(|event| {
+            let anchor = event.active_frame.unwrap_or(event.input_frame);
+            events
+                .damage
+                .iter()
+                .filter(|damage| {
+                    damage.victim == own
+                        && damage.round_no == event.round_no
+                        && damage.start_frame >= anchor.saturating_sub(2)
+                        && damage.start_frame <= anchor.saturating_add(THROW_WHIFF_DAMAGE_WINDOW)
+                })
+                .min_by_key(|damage| damage.start_frame)
+                .map(|damage| (event, damage))
+        })
+        .collect();
+    exchanges.sort_by_key(|(event, _)| event.input_frame);
+    exchanges.dedup_by_key(|(_, damage)| damage.start_frame);
+    if exchanges.is_empty() {
+        return None;
+    }
+
+    let hp_lost: f32 = exchanges.iter().map(|(_, damage)| damage.drop).sum();
+    let repeated = exchanges.len() >= MIN_REPEATED_NEGATIVE_OUTCOMES;
+    Some(AdviceCard {
+        id: "throw_interrupted_by_invincible".to_string(),
+        kind: AdviceKind::Observation,
+        confidence: EventConfidence::High,
+        title: if repeated {
+            "投げに無敵技を合わせられた場面"
+        } else {
+            "投げが相手の無敵技に負けた場面"
+        }
+        .to_string(),
+        severity: hp_lost,
+        description: if repeated {
+            format!(
+                "投げを実行した直後に相手の無敵技が始まり、被弾した場面が {} 件、合計 {:.0}% あります。投げ間合いの空振りではありません。複数回ありますが、同じ起き攻めで投げに偏っていたのか、別々の読み合いで無敵技がかみ合ったのかまでは断定できません。",
+                exchanges.len(),
+                hp_lost * 100.0
+            )
+        } else {
+            format!(
+                "投げを実行した直後に相手の無敵技が始まり、{:.0}% 被弾した場面が1件あります。投げ間合いの空振りではありません。この1回だけでは、投げ選択が不適切だったのか、相手の無敵技がかみ合った読み負けかは{OBSERVATION_REVIEW_CAVEAT}。",
+                hp_lost * 100.0
+            )
+        },
+        practice: "クリップの直前まで戻り、同じ起き攻めで投げ・様子見・後退をどの程度選んでいたかを確認します。投げに偏りが無ければ単発の読み負けとして扱い、偏っていた場合だけ無敵技を待つ選択を混ぜましょう。".to_string(),
+        evidence: exchanges
+            .iter()
+            .map(|(event, damage)| EvidenceClip {
+                frame: event.input_frame,
+                end_frame: Some(damage.end_frame),
+                label: format!(
+                    "R{} 投げに無敵技→-{:.0}%",
+                    event.round_no,
+                    damage.drop * 100.0
+                ),
+            })
+            .collect(),
+    })
+}
+
 /// 実行まで確定した自分の投げ空振り後、短時間内に被弾した場面を提示する。
 pub(crate) fn detect_throw_whiff_punished(events: &MatchEvents, own: u8) -> Option<AdviceCard> {
     let mut groups: Vec<PunishedWhiffGroup<'_>> = Vec::new();

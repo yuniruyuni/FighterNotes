@@ -26,6 +26,7 @@ pub enum EventConfidence {
 pub enum ThrowOutcome {
     Hit,
     Teched,
+    InterruptedByInvincible,
     ExecutedWhiff,
     Unconfirmed,
 }

@@ -24,7 +24,7 @@ pub(crate) use punishment::{
 };
 pub(crate) use rounds::{detect_early_hits, detect_lead_loss};
 pub(crate) use throw_loop::detect_throw_loop;
-pub(crate) use throw_whiff::detect_throw_whiff_punished;
+pub(crate) use throw_whiff::{detect_throw_interrupted_by_invincible, detect_throw_whiff_punished};
 
 #[cfg(test)]
 mod tests;
