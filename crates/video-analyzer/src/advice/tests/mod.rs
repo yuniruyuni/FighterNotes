@@ -26,6 +26,7 @@ mod test_lead_loss_clip_range;
 mod test_mashing_excludes_beaten_by_invincible;
 mod test_mashing_excludes_jump_attributed_damage;
 mod test_mashing_excludes_minus_press_attributed;
+mod test_mashing_excludes_own_raw_drive_rush;
 mod test_mashing_excludes_projectile_press;
 mod test_mashing_ignores_projectile_block_context;
 mod test_naked_teleport_card_requires_confirmed_reach;

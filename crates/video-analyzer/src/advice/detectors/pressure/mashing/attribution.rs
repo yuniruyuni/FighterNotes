@@ -1,8 +1,8 @@
 use crate::advice::{BIG_DAMAGE, MASH_PRESS_WINDOW};
 use crate::match_events::{
-    DamageEvent, EventConfidence, InputSegment, JumpOutcome, MatchEvents, MinusPressOutcome,
-    ThreatOutcome, JUMP_ATTACK_MAX, JUMP_ATTACK_MIN, JUMP_SELF_HIT_MIN, JUMP_SELF_HIT_WINDOW,
-    THREAT_DAMAGE_WINDOW,
+    DamageEvent, DriveRushOutcome, EventConfidence, InputSegment, JumpOutcome, MatchEvents,
+    MinusPressOutcome, ThreatOutcome, JUMP_ATTACK_MAX, JUMP_ATTACK_MIN, JUMP_SELF_HIT_MIN,
+    JUMP_SELF_HIT_WINDOW, THREAT_DAMAGE_WINDOW,
 };
 
 pub(super) fn nearest_direct_press<'a>(
@@ -69,5 +69,19 @@ pub(super) fn claimed_by_other_detector(
             && damage.start_frame >= event.input_frame
             && damage.start_frame <= event.input_frame.saturating_add(90)
     });
-    jump || compound || reversal || minus_press || drive_impact
+    // 生ラッシュ同士の衝突など、自分の前進行動が止められた被弾は
+    // 「守勢でボタンを押した」場面ではない。空間確定前でも、パリィ始動・
+    // 自分が接触の被害側・HP 低下が同じ接触へ結び付く条件をすべて要求する。
+    let own_raw_drive_rush = events.drive_rushes.iter().any(|rush| {
+        rush.side == own
+            && rush.raw
+            && rush.outcome == DriveRushOutcome::Stopped
+            && rush.damage > 0.0
+            && rush.round_no == damage.round_no
+            && rush.contact_frame.is_some_and(|contact_frame| {
+                damage.start_frame.saturating_add(5) >= contact_frame
+                    && damage.start_frame <= contact_frame.saturating_add(25)
+            })
+    });
+    jump || compound || reversal || minus_press || drive_impact || own_raw_drive_rush
 }
