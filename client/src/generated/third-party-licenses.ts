@@ -37,7 +37,7 @@ export const distributedMaterials = [
     category: "Data/model",
     name: "Analyzer data and recognition models",
     location:
-      "crates/video-analyzer/data, input_history/templates.rs, and meter_digits.bin",
+      "crates/video-analyzer/data, input_history/templates.rs, round_start/fight_template.bin, and meter_digits.bin",
     treatment:
       "Project data/model; not part of the third-party software inventory. DATA_NOTICE applies.",
     reference: "/DATA_NOTICE.txt",

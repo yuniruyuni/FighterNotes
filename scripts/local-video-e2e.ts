@@ -45,6 +45,7 @@ interface CapturedWorkerArtifacts {
   readonly timeline: string;
   readonly features: string;
   readonly trackedInputs?: string;
+  readonly fightMarkers?: string;
   readonly spatialWindows?: string;
   readonly spatialObservations?: string;
   readonly analysisMs: number;
@@ -118,6 +119,11 @@ try {
         "trackedInputs",
         fixture.id,
       ),
+      fightMarkers: parseOptionalArtifact(
+        captured.fightMarkers,
+        "fightMarkers",
+        fixture.id,
+      ),
       spatialWindows: parseOptionalArtifact(
         captured.spatialWindows,
         "spatialWindows",
@@ -139,6 +145,7 @@ try {
       timeline: sha256(captured.timeline),
       features: sha256(captured.features),
       trackedInputs: sha256(captured.trackedInputs ?? ""),
+      fightMarkers: sha256(captured.fightMarkers ?? ""),
       spatialWindows: sha256(captured.spatialWindows ?? ""),
       spatialObservations: sha256(captured.spatialObservations ?? ""),
     };
@@ -520,6 +527,7 @@ function captureBootstrap(): string {
                 timeline: message.timeline,
                 features: message.features,
                 trackedInputs: message.trackedInputs,
+                fightMarkers: message.fightMarkers,
                 spatialWindows: state.spatialWindows,
                 spatialObservations: message.spatialObservations,
                 analysisMs: performance.now() - state.startedAt,

@@ -9,6 +9,7 @@ use crate::context::AnalysisContext;
 use crate::frame_features::FrameFeatures;
 use crate::input_tracker::TrackedInput;
 use crate::match_events;
+use crate::round_start::FightMarker;
 
 /// 確定層: 知覚層の per-frame 読みを時間方向にクリーニングして確定させる。
 ///
@@ -17,6 +18,16 @@ use crate::match_events;
 /// ドライブの短期偽値排除を後に行う。
 pub fn finalize_features(features: &mut Vec<FrameFeatures>) {
     crate::temporal::confirm_hp(features);
+    crate::temporal::clean_drive_temporal(features);
+}
+
+/// Browser の `FIGHT` 画像検出を境界の唯一の決定信号として確定層を実行する。
+pub fn finalize_features_with_fight_markers(
+    features: &mut Vec<FrameFeatures>,
+    markers: &[FightMarker],
+    own_side: &str,
+) {
+    crate::temporal::confirm_hp_with_fight_markers(features, markers, own_side);
     crate::temporal::clean_drive_temporal(features);
 }
 

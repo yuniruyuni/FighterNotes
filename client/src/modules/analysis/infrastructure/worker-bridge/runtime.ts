@@ -26,7 +26,12 @@ export function installAnalyzerWorker(scope: DedicatedWorkerGlobalScope): void {
     firstPassPayload: null,
   };
   scope.onmessage = (event: MessageEvent<AnalyzerWorkerRequest>) => {
-    void handleMessage(scope, state, event.data);
+    void handleMessage(scope, state, event.data).catch((error) => {
+      respond(scope, {
+        type: "error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
   };
 }
 

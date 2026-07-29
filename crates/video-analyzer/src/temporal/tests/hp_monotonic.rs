@@ -1,6 +1,7 @@
 use super::super::hp::{test_enforce_monotonic, test_round_reset_frames};
-use super::super::{confirm_hp, FULL_HP, FULL_MIN_RUN};
+use super::super::{confirm_hp, confirm_hp_with_fight_markers, FULL_HP, FULL_MIN_RUN};
 use super::support::{assert_close, hp_series, own_hp_series};
+use crate::round_start::FightMarker;
 
 #[test]
 fn monotonic_within_round_resets_on_full_run() {
@@ -134,6 +135,69 @@ fn monotonic_enforcement_allows_an_increase_at_reset() {
     test_enforce_monotonic(&mut values, &[false, true]);
 
     assert_eq!(values, vec![0.4, 1.0]);
+}
+
+#[test]
+fn fight_markers_are_the_only_resets_in_the_marker_aware_path() {
+    let mut features = hp_series(&[(0.4, 0.5); 20]);
+    features.extend(hp_series(&[(0.916, 1.0); 20]));
+    features.extend(hp_series(&[(0.7, 0.8); 70]));
+    features.extend(hp_series(&[(1.0, 1.0); 30]));
+    features.extend(hp_series(&[(0.6, 0.7); 20]));
+    features.extend(hp_series(&[(-1.0, -1.0); 20]));
+    features.extend(hp_series(&[(0.91, 0.92); 20]));
+    features.extend(hp_series(&[(0.5, 0.6); 70]));
+    reindex(&mut features);
+    for feature in &mut features[160..180] {
+        feature.is_match_screen = false;
+    }
+    let markers = [
+        FightMarker {
+            first_frame: 20,
+            last_frame: 36,
+            peak_frame: 28,
+            peak_score: 0.9,
+        },
+        FightMarker {
+            first_frame: 180,
+            last_frame: 196,
+            peak_frame: 188,
+            peak_score: 0.9,
+        },
+    ];
+
+    confirm_hp_with_fight_markers(&mut features, &markers, "p1");
+
+    assert_close(features[20].own_hp, 1.0);
+    assert_close(features[45].own_hp, 0.7);
+    // HP だけが満タンへ戻っても、FIGHT marker が無ければ reset しない。
+    assert_close(features[125].own_hp, 0.7);
+    assert_close(features[180].own_hp, 1.0);
+    assert_close(features[205].own_hp, 0.5);
+}
+
+#[test]
+fn fight_opening_uses_reliable_raw_hp_instead_of_previous_round_fill() {
+    let mut features = hp_series(&[(0.4, 0.1); 20]);
+    features.extend(hp_series(&[(1.0, -1.0); 25]));
+    features.extend(hp_series(&[(1.0, 1.0); 15]));
+    features.extend(hp_series(&[(1.0, 0.94); 20]));
+    reindex(&mut features);
+    for feature in &mut features[20..45] {
+        feature.right_hp_raw = 0.0;
+        feature.right_hp_raw_quality = 1.0;
+    }
+    let markers = [FightMarker {
+        first_frame: 20,
+        last_frame: 52,
+        peak_frame: 36,
+        peak_score: 0.9,
+    }];
+
+    confirm_hp_with_fight_markers(&mut features, &markers, "p1");
+
+    assert_close(features[52].opponent_hp, 1.0);
+    assert_close(features[60].opponent_hp, 0.94);
 }
 
 fn reindex(features: &mut [crate::frame_features::FrameFeatures]) {

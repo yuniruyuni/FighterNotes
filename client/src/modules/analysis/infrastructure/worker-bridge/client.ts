@@ -133,6 +133,9 @@ export class AnalyzerWorkerSession {
 
   #receive(message: AnalyzerWorkerResponse): void {
     switch (message.type) {
+      case "error":
+        this.#fail(new Error(message.message));
+        break;
       case "ready":
         this.#ready.resolve();
         break;
@@ -225,6 +228,9 @@ export class MeterWorkerSession {
 
   #receive(message: AnalyzerWorkerResponse): void {
     switch (message.type) {
+      case "error":
+        this.#fail(new Error(message.message));
+        break;
       case "ready":
         this.#ready.resolve();
         break;

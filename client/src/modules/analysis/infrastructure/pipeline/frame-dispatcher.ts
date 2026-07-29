@@ -5,7 +5,7 @@ export interface ClosableFrame {
 }
 
 export interface StripFrameExtractor<Frame, Pending> {
-  createBitmaps(frame: Frame): Pending;
+  createBitmaps(frame: Frame, frameIndex: number): Pending;
   readBitmaps(pending: Pending): Promise<StripPixels>;
 }
 
@@ -35,7 +35,7 @@ export class FrameDispatcher<Frame extends ClosableFrame, Pending> {
 
   dispatch(frame: Frame, frameIndex: number): void {
     try {
-      const pending = this.#options.extractor.createBitmaps(frame);
+      const pending = this.#options.extractor.createBitmaps(frame, frameIndex);
       this.#chain = this.#chain.then(async () => {
         const startedAt = this.#now();
         try {

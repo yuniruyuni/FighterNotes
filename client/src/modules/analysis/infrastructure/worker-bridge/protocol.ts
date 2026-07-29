@@ -40,12 +40,14 @@ export interface AnalyzerWorkerDone {
   readonly timeline: string;
   readonly features: string;
   readonly trackedInputs?: string;
+  readonly fightMarkers?: string;
   readonly debugHp?: unknown[];
   readonly spatialObservations?: string;
 }
 
 export type AnalyzerWorkerResponse =
   | { readonly type: "ready" }
+  | { readonly type: "error"; readonly message: string }
   | {
       readonly type: "meterFrameResult";
       readonly slot: number;

@@ -829,6 +829,7 @@ function collectDistributionMaterials(
     "crates/video-analyzer/data/frame_data.json",
     "crates/video-analyzer/data/manifest.json",
     "crates/video-analyzer/src/input_history/templates.rs",
+    "crates/video-analyzer/src/round_start/fight_template.bin",
   ]) {
     if (!existsSync(join(projectRoot, relativePath))) {
       throw new Error(`Distributed data/model is missing: ${relativePath}`);
@@ -890,7 +891,7 @@ function collectDistributionMaterials(
       category: "Data/model",
       name: "Analyzer data and recognition models",
       location:
-        "crates/video-analyzer/data, input_history/templates.rs, and meter_digits.bin",
+        "crates/video-analyzer/data, input_history/templates.rs, round_start/fight_template.bin, and meter_digits.bin",
       treatment:
         "Project data/model; not part of the third-party software inventory. DATA_NOTICE applies.",
       reference: "/DATA_NOTICE.txt",

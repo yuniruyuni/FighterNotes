@@ -1,4 +1,8 @@
-import { ANALYSIS_STRIPS, ANALYSIS_WIDTH } from "./layout.js";
+import {
+  ANALYSIS_STRIPS,
+  ANALYSIS_WIDTH,
+  FIGHT_MARKER_LAYOUT,
+} from "./layout.js";
 import type { AnalysisTransferBuffers } from "./strip-buffer-pool.js";
 
 interface StripBitmaps {
@@ -11,6 +15,7 @@ interface PendingStripBitmaps {
   readonly hud: Promise<ImageBitmap>;
   readonly meter: Promise<ImageBitmap>;
   readonly input: Promise<ImageBitmap>;
+  readonly fightFrame?: VideoFrame;
 }
 
 export interface StripPixels {
@@ -24,11 +29,14 @@ export class FrameStripExtractor {
   readonly #meter = stripCanvas(ANALYSIS_STRIPS.meter.height);
   readonly #input = stripCanvas(ANALYSIS_STRIPS.input.height);
 
-  createBitmaps(frame: VideoFrame): PendingStripBitmaps {
+  createBitmaps(frame: VideoFrame, frameIndex: number): PendingStripBitmaps {
     return {
       hud: createStripBitmap(frame, ANALYSIS_STRIPS.hud),
       meter: createStripBitmap(frame, ANALYSIS_STRIPS.meter),
       input: createStripBitmap(frame, ANALYSIS_STRIPS.input),
+      ...(frameIndex % FIGHT_MARKER_LAYOUT.sampleInterval === 0
+        ? { fightFrame: frame }
+        : {}),
     };
   }
 
@@ -39,7 +47,7 @@ export class FrameStripExtractor {
       input: await pending.input,
     };
     return {
-      hud: drawBitmap(this.#hud, bitmaps.hud),
+      hud: drawHudBitmap(this.#hud, bitmaps.hud, pending.fightFrame),
       meter: drawBitmap(this.#meter, bitmaps.meter),
       input: drawBitmap(this.#input, bitmaps.input),
     };
@@ -81,6 +89,36 @@ function drawBitmap(
 ): Uint8ClampedArray {
   target.context.drawImage(bitmap, 0, 0);
   bitmap.close();
+  return readPixels(target);
+}
+
+function drawHudBitmap(
+  target: StripCanvas,
+  bitmap: ImageBitmap,
+  fightFrame: VideoFrame | undefined,
+): Uint8ClampedArray {
+  target.context.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  if (fightFrame) {
+    const { source, target: destination } = FIGHT_MARKER_LAYOUT;
+    target.context.imageSmoothingEnabled = true;
+    target.context.imageSmoothingQuality = "high";
+    target.context.drawImage(
+      fightFrame,
+      source.x,
+      source.y,
+      source.width,
+      source.height,
+      destination.x,
+      destination.y,
+      destination.width,
+      destination.height,
+    );
+  }
+  return readPixels(target);
+}
+
+function readPixels(target: StripCanvas): Uint8ClampedArray {
   return target.context.getImageData(
     0,
     0,

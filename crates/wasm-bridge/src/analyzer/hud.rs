@@ -13,6 +13,17 @@ impl Analyzer {
         full_height: u32,
         video_frame: u32,
     ) {
+        if video_frame.is_multiple_of(video_analyzer::FIGHT_SAMPLE_INTERVAL) {
+            self.fight_observations
+                .push(video_analyzer::FightObservation {
+                    frame: video_frame,
+                    score: video_analyzer::fight_score_from_hud_strip(
+                        &self.hud_buf,
+                        full_width as usize,
+                    ),
+                });
+            self.fight_markers = None;
+        }
         let (raw_left, left_uncertain) = video_analyzer::hp_fill_ratio_with_quality_from_hud_strip(
             &self.hud_buf,
             full_width,

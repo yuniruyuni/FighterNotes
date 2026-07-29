@@ -7,7 +7,7 @@ mod drive;
 mod hp;
 
 pub use drive::clean_drive_temporal;
-pub use hp::{confirm_hp, FULL_HP, FULL_MIN_RUN};
+pub use hp::{confirm_hp, confirm_hp_with_fight_markers, FULL_HP, FULL_MIN_RUN};
 
 #[cfg(test)]
 mod tests;

@@ -11,6 +11,7 @@ pub mod input_history;
 pub mod input_tracker;
 pub mod match_events;
 pub mod pipeline;
+pub mod round_start;
 pub mod spatial;
 pub mod temporal;
 
@@ -35,18 +36,23 @@ pub use input_history::{
 };
 pub use input_tracker::{repair_row0_sequence, TrackedInput};
 pub use match_events::{
-    build_match_events, build_match_events_with_context, BurnoutCause, BurnoutPeriod,
-    CompoundThreat, ContactEvent, DamageEvent, DefenseResponse, DefenseResponseKind,
-    DefensiveActionKind, DpReachability, DriveImpactEvent, DriveImpactOutcome, DriveRushEvent,
-    DriveRushOutcome, EventConfidence, GuardBreakEvent, JumpDirection, JumpEvent, JumpOutcome,
-    MatchEvents, MeterState, MinusPressEvent, MinusPressOutcome, MinusSituationEvent,
-    ProjectileThreat, PunishChance, PunishOrigin, PunishOutcome, PunishReachability, ReversalEvent,
-    RoundInfo, TeleportContext, TeleportEvent, ThreatOutcome, ThrowActionEvent, ThrowApproach,
-    ThrowEvent, ThrowOutcome,
+    build_match_events, build_match_events_with_context,
+    build_match_events_with_context_and_fight_markers, BurnoutCause, BurnoutPeriod, CompoundThreat,
+    ContactEvent, DamageEvent, DefenseResponse, DefenseResponseKind, DefensiveActionKind,
+    DpReachability, DriveImpactEvent, DriveImpactOutcome, DriveRushEvent, DriveRushOutcome,
+    EventConfidence, GuardBreakEvent, JumpDirection, JumpEvent, JumpOutcome, MatchEvents,
+    MeterState, MinusPressEvent, MinusPressOutcome, MinusSituationEvent, ProjectileThreat,
+    PunishChance, PunishOrigin, PunishOutcome, PunishReachability, ReversalEvent, RoundInfo,
+    TeleportContext, TeleportEvent, ThreatOutcome, ThrowActionEvent, ThrowApproach, ThrowEvent,
+    ThrowOutcome,
 };
 pub use pipeline::{
     analyze_features, analyze_features_with_context, analyze_match, analyze_match_with_context,
-    finalize_features,
+    finalize_features, finalize_features_with_fight_markers,
+};
+pub use round_start::{
+    detect_fight_markers, fight_score_from_hud_strip, FightMarker, FightObservation,
+    FIGHT_PATCH_HEIGHT, FIGHT_PATCH_WIDTH, FIGHT_PATCH_X, FIGHT_PATCH_Y, FIGHT_SAMPLE_INTERVAL,
 };
 pub use spatial::{
     refine_match_events_with_spatial, spatial_candidate_windows, ActorHint, ActorObservation,
@@ -54,4 +60,4 @@ pub use spatial::{
     SpatialCandidateWindow, SpatialConfig, SpatialError, SpatialExtractor, SpatialHintRange,
     SpatialHints, SpatialObservation, SpatialPoint, SpatialRect,
 };
-pub use temporal::{clean_drive_temporal, confirm_hp};
+pub use temporal::{clean_drive_temporal, confirm_hp, confirm_hp_with_fight_markers};

@@ -1,8 +1,9 @@
 use crate::pipeline_scenarios::{classic_punch, feature_for_p2, neutral_inputs, set_input_run};
 use video_analyzer::advice::build_report_with_context;
 use video_analyzer::{
-    build_match_events_with_context, finalize_features, AnalysisContext, BadgeColor, FrameFeatures,
-    InputDir,
+    build_match_events_with_context, build_match_events_with_context_and_fight_markers,
+    finalize_features, finalize_features_with_fight_markers, AnalysisContext, BadgeColor,
+    FightMarker, FrameFeatures, InputDir,
 };
 
 #[test]
@@ -86,6 +87,64 @@ fn stage_biased_full_bar_still_splits_rounds() {
     );
     assert_eq!(report.rounds_detected, 2);
     assert!(features[40].opponent_hp >= 0.985);
+}
+
+#[test]
+fn fight_markers_split_stage_biased_rounds_without_hp_boundaries() {
+    let mut features = Vec::new();
+    let mut markers = Vec::new();
+    for winner in [1, 2] {
+        extend_transition(&mut features, 30);
+        let first_frame = features.len() as u32;
+        extend_stage_biased_full_health(&mut features, 40);
+        markers.push(FightMarker {
+            first_frame,
+            last_frame: first_frame + 28,
+            peak_frame: first_frame + 12,
+            peak_score: 0.9,
+        });
+        for step in 1..=20 {
+            let loser_hp = (1.0_f32 - step as f32 * 0.05).max(0.0);
+            let health = if winner == 1 {
+                (0.916, loser_hp)
+            } else {
+                (loser_hp, 1.0)
+            };
+            features.push(feature_for_p2(features.len() as u32, health.1, health.0));
+        }
+        let health = if winner == 1 {
+            (0.916, 0.0)
+        } else {
+            (0.0, 1.0)
+        };
+        for _ in 0..60 {
+            features.push(feature_for_p2(features.len() as u32, health.1, health.0));
+        }
+    }
+    finalize_features_with_fight_markers(&mut features, &markers, "p2");
+    let context = AnalysisContext::from_characters("p2", Some("KEN"), Some("AKUMA"));
+
+    let events = build_match_events_with_context_and_fight_markers(
+        &features,
+        &[],
+        &[],
+        None,
+        &context,
+        &markers,
+    );
+
+    assert_eq!(events.rounds.len(), 2);
+    assert_eq!(
+        events
+            .rounds
+            .iter()
+            .map(|round| (round.start_frame, round.winner))
+            .collect::<Vec<_>>(),
+        vec![
+            (markers[0].last_frame, Some(1)),
+            (markers[1].last_frame, Some(2)),
+        ]
+    );
 }
 
 fn three_round_match_for_p2() -> Vec<FrameFeatures> {

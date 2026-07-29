@@ -43,7 +43,7 @@ that apply together, while OR preserves the alternatives offered upstream.
 ### Analyzer data and recognition models
 
 - Category: Data/model
-- Location: crates/video-analyzer/data, input_history/templates.rs, and meter_digits.bin
+- Location: crates/video-analyzer/data, input_history/templates.rs, round_start/fight_template.bin, and meter_digits.bin
 - Treatment: Project data/model; not part of the third-party software inventory. DATA_NOTICE applies.
 - Reference: /DATA_NOTICE.txt
 

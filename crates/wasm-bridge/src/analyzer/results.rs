@@ -11,14 +11,42 @@ struct ImportedMeterTimeline {
 }
 
 impl Analyzer {
-    fn ensure_events(&mut self) {
+    fn ensure_fight_markers(&mut self) {
+        if self.fight_markers.is_none() {
+            self.fight_markers = Some(video_analyzer::detect_fight_markers(
+                &self.fight_observations,
+            ));
+        }
+    }
+
+    fn ensure_events(&mut self) -> Result<(), JsValue> {
         if self.events.is_some() {
-            return;
+            return Ok(());
         }
         if self.imported_meter.is_none() {
             self.tracker.finish();
         }
-        video_analyzer::finalize_features(&mut self.features);
+        self.ensure_fight_markers();
+        let fight_markers = self
+            .fight_markers
+            .clone()
+            .expect("fight markers initialized");
+        let marker_count_is_valid = (2..=3).contains(&fight_markers.len());
+        if self.require_fight_markers && !marker_count_is_valid {
+            return Err(JsValue::from_str(&format!(
+                "FIGHT のラウンド開始演出を 2〜3 回検出する必要があります（検出: {} 回）。対戦開始前からの未編集動画で、中央画面が隠れていないことを確認してください。",
+                fight_markers.len()
+            )));
+        }
+        if marker_count_is_valid {
+            video_analyzer::finalize_features_with_fight_markers(
+                &mut self.features,
+                &fight_markers,
+                self.analysis_context.own_side(),
+            );
+        } else {
+            video_analyzer::finalize_features(&mut self.features);
+        }
 
         let events = if self.input_rows.len() == self.features.len() && !self.input_rows.is_empty()
         {
@@ -36,25 +64,48 @@ impl Analyzer {
                 .as_ref()
                 .map(|(left, right)| (left, right))
                 .unwrap_or((&self.tracker.left, &self.tracker.right));
-            video_analyzer::build_match_events_with_context(
-                &self.features,
-                &p1_tracked,
-                &p2_tracked,
-                Some(meter),
-                &self.analysis_context,
-            )
+            if marker_count_is_valid {
+                video_analyzer::build_match_events_with_context_and_fight_markers(
+                    &self.features,
+                    &p1_tracked,
+                    &p2_tracked,
+                    Some(meter),
+                    &self.analysis_context,
+                    &fight_markers,
+                )
+            } else {
+                video_analyzer::build_match_events_with_context(
+                    &self.features,
+                    &p1_tracked,
+                    &p2_tracked,
+                    Some(meter),
+                    &self.analysis_context,
+                )
+            }
         } else {
-            video_analyzer::build_match_events_with_context(
-                &self.features,
-                &[],
-                &[],
-                None,
-                &self.analysis_context,
-            )
+            if marker_count_is_valid {
+                video_analyzer::build_match_events_with_context_and_fight_markers(
+                    &self.features,
+                    &[],
+                    &[],
+                    None,
+                    &self.analysis_context,
+                    &fight_markers,
+                )
+            } else {
+                video_analyzer::build_match_events_with_context(
+                    &self.features,
+                    &[],
+                    &[],
+                    None,
+                    &self.analysis_context,
+                )
+            }
         };
         self.input_rows.clear();
         self.input_rows.shrink_to_fit();
         self.events = Some(events);
+        Ok(())
     }
 
     fn report_json(&self) -> String {
@@ -83,9 +134,19 @@ impl Analyzer {
             .unwrap_or_else(|error| format!(r#"[{{"error":"{error}"}}]"#))
     }
 
-    pub fn finish(&mut self) -> String {
-        self.ensure_events();
-        self.report_json()
+    pub fn get_fight_markers_json(&mut self) -> String {
+        self.ensure_fight_markers();
+        serde_json::to_string(
+            self.fight_markers
+                .as_deref()
+                .expect("fight markers initialized"),
+        )
+        .unwrap_or_else(|error| format!(r#"[{{"error":"{error}"}}]"#))
+    }
+
+    pub fn finish(&mut self) -> Result<String, JsValue> {
+        self.ensure_events()?;
+        Ok(self.report_json())
     }
 
     pub fn finish_meter_timeline(&mut self) -> String {
@@ -106,12 +167,14 @@ impl Analyzer {
         Ok(())
     }
 
-    pub fn get_spatial_windows_json(&mut self) -> String {
-        self.ensure_events();
-        serde_json::to_string(&video_analyzer::spatial_candidate_windows(
-            self.events.as_ref().expect("finalized events"),
-        ))
-        .unwrap_or_else(|error| format!(r#"[{{"error":"{error}"}}]"#))
+    pub fn get_spatial_windows_json(&mut self) -> Result<String, JsValue> {
+        self.ensure_events()?;
+        Ok(
+            serde_json::to_string(&video_analyzer::spatial_candidate_windows(
+                self.events.as_ref().expect("finalized events"),
+            ))
+            .unwrap_or_else(|error| format!(r#"[{{"error":"{error}"}}]"#)),
+        )
     }
 
     pub fn refine_with_spatial(&mut self, observations_json: &str) -> Result<String, JsValue> {
@@ -119,7 +182,7 @@ impl Analyzer {
             serde_json::from_str(observations_json).map_err(|error| {
                 JsValue::from_str(&format!("invalid spatial observations: {error}"))
             })?;
-        self.ensure_events();
+        self.ensure_events()?;
         video_analyzer::refine_match_events_with_spatial(
             self.events.as_mut().expect("finalized events"),
             &observations,

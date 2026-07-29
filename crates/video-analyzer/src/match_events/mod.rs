@@ -17,6 +17,7 @@
 use crate::frame_features::FrameFeatures;
 use crate::input_history::InputDir;
 use crate::input_tracker::TrackedInput;
+use crate::round_start::FightMarker;
 use meter_tracker::MeterTimeline;
 
 // ── 出力型 ───────────────────────────────────────────────────────────────────
@@ -91,6 +92,38 @@ pub fn build_match_events_with_context(
     meter: Option<(&MeterTimeline, &MeterTimeline)>,
     context: &crate::context::AnalysisContext,
 ) -> MatchEvents {
+    build_match_events_with_optional_fight_markers(
+        features, p1_inputs, p2_inputs, meter, context, None,
+    )
+}
+
+/// `FIGHT` 画像で確定した開始位置だけを使う browser pipeline 用 entry point。
+pub fn build_match_events_with_context_and_fight_markers(
+    features: &[FrameFeatures],
+    p1_inputs: &[TrackedInput],
+    p2_inputs: &[TrackedInput],
+    meter: Option<(&MeterTimeline, &MeterTimeline)>,
+    context: &crate::context::AnalysisContext,
+    markers: &[FightMarker],
+) -> MatchEvents {
+    build_match_events_with_optional_fight_markers(
+        features,
+        p1_inputs,
+        p2_inputs,
+        meter,
+        context,
+        Some(markers),
+    )
+}
+
+fn build_match_events_with_optional_fight_markers(
+    features: &[FrameFeatures],
+    p1_inputs: &[TrackedInput],
+    p2_inputs: &[TrackedInput],
+    meter: Option<(&MeterTimeline, &MeterTimeline)>,
+    context: &crate::context::AnalysisContext,
+    fight_markers: Option<&[FightMarker]>,
+) -> MatchEvents {
     let own_side = context.own_side();
     let characters = [
         context.p1.character.as_deref(),
@@ -127,7 +160,10 @@ pub fn build_match_events_with_context(
     };
 
     // ── ラウンド分割 ─────────────────────────────────────────────────────
-    let mut rounds = detect_rounds_from_hp(features, &hp);
+    let mut rounds = match fight_markers {
+        Some(markers) => detect_rounds_from_fight_markers(features, &hp, markers),
+        None => detect_rounds_from_hp(features, &hp),
+    };
     extend_rounds_through_freezes(&mut rounds, features, &hp, &freeze_spans);
 
     // ── ラウンド内単調化（HP は増えない。灰ゲージ回復は無視） ──────────

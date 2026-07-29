@@ -50,11 +50,11 @@ describe("FrameDispatcher", () => {
   });
 
   test("starts asynchronous extraction for every frame in a burst", async () => {
-    const created: number[] = [];
+    const created: Array<[number, number]> = [];
     const read: number[] = [];
     const extractor: StripFrameExtractor<FakeFrame, number> = {
-      createBitmaps: (item) => {
-        created.push(item.id);
+      createBitmaps: (item, frameIndex) => {
+        created.push([item.id, frameIndex]);
         return item.id;
       },
       readBitmaps: async (pending) => {
@@ -74,7 +74,14 @@ describe("FrameDispatcher", () => {
     for (let id = 1; id <= 6; id += 1) {
       dispatcher.dispatch(frame(id), id - 1);
     }
-    expect(created).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(created).toEqual([
+      [1, 0],
+      [2, 1],
+      [3, 2],
+      [4, 3],
+      [5, 4],
+      [6, 5],
+    ]);
 
     await dispatcher.drain();
 

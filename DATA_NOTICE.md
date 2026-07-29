@@ -20,7 +20,8 @@ Fighter Notes は、これらのデータに含まれ得る第三者の著作権
 
 ## 認識用テンプレート
 
-`crates/video-analyzer/src/input_history/templates.rs`および
+`crates/video-analyzer/src/input_history/templates.rs`、
+`crates/video-analyzer/src/round_start/fight_template.bin`および
 `crates/frame-meter/src/data/meter_digits.bin`には、実ゲームを撮影した動画サンプルから
 生成した認識用の数値・統計モデルが含まれます。元動画、frame、screenshot、cropそのものは
 収録せず、認識に必要な画素平均、標準偏差、正規化値およびbit maskだけを保持しています。

@@ -25,6 +25,7 @@ const expectedAnalyzerMethods = [
   "finish(): string;",
   "finish_meter_timeline(): string;",
   "get_features_json(): string;",
+  "get_fight_markers_json(): string;",
   "get_spatial_windows_json(): string;",
   "get_timeline(): string;",
   "get_tracked_inputs(): string;",

@@ -16,6 +16,9 @@ impl Analyzer {
             .map_err(|error| JsValue::from_str(&format!("invalid analysis context: {error}")))?;
         context.normalize_for_side(&self.own_side);
         self.analysis_context = context;
+        // The browser pipeline supplies the central FIGHT image. Legacy Rust
+        // callers that only use set_characters keep the HP-based compatibility path.
+        self.require_fight_markers = true;
         Ok(())
     }
 }

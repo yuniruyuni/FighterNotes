@@ -53,7 +53,7 @@ fn analyzer_keeps_buffer_and_json_contracts() {
         ],
     );
 
-    let report: Value = serde_json::from_str(&analyzer.finish()).unwrap();
+    let report: Value = serde_json::from_str(&analyzer.finish().unwrap()).unwrap();
     assert_object_keys(
         &report,
         &[
@@ -94,6 +94,7 @@ fn analyzer_keeps_buffer_and_json_contracts() {
         ],
     );
 
-    let windows: Value = serde_json::from_str(&analyzer.get_spatial_windows_json()).unwrap();
+    let windows: Value =
+        serde_json::from_str(&analyzer.get_spatial_windows_json().unwrap()).unwrap();
     assert!(windows.is_array());
 }

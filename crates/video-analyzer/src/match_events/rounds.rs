@@ -3,6 +3,7 @@
 //! match_events.rs からの機械的分割（挙動不変）。
 
 use super::*;
+use crate::round_start::FightMarker;
 
 /// タイムアップや KO 演出でゼロ HP を読めない場合に、残 HP 差から勝者を
 /// 推定する最小差。HP バー約 14px 相当で、通常の読み取り揺れより十分大きい。
@@ -60,14 +61,54 @@ pub(crate) fn detect_rounds_from_hp(
         }
     }
 
-    // 各 onset から次の onset（または末尾）までをラウンドとし、KO で終端を締める
+    detect_rounds_from_bounds(features, hp, &merged, &merged)
+}
+
+/// `FIGHT` 画像の安定表示区間からラウンドを分割する。
+///
+/// 前ラウンドの hard end は次の FIGHT 検出開始直前、イベントを所属させる
+/// start は安定表示の末尾とする。HP は境界の決定には使用しない。
+pub(crate) fn detect_rounds_from_fight_markers(
+    features: &[FrameFeatures],
+    hp: &[Vec<f32>; 2],
+    markers: &[FightMarker],
+) -> Vec<RoundInfo> {
+    if features.is_empty() || markers.is_empty() {
+        return Vec::new();
+    }
+    let starts: Vec<usize> = markers
+        .iter()
+        .map(|marker| idx_of(features, marker.last_frame))
+        .collect();
+    let boundaries: Vec<usize> = markers
+        .iter()
+        .map(|marker| idx_of(features, marker.first_frame))
+        .collect();
+    detect_rounds_from_bounds(features, hp, &starts, &boundaries)
+}
+
+/// 各 start から次の boundary（または末尾）までをラウンドとし、
+/// KO・安定 HUD で終端を締める。
+fn detect_rounds_from_bounds(
+    features: &[FrameFeatures],
+    hp: &[Vec<f32>; 2],
+    starts: &[usize],
+    boundaries: &[usize],
+) -> Vec<RoundInfo> {
+    if starts.len() != boundaries.len() {
+        return Vec::new();
+    }
+    let n = features.len();
     let mut rounds: Vec<RoundInfo> = Vec::new();
-    for (k, &o) in merged.iter().enumerate() {
-        let hard_end = if k + 1 < merged.len() {
-            merged[k + 1] - 1
+    for (k, &o) in starts.iter().enumerate() {
+        let hard_end = if k + 1 < boundaries.len() {
+            boundaries[k + 1].saturating_sub(1)
         } else {
             n - 1
         };
+        if o > hard_end {
+            continue;
+        }
         // KO 探索: どちらかが KO_HP 以下を KO_MIN_RUN 持続する最初の位置
         let mut end = hard_end;
         let mut winner: Option<u8> = None;
