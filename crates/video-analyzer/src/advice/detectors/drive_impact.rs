@@ -6,6 +6,8 @@ use crate::match_events::{
     DriveImpactOutcome, EventConfidence, InputSegment, MatchEvents, MeterState,
 };
 
+use super::dir_arrow;
+
 const RESULT_WINDOW: u32 = 80;
 const INPUT_LOOKBACK: u32 = 2;
 const INPUT_EXECUTION_LAG: u32 = 8;
@@ -19,7 +21,7 @@ struct CommittedButton {
     input: String,
 }
 
-fn normal_button_label(input: &InputSegment) -> Option<String> {
+fn normal_button(input: &InputSegment) -> Option<&str> {
     if input.throw || input.is_drive_impact() || input.badges.len() != 1 {
         return None;
     }
@@ -27,7 +29,43 @@ fn normal_button_label(input: &InputSegment) -> Option<String> {
         input.badges[0].as_str(),
         "弱" | "中" | "強" | "弱P" | "中P" | "強P" | "弱K" | "中K" | "強K"
     )
-    .then(|| input.badges[0].clone())
+    .then(|| input.badges[0].as_str())
+}
+
+fn normal_button_label(input: &InputSegment) -> Option<String> {
+    let button = normal_button(input)?;
+    Some(if input.dir == "N" {
+        button.to_string()
+    } else {
+        format!("{}+{button}", dir_arrow(&input.dir))
+    })
+}
+
+/// ボタンを保持したまま方向だけ離した場合、入力履歴は方向変更の境界で
+/// 別セグメントになる。直前の隣接セグメントが同じボタンで方向だけ異なるなら、
+/// ボタンを押した瞬間の方向とフレームまで戻す。
+fn button_press_segment(
+    segments: &[InputSegment],
+    mut index: usize,
+    earliest_frame: u32,
+) -> &InputSegment {
+    while index > 0 {
+        let current = &segments[index];
+        let previous = &segments[index - 1];
+        let same_held_button = normal_button(previous) == normal_button(current)
+            && previous.auto == current.auto
+            && previous.dir != current.dir;
+        let adjacent = previous.end_frame.saturating_add(1) >= current.start_frame;
+        if !same_held_button
+            || !adjacent
+            || previous.start_frame < earliest_frame
+            || !previous.evidence.has_direct_observation()
+        {
+            break;
+        }
+        index -= 1;
+    }
+    &segments[index]
 }
 
 fn execution_is_confirmed(
@@ -101,17 +139,23 @@ pub(crate) fn detect_committed_button_vs_di(
         else {
             continue;
         };
-        let Some((input, label)) = events.segments[own_index]
+        let segments = &events.segments[own_index];
+        let Some((input_index, _)) = segments
             .iter()
+            .enumerate()
             .filter(|input| {
-                input.evidence.has_direct_observation()
-                    && input.start_frame >= impact.input_frame
-                    && input.start_frame <= contact_frame
+                input.1.evidence.has_direct_observation()
+                    && input.1.start_frame >= impact.input_frame
+                    && input.1.start_frame <= contact_frame
             })
-            .filter_map(|input| normal_button_label(input).map(|label| (input, label)))
-            .filter(|(input, _)| execution_is_confirmed(events, own_index, input, contact_frame))
-            .max_by_key(|(input, _)| input.start_frame)
+            .filter(|(_, input)| normal_button(input).is_some())
+            .filter(|(_, input)| execution_is_confirmed(events, own_index, input, contact_frame))
+            .max_by_key(|(_, input)| input.start_frame)
         else {
+            continue;
+        };
+        let input = button_press_segment(segments, input_index, impact.input_frame);
+        let Some(label) = normal_button_label(input) else {
             continue;
         };
         caught.push(CommittedButton {
@@ -147,30 +191,30 @@ pub(crate) fn detect_committed_button_vs_di(
         },
         confidence: EventConfidence::High,
         title: if repeated {
-            "通常技をDIに繰り返し取られている"
+            "通常技の実行中にDIを繰り返し受けている"
         } else {
-            "通常技をDIに取られた場面"
+            "通常技の実行中にDIを受けた場面"
         }
         .to_string(),
         severity: hp_lost,
         description: if repeated {
             format!(
-                "通常技の実行中に相手DIがヒットした場面を {} 回確認し、合計 {:.0}% 被弾しています。最も多かった入力は {} でした。同じ距離・タイミングの技選択が複数回重なっているため、DIに対して確定しやすい置き技を改善候補とします。",
+                "入力表示とフレームメーターの両方で、通常技の実行中に相手DIがヒットした場面を {} 回確認し、合計 {:.0}% 被弾しています。最も多かった表示入力は {} でした。相手が技の出始めを見てDIしたのか、先に選んだDIと技がかみ合ったのかは、この時系列データだけでは断定できません。繰り返しているため、使用技のDIキャンセル可否と置く距離・頻度を見直す候補です。",
                 caught.len(),
                 hp_lost * 100.0,
                 common_input
             )
         } else {
             format!(
-                "入力表示とフレームメーターの両方で {} の実行を確認した直後、相手DIがヒットして {:.0}% 被弾した場面が1回あります。この1回だけでは、DIを読んだ技選択だったのか、反応できないタイミングで技を置いていたのかは{OBSERVATION_REVIEW_CAVEAT}。",
+                "入力表示では {}、フレームメーターでは通常技の実行中に相手DIがヒットし、{:.0}% 被弾した場面が1回あります。このデータだけでは、相手が技の出始めを見てDIしたのか、先に選んだDIと技がかみ合ったのかは{OBSERVATION_REVIEW_CAVEAT}。",
                 common_input,
                 hp_lost * 100.0
             )
         },
         practice: if repeated {
-            "同じ距離から相手の前進・DIをランダム再生し、キャンセル可能な技か様子見を混ぜます。DIを受け止めた通常技が毎回同じなら、その技を置く距離と頻度を先に減らしましょう。"
+            "各クリップをスロー再生し、技が出始めた時点とDI演出開始の順序、その技のDIキャンセル可否を確認します。技が先でキャンセル不能なら置く距離・頻度を、DIが先またはキャンセル可能ならDI返し入力を練習しましょう。"
         } else {
-            "クリップをスロー再生し、DIの暗転前に技を出し切っていたか、暗転後に入力したかを確認します。前者なら技を置く距離、後者ならDI返しの反応を個別に練習しましょう。"
+            "クリップをスロー再生し、技が出始めた時点とDI演出開始の順序、その技のDIキャンセル可否を確認します。技が先でキャンセル不能なら置く距離・頻度を、DIが先またはキャンセル可能ならDI返し入力を個別に練習しましょう。"
         }
         .to_string(),
         evidence: caught
