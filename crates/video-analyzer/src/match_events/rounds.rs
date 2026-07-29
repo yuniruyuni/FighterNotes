@@ -92,7 +92,7 @@ pub(crate) fn detect_rounds_from_hp(
         }
         // KO が検出できないラウンド（KO フラッシュで最後の一撃が uncertain に
         // なった / タイムアップ / 動画途中で終了）は、両者の読み取り品質が
-        // 良かった最後のフレームまで巻き戻し、その時点の HP 差で勝敗を推定する
+        // 良かった最後のフレームを起点にする。
         if winner.is_none() {
             // 「安定」は連続 8 フレーム両者品質良好を要求する。リザルト画面には
             // 品質良好に見える孤立ジャンクフレームが混ざるため、単発では信用しない。
@@ -111,8 +111,19 @@ pub(crate) fn detect_rounds_from_hp(
                 .find(|&i| i >= o + 7 && (i - 7..=i).all(stable))
                 .or_else(|| (o..=hard_end).rev().find(|&i| stable(i)))
                 .unwrap_or(hard_end);
-            end = end_stable;
-            hp_end = (hp[0][end_stable], hp[1][end_stable]);
+            // SA/CA 演出では片側 HP が長時間スプライトに覆われ、最後の安定
+            // 読みがコンボ開始まで巻き戻ることがある。一度安定した試合 HUD
+            // を確認できた後は、同じ連続した HUD 区間の終端までイベント範囲を
+            // 保持する。リザルトや次ラウンド前の孤立 HUD は non-match 区間で
+            // 分断されるため越えない。
+            end = (end_stable..=hard_end)
+                .take_while(|&i| features[i].is_match_screen)
+                .last()
+                .unwrap_or(end_stable);
+            hp_end = (
+                (o..=end).map(|i| hp[0][i]).fold(f32::MAX, f32::min),
+                (o..=end).map(|i| hp[1][i]).fold(f32::MAX, f32::min),
+            );
             let (l, r) = hp_end;
             if (l - r).abs() > WINNER_HP_MARGIN {
                 winner = Some(if l > r { 1 } else { 2 });
