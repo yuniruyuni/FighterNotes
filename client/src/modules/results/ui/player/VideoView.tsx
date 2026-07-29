@@ -20,7 +20,7 @@ export function VideoView(props: VideoViewProps) {
         <video
           id="player-video"
           ref={videoRef}
-          src={source}
+          src={source || undefined}
           preload="metadata"
           onLoadedMetadata={(event) =>
             events.loadedMetadata(event.currentTarget)
@@ -37,6 +37,7 @@ export function VideoView(props: VideoViewProps) {
         frameTimestamps={props.frameTimestamps}
         onSeek={controls.seek}
         onStepFrame={controls.stepFrame}
+        onPlaybackRateChange={controls.changePlaybackRate}
         onToggleLoop={controls.toggleLoop}
         onTogglePlayback={controls.togglePlayback}
       />

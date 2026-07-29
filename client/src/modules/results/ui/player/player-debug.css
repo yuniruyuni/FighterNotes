@@ -190,6 +190,30 @@
   color: #dcc2ff;
   box-shadow: 0 0 7.5px var(--glow-purple);
 }
+.playback-rate-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+  min-inline-size: 0;
+  padding: 0;
+  border: 0;
+}
+.playback-rate-label {
+  float: left;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  margin-right: 0.1rem;
+}
+.pbtn.speed {
+  min-width: 3.25rem;
+  font-variant-numeric: tabular-nums;
+}
+.pbtn.speed.active {
+  background: rgba(165, 90, 255, 0.16);
+  border-color: var(--purple);
+  color: #dcc2ff;
+}
 
 /* 改善ポイント */
 .clip-advice {

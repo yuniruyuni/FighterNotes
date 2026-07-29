@@ -13,6 +13,7 @@ import {
   shouldLoopBack,
 } from "../../domain/frame-time.js";
 import type { SceneSelection } from "../../domain/scene-selection.js";
+import type { PlaybackRate } from "./playback-rate.js";
 
 interface VideoControllerOptions {
   active: boolean;
@@ -32,6 +33,7 @@ export function useVideoController({
   const source = useObjectUrl(file);
   const [loopEnabled, setLoopEnabled] = useState(true);
   const [playing, setPlaying] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState<PlaybackRate>(1);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const range = useMemo(
@@ -88,6 +90,7 @@ export function useVideoController({
       currentTime,
       duration,
       loopEnabled,
+      playbackRate,
       playing,
       progressStyle,
     },
@@ -97,6 +100,10 @@ export function useVideoController({
           videoRef.current.currentTime = milliseconds / 1000;
       },
       stepFrame,
+      changePlaybackRate(rate: PlaybackRate) {
+        setPlaybackRate(rate);
+        if (videoRef.current) videoRef.current.playbackRate = rate;
+      },
       toggleLoop() {
         setLoopEnabled((enabled) => !enabled);
       },
@@ -110,6 +117,7 @@ export function useVideoController({
     events: {
       loadedMetadata(video: HTMLVideoElement) {
         setDuration(video.duration || 0);
+        video.playbackRate = playbackRate;
         if (!range) return;
         previousSeconds.current = range.startSec;
         video.currentTime = range.startSec;
