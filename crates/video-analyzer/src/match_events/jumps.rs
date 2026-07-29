@@ -90,9 +90,9 @@ pub(crate) fn extract_jumps(inputs: JumpInputs<'_>) -> Vec<JumpEvent> {
             if !movementish[s].is_empty() {
                 let lo = idx_of(features, f0.saturating_sub(JUMP_CONFIRM_BACK));
                 let hi = idx_of(features, f0 + JUMP_CONFIRM_FWD).min(n - 1);
-                // 既に前のジャンプへ割り当てたランの末尾より、新しく始まる
-                // 未使用ランを優先する。未使用ランが無いときだけ古いランを
-                // 曖昧候補の根拠として残す。
+                // 窓に重なる全ランを列挙する。窓の左端へ伸びる古いランと、
+                // 入力直後に始まる本物の離陸ランが同時に入ることがあるため、
+                // 単純な先頭一致では決めない。
                 let mut runs = Vec::new();
                 for hit_i in (lo..=hi).filter(|&i| movementish[s][i]) {
                     let mut a = hit_i;
@@ -108,31 +108,46 @@ pub(crate) fn extract_jumps(inputs: JumpInputs<'_>) -> Vec<JumpEvent> {
                     }
                     runs.push((a, b));
                 }
-                let run = runs
-                    .iter()
-                    .copied()
-                    .find(|(a, _)| !claimed_movement_runs[s].contains(a))
-                    .or_else(|| runs.first().copied());
-                let Some((a, b)) = run else {
-                    continue;
-                };
-                let gf_len = match (meter_gf[s].get(a), meter_gf[s].get(b)) {
-                    (Some(&g0), Some(&g1)) if g0 >= 0 && g1 >= g0 => g1 - g0 + 1,
-                    _ => (b - a + 1) as i64,
-                };
-                let clipped_into_stun = (b + 1..(b + 4).min(n))
-                    .any(|i| meter_state[s].get(i) == Some(&MeterState::Stun));
-                if gf_len < JUMP_CONFIRM_MIN_GF && !clipped_into_stun {
-                    continue;
+                // 短い攻撃発生ランを先に選んで有効な離陸ランを捨てないよう、
+                // 長さ条件を満たす候補だけを順位付けする。入力との時間整合、
+                // 地上攻撃チェーンでないこと、未使用であること、距離の順で
+                // 優先する。
+                let mut candidates = Vec::new();
+                for (a, b) in runs {
+                    let gf_len = match (meter_gf[s].get(a), meter_gf[s].get(b)) {
+                        (Some(&g0), Some(&g1)) if g0 >= 0 && g1 >= g0 => g1 - g0 + 1,
+                        _ => (b - a + 1) as i64,
+                    };
+                    let clipped_into_stun = (b + 1..(b + 4).min(n))
+                        .any(|i| meter_state[s].get(i) == Some(&MeterState::Stun));
+                    if gf_len < JUMP_CONFIRM_MIN_GF && !clipped_into_stun {
+                        continue;
+                    }
+                    let run_start = features[a].frame_index;
+                    let timing_matches = run_start >= f0.saturating_sub(JUMP_CONFIRM_BACK)
+                        && run_start <= f0.saturating_add(JUMP_CONFIRM_FWD);
+                    let ground_attack_chain =
+                        movement_run_is_ground_attack_chain(&meter_state[s], &meter_epoch[s], a, b);
+                    candidates.push((
+                        a,
+                        b,
+                        timing_matches,
+                        ground_attack_chain,
+                        claimed_movement_runs[s].contains(&a),
+                        run_start.abs_diff(f0),
+                    ));
                 }
+                let Some((a, b, timing_matches, ground_attack_chain, claimed, _)) =
+                    candidates.into_iter().min_by_key(
+                        |(_, _, timing_matches, ground_attack_chain, claimed, distance)| {
+                            (!*timing_matches, *ground_attack_chain, *claimed, *distance)
+                        },
+                    )
+                else {
+                    continue;
+                };
                 movement_run_start = Some(a);
-                let run_start = features[a].frame_index;
-                let ground_attack_chain =
-                    movement_run_is_ground_attack_chain(&meter_state[s], &meter_epoch[s], a, b);
-                takeoff_confirmed = !claimed_movement_runs[s].contains(&a)
-                    && !ground_attack_chain
-                    && run_start >= f0.saturating_sub(JUMP_CONFIRM_BACK)
-                    && run_start <= f0.saturating_add(JUMP_CONFIRM_FWD);
+                takeoff_confirmed = !claimed && !ground_attack_chain && timing_matches;
                 if crate::frame_data::has_extended_airtime(characters[s]) {
                     air_end = air_end.max(features[b].frame_index + JUMP_LAND_EPS);
                 }
@@ -188,21 +203,30 @@ pub(crate) fn extract_jumps(inputs: JumpInputs<'_>) -> Vec<JumpEvent> {
     // 優先し、空対空でも同じ接触を LandedHit と GotHit の両方に数えない。
     if !contacts.is_empty() {
         let mut used_contacts = HashSet::new();
-        for (contact_i, contact) in contacts.iter().enumerate().filter(|(_, c)| c.hit) {
+        for (contact_i, contact) in contacts.iter().enumerate() {
             let candidate = pending_jumps
                 .iter()
                 .enumerate()
-                .filter(|(_, (jump, _))| {
+                .filter(|(_, (jump, air_hit_end))| {
                     jump.outcome == JumpOutcome::Neutral
                         && jump.side == contact.victim
                         && contact.frame >= jump.frame
                         && contact.frame <= jump.air_end
+                        // SF6 は空中ガードが無い。HP が演出で読めず contact.hit
+                        // が false でも、確認済み離陸の空中窓ならヒット候補として
+                        // 空間解析へ送り、接地していれば後段で棄却する。
+                        && (contact.hit
+                            || (jump.takeoff_confirmed
+                                && contact.frame > jump.frame + JUMP_C_PRE_MAX
+                                && contact.frame <= *air_hit_end))
                 })
                 .max_by_key(|(_, (jump, _))| jump.frame)
                 .map(|(i, _)| i);
             let Some(jump_i) = candidate else { continue };
             let (jump, air_hit_end) = &mut pending_jumps[jump_i];
-            jump.outcome = if contact.frame <= jump.frame + JUMP_C_PRE_MAX {
+            jump.outcome = if !contact.hit {
+                JumpOutcome::UnverifiedHit
+            } else if contact.frame <= jump.frame + JUMP_C_PRE_MAX {
                 JumpOutcome::PreJumpClipped
             } else if contact.frame <= *air_hit_end {
                 if jump.takeoff_confirmed {

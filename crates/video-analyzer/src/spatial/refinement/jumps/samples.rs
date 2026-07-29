@@ -57,6 +57,10 @@ pub(super) fn refine_landed_hit(
 }
 
 pub(super) fn refine_incoming_hit(jump: &mut JumpEvent, samples: &[(u32, &ActorObservation)]) {
+    // 第一段で「HP は読めないが、確認済み離陸の空中窓にメーター接触あり」
+    // とした候補。SF6 は空中ガード不可なので、空間層が明確な接地を示さず
+    // 演出で追跡不能な場合はヒットとして復元できる。
+    let meter_air_contact = jump.outcome == JumpOutcome::UnverifiedHit && jump.takeoff_confirmed;
     let airborne = samples
         .iter()
         .filter(|(_, actor)| !actor.ground_anchor)
@@ -70,12 +74,15 @@ pub(super) fn refine_incoming_hit(jump: &mut JumpEvent, samples: &[(u32, &ActorO
         jump.outcome = JumpOutcome::GotHit;
         return;
     }
-    jump.takeoff_confirmed = false;
-    jump.outcome = if grounded >= JUMP_AIR_MIN_SAMPLES && grounded >= airborne {
-        JumpOutcome::GroundedHit
+    if grounded >= JUMP_AIR_MIN_SAMPLES && grounded >= airborne {
+        jump.takeoff_confirmed = false;
+        jump.outcome = JumpOutcome::GroundedHit;
+    } else if meter_air_contact {
+        jump.outcome = JumpOutcome::GotHit;
     } else {
         // An observed window without stable airborne samples is not enough
         // evidence for user-facing anti-air advice.
-        JumpOutcome::Neutral
-    };
+        jump.takeoff_confirmed = false;
+        jump.outcome = JumpOutcome::Neutral;
+    }
 }

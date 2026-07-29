@@ -51,3 +51,36 @@ fn test_old_movement_run_does_not_confirm_new_takeoff() {
     let report = crate::advice::build_report(&fs, &ev, "p2", Some("LUKE"));
     assert!(report.cards.iter().all(|card| card.id != "own_jumps"));
 }
+
+#[test]
+fn nearby_takeoff_run_is_preferred_over_a_stale_overlapping_run() {
+    let mut fs = Vec::new();
+    for i in 0..165u32 {
+        fs.push(feat(i, 1.0, 1.0));
+    }
+    for i in 165..185u32 {
+        fs.push(feat(i, 1.0 - 0.005 * (i - 164) as f32, 1.0));
+    }
+    for i in 185..300u32 {
+        fs.push(feat(i, 0.9, 1.0));
+    }
+    let inputs = up_inputs(fs.len(), &[(100, 104)]);
+    let left = synth_timeline(vec![]);
+    let right = synth_timeline(
+        [
+            synth_run(0, "motion_recovery", 70, 90),
+            synth_run(21, "motion_recovery", 104, 142),
+        ]
+        .concat(),
+    );
+
+    let events = build_match_events(&fs, &[], &inputs, Some((&left, &right)), "p1");
+    let jumps: Vec<_> = events.jumps.iter().filter(|jump| jump.side == 2).collect();
+
+    assert_eq!(jumps.len(), 1);
+    assert_eq!(jumps[0].frame, 100);
+    assert!(
+        jumps[0].takeoff_confirmed,
+        "入力直後の未使用ランを古いランより優先する: {jumps:?}"
+    );
+}

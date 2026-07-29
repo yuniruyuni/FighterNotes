@@ -19,6 +19,7 @@ mod test_contact_projectile_flag;
 mod test_damage_sequences;
 mod test_ground_attack_chain_does_not_confirm_takeoff;
 mod test_jump_landed_hit_excludes_post_landing_damage;
+mod test_jump_obscured_hp_contact;
 mod test_jump_outcome;
 mod test_jump_outcome_by_contact_windows;
 mod test_late_strike_and_unconfirmed_projectile_are_not_whiff_fails;

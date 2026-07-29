@@ -41,7 +41,13 @@ impl ActorTracker {
             .map(|(index, _)| index)
             .collect();
         if self.p1.is_none() && self.p2.is_none() && candidates.len() >= 2 {
-            if let Some([p1, p2]) = initial_tracks(regions, &candidates, frame_index) {
+            if let Some([p1, p2]) = initial_tracks(
+                regions,
+                &candidates,
+                frame_index,
+                [hints.p1.allow_airborne, hints.p2.allow_airborne],
+                config,
+            ) {
                 self.p1 = Some(p1);
                 self.p2 = Some(p2);
             }

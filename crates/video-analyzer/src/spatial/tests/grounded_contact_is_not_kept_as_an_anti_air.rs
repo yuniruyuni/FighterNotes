@@ -43,4 +43,25 @@ fn grounded_contact_is_not_kept_as_an_anti_air() {
     assert_eq!(airborne.jumps[0].direction, JumpDirection::Forward);
     assert_eq!(airborne.jumps[0].outcome, JumpOutcome::GotHit);
     assert!(airborne.jumps[0].takeoff_confirmed);
+
+    let mut obscured = empty_events();
+    obscured
+        .jumps
+        .push(jump(100, JumpOutcome::UnverifiedHit, "UL"));
+    obscured.jumps[0].takeoff_confirmed = true;
+    let obscured_observations: Vec<_> = (100..=120)
+        .map(|frame_index| SpatialObservation {
+            frame_index,
+            p1: None,
+            p2: None,
+            screen_distance: None,
+            distance_band: None,
+            horizontal_order: None,
+            projectile_candidates: vec![],
+            motion_regions: vec![],
+        })
+        .collect();
+    refine_match_events_with_spatial(&mut obscured, &obscured_observations, &context);
+    assert_eq!(obscured.jumps[0].outcome, JumpOutcome::GotHit);
+    assert!(obscured.jumps[0].takeoff_confirmed);
 }

@@ -6,6 +6,8 @@ pub(super) fn initial_tracks(
     regions: &[MotionRegion],
     candidates: &[usize],
     frame_index: u32,
+    allow_airborne: [bool; 2],
+    config: &SpatialConfig,
 ) -> Option<[ActorTrack; 2]> {
     let mut ranked = candidates.to_vec();
     ranked.sort_by(|&a, &b| {
@@ -20,6 +22,29 @@ pub(super) fn initial_tracks(
         .copied()
         .skip(1)
         .find(|&index| (regions[index].anchor().x - regions[first].anchor().x).abs() >= 0.12)?;
+    // 短いイベント窓は両者が既に位置を入れ替えた状態から始まることがある。
+    // 片側だけにジャンプヒントがあり、候補も空中/地上に分かれるなら、
+    // 左=P1 の初期仮定より意味ヒントを優先してプレイヤーIDを割り当てる。
+    if allow_airborne[0] != allow_airborne[1] {
+        let first_airborne = regions[first].anchor().y < config.actor_ground_y;
+        let second_airborne = regions[second].anchor().y < config.actor_ground_y;
+        if first_airborne != second_airborne {
+            let (airborne, grounded) = if first_airborne {
+                (first, second)
+            } else {
+                (second, first)
+            };
+            let assigned = if allow_airborne[0] {
+                [airborne, grounded]
+            } else {
+                [grounded, airborne]
+            };
+            return Some([
+                from_region(&regions[assigned[0]], frame_index, 0.55),
+                from_region(&regions[assigned[1]], frame_index, 0.55),
+            ]);
+        }
+    }
     let (left, right) = if regions[first].anchor().x <= regions[second].anchor().x {
         (first, second)
     } else {
