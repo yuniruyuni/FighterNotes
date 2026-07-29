@@ -2,6 +2,40 @@ use super::*;
 use meter_tracker::MeterTimeline;
 use std::collections::HashSet;
 
+fn takeoff_timing_matches(
+    features: &[FrameFeatures],
+    meter_gf: &[i64],
+    meter_epoch: &[i32],
+    run_start_index: usize,
+    input_frame: u32,
+) -> bool {
+    let run_start = features[run_start_index].frame_index;
+    if run_start < input_frame.saturating_sub(JUMP_CONFIRM_BACK)
+        || run_start > input_frame.saturating_add(JUMP_CONFIRM_FWD)
+    {
+        return false;
+    }
+    if run_start >= input_frame {
+        return true;
+    }
+
+    // 動画上で入力表示が遅れても、ヒットストップ中なら game frame 差は
+    // ほぼゼロになる。ゲーム自体が数フレーム以上進んでいる場合、先行する
+    // 移動ランをその上入力が発生させたとはいえない。
+    let input_index = idx_of(features, input_frame);
+    let (Some(&run_gf), Some(&input_gf)) =
+        (meter_gf.get(run_start_index), meter_gf.get(input_index))
+    else {
+        return true;
+    };
+    if run_gf < 0 || input_gf < 0 {
+        return true;
+    }
+    input_gf >= run_gf
+        && input_gf - run_gf <= JUMP_CONFIRM_BACK_GF
+        && continuous_epoch(meter_epoch, run_start_index, input_index).is_some()
+}
+
 pub(crate) struct JumpInputs<'a> {
     pub(crate) features: &'a [FrameFeatures],
     pub(crate) segments: &'a [Vec<InputSegment>; 2],
@@ -124,8 +158,8 @@ pub(crate) fn extract_jumps(inputs: JumpInputs<'_>) -> Vec<JumpEvent> {
                         continue;
                     }
                     let run_start = features[a].frame_index;
-                    let timing_matches = run_start >= f0.saturating_sub(JUMP_CONFIRM_BACK)
-                        && run_start <= f0.saturating_add(JUMP_CONFIRM_FWD);
+                    let timing_matches =
+                        takeoff_timing_matches(features, &meter_gf[s], &meter_epoch[s], a, f0);
                     let ground_attack_chain =
                         movement_run_is_ground_attack_chain(&meter_state[s], &meter_epoch[s], a, b);
                     candidates.push((

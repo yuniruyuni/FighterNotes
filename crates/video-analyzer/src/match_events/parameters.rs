@@ -77,6 +77,11 @@ pub(crate) const JUMP_LAND_EPS: u32 = 5;
 /// 終端側 +8 は離地までの予備動作（f5924 実測: 入力 +4vf でラン開始）
 pub(crate) const JUMP_CONFIRM_BACK: u32 = 15;
 pub(crate) const JUMP_CONFIRM_FWD: u32 = 8;
+/// 移動ランが入力表示より先に見える場合に許すゲーム内フレーム差。
+/// 入力履歴の表示はヒットストップ中に遅れることがあるが、その間の game
+/// frame は進まない。実ゲーム時間まで進んでいれば、既に実行中の空中化する
+/// 必殺技など別行動のランであり、後から表示された上入力の離陸証拠ではない。
+pub(crate) const JUMP_CONFIRM_BACK_GF: i64 = 2;
 /// ジャンプと認める移動系ランの最小 game frame 長。ジャンプの空中時間は
 /// 38-45gf、攻撃の発生（同じ緑表示）はほとんど 4-13gf。短くても直後に
 /// 自分が stun になっていれば予備動作狩られ（PreJumpClipped）として認める

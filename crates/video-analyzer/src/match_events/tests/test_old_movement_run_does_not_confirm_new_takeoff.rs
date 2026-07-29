@@ -84,3 +84,53 @@ fn nearby_takeoff_run_is_preferred_over_a_stale_overlapping_run() {
         "入力直後の未使用ランを古いランより優先する: {jumps:?}"
     );
 }
+
+#[test]
+fn movement_before_the_input_only_confirms_takeoff_while_game_time_is_frozen() {
+    let mut features = Vec::new();
+    for frame in 0..160u32 {
+        features.push(feat(frame, 1.0, 1.0));
+    }
+    for frame in 160..180u32 {
+        features.push(feat(frame, 1.0, 1.0 - 0.005 * (frame - 159) as f32));
+    }
+    for frame in 180..300u32 {
+        features.push(feat(frame, 1.0, 0.9));
+    }
+    let inputs = up_inputs(features.len(), &[(100, 104)]);
+    let left = synth_timeline(vec![]);
+
+    // 入力表示より11 video frame早くランが始まっても、同じ game frame が
+    // 継続しているならヒットストップによる表示遅延として確認できる。
+    let frozen = synth_timeline(
+        [
+            vec![(0, "motion_recovery", 89, 100)],
+            synth_run(1, "motion_recovery", 101, 139),
+        ]
+        .concat(),
+    );
+    let events = build_match_events(&features, &[], &inputs, Some((&left, &frozen)), "p1");
+    let jump = events
+        .jumps
+        .iter()
+        .find(|jump| jump.side == 2 && jump.frame == 100)
+        .expect("上入力候補");
+    assert!(
+        jump.takeoff_confirmed,
+        "停止中の入力表示遅延は本物の離陸を維持する: {jump:?}"
+    );
+
+    // 同じ11 video frame差でも game frame が進んでいれば、先に始まった
+    // 空中化する必殺技等のランを後発の上入力へ帰属しない。
+    let progressing = synth_timeline(synth_run(0, "motion_recovery", 89, 139));
+    let events = build_match_events(&features, &[], &inputs, Some((&left, &progressing)), "p1");
+    let jump = events
+        .jumps
+        .iter()
+        .find(|jump| jump.side == 2 && jump.frame == 100)
+        .expect("確認不能でも上入力候補は保持する");
+    assert!(
+        !jump.takeoff_confirmed,
+        "実ゲーム時間で先行するランは離陸証拠にしない: {jump:?}"
+    );
+}
