@@ -200,6 +200,65 @@ fn fight_opening_uses_reliable_raw_hp_instead_of_previous_round_fill() {
     assert_close(features[60].opponent_hp, 0.94);
 }
 
+#[test]
+fn sustained_stepwise_recovery_is_not_committed_as_permanent_damage() {
+    let mut values = vec![1.0; 40];
+    values.extend(vec![0.96; 100]);
+    for step in 1..=20 {
+        values.extend(vec![0.96 + step as f32 * 0.0015; 6]);
+    }
+    values.extend(vec![0.991; 12]);
+    values.extend(vec![0.72; 40]);
+    let mut features = own_hp_series(&values);
+    for feature in &mut features[40..] {
+        feature.opponent_hp = 0.875;
+        feature.right_hp_raw = 0.875;
+    }
+    for feature in &mut features[246..260] {
+        feature.own_hp = -1.0;
+        feature.left_hp_raw = 0.0;
+        feature.left_hp_raw_quality = 1.0;
+    }
+
+    confirm_hp(&mut features);
+
+    assert!(features[40..272]
+        .iter()
+        .all(|feature| feature.own_hp == 1.0));
+    assert_close(features[272].own_hp, 0.72);
+}
+
+#[test]
+fn partial_or_single_step_rebounds_remain_monotonic() {
+    let mut partial = own_hp_series(
+        &vec![1.0; 40]
+            .into_iter()
+            .chain(vec![0.70; 80])
+            .chain(vec![0.75; 80])
+            .collect::<Vec<_>>(),
+    );
+    for feature in &mut partial[40..] {
+        feature.opponent_hp = 0.8;
+        feature.right_hp_raw = 0.8;
+    }
+    confirm_hp(&mut partial);
+    assert_close(partial.last().unwrap().own_hp, 0.70);
+
+    let mut spike = own_hp_series(
+        &vec![1.0; 40]
+            .into_iter()
+            .chain(vec![0.70; 80])
+            .chain(vec![0.99; 20])
+            .collect::<Vec<_>>(),
+    );
+    for feature in &mut spike[40..] {
+        feature.opponent_hp = 0.8;
+        feature.right_hp_raw = 0.8;
+    }
+    confirm_hp(&mut spike);
+    assert_close(spike.last().unwrap().own_hp, 0.70);
+}
+
 fn reindex(features: &mut [crate::frame_features::FrameFeatures]) {
     for (index, frame) in features.iter_mut().enumerate() {
         frame.frame_index = index as u32;

@@ -5,10 +5,12 @@ use crate::round_start::FightMarker;
 
 mod crash;
 mod monotonic;
+mod recoverable;
 mod uncertainty;
 
 use crash::reject_hp_crashes;
 use monotonic::{enforce_monotonic, normalize_structural_full_runs, round_reset_frames};
+use recoverable::restore_confirmed_recoveries;
 use uncertainty::{forward_fill, UncertaintyWindow};
 
 const GAP_FILL: usize = 10;
@@ -44,6 +46,8 @@ pub fn confirm_hp_with_fight_markers(
 fn confirm_hp_impl(features: &mut [FrameFeatures], fight_context: Option<(&[FightMarker], &str)>) {
     let mut own: Vec<_> = features.iter().map(|feature| feature.own_hp).collect();
     let mut opponent: Vec<_> = features.iter().map(|feature| feature.opponent_hp).collect();
+    let own_source = own.clone();
+    let opponent_source = opponent.clone();
     let match_frames: Vec<_> = features
         .iter()
         .map(|feature| feature.is_match_screen)
@@ -74,6 +78,13 @@ fn confirm_hp_impl(features: &mut [FrameFeatures], fight_context: Option<(&[Figh
         }
         None => round_reset_frames(&own, &opponent, &match_frames),
     };
+    restore_confirmed_recoveries(&mut own, &own_source, &match_frames, &reset_frames);
+    restore_confirmed_recoveries(
+        &mut opponent,
+        &opponent_source,
+        &match_frames,
+        &reset_frames,
+    );
     enforce_monotonic(&mut own, &reset_frames);
     enforce_monotonic(&mut opponent, &reset_frames);
 
