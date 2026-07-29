@@ -1,6 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import type { AnalysisServices } from "~/modules/analysis/application/ports.js";
 import { AnalysisSessionProvider } from "~/modules/analysis/index.js";
 import { syntheticAnalysisResult } from "~/test-support/analysis.js";
@@ -29,8 +28,6 @@ describe("AnalysisSetupPage", () => {
       },
       debugSink: { capture },
     };
-    const user = userEvent.setup();
-
     render(
       <AnalysisSessionProvider services={services}>
         <AnalysisSetupPage />
@@ -39,24 +36,28 @@ describe("AnalysisSetupPage", () => {
 
     const fileInput = document.querySelector<HTMLInputElement>("#file-input");
     expect(fileInput).not.toBeNull();
-    await user.upload(
-      fileInput!,
-      new File(["video"], "replay.mp4", { type: "video/mp4" }),
-    );
-    expect(screen.getByRole("button", { name: "解析する" })).toBeDisabled();
-    await user.selectOptions(screen.getByLabelText(/自分のサイド/), "p2");
-    await user.selectOptions(
-      screen.getByLabelText(/自分のキャラクター/),
-      "JURI",
-    );
-    await user.selectOptions(
-      screen.getByLabelText(/相手のキャラクター/),
-      "KEN",
-    );
-    await user.click(screen.getByRole("button", { name: "解析する" }));
+    fireEvent.change(fileInput!, {
+      target: {
+        files: [new File(["video"], "replay.mp4", { type: "video/mp4" })],
+      },
+    });
+    const analyzeButton =
+      document.querySelector<HTMLButtonElement>(".analyze-btn");
+    if (!analyzeButton) throw new Error("analyze button not rendered");
+    expect(analyzeButton.disabled).toBe(true);
+    fireEvent.change(document.querySelector("#side-select")!, {
+      target: { value: "p2" },
+    });
+    fireEvent.change(document.querySelector("#char-select")!, {
+      target: { value: "JURI" },
+    });
+    fireEvent.change(document.querySelector("#opponent-char-select")!, {
+      target: { value: "KEN" },
+    });
+    fireEvent.click(analyzeButton);
 
     await waitFor(() => expect(analyze).toHaveBeenCalledTimes(1));
     expect(capture).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: "解析する" })).toBeEnabled();
+    expect(analyzeButton.disabled).toBe(false);
   });
 });

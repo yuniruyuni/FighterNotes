@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
@@ -69,27 +69,31 @@ describe("React frontend routes", () => {
     expect(screen.getByLabelText(/相手のキャラクター/)).toBeRequired();
   });
 
-  test("動画と両キャラクターを指定すると解析を開始できる", async () => {
-    const user = userEvent.setup();
+  test("動画と両キャラクターを指定すると解析を開始できる", () => {
     renderAt("/");
     const fileInput = document.querySelector<HTMLInputElement>("#file-input");
     expect(fileInput).not.toBeNull();
 
-    await user.upload(
-      fileInput!,
-      new File(["video"], "replay.mp4", { type: "video/mp4" }),
+    fireEvent.change(fileInput!, {
+      target: {
+        files: [new File(["video"], "replay.mp4", { type: "video/mp4" })],
+      },
+    });
+    fireEvent.change(document.querySelector("#side-select")!, {
+      target: { value: "p1" },
+    });
+    fireEvent.change(document.querySelector("#char-select")!, {
+      target: { value: "JURI" },
+    });
+    fireEvent.change(document.querySelector("#opponent-char-select")!, {
+      target: { value: "KEN" },
+    });
+    expect(document.querySelector(".selected-file-name")).toHaveTextContent(
+      "replay.mp4",
     );
-    await user.selectOptions(
-      screen.getByLabelText(/自分のキャラクター/),
-      "JURI",
-    );
-    await user.selectOptions(
-      screen.getByLabelText(/相手のキャラクター/),
-      "KEN",
-    );
-
-    expect(screen.getByText("replay.mp4")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "解析する" })).toBeEnabled();
+    expect(
+      document.querySelector<HTMLButtonElement>(".analyze-btn")?.disabled,
+    ).toBe(false);
   });
 
   test("信頼されないHTTP接続では解析を無効化して理由を表示する", () => {
