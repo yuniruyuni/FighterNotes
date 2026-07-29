@@ -69,7 +69,7 @@ export function AnalysisWorkspacePage() {
             active={navigation.view === "debug"}
             file={file}
             result={result}
-            side={state.side}
+            side={context.ownSide}
           />
         </main>
       </div>

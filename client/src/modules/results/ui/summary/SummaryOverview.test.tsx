@@ -7,6 +7,11 @@ describe("SummaryOverview", () => {
   test("解析結果が映像からの推定であることを常に表示する", () => {
     render(
       <SummaryOverview
+        context={{
+          ownSide: "p2",
+          p1: { character: "JURI" },
+          p2: { character: "KEN" },
+        }}
         report={syntheticAdviceReport({ summary: "解析結果の要約" })}
       />,
     );
@@ -17,5 +22,7 @@ describe("SummaryOverview", () => {
         "解析結果は映像からの推定です。正確な記録ではなく、見直しのための参考情報として利用してください。",
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText("2P（右）・KEN")).toBeInTheDocument();
+    expect(screen.getByText(/相手: 1P（左）・JURI/)).toBeInTheDocument();
   });
 });

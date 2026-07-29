@@ -35,7 +35,7 @@ export function SummaryView({
 }: SummaryViewProps) {
   return (
     <div id="view-summary" style={{ display: active ? "block" : "none" }}>
-      <SummaryOverview report={report} sharing={sharing} />
+      <SummaryOverview context={context} report={report} sharing={sharing} />
       <AdviceSection
         report={report}
         frameTimestamps={frameTimestamps}

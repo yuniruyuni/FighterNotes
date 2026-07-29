@@ -6,7 +6,7 @@ export type AnalysisPhase = "setup" | "analyzing" | "ready";
 
 export interface AnalysisSessionState {
   file: File | null;
-  side: AnalysisSide;
+  side: AnalysisSide | "";
   ownCharacter: string;
   opponentCharacter: string;
   phase: AnalysisPhase;
@@ -45,7 +45,7 @@ export const AnalysisSession = {
   initial(): AnalysisSessionState {
     return {
       file: null,
-      side: "p1",
+      side: "",
       ownCharacter: "",
       opponentCharacter: "",
       phase: "setup",
@@ -62,6 +62,7 @@ export const AnalysisSession = {
     return Boolean(
       state.phase !== "analyzing" &&
         state.file &&
+        state.side &&
         state.ownCharacter &&
         state.opponentCharacter,
     );
@@ -73,7 +74,7 @@ export const AnalysisSession = {
   ): AnalysisSessionState {
     switch (action.type) {
       case "file":
-        return { ...state, file: action.file, error: "" };
+        return { ...state, file: action.file, side: "", error: "" };
       case "side":
         return { ...state, side: action.side };
       case "ownCharacter":
@@ -119,7 +120,6 @@ export const AnalysisSession = {
         return {
           ...AnalysisSession.initial(),
           file: state.file,
-          side: state.side,
           ownCharacter: state.ownCharacter,
           opponentCharacter: state.opponentCharacter,
         };

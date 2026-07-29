@@ -43,6 +43,8 @@ describe("AnalysisSetupPage", () => {
       fileInput!,
       new File(["video"], "replay.mp4", { type: "video/mp4" }),
     );
+    expect(screen.getByRole("button", { name: "解析する" })).toBeDisabled();
+    await user.selectOptions(screen.getByLabelText(/自分のサイド/), "p2");
     await user.selectOptions(
       screen.getByLabelText(/自分のキャラクター/),
       "JURI",

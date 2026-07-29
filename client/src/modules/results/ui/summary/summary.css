@@ -47,6 +47,24 @@
   font-size: 0.95rem;
   line-height: 1.7;
 }
+.analysis-side-confirmation {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.7rem;
+  align-items: baseline;
+  margin-bottom: 0.9rem;
+  padding: 0.65rem 0.8rem;
+  border-left: 3.5px solid var(--sa);
+  background: rgba(58, 168, 255, 0.09);
+  color: var(--text-dim);
+  font-size: 0.76rem;
+}
+.analysis-side-confirmation strong {
+  color: var(--text-hi);
+  font-size: 0.9rem;
+}
 .summary-caveat {
   margin-top: 0.65rem;
   color: var(--text-dim);

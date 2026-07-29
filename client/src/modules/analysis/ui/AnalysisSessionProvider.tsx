@@ -67,7 +67,7 @@ export function AnalysisSessionProvider({
       dispatch({ type: "fail", error: runtime.reason });
       return null;
     }
-    if (!AnalysisSession.canStart(state) || !file) {
+    if (!AnalysisSession.canStart(state) || !file || !side) {
       return null;
     }
 

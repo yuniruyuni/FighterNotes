@@ -10,7 +10,7 @@ describe("analysis session reducer", () => {
 
     expect(first).toEqual({
       file: null,
-      side: "p1",
+      side: "",
       ownCharacter: "",
       opponentCharacter: "",
       phase: "setup",
@@ -28,12 +28,14 @@ describe("analysis session reducer", () => {
     const ready = {
       ...AnalysisSession.initial(),
       file: new File(["video"], "replay.mp4"),
+      side: "p1" as const,
       ownCharacter: "JURI",
       opponentCharacter: "KEN",
     };
 
     expect(AnalysisSession.canStart(ready)).toBe(true);
     expect(AnalysisSession.canStart({ ...ready, file: null })).toBe(false);
+    expect(AnalysisSession.canStart({ ...ready, side: "" })).toBe(false);
     expect(AnalysisSession.canStart({ ...ready, ownCharacter: "" })).toBe(
       false,
     );
@@ -46,10 +48,15 @@ describe("analysis session reducer", () => {
   });
 
   test("設定actionを適用し、再入力時に以前のエラーを消す", () => {
-    const initial = { ...AnalysisSession.initial(), error: "old error" };
+    const initial = {
+      ...AnalysisSession.initial(),
+      side: "p1" as const,
+      error: "old error",
+    };
     const file = new File(["video"], "replay.mp4");
     const withFile = AnalysisSession.reduce(initial, { type: "file", file });
     expect(withFile.error).toBe("");
+    expect(withFile.side).toBe("");
     const withSide = AnalysisSession.reduce(withFile, {
       type: "side",
       side: "p2",
@@ -119,7 +126,7 @@ describe("analysis session reducer", () => {
     ).toMatchObject({ phase: "setup", status: "", error: "failed" });
   });
 
-  test("設定を保ったまま解析状態をリセットする", () => {
+  test("動画とキャラクターを保ち、サイドの再確認を要求してリセットする", () => {
     const file = new File(["video"], "replay.mp4", { type: "video/mp4" });
     const configured = {
       ...AnalysisSession.initial(),
@@ -134,7 +141,7 @@ describe("analysis session reducer", () => {
     expect(AnalysisSession.reduce(configured, { type: "reset" })).toEqual({
       ...AnalysisSession.initial(),
       file,
-      side: "p2",
+      side: "",
       ownCharacter: "JURI",
       opponentCharacter: "KEN",
     });

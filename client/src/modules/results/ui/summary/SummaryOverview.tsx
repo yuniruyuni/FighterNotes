@@ -1,10 +1,16 @@
 import type { ReactNode } from "react";
-import type { AdviceReport } from "~/modules/analysis/contracts.js";
+import {
+  type AdviceReport,
+  type AnalysisContext,
+  formatCharacterId,
+} from "~/modules/analysis/contracts.js";
 
 export function SummaryOverview({
+  context,
   report,
   sharing,
 }: {
+  context: AnalysisContext;
   report: AdviceReport;
   sharing?: ReactNode;
 }) {
@@ -32,10 +38,24 @@ export function SummaryOverview({
   if (report.analyzer_build_id) {
     badges.push(`解析器 ${report.analyzer_build_id}`);
   }
+  const ownIsP1 = context.ownSide === "p1";
+  const own = ownIsP1 ? context.p1 : context.p2;
+  const opponent = ownIsP1 ? context.p2 : context.p1;
+  const ownSideLabel = ownIsP1 ? "1P（左）" : "2P（右）";
+  const opponentSideLabel = ownIsP1 ? "2P（右）" : "1P（左）";
 
   return (
     <section className="summary-section" data-wm="Summary">
       <h2>解析結果サマリー</h2>
+      <div className="analysis-side-confirmation">
+        <span>解析対象</span>
+        <strong>
+          {ownSideLabel}・{formatCharacterId(own.character)}
+        </strong>
+        <span>
+          相手: {opponentSideLabel}・{formatCharacterId(opponent.character)}
+        </span>
+      </div>
       <div className="summary-box">{report.summary}</div>
       <p className="summary-caveat">
         解析結果は映像からの推定です。正確な記録ではなく、見直しのための参考情報として利用してください。

@@ -2,7 +2,7 @@ import { CHARACTER_CATALOG } from "../../domain/character.js";
 import type { AnalysisSide } from "../../domain/context.js";
 
 interface AnalysisSettingsProps {
-  side: AnalysisSide;
+  side: AnalysisSide | "";
   ownCharacter: string;
   opponentCharacter: string;
   busy: boolean;
@@ -20,15 +20,17 @@ export function AnalysisSettings(props: AnalysisSettingsProps) {
       <h2>設定</h2>
       <div className="row">
         <div className="field">
-          <label htmlFor="side-select">自分のサイド</label>
+          <label htmlFor="side-select">自分のサイド（必須）</label>
           <select
             id="side-select"
+            required
             value={props.side}
             disabled={props.busy}
             onChange={(event) =>
               props.onSideChange(event.currentTarget.value as AnalysisSide)
             }
           >
+            <option value="">動画ごとに選択してください</option>
             <option value="p1">1P（左）</option>
             <option value="p2">2P（右）</option>
           </select>
