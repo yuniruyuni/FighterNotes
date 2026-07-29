@@ -5,6 +5,9 @@ use super::*;
 const ACTION_INPUT_LOOKBACK: usize = 3;
 const ACTION_START_WINDOW: usize = 20;
 const ACTION_ACTIVE_WINDOW: usize = 28;
+/// DI は 26 ゲームフレーム発生で、ヒットストップ中は同じゲームフレームが
+/// 複数の動画フレームへ伸びる。通常行動の窓とは分けて Active まで追う。
+const DI_ACTIVE_WINDOW: usize = 80;
 const THROW_DAMAGE_WINDOW: u32 = 125;
 const THROW_DEDUP_WINDOW: u32 = 18;
 const THROW_CONTACT_WINDOW: usize = 10;
@@ -23,6 +26,8 @@ fn action_run(
     state: &[MeterState],
     epochs: &[i32],
     input_frame: u32,
+    start_states: &[MeterState],
+    active_window: usize,
 ) -> (Option<usize>, Option<usize>, Option<i32>) {
     let n = state.len().min(epochs.len());
     if n == 0 {
@@ -31,23 +36,23 @@ fn action_run(
     let input = (input_frame as usize).min(n - 1);
     let lo = input.saturating_sub(ACTION_INPUT_LOOKBACK);
     let hi = (input + ACTION_START_WINDOW).min(n - 1);
-    let startup = (lo..=hi).find(|&frame| state[frame] == MeterState::Startup);
-    let Some(startup) = startup else {
+    let start = (lo..=hi).find(|&frame| start_states.contains(&state[frame]));
+    let Some(start) = start else {
         return (None, None, None);
     };
-    let epoch = epochs[startup];
+    let epoch = epochs[start];
     if epoch < 0 {
-        return (Some(startup), None, None);
+        return (Some(start), None, None);
     }
-    let active_end = (startup + ACTION_ACTIVE_WINDOW).min(n - 1);
-    let active = (startup..=active_end).find(|&frame| {
+    let active_end = (start + active_window).min(n - 1);
+    let active = (start..=active_end).find(|&frame| {
         epochs[frame] == epoch
             && matches!(
                 state[frame],
                 MeterState::Active | MeterState::ProjectileActive
             )
     });
-    (Some(startup), active, Some(epoch))
+    (Some(start), active, Some(epoch))
 }
 
 pub(crate) fn extract_throw_actions(
@@ -78,6 +83,8 @@ pub(crate) fn extract_throw_actions(
                 &meter_state[side_index],
                 &meter_epoch[side_index],
                 segment.start_frame,
+                &[MeterState::Startup],
+                ACTION_ACTIVE_WINDOW,
             );
             let startup_frame = startup.map(|frame| frame as u32);
             let active_frame = active.map(|frame| frame as u32);
@@ -177,10 +184,18 @@ pub(crate) fn extract_drive_impacts(
             let Some(round_no) = round_of(rounds, segment.start_frame) else {
                 continue;
             };
+            // DI のアーマー区間はメーター上で Startup ではなく
+            // Invincible として現れ、そのまま Active へ遷移する。
             let (_, active, epoch) = action_run(
                 &meter_state[side_index],
                 &meter_epoch[side_index],
                 segment.start_frame,
+                &[
+                    MeterState::Startup,
+                    MeterState::Invincible,
+                    MeterState::Parry,
+                ],
+                DI_ACTIVE_WINDOW,
             );
             let active_frame = active.map(|frame| frame as u32);
             let (contact_frame, outcome, damage_amount, confidence) = match (active, epoch) {
