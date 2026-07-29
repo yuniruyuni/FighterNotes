@@ -196,6 +196,35 @@ raw video、screenshot、解析途中の全frame dumpはrepositoryへ保存し�
 event / adviceの結合は`crates/video-analyzer/tests/pipeline_contract.rs`の合成HP・入力・meter timelineで
 検査する。回帰条件は再現に必要な最小入力としてtest code内に追加する。
 
+### ローカル動画によるE2E回帰確認
+
+実動画でしか再現できない問題の原因調査には、Chrome DevTools Protocol経由のローカルE2E runnerを
+使用できる。動画、manifest、解析artifactはいずれもGitの無視対象である`video/`と`output/`に置き、
+commitしない。問題を切り分けた後は、再現に必要な最小条件を合成pixelまたは合成timelineのtestへ移す。
+
+最初にexampleをコピーして、手元の絶対パス、サイド、キャラクター、期待値を設定する。
+Chrome/ChromiumはPATHまたはPlaywrightのローカルcacheから自動検出される。
+
+```bash
+cp scripts/local-video-e2e.example.json video/local-video-e2e.json
+bun run build
+bun run local:e2e
+```
+
+各caseのreport、timeline、HP、入力、空間解析結果と所要時間は
+`output/local-video-e2e/current/`へ出力される。期待値違反があればcommandは失敗する。
+実行環境を固定した速度比較では、変更前の出力directoryを残して`--baseline`で指定する。
+
+```bash
+mv output/local-video-e2e/current output/local-video-e2e/baseline
+bun run local:e2e -- --baseline output/local-video-e2e/baseline
+```
+
+自動起動できないbrowserを使う場合は、専用profileとremote debugging portで起動し
+`--cdp http://127.0.0.1:9222`を渡す。browserが別OSから動画を読む場合だけ、manifestの
+`browserVideoPath`へそのOSから見えるpathを追加する。通常の`videoPath`はrunner自身が
+fixtureの存在確認に使う。
+
 ## 公式 frame data
 
 `scripts/gen-frame-data.ts` は Street Fighter 6 公式 frame data pageを通常のHTTP

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "sample-ken-vs-juri",
+      "videoPath": "/absolute/path/to/local-replay.mp4",
+      "side": "p2",
+      "ownCharacter": "KEN",
+      "opponentCharacter": "JURI",
+      "timeoutSeconds": 600,
+      "expect": {
+        "roundsDetected": 3,
+        "roundWinners": [true, false, true],
+        "cardIds": {
+          "exclude": ["mashing"]
+        },
+        "tacticStats": {
+          "di_faced": {
+            "min": 1
+          }
+        },
+        "coverageRatio": {
+          "min": 0.8
+        }
+      }
+    }
+  ]
+}
