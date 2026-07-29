@@ -17,6 +17,7 @@ pub(crate) fn build_advice_cards(
         detect_anti_air(events, own, opp),
         detect_own_jumps(events, own),
         detect_burnout(events, own),
+        detect_committed_button_vs_di(events, own, own_index),
         detect_mashing(features, events, own, own_index),
         detect_press_while_minus(events, own),
         detect_throw_while_minus(events, own),

@@ -3,7 +3,11 @@ use crate::match_events::{EventConfidence, MatchEvents, JUMP_ATTACK_MAX, JUMP_SE
 
 fn evidence_window(card_id: &str, evidence: &EvidenceClip) -> Option<(u32, u32)> {
     match card_id {
-        "layered_defense" | "mashing" | "teleport_defense" | "reversal_punished"
+        "layered_defense"
+        | "mashing"
+        | "committed_button_vs_di"
+        | "teleport_defense"
+        | "reversal_punished"
         | "punish_fail" => Some((
             evidence.frame,
             evidence

@@ -11,6 +11,10 @@ fn detectors_abstain_without_relevant_events() {
         ("own_jumps", detect_own_jumps(&events, 1)),
         ("burnout", detect_burnout(&events, 1)),
         ("mashing", detect_mashing(&[], &events, 1, 0)),
+        (
+            "committed_button_vs_di",
+            detect_committed_button_vs_di(&events, 1, 0),
+        ),
         ("press_while_minus", detect_press_while_minus(&events, 1)),
         ("throw_while_minus", detect_throw_while_minus(&events, 1)),
         (

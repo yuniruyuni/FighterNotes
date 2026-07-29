@@ -1,8 +1,8 @@
 use crate::advice::{BIG_DAMAGE, MASH_PRESS_WINDOW};
 use crate::match_events::{
-    DamageEvent, DriveRushOutcome, EventConfidence, InputSegment, JumpOutcome, MatchEvents,
-    MinusPressOutcome, ThreatOutcome, JUMP_ATTACK_MAX, JUMP_ATTACK_MIN, JUMP_SELF_HIT_MIN,
-    JUMP_SELF_HIT_WINDOW, THREAT_DAMAGE_WINDOW,
+    DamageEvent, DriveImpactOutcome, DriveRushOutcome, EventConfidence, InputSegment, JumpOutcome,
+    MatchEvents, MinusPressOutcome, ThreatOutcome, JUMP_ATTACK_MAX, JUMP_ATTACK_MIN,
+    JUMP_SELF_HIT_MIN, JUMP_SELF_HIT_WINDOW, THREAT_DAMAGE_WINDOW,
 };
 
 pub(super) fn nearest_direct_press<'a>(
@@ -63,9 +63,10 @@ pub(super) fn claimed_by_other_detector(
             && damage.start_frame <= event.frame + 30
     });
     let drive_impact = events.drive_impacts.iter().any(|event| {
-        event.side == own
-            && event.confidence == EventConfidence::High
+        event.confidence == EventConfidence::High
             && event.damage > 0.0
+            && ((event.side == own && event.outcome == DriveImpactOutcome::Countered)
+                || (event.side == opponent && event.outcome == DriveImpactOutcome::Hit))
             && damage.start_frame >= event.input_frame
             && damage.start_frame <= event.input_frame.saturating_add(90)
     });

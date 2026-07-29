@@ -4,6 +4,7 @@ mod big_hits;
 mod burnout;
 mod defense;
 mod direction;
+mod drive_impact;
 mod jumps;
 mod pressure;
 mod punishment;
@@ -15,6 +16,7 @@ pub(crate) use big_hits::detect_big_hits;
 pub(crate) use burnout::detect_burnout;
 pub(crate) use defense::{detect_guard_break, detect_layered_defense, detect_teleport_defense};
 pub(crate) use direction::dir_arrow;
+pub(crate) use drive_impact::detect_committed_button_vs_di;
 pub(crate) use jumps::{detect_anti_air, detect_own_jumps};
 pub(crate) use pressure::{detect_mashing, detect_press_while_minus, detect_throw_while_minus};
 pub(crate) use punishment::{
