@@ -7,16 +7,19 @@ import type { AnalysisContext } from "../../domain/context.js";
 import type { SpatialFrameHints } from "../../domain/result.js";
 import { buildHpDebugSnapshot } from "./hp-debug-snapshot.js";
 
-export interface WasmFrameBuffers {
+export interface WasmResultFrameBuffers {
   readonly hud: ArrayBuffer;
-  readonly meter: ArrayBuffer;
   readonly input: ArrayBuffer;
 }
 
-export interface WasmFrameTiming {
+export interface WasmResultFrameTiming {
+  readonly tCopy: number;
+  readonly tHud: number;
+}
+
+export interface WasmMeterFrameTiming {
   readonly tCopy: number;
   readonly tMeter: number;
-  readonly tHud: number;
 }
 
 export interface WasmFirstPassPayload {
@@ -38,8 +41,6 @@ interface AnalyzerWasmState {
   readonly memory: WebAssembly.Memory;
   readonly hudPtr: number;
   readonly hudLen: number;
-  readonly meterPtr: number;
-  readonly meterLen: number;
   readonly inputPtr: number;
   readonly inputLen: number;
   readonly spatialPtr: number;
@@ -69,8 +70,6 @@ export class AnalyzerWasmSession {
       memory: wasm_memory() as WebAssembly.Memory,
       hudPtr: analyzer.hud_buf_ptr() as number,
       hudLen: analyzer.hud_buf_len() as number,
-      meterPtr: analyzer.meter_buf_ptr() as number,
-      meterLen: analyzer.meter_buf_len() as number,
       inputPtr: analyzer.input_buf_ptr() as number,
       inputLen: analyzer.input_buf_len() as number,
       spatialPtr: spatialAnalyzer.rgba_buf_ptr() as number,
@@ -78,24 +77,17 @@ export class AnalyzerWasmSession {
     };
   }
 
-  analyzeFrame(
+  analyzeResultFrame(
     frameIndex: number,
-    buffers: WasmFrameBuffers,
+    buffers: WasmResultFrameBuffers,
     dimensions: { readonly width: number; readonly height: number },
-  ): WasmFrameTiming {
+  ): WasmResultFrameTiming {
     const state = this.#requireState();
     const t0 = performance.now();
     copyToWasm(state, state.hudPtr, state.hudLen, buffers.hud);
-    copyToWasm(state, state.meterPtr, state.meterLen, buffers.meter);
     copyToWasm(state, state.inputPtr, state.inputLen, buffers.input);
     const t1 = performance.now();
 
-    state.analyzer.analyze_meter_inplace(
-      dimensions.width,
-      dimensions.height,
-      frameIndex,
-    );
-    const t2 = performance.now();
     state.analyzer.push_hud_features_inplace(
       dimensions.width,
       dimensions.height,
@@ -106,12 +98,13 @@ export class AnalyzerWasmSession {
       dimensions.height,
       frameIndex,
     );
-    const t3 = performance.now();
-    return { tCopy: t1 - t0, tMeter: t2 - t1, tHud: t3 - t2 };
+    const t2 = performance.now();
+    return { tCopy: t1 - t0, tHud: t2 - t1 };
   }
 
-  finishFirstPass(): WasmFirstPassResult {
+  finishFirstPass(meterTimeline: string): WasmFirstPassResult {
     const { analyzer } = this.#requireState();
+    analyzer.set_meter_timeline(meterTimeline);
     const report = analyzer.finish();
     const timeline = analyzer.get_timeline();
     const features = analyzer.get_features_json();
@@ -171,8 +164,57 @@ export class AnalyzerWasmSession {
   }
 }
 
+interface MeterWasmState {
+  readonly analyzer: InstanceType<typeof Analyzer>;
+  readonly memory: WebAssembly.Memory;
+  readonly meterPtr: number;
+  readonly meterLen: number;
+}
+
+export class MeterWasmSession {
+  #state: MeterWasmState | null = null;
+
+  async initialize(ownSide: string): Promise<void> {
+    await init();
+    const analyzer = new Analyzer(ownSide);
+    this.#state = {
+      analyzer,
+      memory: wasm_memory() as WebAssembly.Memory,
+      meterPtr: analyzer.meter_buf_ptr() as number,
+      meterLen: analyzer.meter_buf_len() as number,
+    };
+  }
+
+  analyzeFrame(
+    frameIndex: number,
+    meterBuffer: ArrayBuffer,
+    dimensions: { readonly width: number; readonly height: number },
+  ): WasmMeterFrameTiming {
+    const state = this.#requireState();
+    const t0 = performance.now();
+    copyToWasm(state, state.meterPtr, state.meterLen, meterBuffer);
+    const t1 = performance.now();
+    state.analyzer.analyze_meter_inplace(
+      dimensions.width,
+      dimensions.height,
+      frameIndex,
+    );
+    const t2 = performance.now();
+    return { tCopy: t1 - t0, tMeter: t2 - t1 };
+  }
+
+  finish(): string {
+    return this.#requireState().analyzer.finish_meter_timeline();
+  }
+
+  #requireState(): MeterWasmState {
+    if (!this.#state) throw new Error("Meter WASM session is not initialized");
+    return this.#state;
+  }
+}
+
 function copyToWasm(
-  state: AnalyzerWasmState,
+  state: { readonly memory: WebAssembly.Memory },
   pointer: number,
   length: number,
   source: ArrayBuffer,

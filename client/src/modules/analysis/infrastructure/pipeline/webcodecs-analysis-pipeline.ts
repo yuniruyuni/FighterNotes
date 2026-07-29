@@ -12,7 +12,10 @@ import {
   type Mp4VideoTrack,
 } from "../video-decoding/mp4-video-source.js";
 import { SampleTimestampIndex } from "../video-decoding/sample-timestamp-index.js";
-import { AnalyzerWorkerSession } from "../worker-bridge/client.js";
+import {
+  AnalyzerWorkerSession,
+  MeterWorkerSession,
+} from "../worker-bridge/client.js";
 import { abortReason, throwIfAborted } from "./abort.js";
 import { completeAnalysis } from "./complete-analysis.js";
 import { DecodePump } from "./decode-pump.js";
@@ -42,10 +45,10 @@ export async function analyzeWithWebCodecs(
   throwIfAborted(signal);
   const arrayBuffer = await file.arrayBuffer();
   throwIfAborted(signal);
-  // Worker 起動
-  const worker = new Worker(new URL("./analyzer-worker.js", import.meta.url), {
-    type: "module",
-  });
+  // 独立した WASM インスタンスでメーターと HUD・入力を並列解析する。
+  const workerUrl = new URL("./analyzer-worker.js", import.meta.url);
+  const resultWorker = new Worker(workerUrl, { type: "module" });
+  const meterWorker = new Worker(workerUrl, { type: "module" });
 
   return new Promise<AnalysisResult>((resolve, reject) => {
     let decoder: VideoDecoder | undefined;
@@ -59,11 +62,13 @@ export async function analyzeWithWebCodecs(
     let savedCodecConfig: VideoCodecConfig | null = null;
     const sampleByTs = new SampleTimestampIndex();
 
-    let workerSession: AnalyzerWorkerSession;
+    let resultWorkerSession: AnalyzerWorkerSession;
+    let meterWorkerSession: MeterWorkerSession;
 
     const cleanup = () => {
       signal.removeEventListener("abort", onAbort);
-      workerSession?.terminate();
+      resultWorkerSession?.terminate();
+      meterWorkerSession?.terminate();
       if (decoder && decoder.state !== "closed") decoder.close();
     };
     const fail = (error: unknown) => {
@@ -86,7 +91,8 @@ export async function analyzeWithWebCodecs(
       onError: fail,
     });
     frameBridge = new WorkerFrameBridge({
-      send: (message) => workerSession.sendFrame(message),
+      sendMeter: (message) => meterWorkerSession.sendFrame(message),
+      sendResult: (message) => resultWorkerSession.sendFrame(message),
       totalSamples: () => totalSamples,
       drawTime: () => frameDispatcher.drawTime,
       onProgress,
@@ -105,17 +111,31 @@ export async function analyzeWithWebCodecs(
         activeDecoder
           .flush()
           .then(() => frameDispatcher.drain())
-          .then(() => workerSession.drainFrames())
-          .then(() => workerSession.finishFirstPass())
+          .then(() =>
+            Promise.all([
+              resultWorkerSession.drainFrames(),
+              meterWorkerSession.drainFrames(),
+            ]),
+          )
+          .then(() => meterWorkerSession.finish())
+          .then((meterTimeline) =>
+            resultWorkerSession.finishFirstPass(meterTimeline),
+          )
           .catch(fail);
       },
       onError: fail,
     });
 
-    workerSession = new AnalyzerWorkerSession(worker, {
+    resultWorkerSession = new AnalyzerWorkerSession(resultWorker, {
       onError: fail,
       onFrameResult(message) {
-        if (!settled) frameBridge.accept(message);
+        if (!settled) frameBridge.acceptResult(message);
+      },
+    });
+    meterWorkerSession = new MeterWorkerSession(meterWorker, {
+      onError: fail,
+      onFrameResult(message) {
+        if (!settled) frameBridge.acceptMeter(message);
       },
     });
     signal.addEventListener("abort", onAbort, { once: true });
@@ -125,7 +145,7 @@ export async function analyzeWithWebCodecs(
     }
 
     void completeAnalysis({
-      session: workerSession,
+      session: resultWorkerSession,
       analysisContext,
       videoArrayBuffer: arrayBuffer,
       sampleData,
@@ -200,7 +220,8 @@ export async function analyzeWithWebCodecs(
       onError: fail,
     });
 
-    workerSession.initialize(ownSide, analysisContext);
+    resultWorkerSession.initialize(ownSide, analysisContext);
+    meterWorkerSession.initialize(ownSide, analysisContext);
     try {
       videoSource.start();
     } catch (error) {

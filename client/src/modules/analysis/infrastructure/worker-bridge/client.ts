@@ -6,18 +6,28 @@ import type {
 import type { AnalyzerWorkerDone, AnalyzerWorkerResponse } from "./protocol.js";
 import { postAnalyzerWorkerMessage } from "./protocol.js";
 
-interface FrameResult {
+export interface ResultFrameResult {
   readonly slot: number;
   readonly tCopy: number;
-  readonly tMeter: number;
   readonly tHud: number;
   readonly hudBuf: ArrayBuffer;
-  readonly meterBuf: ArrayBuffer;
   readonly inputBuf: ArrayBuffer;
 }
 
+export interface MeterFrameResult {
+  readonly slot: number;
+  readonly tCopy: number;
+  readonly tMeter: number;
+  readonly meterBuf: ArrayBuffer;
+}
+
 interface WorkerSessionCallbacks {
-  readonly onFrameResult: (result: FrameResult) => void;
+  readonly onFrameResult: (result: ResultFrameResult) => void;
+  readonly onError: (error: unknown) => void;
+}
+
+interface MeterWorkerSessionCallbacks {
+  readonly onFrameResult: (result: MeterFrameResult) => void;
   readonly onError: (error: unknown) => void;
 }
 
@@ -45,6 +55,7 @@ export class AnalyzerWorkerSession {
   initialize(ownSide: string, analysisContext: AnalysisContext): void {
     postAnalyzerWorkerMessage(this.#worker, {
       type: "init",
+      role: "result",
       ownSide,
       analysisContext,
     });
@@ -54,16 +65,15 @@ export class AnalyzerWorkerSession {
     readonly slot: number;
     readonly frameIndex: number;
     readonly hudBuf: ArrayBuffer;
-    readonly meterBuf: ArrayBuffer;
     readonly inputBuf: ArrayBuffer;
   }): Promise<void> {
     await this.#ready.promise;
     this.#pendingFrames += 1;
-    postAnalyzerWorkerMessage(this.#worker, { type: "frame", ...options }, [
-      options.hudBuf,
-      options.meterBuf,
-      options.inputBuf,
-    ]);
+    postAnalyzerWorkerMessage(
+      this.#worker,
+      { type: "resultFrame", ...options },
+      [options.hudBuf, options.inputBuf],
+    );
   }
 
   drainFrames(): Promise<void> {
@@ -71,8 +81,11 @@ export class AnalyzerWorkerSession {
     return new Promise((resolve) => this.#frameDrainWaiters.push(resolve));
   }
 
-  finishFirstPass(): void {
-    postAnalyzerWorkerMessage(this.#worker, { type: "finish" });
+  finishFirstPass(meterTimeline: string): void {
+    postAnalyzerWorkerMessage(this.#worker, {
+      type: "finish",
+      meterTimeline,
+    });
   }
 
   firstPass(): Promise<SpatialCandidateWindow[]> {
@@ -123,7 +136,7 @@ export class AnalyzerWorkerSession {
       case "ready":
         this.#ready.resolve();
         break;
-      case "frameResult":
+      case "resultFrameResult":
         this.#pendingFrames -= 1;
         this.#callbacks.onFrameResult(message);
         if (this.#pendingFrames === 0) drain(this.#frameDrainWaiters);
@@ -152,6 +165,83 @@ export class AnalyzerWorkerSession {
     this.#firstPass.reject(error);
     this.#done.reject(error);
     this.#spatialReset?.reject(error);
+    this.#callbacks.onError(error);
+  }
+}
+
+export class MeterWorkerSession {
+  readonly #worker: Worker;
+  readonly #callbacks: MeterWorkerSessionCallbacks;
+  readonly #ready = deferred<void>();
+  readonly #timeline = deferred<string>();
+  readonly #frameDrainWaiters: Array<() => void> = [];
+  #pendingFrames = 0;
+
+  constructor(worker: Worker, callbacks: MeterWorkerSessionCallbacks) {
+    this.#worker = worker;
+    this.#callbacks = callbacks;
+    worker.onerror = (event) => this.#fail(event);
+    worker.onmessage = (event: MessageEvent<AnalyzerWorkerResponse>) => {
+      this.#receive(event.data);
+    };
+  }
+
+  initialize(ownSide: string, analysisContext: AnalysisContext): void {
+    postAnalyzerWorkerMessage(this.#worker, {
+      type: "init",
+      role: "meter",
+      ownSide,
+      analysisContext,
+    });
+  }
+
+  async sendFrame(options: {
+    readonly slot: number;
+    readonly frameIndex: number;
+    readonly meterBuf: ArrayBuffer;
+  }): Promise<void> {
+    await this.#ready.promise;
+    this.#pendingFrames += 1;
+    postAnalyzerWorkerMessage(
+      this.#worker,
+      { type: "meterFrame", ...options },
+      [options.meterBuf],
+    );
+  }
+
+  drainFrames(): Promise<void> {
+    if (this.#pendingFrames === 0) return Promise.resolve();
+    return new Promise((resolve) => this.#frameDrainWaiters.push(resolve));
+  }
+
+  finish(): Promise<string> {
+    postAnalyzerWorkerMessage(this.#worker, { type: "finishMeter" });
+    return this.#timeline.promise;
+  }
+
+  terminate(): void {
+    this.#worker.terminate();
+  }
+
+  #receive(message: AnalyzerWorkerResponse): void {
+    switch (message.type) {
+      case "ready":
+        this.#ready.resolve();
+        break;
+      case "meterFrameResult":
+        this.#pendingFrames -= 1;
+        this.#callbacks.onFrameResult(message);
+        if (this.#pendingFrames === 0) drain(this.#frameDrainWaiters);
+        break;
+      case "meterDone":
+        this.#timeline.resolve(message.timeline);
+        break;
+    }
+  }
+
+  #fail(error: unknown): void {
+    this.#ready.reject(error);
+    this.#timeline.reject(error);
     this.#callbacks.onError(error);
   }
 }

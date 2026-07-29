@@ -2,21 +2,27 @@ import { ANALYSIS_HEIGHT, ANALYSIS_WIDTH } from "../frame-extraction/layout.js";
 import { SPATIAL_HEIGHT, SPATIAL_WIDTH } from "../spatial-analysis/layout.js";
 import {
   AnalyzerWasmSession,
+  MeterWasmSession,
   type WasmFirstPassPayload,
 } from "../wasm-bridge/analyzer-session.js";
 import type {
   AnalyzerWorkerRequest,
   AnalyzerWorkerResponse,
+  AnalyzerWorkerRole,
 } from "./protocol.js";
 
 interface AnalyzerWorkerState {
-  readonly wasm: AnalyzerWasmSession;
+  readonly resultWasm: AnalyzerWasmSession;
+  readonly meterWasm: MeterWasmSession;
+  role: AnalyzerWorkerRole | null;
   firstPassPayload: WasmFirstPassPayload | null;
 }
 
 export function installAnalyzerWorker(scope: DedicatedWorkerGlobalScope): void {
   const state: AnalyzerWorkerState = {
-    wasm: new AnalyzerWasmSession(),
+    resultWasm: new AnalyzerWasmSession(),
+    meterWasm: new MeterWasmSession(),
+    role: null,
     firstPassPayload: null,
   };
   scope.onmessage = (event: MessageEvent<AnalyzerWorkerRequest>) => {
@@ -30,21 +36,47 @@ async function handleMessage(
   message: AnalyzerWorkerRequest,
 ): Promise<void> {
   switch (message.type) {
-    case "init":
-      await state.wasm.initialize({
-        ownSide: message.ownSide,
-        analysisContext: message.analysisContext,
-        spatialWidth: SPATIAL_WIDTH,
-        spatialHeight: SPATIAL_HEIGHT,
-      });
+    case "init": {
+      if (state.role) throw new Error("Analyzer worker is already initialized");
+      state.role = message.role;
+      if (message.role === "meter") {
+        await state.meterWasm.initialize(message.ownSide);
+      } else {
+        await state.resultWasm.initialize({
+          ownSide: message.ownSide,
+          analysisContext: message.analysisContext,
+          spatialWidth: SPATIAL_WIDTH,
+          spatialHeight: SPATIAL_HEIGHT,
+        });
+      }
       respond(scope, { type: "ready" });
       break;
-    case "frame": {
-      const timing = state.wasm.analyzeFrame(
+    }
+    case "meterFrame": {
+      requireRole(state, "meter");
+      const timing = state.meterWasm.analyzeFrame(
+        message.frameIndex,
+        message.meterBuf,
+        { width: ANALYSIS_WIDTH, height: ANALYSIS_HEIGHT },
+      );
+      respond(
+        scope,
+        {
+          type: "meterFrameResult",
+          slot: message.slot,
+          ...timing,
+          meterBuf: message.meterBuf,
+        },
+        [message.meterBuf],
+      );
+      break;
+    }
+    case "resultFrame": {
+      requireRole(state, "result");
+      const timing = state.resultWasm.analyzeResultFrame(
         message.frameIndex,
         {
           hud: message.hudBuf,
-          meter: message.meterBuf,
           input: message.inputBuf,
         },
         { width: ANALYSIS_WIDTH, height: ANALYSIS_HEIGHT },
@@ -52,19 +84,26 @@ async function handleMessage(
       respond(
         scope,
         {
-          type: "frameResult",
+          type: "resultFrameResult",
           slot: message.slot,
           ...timing,
           hudBuf: message.hudBuf,
-          meterBuf: message.meterBuf,
           inputBuf: message.inputBuf,
         },
-        [message.hudBuf, message.meterBuf, message.inputBuf],
+        [message.hudBuf, message.inputBuf],
       );
       break;
     }
+    case "finishMeter":
+      requireRole(state, "meter");
+      respond(scope, {
+        type: "meterDone",
+        timeline: state.meterWasm.finish(),
+      });
+      break;
     case "finish": {
-      const result = state.wasm.finishFirstPass();
+      requireRole(state, "result");
+      const result = state.resultWasm.finishFirstPass(message.meterTimeline);
       state.firstPassPayload = result.payload;
       respond(scope, {
         type: "firstPass",
@@ -73,11 +112,13 @@ async function handleMessage(
       break;
     }
     case "spatialReset":
-      state.wasm.resetSpatialWindow();
+      requireRole(state, "result");
+      state.resultWasm.resetSpatialWindow();
       respond(scope, { type: "spatialResetReady" });
       break;
     case "spatialFrame":
-      state.wasm.analyzeSpatialFrame(
+      requireRole(state, "result");
+      state.resultWasm.analyzeSpatialFrame(
         message.frameIndex,
         message.rgbaBuf,
         message.hints,
@@ -88,7 +129,8 @@ async function handleMessage(
       if (!state.firstPassPayload) {
         throw new Error("spatial finish before first pass");
       }
-      const spatial = state.wasm.finishSpatialPass();
+      requireRole(state, "result");
+      const spatial = state.resultWasm.finishSpatialPass();
       respond(scope, {
         type: "done",
         ...state.firstPassPayload,
@@ -96,6 +138,17 @@ async function handleMessage(
       });
       break;
     }
+  }
+}
+
+function requireRole(
+  state: AnalyzerWorkerState,
+  expected: AnalyzerWorkerRole,
+): void {
+  if (state.role !== expected) {
+    throw new Error(
+      `Expected ${expected} worker, received ${state.role ?? "uninitialized"} worker`,
+    );
   }
 }
 

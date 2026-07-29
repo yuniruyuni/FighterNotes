@@ -1,21 +1,30 @@
 import type { AnalysisContext } from "../../domain/context.js";
 import type { SpatialFrameHints } from "../../domain/result.js";
 
+export type AnalyzerWorkerRole = "meter" | "result";
+
 export type AnalyzerWorkerRequest =
   | {
       readonly type: "init";
+      readonly role: AnalyzerWorkerRole;
       readonly ownSide: string;
       readonly analysisContext: AnalysisContext;
     }
   | {
-      readonly type: "frame";
+      readonly type: "meterFrame";
+      readonly slot: number;
+      readonly frameIndex: number;
+      readonly meterBuf: ArrayBuffer;
+    }
+  | {
+      readonly type: "resultFrame";
       readonly slot: number;
       readonly frameIndex: number;
       readonly hudBuf: ArrayBuffer;
-      readonly meterBuf: ArrayBuffer;
       readonly inputBuf: ArrayBuffer;
     }
-  | { readonly type: "finish" }
+  | { readonly type: "finishMeter" }
+  | { readonly type: "finish"; readonly meterTimeline: string }
   | { readonly type: "spatialReset" }
   | {
       readonly type: "spatialFrame";
@@ -38,15 +47,21 @@ export interface AnalyzerWorkerDone {
 export type AnalyzerWorkerResponse =
   | { readonly type: "ready" }
   | {
-      readonly type: "frameResult";
+      readonly type: "meterFrameResult";
       readonly slot: number;
       readonly tCopy: number;
       readonly tMeter: number;
+      readonly meterBuf: ArrayBuffer;
+    }
+  | {
+      readonly type: "resultFrameResult";
+      readonly slot: number;
+      readonly tCopy: number;
       readonly tHud: number;
       readonly hudBuf: ArrayBuffer;
-      readonly meterBuf: ArrayBuffer;
       readonly inputBuf: ArrayBuffer;
     }
+  | { readonly type: "meterDone"; readonly timeline: string }
   | { readonly type: "spatialResetReady" }
   | { readonly type: "spatialFrameResult" }
   | {

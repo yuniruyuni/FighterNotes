@@ -25,6 +25,8 @@ pub struct Analyzer {
     input_rows: Vec<(video_analyzer::InputRow, video_analyzer::InputRow)>,
     tracked_json: Option<String>,
     analysis_context: video_analyzer::AnalysisContext,
+    imported_meter: Option<(meter_tracker::MeterTimeline, meter_tracker::MeterTimeline)>,
+    imported_timeline_json: Option<String>,
     events: Option<video_analyzer::MatchEvents>,
 }
 
@@ -44,6 +46,8 @@ impl Analyzer {
             input_rows: Vec::new(),
             tracked_json: None,
             analysis_context: video_analyzer::AnalysisContext::new(own_side),
+            imported_meter: None,
+            imported_timeline_json: None,
             events: None,
         }
     }

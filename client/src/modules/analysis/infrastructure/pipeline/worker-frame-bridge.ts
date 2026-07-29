@@ -4,24 +4,27 @@ import {
   copyStripPixels,
   type StripPixels,
 } from "../frame-extraction/strip-extractor.js";
+import type {
+  MeterFrameResult,
+  ResultFrameResult,
+} from "../worker-bridge/client.js";
 import { throwIfAborted } from "./abort.js";
 
-interface WorkerFrameResult {
-  readonly slot: number;
-  readonly tCopy: number;
-  readonly tMeter: number;
-  readonly tHud: number;
-  readonly hudBuf: ArrayBuffer;
-  readonly meterBuf: ArrayBuffer;
-  readonly inputBuf: ArrayBuffer;
+interface PartialWorkerFrameResult {
+  meter?: MeterFrameResult;
+  result?: ResultFrameResult;
 }
 
 interface WorkerFrameBridgeOptions {
-  readonly send: (message: {
+  readonly sendMeter: (message: {
+    readonly slot: number;
+    readonly frameIndex: number;
+    readonly meterBuf: ArrayBuffer;
+  }) => Promise<void>;
+  readonly sendResult: (message: {
     readonly slot: number;
     readonly frameIndex: number;
     readonly hudBuf: ArrayBuffer;
-    readonly meterBuf: ArrayBuffer;
     readonly inputBuf: ArrayBuffer;
   }) => Promise<void>;
   readonly totalSamples: () => number;
@@ -34,6 +37,7 @@ interface WorkerFrameBridgeOptions {
 export class WorkerFrameBridge {
   readonly #options: WorkerFrameBridgeOptions;
   readonly #bufferPool = new TransferBufferPool(2);
+  readonly #partialResults = new Map<number, PartialWorkerFrameResult>();
   #completedFrames = 0;
   #copyTime = 0;
   #meterTime = 0;
@@ -55,17 +59,26 @@ export class WorkerFrameBridge {
     };
   }
 
-  accept(result: WorkerFrameResult): void {
+  acceptMeter(result: MeterFrameResult): void {
     this.#copyTime += result.tCopy;
     this.#meterTime += result.tMeter;
+    const partial = this.#partialResult(result.slot);
+    if (partial.meter) {
+      throw new Error(`Duplicate meter frame result for slot ${result.slot}`);
+    }
+    partial.meter = result;
+    this.#completeIfReady(result.slot, partial);
+  }
+
+  acceptResult(result: ResultFrameResult): void {
+    this.#copyTime += result.tCopy;
     this.#hudTime += result.tHud;
-    this.#bufferPool.release(result.slot, {
-      hud: result.hudBuf,
-      meter: result.meterBuf,
-      input: result.inputBuf,
-    });
-    this.#completedFrames += 1;
-    this.#options.onFrameCompleted();
+    const partial = this.#partialResult(result.slot);
+    if (partial.result) {
+      throw new Error(`Duplicate result frame result for slot ${result.slot}`);
+    }
+    partial.result = result;
+    this.#completeIfReady(result.slot, partial);
   }
 
   async send(frameIndex: number, pixels: StripPixels): Promise<void> {
@@ -74,19 +87,43 @@ export class WorkerFrameBridge {
     throwIfAborted(this.#options.signal);
     const buffers = this.#bufferPool.get(slot);
     copyStripPixels(pixels, buffers);
-    await this.#options.send({
-      slot,
-      frameIndex,
-      hudBuf: buffers.hud,
-      meterBuf: buffers.meter,
-      inputBuf: buffers.input,
-    });
+    await Promise.all([
+      this.#options.sendMeter({
+        slot,
+        frameIndex,
+        meterBuf: buffers.meter,
+      }),
+      this.#options.sendResult({
+        slot,
+        frameIndex,
+        hudBuf: buffers.hud,
+        inputBuf: buffers.input,
+      }),
+    ]);
 
     if ((frameIndex + 1) % 300 === 0) this.#logProgress(frameIndex + 1);
     this.#options.onProgress(
       ((frameIndex + 1) / this.#options.totalSamples()) * 0.9,
       `フレーム ${frameIndex + 1} / ${this.#options.totalSamples()}`,
     );
+  }
+
+  #partialResult(slot: number): PartialWorkerFrameResult {
+    const partial = this.#partialResults.get(slot) ?? {};
+    this.#partialResults.set(slot, partial);
+    return partial;
+  }
+
+  #completeIfReady(slot: number, partial: PartialWorkerFrameResult): void {
+    if (!partial.meter || !partial.result) return;
+    this.#partialResults.delete(slot);
+    this.#bufferPool.release(slot, {
+      hud: partial.result.hudBuf,
+      meter: partial.meter.meterBuf,
+      input: partial.result.inputBuf,
+    });
+    this.#completedFrames += 1;
+    this.#options.onFrameCompleted();
   }
 
   #logProgress(frameCount: number): void {

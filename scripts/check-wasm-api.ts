@@ -23,6 +23,7 @@ const expectedAnalyzerMethods = [
   "analyze_meter_inplace(full_width: number, full_height: number, video_frame: number): void;",
   "constructor(own_side: string);",
   "finish(): string;",
+  "finish_meter_timeline(): string;",
   "get_features_json(): string;",
   "get_spatial_windows_json(): string;",
   "get_timeline(): string;",
@@ -38,6 +39,7 @@ const expectedAnalyzerMethods = [
   "refine_with_spatial(observations_json: string): string;",
   "set_analysis_context(context_json: string): void;",
   "set_characters(own_char: string, opponent_char: string): void;",
+  "set_meter_timeline(timeline_json: string): void;",
 ];
 
 const expectedSpatialMethods = [

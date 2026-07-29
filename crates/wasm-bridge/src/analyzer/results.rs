@@ -4,12 +4,20 @@ use crate::serialization::tracked_to_json;
 
 use super::Analyzer;
 
+#[derive(serde::Deserialize)]
+struct ImportedMeterTimeline {
+    left: meter_tracker::MeterTimeline,
+    right: meter_tracker::MeterTimeline,
+}
+
 impl Analyzer {
     fn ensure_events(&mut self) {
         if self.events.is_some() {
             return;
         }
-        self.tracker.finish();
+        if self.imported_meter.is_none() {
+            self.tracker.finish();
+        }
         video_analyzer::finalize_features(&mut self.features);
 
         let events = if self.input_rows.len() == self.features.len() && !self.input_rows.is_empty()
@@ -23,11 +31,16 @@ impl Analyzer {
                 tracked_to_json(&p1_tracked),
                 tracked_to_json(&p2_tracked),
             ));
+            let meter = self
+                .imported_meter
+                .as_ref()
+                .map(|(left, right)| (left, right))
+                .unwrap_or((&self.tracker.left, &self.tracker.right));
             video_analyzer::build_match_events_with_context(
                 &self.features,
                 &p1_tracked,
                 &p2_tracked,
-                Some((&self.tracker.left, &self.tracker.right)),
+                Some(meter),
                 &self.analysis_context,
             )
         } else {
@@ -52,6 +65,15 @@ impl Analyzer {
         );
         serde_json::to_string(&report).unwrap_or_else(|error| format!(r#"{{"error":"{error}"}}"#))
     }
+
+    fn tracker_timeline_json(&self) -> String {
+        serde_json::json!({
+            "left": &self.tracker.left,
+            "right": &self.tracker.right,
+            "video_map": &self.tracker.video_map,
+        })
+        .to_string()
+    }
 }
 
 #[wasm_bindgen]
@@ -64,6 +86,24 @@ impl Analyzer {
     pub fn finish(&mut self) -> String {
         self.ensure_events();
         self.report_json()
+    }
+
+    pub fn finish_meter_timeline(&mut self) -> String {
+        self.tracker.finish();
+        self.tracker_timeline_json()
+    }
+
+    pub fn set_meter_timeline(&mut self, timeline_json: &str) -> Result<(), JsValue> {
+        if self.events.is_some() {
+            return Err(JsValue::from_str(
+                "meter timeline cannot be changed after finalization",
+            ));
+        }
+        let timeline: ImportedMeterTimeline = serde_json::from_str(timeline_json)
+            .map_err(|error| JsValue::from_str(&format!("invalid meter timeline: {error}")))?;
+        self.imported_meter = Some((timeline.left, timeline.right));
+        self.imported_timeline_json = Some(timeline_json.to_string());
+        Ok(())
     }
 
     pub fn get_spatial_windows_json(&mut self) -> String {
@@ -95,11 +135,8 @@ impl Analyzer {
     }
 
     pub fn get_timeline(&self) -> String {
-        serde_json::json!({
-            "left": &self.tracker.left,
-            "right": &self.tracker.right,
-            "video_map": &self.tracker.video_map,
-        })
-        .to_string()
+        self.imported_timeline_json
+            .clone()
+            .unwrap_or_else(|| self.tracker_timeline_json())
     }
 }
