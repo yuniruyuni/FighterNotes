@@ -169,6 +169,7 @@ describe("published analysis presentation", () => {
       "layered_defense",
       "anti_air",
       "own_jumps",
+      "committed_button_vs_di",
       "mashing",
       "press_while_minus",
       "throw_while_minus",
@@ -176,6 +177,7 @@ describe("published analysis presentation", () => {
       "reversal_punished",
       "punish_fail",
       "low_conversion",
+      "throw_whiff_punished",
       "throw_loop",
     ] as const;
     const descriptions = observationKinds.map(

@@ -105,6 +105,20 @@ export const FINDING_PRESENTATIONS: Record<FindingKind, FindingPresentation> = {
       "突入直前を確認し、攻めのための消費か、守りで削り切られたかを分けて整理します。",
     tone: "resource",
   },
+  committed_button_vs_di: {
+    title: "通常技をDIに繰り返し取られている",
+    description:
+      "通常技の実行中に相手DIがヒットした場面が複数確認されています。",
+    practice:
+      "同じ距離から相手の前進とDIをランダム再生し、キャンセル可能な技か様子見を混ぜます。",
+    observation: {
+      title: "通常技をDIに取られた場面",
+      description: `通常技の実行中に相手DIがヒットした事実です。単発では技を置く判断かDIへの反応が原因かを${OBSERVATION_REVIEW_CAVEAT}。`,
+      practice:
+        "スロー再生でDIの演出前に技を出し切っていたかを確認し、技を置く距離とDI返しを分けて練習します。",
+    },
+    tone: "warning",
+  },
   mashing: {
     title: "守勢でボタンを押して繰り返し被弾している",
     description:
@@ -205,6 +219,20 @@ export const FINDING_PRESENTATIONS: Record<FindingKind, FindingPresentation> = {
       description: `確反は成功したもののダメージが小さかった事実です。ゲージ温存・位置・KO状況による選択かもしれないため、リターン不足の癖とは${OBSERVATION_REVIEW_CAVEAT}。`,
       practice:
         "残り体力・ゲージ・位置を確認し、意図した温存でなければ短い基本コンボを確認します。",
+    },
+    tone: "warning",
+  },
+  throw_whiff_punished: {
+    title: "投げ空振りを繰り返して反撃を受けている",
+    description:
+      "実行まで確認できた投げ空振りの後、短時間内に被弾した場面が複数確認されています。",
+    practice:
+      "投げ入力時の距離と相手の後退を確認し、投げ間合い外では歩きガードへ戻します。",
+    observation: {
+      title: "投げ空振り後に被弾した場面",
+      description: `投げ空振り後の短時間内に被弾した事実です。単発では相手の後退を読めなかったのか、別の読み合いの結果かを${OBSERVATION_REVIEW_CAVEAT}。`,
+      practice:
+        "スロー再生で投げ入力時の距離と相手の後退開始を確認し、同じ距離で投げる場面と見比べます。",
     },
     tone: "warning",
   },

@@ -58,13 +58,15 @@ CREATE TABLE IF NOT EXISTS published_analysis_findings (
   analysis_id TEXT NOT NULL
     REFERENCES published_analyses (id) ON DELETE CASCADE,
   ordinal SMALLINT NOT NULL
-    CHECK (ordinal BETWEEN 0 AND 16),
+    CHECK (ordinal BETWEEN 0 AND 18),
   kind TEXT NOT NULL
     CHECK (kind IN (
       'layered_defense', 'teleport_defense', 'anti_air', 'own_jumps',
-      'burnout', 'mashing', 'press_while_minus', 'throw_while_minus',
+      'burnout', 'committed_button_vs_di', 'mashing',
+      'press_while_minus', 'throw_while_minus',
       'guard_break', 'reversal_punished', 'punish_fail', 'punish_missed',
-      'low_conversion', 'throw_loop', 'early_hits', 'lead_loss', 'big_hits'
+      'low_conversion', 'throw_whiff_punished', 'throw_loop',
+      'early_hits', 'lead_loss', 'big_hits'
     )),
   -- ruleset v3-v5の既存行はNULL。読み出し時に当時の規則から復元する。
   -- ruleset v6以降はapplication schemaが必須化する。
@@ -82,6 +84,24 @@ CREATE TABLE IF NOT EXISTS published_analysis_findings (
 ALTER TABLE published_analysis_findings
   ADD COLUMN IF NOT EXISTS assessment TEXT
   CHECK (assessment IN ('diagnosis', 'observation', 'statistic'));
+-- 新しいruleset v6カードを既存環境でも保存できるよう、閉じたIDとordinalを更新する。
+ALTER TABLE published_analysis_findings
+  DROP CONSTRAINT IF EXISTS published_analysis_findings_kind_check;
+ALTER TABLE published_analysis_findings
+  ADD CONSTRAINT published_analysis_findings_kind_check
+  CHECK (kind IN (
+    'layered_defense', 'teleport_defense', 'anti_air', 'own_jumps',
+    'burnout', 'committed_button_vs_di', 'mashing',
+    'press_while_minus', 'throw_while_minus',
+    'guard_break', 'reversal_punished', 'punish_fail', 'punish_missed',
+    'low_conversion', 'throw_whiff_punished', 'throw_loop',
+    'early_hits', 'lead_loss', 'big_hits'
+  ));
+ALTER TABLE published_analysis_findings
+  DROP CONSTRAINT IF EXISTS published_analysis_findings_ordinal_check;
+ALTER TABLE published_analysis_findings
+  ADD CONSTRAINT published_analysis_findings_ordinal_check
+  CHECK (ordinal BETWEEN 0 AND 18);
 GRANT SELECT, INSERT ON published_analysis_findings TO fighter_app;
 
 CREATE TABLE IF NOT EXISTS published_analysis_tactics (
