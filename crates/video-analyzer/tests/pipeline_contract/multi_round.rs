@@ -1,7 +1,8 @@
 use crate::pipeline_scenarios::{classic_punch, feature_for_p2, neutral_inputs, set_input_run};
 use video_analyzer::advice::build_report_with_context;
 use video_analyzer::{
-    build_match_events_with_context, AnalysisContext, BadgeColor, FrameFeatures, InputDir,
+    build_match_events_with_context, finalize_features, AnalysisContext, BadgeColor, FrameFeatures,
+    InputDir,
 };
 
 #[test]
@@ -44,6 +45,49 @@ fn synthetic_three_round_match_preserves_pipeline_contract() {
     assert_eq!(report.coverage.analyzed_match_frames, features.len() as u32);
 }
 
+#[test]
+fn stage_biased_full_bar_still_splits_rounds() {
+    let mut features = Vec::new();
+    for winner in [1, 2] {
+        extend_transition(&mut features, 30);
+        extend_stage_biased_full_health(&mut features, 40);
+        for step in 1..=20 {
+            let loser_hp = (1.0_f32 - step as f32 * 0.05).max(0.0);
+            let health = if winner == 1 {
+                (0.916, loser_hp)
+            } else {
+                (loser_hp, 1.0)
+            };
+            features.push(feature_for_p2(features.len() as u32, health.1, health.0));
+        }
+        let health = if winner == 1 {
+            (0.916, 0.0)
+        } else {
+            (0.0, 1.0)
+        };
+        for _ in 0..60 {
+            features.push(feature_for_p2(features.len() as u32, health.1, health.0));
+        }
+    }
+    finalize_features(&mut features);
+    let context = AnalysisContext::from_characters("p2", Some("KEN"), Some("AKUMA"));
+
+    let events = build_match_events_with_context(&features, &[], &[], None, &context);
+    let report = build_report_with_context(&features, &events, &context);
+
+    assert_eq!(events.rounds.len(), 2);
+    assert_eq!(
+        events
+            .rounds
+            .iter()
+            .map(|round| round.winner)
+            .collect::<Vec<_>>(),
+        vec![Some(1), Some(2)]
+    );
+    assert_eq!(report.rounds_detected, 2);
+    assert!(features[40].opponent_hp >= 0.985);
+}
+
 fn three_round_match_for_p2() -> Vec<FrameFeatures> {
     let mut features = Vec::new();
     for winner in [2, 1, 2] {
@@ -63,6 +107,22 @@ fn three_round_match_for_p2() -> Vec<FrameFeatures> {
         }
     }
     features
+}
+
+fn extend_transition(features: &mut Vec<FrameFeatures>, count: usize) {
+    for _ in 0..count {
+        let mut feature = feature_for_p2(features.len() as u32, -1.0, -1.0);
+        feature.is_match_screen = false;
+        feature.left_drive_uncertain = true;
+        feature.right_drive_uncertain = true;
+        features.push(feature);
+    }
+}
+
+fn extend_stage_biased_full_health(features: &mut Vec<FrameFeatures>, count: usize) {
+    for _ in 0..count {
+        features.push(feature_for_p2(features.len() as u32, 1.0, 0.916));
+    }
 }
 
 fn extend_full_health(features: &mut Vec<FrameFeatures>, count: usize) {

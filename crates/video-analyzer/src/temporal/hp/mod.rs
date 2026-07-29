@@ -7,7 +7,7 @@ mod monotonic;
 mod uncertainty;
 
 use crash::reject_hp_crashes;
-use monotonic::{enforce_monotonic, round_reset_frames};
+use monotonic::{enforce_monotonic, normalize_structural_full_runs, round_reset_frames};
 use uncertainty::{forward_fill, UncertaintyWindow};
 
 const GAP_FILL: usize = 10;
@@ -41,6 +41,7 @@ pub fn confirm_hp(features: &mut Vec<FrameFeatures>) {
     reject_hp_crashes(&mut own, &match_frames);
     reject_hp_crashes(&mut opponent, &match_frames);
 
+    normalize_structural_full_runs(features, &mut own, &mut opponent, &match_frames);
     let reset_frames = round_reset_frames(&own, &opponent, &match_frames);
     enforce_monotonic(&mut own, &reset_frames);
     enforce_monotonic(&mut opponent, &reset_frames);

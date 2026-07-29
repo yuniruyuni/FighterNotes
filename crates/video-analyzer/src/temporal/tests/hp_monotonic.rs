@@ -66,6 +66,58 @@ fn reset_detection_requires_a_match_frame_at_the_full_hp_boundary() {
 }
 
 #[test]
+fn stage_biased_full_hp_is_normalized_only_after_a_round_transition() {
+    let mut features = hp_series(&[(0.2, 0.0); 40]);
+    features.extend(hp_series(&[(-1.0, -1.0); 30]));
+    features.extend(hp_series(&[(0.916, 1.0); 40]));
+    features.extend(hp_series(&[(0.914, 1.0); 40]));
+    features.extend(hp_series(&[(0.87, 1.0); 20]));
+    reindex(&mut features);
+    for frame in &mut features[40..70] {
+        frame.is_match_screen = false;
+        frame.left_drive_uncertain = true;
+        frame.right_drive_uncertain = true;
+    }
+    for frame in &mut features[110..] {
+        frame.left_drive_ratio = 0.5;
+        frame.right_drive_ratio = 0.5;
+    }
+
+    confirm_hp(&mut features);
+
+    assert!(features[80..150]
+        .iter()
+        .all(|frame| frame.own_hp == 1.0 && frame.opponent_hp == 1.0));
+    assert_close(features[155].own_hp, 0.87);
+}
+
+#[test]
+fn near_full_hp_inside_a_round_is_not_promoted() {
+    let mut features = hp_series(&[(0.916, 1.0); 40]);
+
+    confirm_hp(&mut features);
+
+    assert_close(features[20].own_hp, 0.916);
+}
+
+#[test]
+fn transition_without_material_hp_recovery_is_not_promoted() {
+    let mut features = hp_series(&[(0.89, 1.0); 40]);
+    features.extend(hp_series(&[(-1.0, -1.0); 30]));
+    features.extend(hp_series(&[(0.916, 1.0); 40]));
+    reindex(&mut features);
+    for frame in &mut features[40..70] {
+        frame.is_match_screen = false;
+        frame.left_drive_uncertain = true;
+        frame.right_drive_uncertain = true;
+    }
+
+    confirm_hp(&mut features);
+
+    assert_close(features[90].own_hp, 0.89);
+}
+
+#[test]
 fn monotonic_enforcement_preserves_unknowns_and_commits_zero_hp() {
     let mut values = vec![0.8, -1.0, 0.9, 0.0, 0.4];
     let reset_at = vec![false; values.len()];
