@@ -1,4 +1,8 @@
 import type { InputStats, TacticStats } from "~/modules/analysis/contracts.js";
+import {
+  appendUnconfirmedCandidates,
+  formatTacticCount,
+} from "./tactic-stat-format.js";
 
 export function InputStatsSection({ stats }: { stats: InputStats | null }) {
   return (
@@ -37,32 +41,49 @@ export function TacticStatsSection({ stats }: { stats: TacticStats }) {
   const balancePrefix = burnoutBalance > 0 ? "+" : "";
   const items: Array<[string, string, string?]> = [
     [
-      formatCount(stats.anti_air_successes, stats.anti_air_opportunities),
+      formatTacticCount(stats.anti_air_successes, stats.anti_air_opportunities),
       "対空 成功 / 機会",
       `飛びを通された ${stats.jump_ins_allowed} 回`,
     ],
     [
-      formatCount(stats.di_returned, stats.di_faced),
+      formatTacticCount(
+        stats.di_returned,
+        stats.di_faced,
+        stats.di_unconfirmed,
+      ),
       "DI返し / 相手DI",
-      `ガード ${stats.di_blocked} / パリィ ${stats.di_parried} / 被弾 ${stats.di_hit}`,
+      appendUnconfirmedCandidates(
+        `ガード ${stats.di_blocked} / パリィ ${stats.di_parried} / 被弾 ${stats.di_hit}`,
+        stats.di_unconfirmed,
+      ),
     ],
     [
-      formatCount(
+      formatTacticCount(
         stats.raw_drive_rushes_defended,
         stats.raw_drive_rushes_faced,
+        stats.raw_drive_rushes_unconfirmed,
       ),
       "生ラッシュ対処 / 相手の生ラッシュ",
-      `被弾 ${stats.raw_drive_rushes_hit} 回`,
+      appendUnconfirmedCandidates(
+        `被弾 ${stats.raw_drive_rushes_hit} 回`,
+        stats.raw_drive_rushes_unconfirmed,
+      ),
     ],
     [`${stats.dash_throws_faced} 回`, "前ステップ投げを受けた"],
     [`${stats.throw_whiffs} 回`, "自分の投げ空振り"],
     [
-      formatCount(stats.fastest_strike_losses, stats.fastest_strike_challenges),
+      formatTacticCount(
+        stats.fastest_strike_losses,
+        stats.fastest_strike_challenges,
+      ),
       "最速打撃の被弾 / 試行",
       `入力確認済みの不利状況 ${stats.minus_defense_opportunities ?? 0} 回`,
     ],
     [
-      formatCount(stats.fastest_throw_losses, stats.fastest_throw_challenges),
+      formatTacticCount(
+        stats.fastest_throw_losses,
+        stats.fastest_throw_challenges,
+      ),
       "最速投げの被弾 / 試行",
       `入力確認済みの不利状況 ${stats.minus_defense_opportunities ?? 0} 回`,
     ],
@@ -92,8 +113,4 @@ function StatGrid({ items }: { items: Array<[string, string, string?]> }) {
       ))}
     </div>
   );
-}
-
-function formatCount(successes: number, opportunities: number): string {
-  return opportunities === 0 ? "-" : `${successes} / ${opportunities}`;
 }

@@ -3,7 +3,8 @@ import type {
   AnalysisContext,
 } from "~/modules/analysis/contracts.js";
 import { formatCharacterId } from "~/modules/analysis/contracts.js";
-import { defensiveResponseBias, rate } from "../../domain/history.js";
+import { defensiveResponseBias } from "../../domain/history.js";
+import { formatTacticRateWithCount } from "./tactic-stat-format.js";
 import { useMatchupHistory } from "./use-matchup-history.js";
 
 interface MatchupHistorySectionProps {
@@ -69,18 +70,23 @@ function MatchupHistoryContent({
                 </td>
                 <td>{summary.matches}</td>
                 <td>
-                  {formatRateWithCount(
+                  {formatTacticRateWithCount(
                     summary.antiAirSuccesses,
                     summary.antiAirOpportunities,
                   )}
                 </td>
                 <td>
-                  {formatRateWithCount(summary.diReturned, summary.diFaced)}
+                  {formatTacticRateWithCount(
+                    summary.diReturned,
+                    summary.diFaced,
+                    summary.diUnconfirmed,
+                  )}
                 </td>
                 <td>
-                  {formatRateWithCount(
+                  {formatTacticRateWithCount(
                     summary.rawRushesDefended,
                     summary.rawRushesFaced,
+                    summary.rawRushesUnconfirmed,
                   )}
                 </td>
                 <td>{formatResponseBias(responseBias)}</td>
@@ -95,12 +101,6 @@ function MatchupHistoryContent({
       </table>
     </div>
   );
-}
-
-function formatRateWithCount(successes: number, opportunities: number): string {
-  return opportunities === 0
-    ? "-"
-    : `${rate(successes, opportunities)} (${successes}/${opportunities})`;
 }
 
 function formatResponseBias(

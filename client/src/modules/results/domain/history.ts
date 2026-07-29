@@ -83,9 +83,11 @@ export interface MatchupSummary {
   antiAirSuccesses: number;
   diFaced: number;
   diReturned: number;
+  diUnconfirmed: number;
   rawRushesFaced: number;
   rawRushesDefended: number;
   rawRushesHit: number;
+  rawRushesUnconfirmed: number;
   minusDefenseOpportunities: number;
   fastestStrikeChallenges: number;
   fastestStrikeLosses: number;
@@ -115,9 +117,11 @@ export function aggregateMatchups(
       antiAirSuccesses: 0,
       diFaced: 0,
       diReturned: 0,
+      diUnconfirmed: 0,
       rawRushesFaced: 0,
       rawRushesDefended: 0,
       rawRushesHit: 0,
+      rawRushesUnconfirmed: 0,
       minusDefenseOpportunities: 0,
       fastestStrikeChallenges: 0,
       fastestStrikeLosses: 0,
@@ -134,9 +138,11 @@ export function aggregateMatchups(
     current.antiAirSuccesses += record.tactics.anti_air_successes;
     current.diFaced += record.tactics.di_faced;
     current.diReturned += record.tactics.di_returned;
+    current.diUnconfirmed += record.tactics.di_unconfirmed;
     current.rawRushesFaced += record.tactics.raw_drive_rushes_faced;
     current.rawRushesDefended += record.tactics.raw_drive_rushes_defended;
     current.rawRushesHit += record.tactics.raw_drive_rushes_hit;
+    current.rawRushesUnconfirmed += record.tactics.raw_drive_rushes_unconfirmed;
     current.minusDefenseOpportunities +=
       record.tactics.minus_defense_opportunities ?? 0;
     current.fastestStrikeChallenges += record.tactics.fastest_strike_challenges;

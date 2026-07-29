@@ -77,7 +77,69 @@ function analysis(
   }).analysis;
 }
 
+function analysisWithUnconfirmedTactics() {
+  const value = analysis();
+  return {
+    ...value,
+    content: {
+      ...value.content,
+      tactics: {
+        ...value.content.tactics,
+        antiAir: {
+          opportunities: 0,
+          successes: 0,
+          jumpInsAllowed: 0,
+        },
+        driveImpact: {
+          faced: 0,
+          returned: 0,
+          blocked: 0,
+          parried: 0,
+          hit: 0,
+          avoided: 0,
+          unconfirmed: 2,
+        },
+        rawDriveRush: {
+          faced: 2,
+          defended: 1,
+          hit: 1,
+          unconfirmed: 3,
+        },
+      },
+    },
+  };
+}
+
 describe("published analysis presentation", () => {
+  test("確認なしと未確認候補を共有ページでも区別する", () => {
+    const view = PublishedAnalysisPageView.from(
+      analysisWithUnconfirmedTactics(),
+      {
+        canonical: new URL("https://fighter.example/s/example"),
+        home: new URL("https://fighter.example/"),
+        image: new URL("https://fighter.example/ogp.jpg"),
+      },
+    );
+
+    expect(view.tactics.slice(0, 3)).toEqual([
+      {
+        value: "確認なし",
+        label: "対空 成功 / 機会",
+        detail: "飛びを通された 0回",
+      },
+      {
+        value: "未確認 2 件",
+        label: "DI返し / 相手DI",
+        detail: "ガード 0・パリィ 0・被弾 0・未確認候補 2件",
+      },
+      {
+        value: "1 / 2",
+        label: "生ラッシュ対処 / 相手ラッシュ",
+        detail: "被弾 1回・未確認候補 3件",
+      },
+    ]);
+  });
+
   test("共有ページもSPAと同じsystem font roleを使用する", () => {
     const styles = publishedAnalysisPageStyles().toString();
 

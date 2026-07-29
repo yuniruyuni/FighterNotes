@@ -21,17 +21,28 @@ export function presentPublishedTactics(
       detail: `飛びを通された ${stats.antiAir.jumpInsAllowed}回`,
     },
     {
-      value: countFraction(stats.driveImpact.returned, stats.driveImpact.faced),
+      value: countFraction(
+        stats.driveImpact.returned,
+        stats.driveImpact.faced,
+        stats.driveImpact.unconfirmed,
+      ),
       label: "DI返し / 相手DI",
-      detail: `ガード ${stats.driveImpact.blocked}・パリィ ${stats.driveImpact.parried}・被弾 ${stats.driveImpact.hit}`,
+      detail: appendUnconfirmedCandidates(
+        `ガード ${stats.driveImpact.blocked}・パリィ ${stats.driveImpact.parried}・被弾 ${stats.driveImpact.hit}`,
+        stats.driveImpact.unconfirmed,
+      ),
     },
     {
       value: countFraction(
         stats.rawDriveRush.defended,
         stats.rawDriveRush.faced,
+        stats.rawDriveRush.unconfirmed,
       ),
       label: "生ラッシュ対処 / 相手ラッシュ",
-      detail: `被弾 ${stats.rawDriveRush.hit}回`,
+      detail: appendUnconfirmedCandidates(
+        `被弾 ${stats.rawDriveRush.hit}回`,
+        stats.rawDriveRush.unconfirmed,
+      ),
     },
     {
       value: `${stats.dashThrow.faced}回`,
@@ -69,8 +80,20 @@ export function presentPublishedTactics(
   ];
 }
 
-function countFraction(successes: number, opportunities: number): string {
-  return opportunities === 0 ? "-" : `${successes} / ${opportunities}`;
+function countFraction(
+  successes: number,
+  opportunities: number,
+  unconfirmed = 0,
+): string {
+  if (opportunities > 0) return `${successes} / ${opportunities}`;
+  return unconfirmed > 0 ? `未確認 ${unconfirmed} 件` : "確認なし";
+}
+
+function appendUnconfirmedCandidates(
+  detail: string,
+  unconfirmed: number,
+): string {
+  return unconfirmed > 0 ? `${detail}・未確認候補 ${unconfirmed}件` : detail;
 }
 
 function signedPercent(basisPoints: number): string {
