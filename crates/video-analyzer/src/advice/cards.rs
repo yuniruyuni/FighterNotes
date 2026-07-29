@@ -25,6 +25,7 @@ pub(crate) fn build_advice_cards(
         detect_punish_fail(events, own, own_character),
         detect_punish_missed(events, own, own_character),
         detect_low_conversion(events, own),
+        detect_throw_whiff_punished(events, own),
         detect_throw_loop(events, opp),
         detect_early_hits(events, round_summaries, own),
         detect_lead_loss(events, round_summaries, own_index),

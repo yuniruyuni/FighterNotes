@@ -9,6 +9,7 @@ mod pressure;
 mod punishment;
 mod rounds;
 mod throw_loop;
+mod throw_whiff;
 
 pub(crate) use big_hits::detect_big_hits;
 pub(crate) use burnout::detect_burnout;
@@ -21,6 +22,7 @@ pub(crate) use punishment::{
 };
 pub(crate) use rounds::{detect_early_hits, detect_lead_loss};
 pub(crate) use throw_loop::detect_throw_loop;
+pub(crate) use throw_whiff::detect_throw_whiff_punished;
 
 #[cfg(test)]
 mod tests;

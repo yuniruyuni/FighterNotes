@@ -13,6 +13,10 @@ fn detectors_abstain_without_relevant_events() {
         ("mashing", detect_mashing(&[], &events, 1, 0)),
         ("press_while_minus", detect_press_while_minus(&events, 1)),
         ("throw_while_minus", detect_throw_while_minus(&events, 1)),
+        (
+            "throw_whiff_punished",
+            detect_throw_whiff_punished(&events, 1),
+        ),
         ("guard_break", detect_guard_break(&events, 1)),
         ("reversal_punished", detect_reversal_punished(&events, 1)),
         ("punish_missed", detect_punish_missed(&events, 1, None)),
