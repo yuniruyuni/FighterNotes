@@ -1,6 +1,6 @@
 //! match_events 全体のユニットテスト。
 
-use super::{actions, contacts, punishes, reversals};
+use super::{actions, contacts, guard_breaks, punishes, reversals};
 
 mod contact_does_not_bridge_meter_reset_epochs;
 mod damage_sequence_uses_gameplay_gap_across_sa_freeze;
@@ -8,6 +8,7 @@ mod drive_impact_invincible_start_is_confirmed;
 mod drive_impact_is_not_reported_as_a_failed_reversal;
 mod empty_input_produces_an_empty_event_model;
 mod fragmented_invincible_run_is_one_reversal;
+mod guard_break_counts_one_release_per_damage_sequence;
 mod legacy_input_segment_defaults_to_direct_observation;
 mod minus_situation_keeps_observed_non_fastest_response_as_denominator;
 mod minus_situation_links_confirmed_fastest_action_and_outcome;

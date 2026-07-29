@@ -54,6 +54,8 @@ pub(crate) fn broke_direction(gset: [&str; 2], hd: &str) -> bool {
 /// ブロック硬直で判定するため、離散的な block コンタクトが立たない連続
 /// ブロック（f8995 実測）も拾える。HP 平坦の要求で被コンボの継続ヒットを、
 /// stun 限定で自分の技の後隙（punish_counter）からの被弾を除外する。
+/// 一度ガードを外して被弾した後のダメージ片は、直前 HP が平坦ではないため
+/// 同じ判断の2回目として数えない。
 /// PreJumpClipped（ブロックから上に外れて予備動作を狩られた）は崩れ本体
 /// なので除外しない。対空された空中ジャンプ（GotHit）・無敵技・投げは除外。
 #[allow(clippy::too_many_arguments)]
