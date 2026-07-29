@@ -71,9 +71,9 @@ pub use model::{BadgeColor, BadgeMark, BtnGlyph, InputDir, InputRow};
 pub use reader::{read_input_row0_from_strip, read_input_rows};
 
 use badges::read_badges;
-use button_glyphs::classify_btn_glyph;
+use button_glyphs::classify_btn_glyph_in_span;
 #[cfg(test)]
-use button_glyphs::BTN_GLYPH_W;
+use button_glyphs::{classify_btn_glyph, BTN_GLYPH_W};
 #[cfg(test)]
 use digits::match_digit_gray;
 use digits::read_count;

@@ -66,18 +66,29 @@ pub(super) fn collect_colored_badges(
             // ── 偽バッジ排除（透過部のキャラ・演出色対策） ──────────────
             // 1. 分類学的拒否: 実在するバッジは 円=teal/黄/赤、箱=橙SP/青DP/
             //    tealDI のみ。橙円・青円は存在しない（肌・炎・HITS 文字の色）
-            let taxonomy_ok =
-                boxed || matches!(c0, BadgeColor::Green | BadgeColor::Yellow | BadgeColor::Red);
+            let taxonomy_ok = if boxed {
+                matches!(
+                    c0,
+                    BadgeColor::Orange | BadgeColor::Green | BadgeColor::Blue
+                )
+            } else {
+                matches!(c0, BadgeColor::Green | BadgeColor::Yellow | BadgeColor::Red)
+            };
             // 2. 不透明バッジは上下に黒縁リングを持つ（実測 82-137、
             //    HITS 文字の偽箱は 36）
-            let mut rim_dark = 0u32;
+            let mut rim_luma_dark = 0u32;
+            let mut rim_max_160 = 0u32;
             for ci in start..=end {
                 for ry in [0usize, 1, 2, 3, 14, 15, 16, 17] {
                     let Some((r, g, b)) = f.px(x1 + ci, y0 + ry) else {
                         continue;
                     };
-                    if r.min(g).min(b) < 80 {
-                        rim_dark += 1;
+                    if r.max(g).max(b) < 160 {
+                        rim_max_160 += 1;
+                    }
+                    let luma = (u32::from(r) + u32::from(g) + u32::from(b)) / 3;
+                    if luma < 80 {
+                        rim_luma_dark += 1;
                     }
                 }
             }
@@ -113,13 +124,17 @@ pub(super) fn collect_colored_badges(
             // （実測 0-1）幅 22-23px。白文字で分断された箱の断片（bright
             // 24-34, w 11-12）が円+グリフとしてすり抜けるのを防ぐ
             let glyph = if !boxed && bright_inside <= 5 && w >= 16 {
-                classify_btn_glyph(f, x1 + start, y0)
+                classify_btn_glyph_in_span(f, x1 + start, y0, w)
             } else {
                 None
             };
 
-            // リムは列あたりで正規化（劣化断片は幅が縮むため絶対値だと落ちる）
-            let rim_ok = rim_dark >= 2 * w as u32;
+            // リムは無彩色の真黒だけに限定しない。半透明パネルでは背景色が
+            // 混ざるため、低輝度または全チャンネルが中暗度の画素を認める。
+            // 一方、彩度の高い明るい幕は平均輝度だけを暗さと誤認しない。
+            // 円・箱の実幅を大きく超える色帯も背景として棄却する。
+            let rim_ok =
+                w <= 40 && (rim_luma_dark >= (w as u32 / 8).max(2) || rim_max_160 >= 2 * w as u32);
             if taxonomy_ok && rim_ok && (smooth_ok || glyph.is_some()) {
                 // 同一箱の断片化による重複を防ぐ（同色・箱・近接なら統合）
                 if boxed {

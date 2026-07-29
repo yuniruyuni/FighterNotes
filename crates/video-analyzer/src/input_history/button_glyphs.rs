@@ -20,7 +20,14 @@ const BTN_GLYPH_MIN_LIGHT: u32 = 60;
 ///
 /// P2 側のアイコンが鏡像かは未実測のため、正順と左右反転の両方を試して
 /// 良い方を採る（Modern 無地円はどちらでも棄却される）。
-pub(super) fn classify_btn_glyph(f: &Frame, x_start: usize, y0: usize) -> Option<BtnGlyph> {
+#[derive(Clone, Copy)]
+struct GlyphMatch {
+    glyph: BtnGlyph,
+    distance: u32,
+    margin: u32,
+}
+
+fn match_btn_glyph(f: &Frame, x_start: usize, y0: usize) -> Option<GlyphMatch> {
     // 暗画素マスク（楕円内部限定。円外の透過背景ノイズを避ける）
     let mut mask = [0u64; DIGIT_H];
     for (ry, row) in mask.iter_mut().enumerate() {
@@ -96,11 +103,46 @@ pub(super) fn classify_btn_glyph(f: &Frame, x_start: usize, y0: usize) -> Option
     if best > BTN_GLYPH_MAX || margin < BTN_GLYPH_AMBIG {
         return None;
     }
-    Some(if dp <= dk {
-        BtnGlyph::Punch
-    } else {
-        BtnGlyph::Kick
+    Some(GlyphMatch {
+        glyph: if dp <= dk {
+            BtnGlyph::Punch
+        } else {
+            BtnGlyph::Kick
+        },
+        distance: best,
+        margin,
     })
+}
+
+#[cfg(test)]
+pub(super) fn classify_btn_glyph(f: &Frame, x_start: usize, y0: usize) -> Option<BtnGlyph> {
+    match_btn_glyph(f, x_start, y0).map(|matched| matched.glyph)
+}
+
+/// 背景の同系色と円が連結した場合は、色チャンクの左端が実際の円の左端と
+/// 一致しない。チャンク内で 23px の照合窓を横に動かし、テンプレート距離が
+/// 最小の位置を採る。
+pub(super) fn classify_btn_glyph_in_span(
+    f: &Frame,
+    x_start: usize,
+    y0: usize,
+    span_w: usize,
+) -> Option<BtnGlyph> {
+    let max_offset = span_w.saturating_sub(BTN_GLYPH_W as usize);
+    let mut best_match: Option<GlyphMatch> = None;
+    for offset in 0..=max_offset {
+        let Some(candidate) = match_btn_glyph(f, x_start + offset, y0) else {
+            continue;
+        };
+        let improves = best_match.is_none_or(|current| {
+            candidate.distance < current.distance
+                || (candidate.distance == current.distance && candidate.margin > current.margin)
+        });
+        if improves {
+            best_match = Some(candidate);
+        }
+    }
+    best_match.map(|matched| matched.glyph)
 }
 
 /// クラシックの投げ入力（弱P+弱K 同時押し）をバッジ列から検出する。

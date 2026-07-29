@@ -29,6 +29,35 @@ fn button_glyph_templates_classify() {
 }
 
 #[test]
+fn button_glyph_alignment_recovers_a_circle_joined_to_background() {
+    let span_w = BTN_GLYPH_W as usize + 13;
+    let glyph_x = 5usize;
+    let mut rgba = vec![160u8; span_w * DIGIT_H * 4];
+    for alpha in rgba[3..].iter_mut().step_by(4) {
+        *alpha = 255;
+    }
+    for (y, bits) in BTN_GLYPH_KICK.iter().enumerate() {
+        for x in 0..BTN_GLYPH_W as usize {
+            if bits & (1 << x) != 0 {
+                let index = (y * span_w + glyph_x + x) * 4;
+                rgba[index..index + 3].copy_from_slice(&[0, 180, 180]);
+            }
+        }
+    }
+    let frame = Frame {
+        rgba: &rgba,
+        w: span_w,
+        y_off: 0,
+        white_th: 210,
+    };
+
+    assert_eq!(
+        classify_btn_glyph_in_span(&frame, 0, 0, span_w),
+        Some(BtnGlyph::Kick)
+    );
+}
+
+#[test]
 fn classic_button_labels() {
     use BtnGlyph::*;
     let mark = |color, glyph| BadgeMark {
