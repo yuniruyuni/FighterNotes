@@ -89,6 +89,16 @@ export function DebugView(props: DebugViewProps) {
           <label>
             <input
               type="checkbox"
+              checked={visibility.super}
+              onChange={(event) =>
+                setOverlayVisibility("super", event.currentTarget.checked)
+              }
+            />{" "}
+            SA
+          </label>
+          <label>
+            <input
+              type="checkbox"
               checked={visibility.input}
               onChange={(event) =>
                 setOverlayVisibility("input", event.currentTarget.checked)

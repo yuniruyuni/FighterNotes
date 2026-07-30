@@ -24,6 +24,7 @@ export interface DebugOverlayVisibility {
   hue: boolean;
   hp: boolean;
   drive: boolean;
+  super: boolean;
   input: boolean;
 }
 
@@ -33,6 +34,7 @@ export function initialDebugOverlayVisibility(): DebugOverlayVisibility {
     hue: false,
     hp: false,
     drive: false,
+    super: false,
     input: false,
   };
 }

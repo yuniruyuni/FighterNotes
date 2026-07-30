@@ -66,6 +66,13 @@ pub fn inspect_drive(rgba: &[u8], width: u32, height: u32) -> String {
 }
 
 #[wasm_bindgen]
+pub fn inspect_super(rgba: &[u8], width: u32, height: u32) -> String {
+    let left = video_analyzer::super_gauge_debug_json(rgba, width, height, "left");
+    let right = video_analyzer::super_gauge_debug_json(rgba, width, height, "right");
+    format!(r#"{{"left":{left},"right":{right}}}"#)
+}
+
+#[wasm_bindgen]
 pub fn inspect_input(rgba: &[u8], width: u32, height: u32) -> String {
     let p1 = video_analyzer::input_history_debug_json(rgba, width, height, "p1");
     let p2 = video_analyzer::input_history_debug_json(rgba, width, height, "p2");

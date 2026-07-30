@@ -5,6 +5,7 @@ import {
   inspect_frame,
   inspect_hp,
   inspect_input,
+  inspect_super,
 } from "../../../../../../crates/wasm-bridge/pkg/wasm_bridge.js";
 import type {
   DebugDriveInspection,
@@ -13,6 +14,7 @@ import type {
   DebugHpInspection,
   DebugInputInspection,
   DebugMeterInspection,
+  DebugSuperInspection,
 } from "../../application/debug-frame-inspection.js";
 
 let hpGeometry: DebugHpGeometry | null = null;
@@ -38,6 +40,12 @@ export const wasmDebugFrameInspector: DebugFrameInspector = {
     return JSON.parse(
       inspect_drive(rgba, width, height),
     ) as DebugDriveInspection;
+  },
+
+  inspectSuper(rgba, width, height) {
+    return JSON.parse(
+      inspect_super(rgba, width, height),
+    ) as DebugSuperInspection;
   },
 
   inspectInput(rgba, width, height) {

@@ -15,6 +15,7 @@ const expectedExports = [
   "inspect_frame",
   "inspect_hp",
   "inspect_input",
+  "inspect_super",
   "wasm_memory",
 ];
 
@@ -58,6 +59,7 @@ const expectedFunctions = [
   "export function inspect_frame(rgba: Uint8Array, width: number, height: number): string;",
   "export function inspect_hp(rgba: Uint8Array, width: number, height: number): string;",
   "export function inspect_input(rgba: Uint8Array, width: number, height: number): string;",
+  "export function inspect_super(rgba: Uint8Array, width: number, height: number): string;",
   "export function wasm_memory(): any;",
 ];
 

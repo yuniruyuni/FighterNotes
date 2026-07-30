@@ -1,5 +1,7 @@
 use serde_json::Value;
-use wasm_bridge::{hp_parallelogram_json, inspect_drive, inspect_frame, inspect_hp, inspect_input};
+use wasm_bridge::{
+    hp_parallelogram_json, inspect_drive, inspect_frame, inspect_hp, inspect_input, inspect_super,
+};
 
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
@@ -81,6 +83,23 @@ fn inspection_exports_keep_browser_json_shapes() {
         ],
     );
     assert_object_keys(&drive["left"]["roi"], &["x1", "x2", "y1", "y2", "slope"]);
+
+    let super_gauge: Value = serde_json::from_str(&inspect_super(&rgba, WIDTH, HEIGHT)).unwrap();
+    assert_object_keys(&super_gauge, &["left", "right"]);
+    assert_object_keys(
+        &super_gauge["left"],
+        &[
+            "value",
+            "displayed_level",
+            "critical_art",
+            "uncertain",
+            "label_roi",
+            "bar_roi",
+        ],
+    );
+    assert_object_keys(&super_gauge["left"]["label_roi"], &["x1", "x2", "y1", "y2"]);
+    assert_eq!(super_gauge["left"]["label_roi"]["x1"], 55);
+    assert_eq!(super_gauge["right"]["bar_roi"]["x1"], 1510);
 
     let input: Value = serde_json::from_str(&inspect_input(&rgba, WIDTH, HEIGHT)).unwrap();
     assert_object_keys(&input, &["p1", "p2"]);

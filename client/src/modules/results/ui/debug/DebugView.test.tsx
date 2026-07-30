@@ -30,6 +30,7 @@ describe("DebugView navigation", () => {
       inspectMeter: unexpectedInspection,
       inspectHp: unexpectedInspection,
       inspectDrive: unexpectedInspection,
+      inspectSuper: unexpectedInspection,
       inspectInput: unexpectedInspection,
     };
     const services: ResultsServices = {
@@ -67,6 +68,7 @@ describe("DebugView navigation", () => {
       );
       await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
       expect(seekFallback).toHaveBeenLastCalledWith(0);
+      expect(screen.getByRole("checkbox", { name: "SA" })).not.toBeNull();
 
       await user.click(screen.getByRole("button", { name: "60フレーム進む" }));
       expect(seekFallback).toHaveBeenLastCalledWith(60);

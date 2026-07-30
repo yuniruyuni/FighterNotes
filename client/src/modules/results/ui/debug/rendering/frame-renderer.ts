@@ -28,6 +28,11 @@ import {
   drawTrackedInputRow0,
 } from "./overlays/input.js";
 import { drawFinalOverlay, drawRawOverlay } from "./overlays/meter.js";
+import {
+  drawSuperGaugeReproduced,
+  drawSuperRoiOverlay,
+  drawSuperTimeline,
+} from "./overlays/super.js";
 
 export class DebugFrameRenderer {
   readonly #context: CanvasRenderingContext2D;
@@ -116,6 +121,9 @@ export class DebugFrameRenderer {
     if (visibility.drive && rgba) {
       this.#drawDrive(rgba, frameIndex, width, height);
     }
+    if (visibility.super && rgba) {
+      this.#drawSuper(rgba, frameIndex, width, height);
+    }
     if (visibility.input && rgba) {
       const input = this.inspector.inspectInput(rgba, width, height);
       drawInputHistoryDebug(context, input, width, height);
@@ -139,6 +147,7 @@ export class DebugFrameRenderer {
       !visibility.raw &&
       !visibility.hp &&
       !visibility.drive &&
+      !visibility.super &&
       !visibility.input
     ) {
       return null;
@@ -205,6 +214,25 @@ export class DebugFrameRenderer {
     drawDriveBarReproduced(this.#context, drive, width, height);
     drawDriveColRow(this.#context, drive, width, height);
     drawDriveTimeline(
+      this.#context,
+      this.data.hpFeatures,
+      frameIndex,
+      width,
+      height,
+    );
+  }
+
+  #drawSuper(
+    rgba: Uint8Array,
+    frameIndex: number,
+    width: number,
+    height: number,
+  ) {
+    const superGauge = this.inspector.inspectSuper(rgba, width, height);
+    const frame = this.data.hpFeatures[frameIndex];
+    drawSuperRoiOverlay(this.#context, superGauge, width, height);
+    drawSuperGaugeReproduced(this.#context, superGauge, frame, width, height);
+    drawSuperTimeline(
       this.#context,
       this.data.hpFeatures,
       frameIndex,

@@ -11,6 +11,7 @@ describe("debug viewer model", () => {
       hue: false,
       hp: false,
       drive: false,
+      super: false,
       input: false,
     });
     expect(first).not.toBe(second);

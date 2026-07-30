@@ -45,6 +45,27 @@ export interface DebugDriveInspection {
   right: DebugDriveSideInspection;
 }
 
+export interface DebugSuperRoi {
+  x1: number;
+  x2: number;
+  y1: number;
+  y2: number;
+}
+
+export interface DebugSuperSideInspection {
+  value: number;
+  displayed_level: number | null;
+  critical_art: boolean;
+  uncertain: boolean;
+  label_roi: DebugSuperRoi;
+  bar_roi: DebugSuperRoi;
+}
+
+export interface DebugSuperInspection {
+  left: DebugSuperSideInspection;
+  right: DebugSuperSideInspection;
+}
+
 export interface DebugInputRowInspection {
   count: number | null;
   dir: string;
@@ -85,6 +106,11 @@ export interface DebugFrameInspector {
     width: number,
     height: number,
   ): DebugDriveInspection;
+  inspectSuper(
+    rgba: Uint8Array,
+    width: number,
+    height: number,
+  ): DebugSuperInspection;
   inspectInput(
     rgba: Uint8Array,
     width: number,
