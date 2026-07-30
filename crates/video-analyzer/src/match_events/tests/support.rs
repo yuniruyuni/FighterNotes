@@ -1,7 +1,7 @@
 pub(super) use super::super::*;
 pub(super) use crate::input_history::BadgeMark;
 
-pub(super) fn feat(i: u32, l: f32, r: f32) -> FrameFeatures {
+pub(crate) fn feat(i: u32, l: f32, r: f32) -> FrameFeatures {
     FrameFeatures {
         frame_index: i,
         fps: 60.0,
@@ -18,6 +18,12 @@ pub(super) fn feat(i: u32, l: f32, r: f32) -> FrameFeatures {
         right_burnout: false,
         left_drive_uncertain: false,
         right_drive_uncertain: false,
+        left_super_value: 0.0,
+        right_super_value: 0.0,
+        left_super_uncertain: true,
+        right_super_uncertain: true,
+        left_ca_ready: false,
+        right_ca_ready: false,
         left_hp_raw: l,
         right_hp_raw: r,
         left_hp_raw_quality: 0.0,

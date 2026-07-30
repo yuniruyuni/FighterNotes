@@ -64,6 +64,12 @@ export interface HpFrameData {
   readonly right_burnout: boolean;
   readonly left_drive_uncertain: boolean;
   readonly right_drive_uncertain: boolean;
+  readonly left_super_value: number;
+  readonly right_super_value: number;
+  readonly left_super_uncertain: boolean;
+  readonly right_super_uncertain: boolean;
+  readonly left_ca_ready: boolean;
+  readonly right_ca_ready: boolean;
   readonly left_hp_raw: number;
   readonly right_hp_raw: number;
 }

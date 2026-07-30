@@ -169,7 +169,7 @@ fn tactic_stats_only_count_confirmed_interactions() {
         round_no: 1,
     });
 
-    let stats = build_tactic_stats(&ev, 1, 2);
+    let stats = build_tactic_stats(&[], &ev, 1, 2);
     assert_eq!(
         (stats.anti_air_successes, stats.anti_air_opportunities),
         (1, 2)

@@ -37,6 +37,9 @@ fn crate_root_keeps_public_function_names() {
     let _ = video_analyzer::refine_match_events_with_spatial;
     let _ = video_analyzer::repair_row0_sequence;
     let _ = video_analyzer::spatial_candidate_windows;
+    let _ = video_analyzer::super_gauge_debug_json;
+    let _ = video_analyzer::super_gauge_read;
+    let _ = video_analyzer::super_gauge_read_from_hud_strip;
 }
 
 #[test]

@@ -16,6 +16,12 @@ const hpFrame = {
   right_burnout: false,
   left_drive_uncertain: false,
   right_drive_uncertain: false,
+  left_super_value: 0,
+  right_super_value: 0,
+  left_super_uncertain: true,
+  right_super_uncertain: true,
+  left_ca_ready: false,
+  right_ca_ready: false,
   left_hp_raw: 1,
   right_hp_raw: 1,
 };

@@ -1,8 +1,14 @@
 use super::super::*;
 
-pub(crate) fn build_tactic_stats(events: &MatchEvents, own: u8, opponent: u8) -> TacticStats {
+pub(crate) fn build_tactic_stats(
+    features: &[FrameFeatures],
+    events: &MatchEvents,
+    own: u8,
+    opponent: u8,
+) -> TacticStats {
     use crate::match_events::{
-        BurnoutCause, DriveImpactOutcome, DriveRushOutcome, ThrowApproach, ThrowOutcome,
+        BurnoutCause, DriveImpactOutcome, DriveRushOutcome, SuperArtContext, SuperArtOutcome,
+        ThrowApproach, ThrowOutcome,
     };
 
     let event_in_round = |round_no: u32, frame: u32| {
@@ -125,6 +131,71 @@ pub(crate) fn build_tactic_stats(events: &MatchEvents, own: u8, opponent: u8) ->
             BurnoutCause::ForcedByGuard => stats.burnout_forced += 1,
             BurnoutCause::Mixed => stats.burnout_mixed += 1,
             BurnoutCause::Unknown => stats.burnout_unknown += 1,
+        }
+    }
+    for event in events.super_arts.iter().filter(|event| {
+        event_in_round(event.round_no, event.frame) && event.confidence != EventConfidence::Low
+    }) {
+        let own_event = event.side == own;
+        match (own_event, event.level, event.critical_art) {
+            (true, 1, _) => stats.sa1_used += 1,
+            (true, 2, _) => stats.sa2_used += 1,
+            (true, 3, true) => stats.ca_used += 1,
+            (true, 3, false) => stats.sa3_used += 1,
+            (false, 1, _) if event.side == opponent => stats.opponent_sa1_used += 1,
+            (false, 2, _) if event.side == opponent => stats.opponent_sa2_used += 1,
+            (false, 3, true) if event.side == opponent => stats.opponent_ca_used += 1,
+            (false, 3, false) if event.side == opponent => stats.opponent_sa3_used += 1,
+            _ => {}
+        }
+        if own_event {
+            match event.outcome {
+                SuperArtOutcome::Hit => stats.super_hits += 1,
+                SuperArtOutcome::Blocked => stats.super_blocked += 1,
+                SuperArtOutcome::NoImmediateContact => stats.super_no_immediate_contact += 1,
+                SuperArtOutcome::Unconfirmed => {}
+            }
+            stats.super_punished += u32::from(event.punished);
+            stats.super_kos += u32::from(event.ko);
+            match event.context {
+                SuperArtContext::Combo => stats.super_combo_uses += 1,
+                SuperArtContext::Punish => stats.super_punish_uses += 1,
+                SuperArtContext::DefensiveReversal => stats.super_reversal_uses += 1,
+                SuperArtContext::Neutral => stats.super_neutral_uses += 1,
+                SuperArtContext::Unknown => {}
+            }
+        } else if event.side == opponent {
+            match event.outcome {
+                SuperArtOutcome::Hit => stats.opponent_super_hits += 1,
+                SuperArtOutcome::Blocked => stats.opponent_super_blocked += 1,
+                SuperArtOutcome::NoImmediateContact => {
+                    stats.opponent_super_no_immediate_contact += 1
+                }
+                SuperArtOutcome::Unconfirmed => {}
+            }
+            stats.opponent_super_punished += u32::from(event.punished);
+            stats.opponent_super_kos += u32::from(event.ko);
+        }
+    }
+
+    let last_round_end = events.rounds.last().map(|round| round.end_frame);
+    if let Some(end_frame) = last_round_end {
+        if let Some(feature) = features
+            .iter()
+            .rev()
+            .find(|feature| feature.is_match_screen && feature.frame_index <= end_frame)
+        {
+            let own_is_left = own == 1;
+            stats.super_gauge_end = if own_is_left {
+                feature.left_super_value
+            } else {
+                feature.right_super_value
+            };
+            stats.opponent_super_gauge_end = if own_is_left {
+                feature.right_super_value
+            } else {
+                feature.left_super_value
+            };
         }
     }
     stats

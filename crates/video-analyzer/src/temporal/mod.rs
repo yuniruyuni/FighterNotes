@@ -5,9 +5,11 @@
 
 mod drive;
 mod hp;
+mod super_gauge;
 
 pub use drive::clean_drive_temporal;
 pub use hp::{confirm_hp, confirm_hp_with_fight_markers, FULL_HP, FULL_MIN_RUN};
+pub use super_gauge::clean_super_temporal;
 
 #[cfg(test)]
 mod tests;

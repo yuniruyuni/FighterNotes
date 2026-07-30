@@ -2,18 +2,20 @@ import {
   ANALYSIS_STRIPS,
   ANALYSIS_WIDTH,
   FIGHT_MARKER_LAYOUT,
+  LOWER_ATLAS_LAYOUT,
+  SUPER_GAUGE_LAYOUT,
 } from "./layout.js";
 import type { AnalysisTransferBuffers } from "./strip-buffer-pool.js";
 
 interface StripBitmaps {
   readonly hud: ImageBitmap;
-  readonly meter: ImageBitmap;
+  readonly lowerAtlas: ImageBitmap;
   readonly input: ImageBitmap;
 }
 
 interface PendingStripBitmaps {
   readonly hud: Promise<ImageBitmap>;
-  readonly meter: Promise<ImageBitmap>;
+  readonly lowerAtlas: Promise<ImageBitmap>;
   readonly input: Promise<ImageBitmap>;
   readonly fightFrame?: VideoFrame;
 }
@@ -32,7 +34,7 @@ export class FrameStripExtractor {
   createBitmaps(frame: VideoFrame, frameIndex: number): PendingStripBitmaps {
     return {
       hud: createStripBitmap(frame, ANALYSIS_STRIPS.hud),
-      meter: createStripBitmap(frame, ANALYSIS_STRIPS.meter),
+      lowerAtlas: createPatchBitmap(frame, LOWER_ATLAS_LAYOUT.source),
       input: createStripBitmap(frame, ANALYSIS_STRIPS.input),
       ...(frameIndex % FIGHT_MARKER_LAYOUT.sampleInterval === 0
         ? { fightFrame: frame }
@@ -43,12 +45,17 @@ export class FrameStripExtractor {
   async readBitmaps(pending: PendingStripBitmaps): Promise<StripPixels> {
     const bitmaps: StripBitmaps = {
       hud: await pending.hud,
-      meter: await pending.meter,
+      lowerAtlas: await pending.lowerAtlas,
       input: await pending.input,
     };
     return {
-      hud: drawHudBitmap(this.#hud, bitmaps.hud, pending.fightFrame),
-      meter: drawBitmap(this.#meter, bitmaps.meter),
+      hud: drawHudBitmap(
+        this.#hud,
+        bitmaps.hud,
+        bitmaps.lowerAtlas,
+        pending.fightFrame,
+      ),
+      meter: drawMeterBitmap(this.#meter, bitmaps.lowerAtlas),
       input: drawBitmap(this.#input, bitmaps.input),
     };
   }
@@ -83,6 +90,18 @@ function createStripBitmap(
   return createImageBitmap(frame, 0, strip.y, ANALYSIS_WIDTH, strip.height);
 }
 
+function createPatchBitmap(
+  frame: VideoFrame,
+  patch: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  },
+): Promise<ImageBitmap> {
+  return createImageBitmap(frame, patch.x, patch.y, patch.width, patch.height);
+}
+
 function drawBitmap(
   target: StripCanvas,
   bitmap: ImageBitmap,
@@ -95,14 +114,16 @@ function drawBitmap(
 function drawHudBitmap(
   target: StripCanvas,
   bitmap: ImageBitmap,
+  lowerAtlas: ImageBitmap,
   fightFrame: VideoFrame | undefined,
 ): Uint8ClampedArray {
   target.context.drawImage(bitmap, 0, 0);
   bitmap.close();
+  target.context.imageSmoothingEnabled = true;
+  target.context.imageSmoothingQuality = "high";
+  drawSuperGauge(target.context, lowerAtlas);
   if (fightFrame) {
     const { source, target: destination } = FIGHT_MARKER_LAYOUT;
-    target.context.imageSmoothingEnabled = true;
-    target.context.imageSmoothingQuality = "high";
     target.context.drawImage(
       fightFrame,
       source.x,
@@ -115,6 +136,51 @@ function drawHudBitmap(
       destination.height,
     );
   }
+  return readPixels(target);
+}
+
+function drawSuperGauge(
+  context: OffscreenCanvasRenderingContext2D,
+  lowerAtlas: ImageBitmap,
+): void {
+  for (const side of [
+    SUPER_GAUGE_LAYOUT.left,
+    SUPER_GAUGE_LAYOUT.right,
+  ] as const) {
+    for (const patch of [side.label, side.bar]) {
+      const { source, target } = patch;
+      context.drawImage(
+        lowerAtlas,
+        source.x,
+        source.y,
+        source.width,
+        source.height,
+        target.x,
+        target.y,
+        target.width,
+        target.height,
+      );
+    }
+  }
+}
+
+function drawMeterBitmap(
+  target: StripCanvas,
+  lowerAtlas: ImageBitmap,
+): Uint8ClampedArray {
+  const { source, target: destination } = LOWER_ATLAS_LAYOUT.meter;
+  target.context.drawImage(
+    lowerAtlas,
+    source.x,
+    source.y,
+    source.width,
+    source.height,
+    destination.x,
+    destination.y,
+    destination.width,
+    destination.height,
+  );
+  lowerAtlas.close();
   return readPixels(target);
 }
 

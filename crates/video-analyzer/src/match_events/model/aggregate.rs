@@ -21,6 +21,9 @@ pub struct MatchEvents {
     pub punishes: Vec<PunishChance>,
     /// 無敵技ぶっぱ被弾（メーターが読めない場合は空）
     pub reversals: Vec<ReversalEvent>,
+    /// SA ゲージ低下から確定した SA1/2/3/CA の使用。
+    #[serde(default)]
+    pub super_arts: Vec<SuperArtEvent>,
     /// ガード崩れ / 被圧被弾（メーターが読めない場合は空）
     pub guard_breaks: Vec<GuardBreakEvent>,
     /// 不利フレーム中のボタン暴れ（メーターが読めない場合は空）

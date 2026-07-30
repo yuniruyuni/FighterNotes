@@ -1,4 +1,4 @@
-pub const RULESET_VERSION: u32 = 6;
+pub const RULESET_VERSION: u32 = 7;
 
 /// 「大被弾」とみなす HP ドロップ（暴れ指摘の対象）
 pub(crate) const BIG_DAMAGE: f32 = 0.10;

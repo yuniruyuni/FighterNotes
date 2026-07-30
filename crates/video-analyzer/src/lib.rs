@@ -27,8 +27,9 @@ pub use frame_features::{
     hp_bar_debug_json, hp_bar_score, hp_bar_score_from_hud_strip, hp_col_active, hp_col_orange,
     hp_col_pixel_detail_json, hp_col_yellow, hp_damage_fill, hp_damage_fill_from_hud_strip,
     hp_fill_ratio, hp_fill_ratio_from_hud_strip, hp_fill_ratio_with_quality,
-    hp_fill_ratio_with_quality_from_hud_strip, hp_parallelogram, DriveGaugeRead, FrameFeatures,
-    HpParallelogram, HP_ROI_P1, HP_ROI_P2, HUD_STRIP_H, HUD_STRIP_Y,
+    hp_fill_ratio_with_quality_from_hud_strip, hp_parallelogram, super_gauge_debug_json,
+    super_gauge_read, super_gauge_read_from_hud_strip, DriveGaugeRead, FrameFeatures,
+    HpParallelogram, SuperGaugeRead, HP_ROI_P1, HP_ROI_P2, HUD_STRIP_H, HUD_STRIP_Y,
 };
 pub use input_history::{
     input_history_debug_json, read_input_row0_from_strip, read_input_rows, BadgeColor, BadgeMark,
@@ -43,8 +44,8 @@ pub use match_events::{
     EventConfidence, GuardBreakEvent, JumpDirection, JumpEvent, JumpOutcome, MatchEvents,
     MeterState, MinusPressEvent, MinusPressOutcome, MinusSituationEvent, ProjectileThreat,
     PunishChance, PunishOrigin, PunishOutcome, PunishReachability, ReversalEvent, RoundInfo,
-    TeleportContext, TeleportEvent, ThreatOutcome, ThrowActionEvent, ThrowApproach, ThrowEvent,
-    ThrowOutcome,
+    SuperArtContext, SuperArtEvent, SuperArtOutcome, TeleportContext, TeleportEvent, ThreatOutcome,
+    ThrowActionEvent, ThrowApproach, ThrowEvent, ThrowOutcome,
 };
 pub use pipeline::{
     analyze_features, analyze_features_with_context, analyze_match, analyze_match_with_context,
@@ -60,4 +61,6 @@ pub use spatial::{
     SpatialCandidateWindow, SpatialConfig, SpatialError, SpatialExtractor, SpatialHintRange,
     SpatialHints, SpatialObservation, SpatialPoint, SpatialRect,
 };
-pub use temporal::{clean_drive_temporal, confirm_hp, confirm_hp_with_fight_markers};
+pub use temporal::{
+    clean_drive_temporal, clean_super_temporal, confirm_hp, confirm_hp_with_fight_markers,
+};

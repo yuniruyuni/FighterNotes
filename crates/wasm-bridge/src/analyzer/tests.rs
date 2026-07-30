@@ -69,3 +69,30 @@ fn split_meter_session_matches_combined_analysis() {
         combined.get_spatial_windows_json()
     );
 }
+
+#[test]
+fn reads_both_super_gauges_on_every_frame() {
+    let mut analyzer = Analyzer::new("p1");
+    paint_vertical_one(&mut analyzer.hud_buf, 68);
+    paint_vertical_one(&mut analyzer.hud_buf, 22 + 1830);
+
+    // 旧実装の 10 フレーム間引きでは frame 1 は未読になっていた。
+    analyzer.push_hud_features_inplace(1920, 1080, 1);
+
+    let feature = &analyzer.features[0];
+    assert_eq!(feature.left_super_value, 1.0);
+    assert!(!feature.left_super_uncertain);
+    assert_eq!(feature.right_super_value, 1.0);
+    assert!(!feature.right_super_uncertain);
+}
+
+fn paint_vertical_one(rgba: &mut [u8], x: usize) {
+    const WIDTH: usize = 1920;
+    for y in 8..60 {
+        for px in x..x + 8 {
+            let index = (y * WIDTH + px) * 4;
+            rgba[index..index + 3].fill(245);
+            rgba[index + 3] = 255;
+        }
+    }
+}

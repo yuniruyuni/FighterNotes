@@ -142,6 +142,31 @@ export interface TacticStats {
   burnout_forced: number;
   burnout_mixed: number;
   burnout_unknown: number;
+  /** ruleset v6 以前の保存済みレポートでは省略。 */
+  sa1_used?: number;
+  sa2_used?: number;
+  sa3_used?: number;
+  ca_used?: number;
+  super_hits?: number;
+  super_blocked?: number;
+  super_no_immediate_contact?: number;
+  super_punished?: number;
+  super_kos?: number;
+  super_combo_uses?: number;
+  super_punish_uses?: number;
+  super_reversal_uses?: number;
+  super_neutral_uses?: number;
+  opponent_sa1_used?: number;
+  opponent_sa2_used?: number;
+  opponent_sa3_used?: number;
+  opponent_ca_used?: number;
+  opponent_super_hits?: number;
+  opponent_super_blocked?: number;
+  opponent_super_no_immediate_contact?: number;
+  opponent_super_punished?: number;
+  opponent_super_kos?: number;
+  super_gauge_end?: number;
+  opponent_super_gauge_end?: number;
 }
 
 export interface AdviceReport {

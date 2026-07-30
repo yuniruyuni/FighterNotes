@@ -24,6 +24,7 @@ pub(super) fn empty_events() -> MatchEvents {
         contacts: vec![],
         punishes: vec![],
         reversals: vec![],
+        super_arts: vec![],
         guard_breaks: vec![],
         presses_while_minus: vec![],
         minus_situations: vec![],

@@ -19,6 +19,7 @@ use crate::round_start::FightMarker;
 pub fn finalize_features(features: &mut Vec<FrameFeatures>) {
     crate::temporal::confirm_hp(features);
     crate::temporal::clean_drive_temporal(features);
+    crate::temporal::clean_super_temporal(features);
 }
 
 /// Browser の `FIGHT` 画像検出を境界の唯一の決定信号として確定層を実行する。
@@ -29,6 +30,7 @@ pub fn finalize_features_with_fight_markers(
 ) {
     crate::temporal::confirm_hp_with_fight_markers(features, markers, own_side);
     crate::temporal::clean_drive_temporal(features);
+    crate::temporal::clean_super_temporal(features);
 }
 
 /// フレームフィーチャ列と入力トラッカー出力からアドバイスレポートを生成する。

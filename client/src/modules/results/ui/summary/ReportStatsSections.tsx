@@ -39,6 +39,16 @@ export function TacticStatsSection({ stats }: { stats: TacticStats }) {
     (stats.burnout_hp_dealt - stats.burnout_hp_lost) * 100,
   );
   const balancePrefix = burnoutBalance > 0 ? "+" : "";
+  const superUsed =
+    (stats.sa1_used ?? 0) +
+    (stats.sa2_used ?? 0) +
+    (stats.sa3_used ?? 0) +
+    (stats.ca_used ?? 0);
+  const opponentSuperUsed =
+    (stats.opponent_sa1_used ?? 0) +
+    (stats.opponent_sa2_used ?? 0) +
+    (stats.opponent_sa3_used ?? 0) +
+    (stats.opponent_ca_used ?? 0);
   const items: Array<[string, string, string?]> = [
     [
       formatTacticCount(stats.anti_air_successes, stats.anti_air_opportunities),
@@ -93,6 +103,29 @@ export function TacticStatsSection({ stats }: { stats: TacticStats }) {
       `与ダメ ${Math.round(stats.burnout_hp_dealt * 100)}% / 被ダメ ${Math.round(stats.burnout_hp_lost * 100)}% / 収支 ${balancePrefix}${burnoutBalance}%・自分の使用 ${stats.burnout_self_initiated} / ガード削り ${stats.burnout_forced} / 混在 ${stats.burnout_mixed} / 保留 ${stats.burnout_unknown}`,
     ],
   ];
+  if (stats.sa1_used !== undefined) {
+    items.push(
+      [
+        `${superUsed} 回`,
+        "自分のSA / CA",
+        `SA1 ${stats.sa1_used ?? 0} / SA2 ${stats.sa2_used ?? 0} / SA3 ${stats.sa3_used ?? 0} / CA ${stats.ca_used ?? 0}・ヒット ${stats.super_hits ?? 0} / ガード ${stats.super_blocked ?? 0} / 即時接触なし ${stats.super_no_immediate_contact ?? 0} / 反撃を受けた ${stats.super_punished ?? 0} / KO ${stats.super_kos ?? 0}`,
+      ],
+      [
+        `コンボ ${stats.super_combo_uses ?? 0} / 確反 ${stats.super_punish_uses ?? 0} / 切り返し ${stats.super_reversal_uses ?? 0} / 単発 ${stats.super_neutral_uses ?? 0}`,
+        "SAを使った文脈",
+      ],
+      [
+        `${opponentSuperUsed} 回`,
+        "相手のSA / CA",
+        `SA1 ${stats.opponent_sa1_used ?? 0} / SA2 ${stats.opponent_sa2_used ?? 0} / SA3 ${stats.opponent_sa3_used ?? 0} / CA ${stats.opponent_ca_used ?? 0}・ヒット ${stats.opponent_super_hits ?? 0} / ガード ${stats.opponent_super_blocked ?? 0} / 即時接触なし ${stats.opponent_super_no_immediate_contact ?? 0} / 反撃を受けた ${stats.opponent_super_punished ?? 0} / KO ${stats.opponent_super_kos ?? 0}`,
+      ],
+      [
+        `自分 ${(stats.super_gauge_end ?? 0).toFixed(1)} / 相手 ${(stats.opponent_super_gauge_end ?? 0).toFixed(1)}`,
+        "最終確認時のSAゲージ",
+        "未使用量は事実として表示し、使うべきだったとは断定しません",
+      ],
+    );
+  }
   return (
     <section className="summary-section" data-wm="Tactics">
       <h2>戦術別の結果</h2>

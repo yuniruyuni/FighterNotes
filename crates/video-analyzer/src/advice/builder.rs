@@ -36,7 +36,7 @@ pub fn build_report_with_context(
     let damage_taken_events = build_damage_taken_events(events, own);
     let round_summaries = build_round_summaries(events, own, opp);
     let input_stats = build_input_stats(features, events, own, own_index);
-    let tactic_stats = build_tactic_stats(events, own, opp);
+    let tactic_stats = build_tactic_stats(features, events, own, opp);
     let (coverage, analysis_warnings) =
         build_coverage(features, events, own_index, &round_summaries);
     let cards = build_advice_cards(

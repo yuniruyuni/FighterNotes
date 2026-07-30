@@ -68,6 +68,10 @@ impl Analyzer {
             full_height,
             "right",
         );
+        let left_super =
+            video_analyzer::super_gauge_read_from_hud_strip(&self.hud_buf, full_width, "left");
+        let right_super =
+            video_analyzer::super_gauge_read_from_hud_strip(&self.hud_buf, full_width, "right");
         self.features.push(video_analyzer::FrameFeatures {
             frame_index: video_frame,
             fps: 60.0,
@@ -84,6 +88,12 @@ impl Analyzer {
             right_burnout: right_drive.burnout,
             left_drive_uncertain: left_drive.uncertain,
             right_drive_uncertain: right_drive.uncertain,
+            left_super_value: left_super.value,
+            right_super_value: right_super.value,
+            left_super_uncertain: left_super.uncertain,
+            right_super_uncertain: right_super.uncertain,
+            left_ca_ready: ca_ready(&left_super, left_hp),
+            right_ca_ready: ca_ready(&right_super, right_hp),
             left_hp_raw: raw_left,
             right_hp_raw: raw_right,
             left_hp_raw_quality: if left_uncertain { 1.0 } else { 0.0 },
@@ -99,4 +109,8 @@ fn normalized_drive(read: &video_analyzer::DriveGaugeRead) -> f32 {
     } else {
         read.value / 6.0
     }
+}
+
+fn ca_ready(read: &video_analyzer::SuperGaugeRead, hp: f32) -> bool {
+    read.critical_art || (!read.uncertain && read.value >= 2.95 && (0.0..=0.255).contains(&hp))
 }

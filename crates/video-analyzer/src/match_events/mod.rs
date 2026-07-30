@@ -35,6 +35,7 @@ mod punishes;
 mod reversals;
 mod rounds;
 mod segments;
+mod super_arts;
 mod threats;
 mod timeline;
 
@@ -412,6 +413,15 @@ fn build_match_events_with_optional_fight_markers(
         rounds: &rounds,
         teleports: &teleports,
     });
+    let super_arts = super_arts::extract_super_arts(super_arts::SuperArtInputs {
+        features,
+        meter_state: &meter_state,
+        contacts: &contacts,
+        damage: &damage,
+        punishes: &punishes,
+        rounds: &rounds,
+        freeze_spans: &freeze_spans,
+    });
 
     // ── ガード入力崩れ ───────────────────────────────────────────────────
     let guard_breaks = extract_guard_breaks(
@@ -450,6 +460,7 @@ fn build_match_events_with_optional_fight_markers(
         contacts,
         punishes,
         reversals,
+        super_arts,
         guard_breaks,
         presses_while_minus,
         minus_situations,

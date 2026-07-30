@@ -14,6 +14,8 @@ fn main() {
 
     let mut side = "p1";
     let mut drive_mode = false;
+    let mut super_mode = false;
+    let mut packed_super_mode = false;
     let mut input_mode = false;
     let mut track_mode = false;
     let mut detail_range: Option<(usize, usize)> = None;
@@ -28,6 +30,13 @@ fn main() {
             }
             "--drive" => {
                 drive_mode = true;
+            }
+            "--super" => {
+                super_mode = true;
+            }
+            "--super-packed" => {
+                super_mode = true;
+                packed_super_mode = true;
             }
             "--input" => {
                 input_mode = true;
@@ -92,6 +101,24 @@ fn main() {
         let height = img.height();
         let rgba = image::DynamicImage::into_rgba8(img);
         let bytes = rgba.as_raw();
+
+        if super_mode {
+            let gauge_side = if side == "p1" || side == "left" {
+                "left"
+            } else {
+                "right"
+            };
+            let read = if packed_super_mode {
+                video_analyzer::super_gauge_read_from_hud_strip(bytes, width, gauge_side)
+            } else {
+                video_analyzer::super_gauge_read(bytes, width, height, gauge_side)
+            };
+            println!(
+                "{}: value={:.3} level={:?} ca={} uncertain={}",
+                path, read.value, read.displayed_level, read.critical_art, read.uncertain
+            );
+            continue;
+        }
 
         // --input: 入力履歴モード
         if input_mode {

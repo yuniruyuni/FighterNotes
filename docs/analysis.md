@@ -1,6 +1,6 @@
 # 動画解析パイプライン
 
-最終確認: 2026-07-22
+最終確認: 2026-07-30
 
 ## 解析の位置づけ
 
@@ -8,7 +8,7 @@
 目的は試合を完全再現することではなく、複数の映像証拠が一致した場面を抽出し、
 利用者が動画を見直す順序を作ることである。
 
-判定は決定的なルールベース処理で、現在の `RULESET_VERSION` は 6。
+判定は決定的なルールベース処理で、現在の `RULESET_VERSION` は 7。
 機械学習モデルや外部推論 API は使わない。
 
 ## 入力条件
@@ -64,7 +64,7 @@ main thread は描画と buffer 転送を担当し、`client/src/entrypoints/ana
 | --- | --- | --- |
 | `frame-meter` | frame-meter strip | 左右 80 cell の色、明度、縞、数字相関、fresh edge |
 | `meter-tracker` | フレームごとの cell 観測 | video frame と game frame を対応させた状態 timeline |
-| `frame_features` | HUD strip | HP、Drive、burnout、試合画面判定、読取品質 |
+| `frame_features` | HUD strip | HP、Drive、SA/CA、burnout、試合画面判定、読取品質 |
 | `input_history` | input strip | 方向、button badge、AUTO、投げなどの row 0 観測 |
 | `input_tracker` | row 0 の時系列 | 欠測と孤立誤読を補修した `TrackedInput` |
 
@@ -95,6 +95,7 @@ cursor が止まる hitstop や演出中は video frame が進んでも game fra
 2. 一瞬だけ急落して戻る HP 誤読を捨てる。
 3. 両者 full HP の持続を round reset とし、round 内で HP を単調非増加にする。
 4. Drive の短い孤立 segment や遮蔽由来の偽値を uncertain にし、直前の信頼値で埋める。
+5. SA の整数ラベルと部分バーを統合し、短い偽ストック低下と同一ストック内の逆行を棄却する。
 
 viewer と event layer は、この確定済み系列を共通の入力にする。画面表示だけ別補正する経路は持たない。
 
@@ -119,7 +120,7 @@ viewer と event layer は、この確定済み系列を共通の入力にする
 | Round / damage | round 境界、勝敗、HP 減少 sequence、freeze 前 anchor |
 | Contact | hit / block、projectile contact、attacker / victim |
 | Input action | jump、throw、Drive Impact、raw Drive Rush |
-| Resource | burnout 期間、突入原因、期間中の与被 damage |
+| Resource | burnout 期間、SA1/2/3/CA 使用、ゲージ前後、使用文脈と結果 |
 | Frame interaction | punish chance、reversal、guard break、minus 後の最速打撃・投げ |
 | Threat | 残存 projectile、teleport、複合 threat |
 
@@ -129,6 +130,8 @@ viewer と event layer は、この確定済み系列を共通の入力にする
 - DI は専用イベントへ帰属し、armor 表示を reversal と二重計上しない。
 - meter epoch をまたいで contact、recovery、punish を結ばない。
 - freeze をまたぐ combo damage は game time の近さでまとめる。
+- SA は両者のゲージ低下を主証拠とし、meter の発生・暗転、contact、damage を使用時点と結果の確認に使う。
+- 接触しない SA2 は `NoImmediateContact` とし、技ごとの役割が不明なまま空振り失敗とは呼ばない。
 - projectile の block や弾撃ち合いを、近距離の mashing として扱わない。
 - 原因別カードへ帰属した大被弾を汎用 `big_hits` へ重複掲載しない。
 
@@ -222,6 +225,8 @@ ruleset が異なる判定結果を同じ率へ混ぜない。分母が0の項�
 - 未知の録画環境、解像度、codec、色変換では既存 threshold が合わない可能性がある。
 - 入力履歴は画面に表示された row 0 を時系列補修した値で、内部 input log ではない。
 - 0件は「失敗しなかった」ではなく、「確認できる機会がなかった」場合を含む。
+- SA/CA は使用、hit / block、即時接触なし、反撃、KO、使用文脈を観測事実として集計する。
+  未使用ゲージだけから「使うべきだった」、残りHPだけから「倒し切れた」とは判定しない。
 - 攻撃面は punish、low conversion、与 damage、burnout 収支など一部だけで、neutral の技選択、
   combo 完走率、起き攻めの質を網羅的には評価していない。
 

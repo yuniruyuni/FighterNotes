@@ -3,7 +3,7 @@ mod drive_segments;
 mod hp_crashes;
 mod hp_monotonic;
 mod hp_uncertainty;
-mod support;
+pub(super) mod support;
 
 use super::{clean_drive_temporal, confirm_hp};
 

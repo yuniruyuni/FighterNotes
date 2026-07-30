@@ -9,7 +9,7 @@ client は TypeScript / React、配信と集計結果の共有は Bun + Hono + P
 ## 現在できること
 
 - HUD、入力履歴、リプレイ用フレームメーターを全フレームで読み取る
-- round、damage、hit / block、jump、throw、DI、Drive Rush、burnout などを同じ時間軸へ統合する
+- round、damage、hit / block、jump、throw、DI、Drive Rush、burnout、両者のSA/CA使用などを同じ時間軸へ統合する
 - 確反、対空、防御中の行動、resource 管理などを evidence 付きの指摘と戦術統計へまとめる
 - 指摘の場面を元動画で見直し、認識結果と meter timeline を debug 表示する
 - 対戦集計を browser の IndexedDB に最大 200 件保存する

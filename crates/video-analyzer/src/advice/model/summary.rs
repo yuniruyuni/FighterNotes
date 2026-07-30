@@ -53,6 +53,7 @@ pub struct InputStats {
 
 /// 指摘の有無とは独立した、戦術ごとの遭遇数と結果。
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct TacticStats {
     pub anti_air_opportunities: u32,
     pub anti_air_successes: u32,
@@ -85,4 +86,28 @@ pub struct TacticStats {
     pub burnout_forced: u32,
     pub burnout_mixed: u32,
     pub burnout_unknown: u32,
+    pub sa1_used: u32,
+    pub sa2_used: u32,
+    pub sa3_used: u32,
+    pub ca_used: u32,
+    pub super_hits: u32,
+    pub super_blocked: u32,
+    pub super_no_immediate_contact: u32,
+    pub super_punished: u32,
+    pub super_kos: u32,
+    pub super_combo_uses: u32,
+    pub super_punish_uses: u32,
+    pub super_reversal_uses: u32,
+    pub super_neutral_uses: u32,
+    pub opponent_sa1_used: u32,
+    pub opponent_sa2_used: u32,
+    pub opponent_sa3_used: u32,
+    pub opponent_ca_used: u32,
+    pub opponent_super_hits: u32,
+    pub opponent_super_blocked: u32,
+    pub opponent_super_no_immediate_contact: u32,
+    pub opponent_super_punished: u32,
+    pub opponent_super_kos: u32,
+    pub super_gauge_end: f32,
+    pub opponent_super_gauge_end: f32,
 }

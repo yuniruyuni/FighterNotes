@@ -109,7 +109,7 @@ finding と tactics は parent 削除時に cascade delete する。create event
 同じ日に共有を削除しても日次 create 件数が減らないようにする。
 
 schema version は現在1、presentation revision は1。server は既存データ表示のため
-ruleset 3、4、5、6 を受理し、新規解析は ruleset 6 を生成する。
+ruleset 3、4、5、6、7 を受理し、新規解析は ruleset 7 を生成する。
 
 ## 削除と期限
 

@@ -52,6 +52,24 @@ pub struct FrameFeatures {
     /// 右ドライブ読み取りが不確実
     #[serde(default)]
     pub right_drive_uncertain: bool,
+    /// 左 SA ゲージ（0.0〜3.0、部分ストックを含む）
+    #[serde(default)]
+    pub left_super_value: f32,
+    /// 右 SA ゲージ（0.0〜3.0、部分ストックを含む）
+    #[serde(default)]
+    pub right_super_value: f32,
+    /// 左 SA ラベルを単フレームで確定できない
+    #[serde(default = "default_true")]
+    pub left_super_uncertain: bool,
+    /// 右 SA ラベルを単フレームで確定できない
+    #[serde(default = "default_true")]
+    pub right_super_uncertain: bool,
+    /// 左プレイヤーが CA 使用可能表示
+    #[serde(default)]
+    pub left_ca_ready: bool,
+    /// 右プレイヤーが CA 使用可能表示
+    #[serde(default)]
+    pub right_ca_ready: bool,
     /// 左 HP 生値（単調制約・遡及補正前の hp_fill_ratio 直値）
     pub left_hp_raw: f32,
     /// 右 HP 生値（単調制約・遡及補正前の hp_fill_ratio 直値）
@@ -64,6 +82,10 @@ pub struct FrameFeatures {
     /// 右 HP 品質（0.0=確実, 1.0=疑問: アイランド検出）
     #[serde(default)]
     pub right_hp_raw_quality: f32,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 // -------------------------------------------------------------------------
@@ -159,11 +181,13 @@ mod debug_json;
 mod drive_gauge;
 mod hp_bar;
 mod hp_correct;
+mod super_gauge;
 
 pub use debug_json::*;
 pub use drive_gauge::*;
 pub use hp_bar::*;
 pub use hp_correct::*;
+pub use super_gauge::*;
 
 #[cfg(test)]
 mod tests;

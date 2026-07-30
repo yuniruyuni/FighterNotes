@@ -18,6 +18,7 @@ mod mashing_requires_direct_input_and_reliable_linked_startup;
 mod one_early_hit_is_kept_as_an_observation;
 mod repeated_guard_direction_and_reversal_are_required_for_diagnosis;
 mod single_minus_read_loss_is_observed_but_not_called_a_habit;
+mod super_art_stats_and_advice;
 mod tactic_stats_only_count_confirmed_interactions;
 mod test_anti_air_card;
 mod test_big_hits_card;

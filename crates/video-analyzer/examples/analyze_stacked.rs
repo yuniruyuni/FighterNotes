@@ -98,6 +98,10 @@ fn main() {
         let right_score = video_analyzer::hp_bar_score_from_hud_strip(hud, W, H, "p2");
         let left_drive = video_analyzer::drive_gauge_read_from_hud_strip(hud, W, H, "left");
         let right_drive = video_analyzer::drive_gauge_read_from_hud_strip(hud, W, H, "right");
+        // 既存 stacked fixture は画面下端を含まない。HUD の未使用領域を
+        // SA パッチと誤認しないよう、明示的に欠測として扱う。
+        let left_super = video_analyzer::SuperGaugeRead::default();
+        let right_super = video_analyzer::SuperGaugeRead::default();
 
         features.push(FrameFeatures {
             frame_index: fi as u32,
@@ -123,6 +127,18 @@ fn main() {
             right_burnout: right_drive.burnout,
             left_drive_uncertain: left_drive.uncertain,
             right_drive_uncertain: right_drive.uncertain,
+            left_super_value: left_super.value,
+            right_super_value: right_super.value,
+            left_super_uncertain: left_super.uncertain,
+            right_super_uncertain: right_super.uncertain,
+            left_ca_ready: left_super.critical_art
+                || (!left_super.uncertain
+                    && left_super.value >= 2.95
+                    && (0.0..=0.255).contains(&left_hp)),
+            right_ca_ready: right_super.critical_art
+                || (!right_super.uncertain
+                    && right_super.value >= 2.95
+                    && (0.0..=0.255).contains(&right_hp)),
             left_hp_raw: raw_left,
             right_hp_raw: raw_right,
             left_hp_raw_quality: if left_unc { 1.0 } else { 0.0 },

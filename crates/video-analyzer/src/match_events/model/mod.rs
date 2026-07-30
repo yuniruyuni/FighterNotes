@@ -6,6 +6,7 @@ mod input;
 mod jump;
 mod meter;
 mod offense;
+mod super_art;
 
 pub use aggregate::*;
 pub use base::*;
@@ -15,3 +16,4 @@ pub use input::*;
 pub use jump::*;
 pub use meter::*;
 pub use offense::*;
+pub use super_art::*;
