@@ -35,6 +35,25 @@ describe("buildAnalysisResult", () => {
         report: JSON.stringify({ ruleset_version: 1 }),
         timeline: JSON.stringify({ entries: [] }),
         trackedInputs: JSON.stringify({ p1: [], p2: [] }),
+        attackInfo: JSON.stringify([
+          {
+            frame_index: 3,
+            p1: {
+              last_damage: 600,
+              scaling_percent: 100,
+              combo_damage: 600,
+              max_combo_damage: 600,
+              attribute: "lower",
+            },
+            p2: {
+              last_damage: 0,
+              scaling_percent: 100,
+              combo_damage: 0,
+              max_combo_damage: 0,
+              attribute: "upper",
+            },
+          },
+        ]),
         features: JSON.stringify([hpFrame]),
         spatialObservations: JSON.stringify([{ frame: 3 }]),
       },
@@ -52,6 +71,8 @@ describe("buildAnalysisResult", () => {
     expect(result.videoArrayBuffer).toBe(videoArrayBuffer);
     expect(result.frameCount).toBe(2);
     expect(result.trackedInputs).toEqual({ p1: [], p2: [] });
+    expect(result.attackInfo).toHaveLength(1);
+    expect(result.attackInfo[0].p1.attribute).toBe("lower");
     expect(result.hpFeatures).toEqual([hpFrame]);
     expect(result.spatialObservations).toEqual([{ frame: 3 }]);
   });
@@ -75,6 +96,7 @@ describe("buildAnalysisResult", () => {
     );
 
     expect(result.trackedInputs).toBeNull();
+    expect(result.attackInfo).toEqual([]);
     expect(result.hpFeatures).toEqual([]);
     expect(result.spatialObservations).toEqual([]);
   });

@@ -1,6 +1,7 @@
 import { ensureAnalysisWasm } from "~/modules/analysis/browser.js";
 import {
   hp_parallelogram_json,
+  inspect_attack_info,
   inspect_drive,
   inspect_frame,
   inspect_hp,
@@ -8,6 +9,7 @@ import {
   inspect_super,
 } from "../../../../../../crates/wasm-bridge/pkg/wasm_bridge.js";
 import type {
+  DebugAttackInfoInspection,
   DebugDriveInspection,
   DebugFrameInspector,
   DebugHpGeometry,
@@ -52,5 +54,11 @@ export const wasmDebugFrameInspector: DebugFrameInspector = {
     return JSON.parse(
       inspect_input(rgba, width, height),
     ) as DebugInputInspection;
+  },
+
+  inspectAttackInfo(rgba, width, height) {
+    return JSON.parse(
+      inspect_attack_info(rgba, width, height),
+    ) as DebugAttackInfoInspection;
   },
 };

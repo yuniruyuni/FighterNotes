@@ -32,6 +32,9 @@ export type {
 export type {
   AnalysisProgress,
   AnalysisResult,
+  AttackAttribute,
+  AttackInfoObservation,
+  AttackInfoSide,
   FrameSample,
   HpFrameData,
   SpatialCandidateWindow,

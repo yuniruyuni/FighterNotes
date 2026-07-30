@@ -15,6 +15,19 @@ pub(super) fn build(success_count: usize, lows: &[LowReturn]) -> AdviceCard {
         .unwrap_or(0);
     let repeated = repeated_input_count >= MIN_REPEATED_NEGATIVE_OUTCOMES;
     let total_return: f32 = lows.iter().map(|low| low.drop).sum();
+    let exact_values: Vec<_> = lows.iter().filter_map(|low| low.exact_damage).collect();
+    let exact_note = if exact_values.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " ゲーム内表示で確認できた累積ダメージは {} です。",
+            exact_values
+                .iter()
+                .map(u32::to_string)
+                .collect::<Vec<_>>()
+                .join(" / ")
+        )
+    };
     AdviceCard {
         id: "low_conversion".to_string(),
         kind: if repeated { AdviceKind::Diagnosis } else { AdviceKind::Observation },
@@ -27,13 +40,13 @@ pub(super) fn build(success_count: usize, lows: &[LowReturn]) -> AdviceCard {
         severity: 0.03 * lows.len() as f32,
         description: if repeated {
             format!(
-                "確反成功 {} 回中、12%未満の小さいリターンで終わった場面が {} 回、合計 {:.0}% あります。同じ入力 {} が {} 回含まれるため、ゲージ温存や位置取りを意図した選択でなければコンボへ繋ぐ改善候補です。",
-                success_count, lows.len(), total_return * 100.0, repeated_input.unwrap_or("?"), repeated_input_count
+                "確反成功 {} 回中、12%未満の小さいリターンで終わった場面が {} 回、合計 {:.0}% あります。{}同じ入力 {} が {} 回含まれるため、ゲージ温存や位置取りを意図した選択でなければコンボへ繋ぐ改善候補です。",
+                success_count, lows.len(), total_return * 100.0, exact_note, repeated_input.unwrap_or("?"), repeated_input_count
             )
         } else {
             format!(
-                "確反成功 {} 回中、12%未満の小さいリターンで終わった場面が {} 回、合計 {:.0}% あります。ゲージ温存・位置・KO状況で単発止めが適切な場合もあるため、この件数だけではリターン不足の癖とは{OBSERVATION_REVIEW_CAVEAT}。この試合で同様の結果は {} 回です。",
-                success_count, lows.len(), total_return * 100.0, lows.len()
+                "確反成功 {} 回中、12%未満の小さいリターンで終わった場面が {} 回、合計 {:.0}% あります。{}ゲージ温存・位置・KO状況で単発止めが適切な場合もあるため、この件数だけではリターン不足の癖とは{OBSERVATION_REVIEW_CAVEAT}。この試合で同様の結果は {} 回です。",
+                success_count, lows.len(), total_return * 100.0, exact_note, lows.len()
             )
         },
         practice: if repeated {
@@ -45,10 +58,17 @@ pub(super) fn build(success_count: usize, lows: &[LowReturn]) -> AdviceCard {
             frame: low.frame,
             end_frame: None,
             label: format!(
-                "R{} 確反{}が小リターン（-{:.0}%）",
+                "R{} 確反{}が小リターン（-{:.0}%）{}",
                 low.round_no,
                 if low.input.is_empty() { String::new() } else { format!("（{}）", low.input) },
-                low.drop * 100.0
+                low.drop * 100.0,
+                low.exact_damage.map(|damage| {
+                    let scaling = low
+                        .final_scaling_percent
+                        .map(|percent| format!("・最終{percent}%補正"))
+                        .unwrap_or_default();
+                    format!("・{damage}ダメージ{scaling}")
+                }).unwrap_or_default()
             ),
         }).collect(),
     }

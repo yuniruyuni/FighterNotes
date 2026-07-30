@@ -11,6 +11,7 @@ pub(in crate::spatial::tests) fn empty_events() -> MatchEvents {
             p2_hp_end: 1.0,
         }],
         damage: vec![],
+        attack_evidence: Default::default(),
         jumps: vec![],
         throws: vec![],
         throw_actions: vec![],

@@ -45,6 +45,7 @@ export const FINDING_KINDS = [
   "throw_while_minus",
   "guard_break",
   "reversal_punished",
+  "low_scaling_super",
   "punish_fail",
   "punish_missed",
   "low_conversion",
@@ -68,7 +69,7 @@ export type FindingAssessment = (typeof FINDING_ASSESSMENTS)[number];
 
 export const SCHEMA_VERSION = 1 as const;
 export const PRESENTATION_REVISION = 1 as const;
-export const SUPPORTED_RULESET_VERSIONS = [3, 4, 5, 6, 7] as const;
+export const SUPPORTED_RULESET_VERSIONS = [3, 4, 5, 6, 7, 8] as const;
 
 /** ruleset v5以前は共有payloadに判定区分が無いため、当時の表示規則を復元する。 */
 export function legacyFindingAssessment(

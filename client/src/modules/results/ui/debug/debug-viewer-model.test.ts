@@ -13,6 +13,7 @@ describe("debug viewer model", () => {
       drive: false,
       super: false,
       input: false,
+      attackInfo: false,
     });
     expect(first).not.toBe(second);
   });

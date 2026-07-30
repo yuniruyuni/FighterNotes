@@ -1,4 +1,5 @@
 mod aggregate;
+mod attack;
 mod base;
 mod burnout;
 mod defense;
@@ -9,6 +10,7 @@ mod offense;
 mod super_art;
 
 pub use aggregate::*;
+pub use attack::*;
 pub use base::*;
 pub use burnout::*;
 pub use defense::*;

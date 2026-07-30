@@ -106,6 +106,16 @@ export function DebugView(props: DebugViewProps) {
             />{" "}
             入力履歴
           </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={visibility.attackInfo}
+              onChange={(event) =>
+                setOverlayVisibility("attackInfo", event.currentTarget.checked)
+              }
+            />{" "}
+            攻撃情報
+          </label>
         </div>
       </div>
     </div>

@@ -87,6 +87,7 @@ fn events_json_keeps_the_serialized_boundary_and_omits_internal_series() {
         &[
             "rounds",
             "damage",
+            "attack_evidence",
             "jumps",
             "throws",
             "throw_actions",

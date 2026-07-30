@@ -23,6 +23,7 @@ pub(crate) fn build_advice_cards(
         detect_throw_while_minus(events, own),
         detect_guard_break(events, own),
         detect_reversal_punished(events, own),
+        detect_low_scaling_super(events, own),
         detect_punish_fail(events, own, own_character),
         detect_punish_missed(events, own, own_character),
         detect_low_conversion(events, own),

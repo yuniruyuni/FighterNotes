@@ -109,6 +109,7 @@ export function useDebugViewer(options: DebugViewerOptions) {
             timeline: options.result.timeline,
             hpFeatures: options.result.hpFeatures,
             trackedInputs: options.result.trackedInputs,
+            attackInfo: options.result.attackInfo,
             frameCount: options.result.frameCount,
             frameTimestamps: options.result.frameTimestamps,
             sampleData: options.result.sampleData,

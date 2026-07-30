@@ -1,4 +1,5 @@
 use super::*;
+use crate::match_events::AttackDamageConsistency;
 
 pub(crate) fn build_coverage(
     features: &[FrameFeatures],
@@ -26,11 +27,33 @@ pub(crate) fn build_coverage(
             })
         })
         .count() as u32;
+    let own = own_index as u8 + 1;
+    let attack_damage_events = events
+        .damage
+        .iter()
+        .filter(|damage| damage.victim == own)
+        .count() as u32;
+    let own_attack_evidence: Vec<_> = events
+        .attack_evidence
+        .damage
+        .iter()
+        .filter(|evidence| evidence.victim == own)
+        .collect();
     let coverage = AnalysisCoverage {
         match_frames,
         analyzed_match_frames,
         input_segments,
         analyzed_input_segments,
+        attack_damage_events,
+        attack_damage_linked: own_attack_evidence.len() as u32,
+        attack_damage_consistent: own_attack_evidence
+            .iter()
+            .filter(|evidence| evidence.hp_consistency == AttackDamageConsistency::Consistent)
+            .count() as u32,
+        attack_damage_mismatched: own_attack_evidence
+            .iter()
+            .filter(|evidence| evidence.hp_consistency == AttackDamageConsistency::Mismatch)
+            .count() as u32,
     };
     let warnings = analysis_warnings(&coverage, events.rounds.len(), round_summaries);
     (coverage, warnings)
@@ -58,6 +81,12 @@ fn analysis_warnings(
             "勝敗を確定できないラウンドがあります。ラウンド表の対象シーンを確認してください。"
                 .to_string(),
         );
+    }
+    if coverage.attack_damage_mismatched > 0 {
+        warnings.push(format!(
+            "ゲーム内ダメージ表示とHPバー由来の減少量が一致しない被弾が {} 件あります。HP値は自動補正せず、ゲーム内表示を補助証拠として記録します。",
+            coverage.attack_damage_mismatched
+        ));
     }
     warnings
 }

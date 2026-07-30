@@ -1,8 +1,10 @@
 import {
   ANALYSIS_STRIPS,
   ANALYSIS_WIDTH,
+  ATTACK_INFO_LAYOUT,
   FIGHT_MARKER_LAYOUT,
   LOWER_ATLAS_LAYOUT,
+  MID_ATLAS_LAYOUT,
   SUPER_GAUGE_LAYOUT,
 } from "./layout.js";
 import type { AnalysisTransferBuffers } from "./strip-buffer-pool.js";
@@ -10,13 +12,13 @@ import type { AnalysisTransferBuffers } from "./strip-buffer-pool.js";
 interface StripBitmaps {
   readonly hud: ImageBitmap;
   readonly lowerAtlas: ImageBitmap;
-  readonly input: ImageBitmap;
+  readonly midAtlas: ImageBitmap;
 }
 
 interface PendingStripBitmaps {
   readonly hud: Promise<ImageBitmap>;
   readonly lowerAtlas: Promise<ImageBitmap>;
-  readonly input: Promise<ImageBitmap>;
+  readonly midAtlas: Promise<ImageBitmap>;
   readonly fightFrame?: VideoFrame;
 }
 
@@ -35,7 +37,7 @@ export class FrameStripExtractor {
     return {
       hud: createStripBitmap(frame, ANALYSIS_STRIPS.hud),
       lowerAtlas: createPatchBitmap(frame, LOWER_ATLAS_LAYOUT.source),
-      input: createStripBitmap(frame, ANALYSIS_STRIPS.input),
+      midAtlas: createPatchBitmap(frame, MID_ATLAS_LAYOUT.source),
       ...(frameIndex % FIGHT_MARKER_LAYOUT.sampleInterval === 0
         ? { fightFrame: frame }
         : {}),
@@ -46,7 +48,7 @@ export class FrameStripExtractor {
     const bitmaps: StripBitmaps = {
       hud: await pending.hud,
       lowerAtlas: await pending.lowerAtlas,
-      input: await pending.input,
+      midAtlas: await pending.midAtlas,
     };
     return {
       hud: drawHudBitmap(
@@ -55,8 +57,8 @@ export class FrameStripExtractor {
         bitmaps.lowerAtlas,
         pending.fightFrame,
       ),
-      meter: drawMeterBitmap(this.#meter, bitmaps.lowerAtlas),
-      input: drawBitmap(this.#input, bitmaps.input),
+      meter: drawMeterBitmap(this.#meter, bitmaps.lowerAtlas, bitmaps.midAtlas),
+      input: drawInputBitmap(this.#input, bitmaps.midAtlas),
     };
   }
 }
@@ -100,15 +102,6 @@ function createPatchBitmap(
   },
 ): Promise<ImageBitmap> {
   return createImageBitmap(frame, patch.x, patch.y, patch.width, patch.height);
-}
-
-function drawBitmap(
-  target: StripCanvas,
-  bitmap: ImageBitmap,
-): Uint8ClampedArray {
-  target.context.drawImage(bitmap, 0, 0);
-  bitmap.close();
-  return readPixels(target);
 }
 
 function drawHudBitmap(
@@ -167,6 +160,7 @@ function drawSuperGauge(
 function drawMeterBitmap(
   target: StripCanvas,
   lowerAtlas: ImageBitmap,
+  midAtlas: ImageBitmap,
 ): Uint8ClampedArray {
   const { source, target: destination } = LOWER_ATLAS_LAYOUT.meter;
   target.context.drawImage(
@@ -180,7 +174,50 @@ function drawMeterBitmap(
     destination.width,
     destination.height,
   );
+  drawAttackInfo(target.context, midAtlas);
   lowerAtlas.close();
+  return readPixels(target);
+}
+
+function drawAttackInfo(
+  context: OffscreenCanvasRenderingContext2D,
+  midAtlas: ImageBitmap,
+): void {
+  for (const side of [ATTACK_INFO_LAYOUT.p1, ATTACK_INFO_LAYOUT.p2] as const) {
+    for (const patch of [side.numeric, side.attribute]) {
+      const { source, target } = patch;
+      context.drawImage(
+        midAtlas,
+        source.x,
+        source.y,
+        source.width,
+        source.height,
+        target.x,
+        target.y,
+        target.width,
+        target.height,
+      );
+    }
+  }
+}
+
+function drawInputBitmap(
+  target: StripCanvas,
+  midAtlas: ImageBitmap,
+): Uint8ClampedArray {
+  const { source, target: destination } = MID_ATLAS_LAYOUT.input;
+  target.context.drawImage(
+    midAtlas,
+    source.x,
+    source.y,
+    source.width,
+    source.height,
+    destination.x,
+    destination.y,
+    destination.width,
+    destination.height,
+  );
+  midAtlas.close();
   return readPixels(target);
 }
 

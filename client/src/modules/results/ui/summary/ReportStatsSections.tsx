@@ -114,6 +114,15 @@ export function TacticStatsSection({ stats }: { stats: TacticStats }) {
         `コンボ ${stats.super_combo_uses ?? 0} / 確反 ${stats.super_punish_uses ?? 0} / 切り返し ${stats.super_reversal_uses ?? 0} / 単発 ${stats.super_neutral_uses ?? 0}`,
         "SAを使った文脈",
       ],
+      ...((stats.super_damage_samples ?? 0) > 0
+        ? ([
+            [
+              `${stats.super_reported_marginal_damage ?? 0} ダメージ`,
+              "SA投入後の表示ダメージ",
+              `ゲーム内表示を帰属できた ${stats.super_damage_samples ?? 0} 回・コンボ全体 ${stats.super_reported_combo_damage ?? 0}・投入時50%以下かつ非KO ${stats.super_low_scaling_uses ?? 0} 回`,
+            ],
+          ] satisfies Array<[string, string, string?]>)
+        : []),
       [
         `${opponentSuperUsed} 回`,
         "相手のSA / CA",

@@ -14,6 +14,7 @@
 //! HP は own/opp ではなく P1/P2（画面左右）で扱う。own への振り分けは
 //! アドバイス層（advice.rs）が行う。
 
+use crate::attack_info::AttackInfoObservation;
 use crate::frame_features::FrameFeatures;
 use crate::input_history::InputDir;
 use crate::input_tracker::TrackedInput;
@@ -23,6 +24,7 @@ use meter_tracker::MeterTimeline;
 // ── 出力型 ───────────────────────────────────────────────────────────────────
 
 mod actions;
+mod attack_evidence;
 mod burnouts;
 mod contacts;
 mod damage;
@@ -46,6 +48,9 @@ pub use threats::{
 };
 pub use timeline::round_of;
 
+pub(crate) use attack_evidence::{
+    attach_super_art_evidence, build_attack_evidence, refine_damage_with_attack_evidence,
+};
 pub(crate) use contacts::*;
 pub(crate) use damage::{extend_rounds_through_freezes, extract_damage_sequences};
 pub(crate) use guard_breaks::*;
@@ -94,7 +99,33 @@ pub fn build_match_events_with_context(
     context: &crate::context::AnalysisContext,
 ) -> MatchEvents {
     build_match_events_with_optional_fight_markers(
-        features, p1_inputs, p2_inputs, meter, context, None,
+        features,
+        p1_inputs,
+        p2_inputs,
+        meter,
+        context,
+        None,
+        &[],
+    )
+}
+
+/// Character-aware entry point with the central attack-information timeline.
+pub fn build_match_events_with_context_and_attack_info(
+    features: &[FrameFeatures],
+    p1_inputs: &[TrackedInput],
+    p2_inputs: &[TrackedInput],
+    meter: Option<(&MeterTimeline, &MeterTimeline)>,
+    context: &crate::context::AnalysisContext,
+    attack_info: &[AttackInfoObservation],
+) -> MatchEvents {
+    build_match_events_with_optional_fight_markers(
+        features,
+        p1_inputs,
+        p2_inputs,
+        meter,
+        context,
+        None,
+        attack_info,
     )
 }
 
@@ -114,6 +145,28 @@ pub fn build_match_events_with_context_and_fight_markers(
         meter,
         context,
         Some(markers),
+        &[],
+    )
+}
+
+/// FIGHT境界と中央攻撃情報の両方を使うbrowser pipeline用entry point。
+pub fn build_match_events_with_context_and_fight_markers_and_attack_info(
+    features: &[FrameFeatures],
+    p1_inputs: &[TrackedInput],
+    p2_inputs: &[TrackedInput],
+    meter: Option<(&MeterTimeline, &MeterTimeline)>,
+    context: &crate::context::AnalysisContext,
+    markers: &[FightMarker],
+    attack_info: &[AttackInfoObservation],
+) -> MatchEvents {
+    build_match_events_with_optional_fight_markers(
+        features,
+        p1_inputs,
+        p2_inputs,
+        meter,
+        context,
+        Some(markers),
+        attack_info,
     )
 }
 
@@ -124,6 +177,7 @@ fn build_match_events_with_optional_fight_markers(
     meter: Option<(&MeterTimeline, &MeterTimeline)>,
     context: &crate::context::AnalysisContext,
     fight_markers: Option<&[FightMarker]>,
+    attack_info: &[AttackInfoObservation],
 ) -> MatchEvents {
     let own_side = context.own_side();
     let characters = [
@@ -279,6 +333,17 @@ fn build_match_events_with_optional_fight_markers(
         d.pre_freeze_frame = fa.max(round_start).min(d.start_frame);
     }
 
+    // 中央表示で複数コンボへのリセットが確認でき、HP側にも十分な境界がある
+    // 場合だけ、HPの長い下降列を分割する。分割後のイベントへ証拠を再帰属する。
+    let initial_attack_evidence = build_attack_evidence(attack_info, &damage, &rounds);
+    let was_refined =
+        refine_damage_with_attack_evidence(features, &mono, &mut damage, &initial_attack_evidence);
+    let mut attack_evidence = if was_refined {
+        build_attack_evidence(attack_info, &damage, &rounds)
+    } else {
+        initial_attack_evidence
+    };
+
     // ── 入力セグメント ───────────────────────────────────────────────────
     let segments = [
         build_segments(features, p1_inputs),
@@ -422,6 +487,7 @@ fn build_match_events_with_optional_fight_markers(
         rounds: &rounds,
         freeze_spans: &freeze_spans,
     });
+    attach_super_art_evidence(&mut attack_evidence, &super_arts, &damage);
 
     // ── ガード入力崩れ ───────────────────────────────────────────────────
     let guard_breaks = extract_guard_breaks(
@@ -451,6 +517,7 @@ fn build_match_events_with_optional_fight_markers(
     MatchEvents {
         rounds,
         damage,
+        attack_evidence,
         jumps,
         throws,
         throw_actions,

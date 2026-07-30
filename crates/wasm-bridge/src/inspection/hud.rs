@@ -79,6 +79,11 @@ pub fn inspect_input(rgba: &[u8], width: u32, height: u32) -> String {
     format!(r#"{{"p1":{p1},"p2":{p2}}}"#)
 }
 
+#[wasm_bindgen]
+pub fn inspect_attack_info(rgba: &[u8], width: u32, height: u32) -> String {
+    video_analyzer::attack_info_debug_json(rgba, width, height)
+}
+
 fn true_fraction(values: &[bool]) -> f32 {
     values.iter().filter(|&&value| value).count() as f32 / values.len().max(1) as f32
 }

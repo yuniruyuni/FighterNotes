@@ -50,6 +50,19 @@ export const LOWER_ATLAS_LAYOUT = {
 } as const;
 
 /**
+ * 入力履歴stripと中央の攻撃情報を1回のcreateImageBitmapで取得する中段
+ * アトラス。個別の攻撃情報bitmapを増やさず、従来どおり1フレーム3枚の
+ * bitmap生成に収める。
+ */
+export const MID_ATLAS_LAYOUT = {
+  source: { x: 0, y: 174, width: ANALYSIS_WIDTH, height: 94 },
+  input: {
+    source: { x: 0, y: 58, width: ANALYSIS_WIDTH, height: 36 },
+    target: { x: 0, y: 0, width: ANALYSIS_WIDTH, height: 36 },
+  },
+} as const;
+
+/**
  * FIGHT の中央画像を低頻度で縮小し、HUD strip の未使用中央領域へ埋め込む。
  * target は HP（x<=853 / x>=1067）と drive（x<=895 / x>=1025）の
  * 読み取り範囲に重ならない。
@@ -67,6 +80,37 @@ export const FIGHT_MARKER_LAYOUT = {
     y: 9,
     width: 128,
     height: 52,
+  },
+} as const;
+
+/**
+ * トレーニング表示の攻撃情報（直近ダメージ/補正率、コンボ値/最大値、
+ * 上段・中段・下段・投げ）を meter strip の未使用左右端へ等倍で詰める。
+ *
+ * frame meter が使用する x=359..1558 とは重ならない。数字と属性を別々に
+ * 切り出すことで、80px ある3行を78pxへ縮小せず、既存の数字統計モデルを
+ * そのまま利用できる。
+ */
+export const ATTACK_INFO_LAYOUT = {
+  p1: {
+    numeric: {
+      source: { x: 600, y: 0, width: 190, height: 56 },
+      target: { x: 0, y: 0, width: 190, height: 56 },
+    },
+    attribute: {
+      source: { x: 749, y: 62, width: 32, height: 20 },
+      target: { x: 200, y: 0, width: 32, height: 20 },
+    },
+  },
+  p2: {
+    numeric: {
+      source: { x: 1136, y: 0, width: 190, height: 56 },
+      target: { x: 1559, y: 0, width: 190, height: 56 },
+    },
+    attribute: {
+      source: { x: 1141, y: 62, width: 32, height: 20 },
+      target: { x: 1759, y: 0, width: 32, height: 20 },
+    },
   },
 } as const;
 

@@ -46,8 +46,10 @@ interface CapturedWorkerArtifacts {
   readonly features: string;
   readonly trackedInputs?: string;
   readonly fightMarkers?: string;
+  readonly attackInfo?: string;
   readonly spatialWindows?: string;
   readonly spatialObservations?: string;
+  readonly perfLogs?: string[];
   readonly analysisMs: number;
 }
 
@@ -124,6 +126,11 @@ try {
         "fightMarkers",
         fixture.id,
       ),
+      attackInfo: parseOptionalArtifact(
+        captured.attackInfo,
+        "attackInfo",
+        fixture.id,
+      ),
       spatialWindows: parseOptionalArtifact(
         captured.spatialWindows,
         "spatialWindows",
@@ -134,6 +141,7 @@ try {
         "spatialObservations",
         fixture.id,
       ),
+      perfLogs: captured.perfLogs ?? [],
     };
     const artifactText = JSON.stringify(artifacts, null, 2);
     await Bun.write(join(outputDir, `${fixture.id}.json`), `${artifactText}\n`);
@@ -146,6 +154,7 @@ try {
       features: sha256(captured.features),
       trackedInputs: sha256(captured.trackedInputs ?? ""),
       fightMarkers: sha256(captured.fightMarkers ?? ""),
+      attackInfo: sha256(captured.attackInfo ?? ""),
       spatialWindows: sha256(captured.spatialWindows ?? ""),
       spatialObservations: sha256(captured.spatialObservations ?? ""),
     };
@@ -510,9 +519,17 @@ function captureBootstrap(): string {
         startedAt: 0,
         workerError: undefined,
         spatialWindows: undefined,
+        perfLogs: [],
         artifacts: undefined,
       };
       globalThis.__fighterNotesLocalE2E = state;
+      const nativeConsoleLog = console.log.bind(console);
+      console.log = (...args) => {
+        if (typeof args[0] === "string" && args[0].startsWith("[perf]")) {
+          state.perfLogs.push(args.map(String).join(" "));
+        }
+        nativeConsoleLog(...args);
+      };
       globalThis.Worker = class LocalE2EWorker extends NativeWorker {
         constructor(...args) {
           super(...args);
@@ -528,8 +545,10 @@ function captureBootstrap(): string {
                 features: message.features,
                 trackedInputs: message.trackedInputs,
                 fightMarkers: message.fightMarkers,
+                attackInfo: message.attackInfo,
                 spatialWindows: state.spatialWindows,
                 spatialObservations: message.spatialObservations,
+                perfLogs: state.perfLogs,
                 analysisMs: performance.now() - state.startedAt,
               };
               state.done = true;

@@ -164,6 +164,20 @@ pub(crate) fn build_tactic_stats(
                 SuperArtContext::Neutral => stats.super_neutral_uses += 1,
                 SuperArtContext::Unknown => {}
             }
+            if let Some(evidence) = events.attack_evidence_for_super(event) {
+                stats.super_damage_samples += 1;
+                stats.super_reported_combo_damage += evidence.combo_damage;
+                if let Some(marginal) = evidence.marginal_damage {
+                    stats.super_reported_marginal_damage += marginal;
+                }
+                if !event.ko
+                    && evidence
+                        .entry_scaling_percent
+                        .is_some_and(|percent| percent <= 50)
+                {
+                    stats.super_low_scaling_uses += 1;
+                }
+            }
         } else if event.side == opponent {
             match event.outcome {
                 SuperArtOutcome::Hit => stats.opponent_super_hits += 1,

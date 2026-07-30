@@ -32,6 +32,7 @@ describe("DebugView navigation", () => {
       inspectDrive: unexpectedInspection,
       inspectSuper: unexpectedInspection,
       inspectInput: unexpectedInspection,
+      inspectAttackInfo: unexpectedInspection,
     };
     const services: ResultsServices = {
       debugFrameInspector: inspector,

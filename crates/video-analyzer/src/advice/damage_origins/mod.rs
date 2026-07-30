@@ -1,15 +1,37 @@
 //! 被ダメージ列を、重複しない1つの主起点へ帰属する。
 
 use super::{AdviceCard, AttributedDamageEvent, DamageBreakdown, DamageOrigin};
+use crate::attack_info::AttackAttribute;
+use crate::frame_data::StrikeKind;
 use crate::frame_features::FrameFeatures;
-use crate::match_events::MatchEvents;
+use crate::match_events::{DamageEvent, EventConfidence, MatchEvents};
 
 mod candidate;
 mod classification;
 mod contexts;
 mod strike;
 
-pub(crate) const DAMAGE_ATTRIBUTION_VERSION: u32 = 2;
+pub(crate) const DAMAGE_ATTRIBUTION_VERSION: u32 = 3;
+
+fn observed_strike_kind(
+    events: &MatchEvents,
+    damage: &DamageEvent,
+) -> Option<strike::StrikeAttribution> {
+    let evidence = events.attack_evidence_for_damage(damage)?;
+    if !evidence.complete || evidence.confidence != EventConfidence::High {
+        return None;
+    }
+    let kind = match evidence.starter_attribute? {
+        AttackAttribute::Upper => StrikeKind::High,
+        AttackAttribute::Middle => StrikeKind::Overhead,
+        AttackAttribute::Lower => StrikeKind::Low,
+        AttackAttribute::Throw => return None,
+    };
+    Some(strike::StrikeAttribution {
+        kind,
+        confidence: EventConfidence::High,
+    })
+}
 
 pub(crate) fn build_damage_breakdown(
     features: &[FrameFeatures],
@@ -26,7 +48,15 @@ pub(crate) fn build_damage_breakdown(
             let candidate = classification::classify_damage(events, own, damage);
             let strike = (candidate.origin == DamageOrigin::Strike)
                 .then(|| {
-                    strike::strike_attribution(features, events, own, damage, opponent_character)
+                    observed_strike_kind(events, damage).or_else(|| {
+                        strike::strike_attribution(
+                            features,
+                            events,
+                            own,
+                            damage,
+                            opponent_character,
+                        )
+                    })
                 })
                 .flatten();
             let scene_frame = if damage.pre_freeze_frame <= damage.start_frame
@@ -50,6 +80,7 @@ pub(crate) fn build_damage_breakdown(
                 strike_kind: strike.map(|value| value.kind),
                 strike_kind_confidence: strike.map(|value| value.confidence),
                 contexts: contexts::damage_contexts(events, own, damage),
+                attack_evidence: events.attack_evidence_for_damage(damage).cloned(),
             }
         })
         .collect();

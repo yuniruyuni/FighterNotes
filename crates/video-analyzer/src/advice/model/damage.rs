@@ -1,4 +1,5 @@
 use super::super::{frame_data, EventConfidence};
+use crate::match_events::DamageAttackEvidence;
 
 /// HP 被弾イベント（互換出力。フロントのクリップ一覧が使用）。
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -60,6 +61,9 @@ pub struct AttributedDamageEvent {
     pub strike_kind_confidence: Option<EventConfidence>,
     #[serde(default)]
     pub contexts: Vec<DamageContext>,
+    /// ゲーム内中央表示から同じ被弾列へ帰属できた正確な攻撃情報。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attack_evidence: Option<DamageAttackEvidence>,
 }
 
 /// 被ダメージ起点グラフ用の、排他的な帰属結果。

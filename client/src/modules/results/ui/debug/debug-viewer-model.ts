@@ -1,4 +1,5 @@
 import type {
+  AttackInfoObservation,
   FrameSample,
   HpFrameData,
   RustTimeline,
@@ -11,6 +12,7 @@ export interface DebugViewerData {
   timeline: RustTimeline;
   hpFeatures: HpFrameData[];
   trackedInputs: { p1: TrackedInputRow[]; p2: TrackedInputRow[] } | null;
+  attackInfo: AttackInfoObservation[];
   frameCount: number;
   frameTimestamps: number[];
   sampleData: FrameSample[] | null;
@@ -26,6 +28,7 @@ export interface DebugOverlayVisibility {
   drive: boolean;
   super: boolean;
   input: boolean;
+  attackInfo: boolean;
 }
 
 export function initialDebugOverlayVisibility(): DebugOverlayVisibility {
@@ -36,5 +39,6 @@ export function initialDebugOverlayVisibility(): DebugOverlayVisibility {
     drive: false,
     super: false,
     input: false,
+    attackInfo: false,
   };
 }

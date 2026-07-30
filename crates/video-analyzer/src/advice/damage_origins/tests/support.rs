@@ -6,6 +6,7 @@ pub(super) fn empty_events() -> MatchEvents {
     MatchEvents {
         rounds: vec![],
         damage: vec![],
+        attack_evidence: Default::default(),
         jumps: vec![],
         throws: vec![],
         throw_actions: vec![],

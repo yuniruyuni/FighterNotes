@@ -11,6 +11,7 @@ const expectedExports = [
   "Analyzer",
   "SpatialWindowAnalyzer",
   "hp_parallelogram_json",
+  "inspect_attack_info",
   "inspect_drive",
   "inspect_frame",
   "inspect_hp",
@@ -26,6 +27,7 @@ const expectedAnalyzerMethods = [
   "finish(): string;",
   "finish_meter_timeline(): string;",
   "get_features_json(): string;",
+  "get_attack_info_json(): string;",
   "get_fight_markers_json(): string;",
   "get_spatial_windows_json(): string;",
   "get_timeline(): string;",
@@ -55,6 +57,7 @@ const expectedSpatialMethods = [
 
 const expectedFunctions = [
   "export function hp_parallelogram_json(): string;",
+  "export function inspect_attack_info(rgba: Uint8Array, width: number, height: number): string;",
   "export function inspect_drive(rgba: Uint8Array, width: number, height: number): string;",
   "export function inspect_frame(rgba: Uint8Array, width: number, height: number): string;",
   "export function inspect_hp(rgba: Uint8Array, width: number, height: number): string;",

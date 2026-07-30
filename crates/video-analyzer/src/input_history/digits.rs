@@ -8,15 +8,27 @@ use super::*;
 /// サンプルとテンプレート平均の正規化相関を取る。輝度・コントラスト
 /// 不変なので画面暗転にも単一パスで対応できる。
 /// score = (1 - 相関) × 100（小さいほど良い）。±1px シフトも試す。
-pub(super) fn match_digit_gray(f: &Frame, x0: usize, y0: usize) -> (u32, u32, u32) {
+pub(crate) fn match_digit_gray(f: &Frame, x0: usize, y0: usize) -> (u32, u32, u32) {
     let mut best = (0u32, u32::MAX);
     let mut second = (0u32, u32::MAX);
     for (d, (mask, means)) in DIGIT_NCC.iter().enumerate() {
+        let (mut sum_t, mut sum_tt, mut n) = (0i64, 0i64, 0i64);
+        for y in 0..DIGIT_H {
+            let mrow = mask[y];
+            for (x, &template_value) in means[y].iter().enumerate() {
+                if mrow & (1 << x) == 0 {
+                    continue;
+                }
+                let value = i64::from(template_value);
+                sum_t += value;
+                sum_tt += value * value;
+                n += 1;
+            }
+        }
         let mut sbest = u32::MAX;
         for dy in -1i32..=1 {
             for dx in -1i32..=1 {
-                let (mut sum_s, mut sum_t, mut n) = (0f32, 0f32, 0u32);
-                let mut vals: [(f32, f32); 200] = [(0.0, 0.0); 200];
+                let (mut sum_s, mut sum_ss, mut sum_st) = (0i64, 0i64, 0i64);
                 for y in 0..DIGIT_H {
                     let mrow = mask[y];
                     if mrow == 0 {
@@ -28,28 +40,26 @@ pub(super) fn match_digit_gray(f: &Frame, x0: usize, y0: usize) -> (u32, u32, u3
                         }
                         let sx = (x0 as i32 + x as i32 + dx).max(0) as usize;
                         let sy = (y0 as i32 + y as i32 + dy).max(0) as usize;
-                        let sv = f.gray(sx, sy) as f32;
-                        let tv = template_value as f32;
-                        vals[n as usize] = (sv, tv);
+                        let sv = i64::from(f.gray(sx, sy));
+                        let tv = i64::from(template_value);
                         sum_s += sv;
-                        sum_t += tv;
-                        n += 1;
+                        sum_ss += sv * sv;
+                        sum_st += sv * tv;
                     }
                 }
                 if n < 20 {
                     continue;
                 }
-                let (ms, mt) = (sum_s / n as f32, sum_t / n as f32);
-                let (mut num, mut ds, mut dt) = (0f32, 0f32, 0f32);
-                for &(sv, tv) in &vals[..n as usize] {
-                    num += (sv - ms) * (tv - mt);
-                    ds += (sv - ms) * (sv - ms);
-                    dt += (tv - mt) * (tv - mt);
-                }
-                if ds < 1e-6 || dt < 1e-6 {
+                // Pearson相関を和だけで計算する。平均との差分を配列へ保存して
+                // 2周目を回す式と等価で、一時配列と再走査を避けられる。
+                let numerator = n * sum_st - sum_s * sum_t;
+                let sample_variance = n * sum_ss - sum_s * sum_s;
+                let template_variance = n * sum_tt - sum_t * sum_t;
+                if sample_variance <= 0 || template_variance <= 0 {
                     continue;
                 }
-                let r = num / (ds.sqrt() * dt.sqrt());
+                let denominator = ((sample_variance as f64) * (template_variance as f64)).sqrt();
+                let r = numerator as f64 / denominator;
                 let score = ((1.0 - r) * 100.0).max(0.0) as u32;
                 sbest = sbest.min(score);
             }

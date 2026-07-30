@@ -28,6 +28,7 @@ export interface WasmFirstPassPayload {
   readonly features: string;
   readonly trackedInputs: string;
   readonly fightMarkers: string;
+  readonly attackInfo: string;
   readonly debugHp: unknown[];
 }
 
@@ -116,6 +117,7 @@ export class AnalyzerWasmSession {
         features,
         trackedInputs: analyzer.get_tracked_inputs(),
         fightMarkers: analyzer.get_fight_markers_json(),
+        attackInfo: analyzer.get_attack_info_json(),
         debugHp: buildHpDebugSnapshot(features),
       },
       spatialWindows: analyzer.get_spatial_windows_json(),

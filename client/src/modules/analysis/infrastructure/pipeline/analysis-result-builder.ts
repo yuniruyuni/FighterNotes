@@ -27,6 +27,7 @@ export function buildAnalysisResult(
     trackedInputs: message.trackedInputs
       ? JSON.parse(message.trackedInputs)
       : null,
+    attackInfo: message.attackInfo ? JSON.parse(message.attackInfo) : [],
     hpFeatures: message.features
       ? (JSON.parse(message.features) as HpFrameData[])
       : [],

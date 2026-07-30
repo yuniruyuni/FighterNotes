@@ -188,6 +188,13 @@ export const FINDING_PRESENTATIONS: Record<FindingKind, FindingPresentation> = {
     },
     tone: "critical",
   },
+  low_scaling_super: {
+    title: "低い補正率でSA/CAを組み込んだ場面",
+    description: `SA/CA投入時の補正率が低く、KOには至らなかった場面です。残り体力、画面位置、起き攻めを含めて使用目的を確認する対象であり、この事実だけで使用ミスとは${OBSERVATION_REVIEW_CAVEAT}。`,
+    practice:
+      "同じ始動のSAなし安定ルートと比較し、KO・端到達・有利状況のどれに寄与した使用かを確認します。",
+    tone: "resource",
+  },
   punish_fail: {
     title: "同じ反撃入力が繰り返し届いていない",
     description:

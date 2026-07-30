@@ -27,6 +27,7 @@ fn detectors_abstain_without_relevant_events() {
         ),
         ("guard_break", detect_guard_break(&events, 1)),
         ("reversal_punished", detect_reversal_punished(&events, 1)),
+        ("low_scaling_super", detect_low_scaling_super(&events, 1)),
         ("punish_missed", detect_punish_missed(&events, 1, None)),
         ("low_conversion", detect_low_conversion(&events, 1)),
         ("punish_fail", detect_punish_fail(&events, 1, None)),

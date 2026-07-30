@@ -8,6 +8,8 @@ use super::Analyzer;
 struct ImportedMeterTimeline {
     left: meter_tracker::MeterTimeline,
     right: meter_tracker::MeterTimeline,
+    #[serde(default)]
+    attack_info: Vec<video_analyzer::AttackInfoObservation>,
 }
 
 impl Analyzer {
@@ -47,6 +49,10 @@ impl Analyzer {
         } else {
             video_analyzer::finalize_features(&mut self.features);
         }
+        let attack_info = self
+            .imported_attack_info
+            .as_deref()
+            .unwrap_or(&self.attack_info_tracker.observations);
 
         let events = if self.input_rows.len() == self.features.len() && !self.input_rows.is_empty()
         {
@@ -65,40 +71,44 @@ impl Analyzer {
                 .map(|(left, right)| (left, right))
                 .unwrap_or((&self.tracker.left, &self.tracker.right));
             if marker_count_is_valid {
-                video_analyzer::build_match_events_with_context_and_fight_markers(
+                video_analyzer::build_match_events_with_context_and_fight_markers_and_attack_info(
                     &self.features,
                     &p1_tracked,
                     &p2_tracked,
                     Some(meter),
                     &self.analysis_context,
                     &fight_markers,
+                    attack_info,
                 )
             } else {
-                video_analyzer::build_match_events_with_context(
+                video_analyzer::build_match_events_with_context_and_attack_info(
                     &self.features,
                     &p1_tracked,
                     &p2_tracked,
                     Some(meter),
                     &self.analysis_context,
+                    attack_info,
                 )
             }
         } else {
             if marker_count_is_valid {
-                video_analyzer::build_match_events_with_context_and_fight_markers(
+                video_analyzer::build_match_events_with_context_and_fight_markers_and_attack_info(
                     &self.features,
                     &[],
                     &[],
                     None,
                     &self.analysis_context,
                     &fight_markers,
+                    attack_info,
                 )
             } else {
-                video_analyzer::build_match_events_with_context(
+                video_analyzer::build_match_events_with_context_and_attack_info(
                     &self.features,
                     &[],
                     &[],
                     None,
                     &self.analysis_context,
+                    attack_info,
                 )
             }
         };
@@ -122,6 +132,7 @@ impl Analyzer {
             "left": &self.tracker.left,
             "right": &self.tracker.right,
             "video_map": &self.tracker.video_map,
+            "attack_info": &self.attack_info_tracker.observations,
         })
         .to_string()
     }
@@ -163,6 +174,7 @@ impl Analyzer {
         let timeline: ImportedMeterTimeline = serde_json::from_str(timeline_json)
             .map_err(|error| JsValue::from_str(&format!("invalid meter timeline: {error}")))?;
         self.imported_meter = Some((timeline.left, timeline.right));
+        self.imported_attack_info = Some(timeline.attack_info);
         self.imported_timeline_json = Some(timeline_json.to_string());
         Ok(())
     }
@@ -195,6 +207,15 @@ impl Analyzer {
         self.tracked_json
             .clone()
             .unwrap_or_else(|| "null".to_string())
+    }
+
+    pub fn get_attack_info_json(&self) -> String {
+        serde_json::to_string(
+            self.imported_attack_info
+                .as_deref()
+                .unwrap_or(&self.attack_info_tracker.observations),
+        )
+        .unwrap_or_else(|error| format!(r#"[{{"error":"{error}"}}]"#))
     }
 
     pub fn get_timeline(&self) -> String {

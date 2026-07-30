@@ -31,6 +31,25 @@ export type DamageContext =
   | "punish_whiff"
   | "burnout";
 
+export type AttackDamageConsistency = "consistent" | "mismatch" | "unverified";
+
+export interface DamageAttackEvidence {
+  victim: number;
+  attacker: number;
+  damage_start_frame: number;
+  sequence_start_frame: number;
+  sequence_end_frame: number;
+  combo_damage: number;
+  sequence_count: number;
+  final_scaling_percent: number;
+  starter_attribute?: "upper" | "middle" | "lower" | "throw";
+  final_attribute: "upper" | "middle" | "lower" | "throw";
+  complete: boolean;
+  recovered_from_max: boolean;
+  confidence: "low" | "medium" | "high";
+  hp_consistency: AttackDamageConsistency;
+}
+
 export interface AttributedDamageEvent {
   sequence_no: number;
   round_no: number;
@@ -45,6 +64,7 @@ export interface AttributedDamageEvent {
   strike_kind?: StrikeKind;
   strike_kind_confidence?: "low" | "medium" | "high";
   contexts: DamageContext[];
+  attack_evidence?: DamageAttackEvidence;
 }
 
 export interface DamageBreakdown {
@@ -94,6 +114,10 @@ export interface AnalysisCoverage {
   analyzed_match_frames: number;
   input_segments: number;
   analyzed_input_segments: number;
+  attack_damage_events?: number;
+  attack_damage_linked?: number;
+  attack_damage_consistent?: number;
+  attack_damage_mismatched?: number;
 }
 
 export interface InputStats {
@@ -156,6 +180,10 @@ export interface TacticStats {
   super_punish_uses?: number;
   super_reversal_uses?: number;
   super_neutral_uses?: number;
+  super_damage_samples?: number;
+  super_reported_combo_damage?: number;
+  super_reported_marginal_damage?: number;
+  super_low_scaling_uses?: number;
   opponent_sa1_used?: number;
   opponent_sa2_used?: number;
   opponent_sa3_used?: number;

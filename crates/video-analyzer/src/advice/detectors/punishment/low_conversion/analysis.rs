@@ -33,7 +33,7 @@ pub(super) fn low_return(
     punish: &PunishChance,
 ) -> Option<LowReturn> {
     let _hit_count = continuous_hit_count(events, own, punish.frame);
-    let drop = events
+    let damage = events
         .damage
         .iter()
         .filter(|damage| {
@@ -41,12 +41,17 @@ pub(super) fn low_return(
                 && damage.start_frame + 5 >= punish.frame
                 && damage.start_frame <= punish.frame + 120
         })
-        .map(|damage| damage.drop)
-        .fold(0.0_f32, f32::max);
+        .max_by(|left, right| left.drop.total_cmp(&right.drop));
+    let drop = damage.map_or(0.0, |damage| damage.drop);
+    let attack = damage
+        .and_then(|damage| events.attack_evidence_for_damage(damage))
+        .filter(|evidence| evidence.exact_damage_is_reliable());
     (drop > 0.0 && drop < LOW_RETURN_DROP).then(|| LowReturn {
         frame: punish.frame,
         round_no: punish.round_no,
         drop,
         input: punish.pressed.clone(),
+        exact_damage: attack.map(|evidence| evidence.combo_damage),
+        final_scaling_percent: attack.map(|evidence| evidence.final_scaling_percent),
     })
 }

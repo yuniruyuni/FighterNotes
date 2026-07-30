@@ -22,11 +22,16 @@ pub struct RoundSummary {
 
 /// レポート内の数値が、動画のどの範囲を母集団にしているかを明示する。
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct AnalysisCoverage {
     pub match_frames: u32,
     pub analyzed_match_frames: u32,
     pub input_segments: u32,
     pub analyzed_input_segments: u32,
+    pub attack_damage_events: u32,
+    pub attack_damage_linked: u32,
+    pub attack_damage_consistent: u32,
+    pub attack_damage_mismatched: u32,
 }
 
 /// 入力習慣の統計（自分側）。
@@ -99,6 +104,14 @@ pub struct TacticStats {
     pub super_punish_uses: u32,
     pub super_reversal_uses: u32,
     pub super_neutral_uses: u32,
+    /// ゲーム内中央表示まで帰属できた自分のSA/CAヒット。
+    pub super_damage_samples: u32,
+    /// SA/CAを含むコンボ全体の表示ダメージ合計。
+    pub super_reported_combo_damage: u32,
+    /// SA/CA投入直前の累積値から増えた表示ダメージ合計。
+    pub super_reported_marginal_damage: u32,
+    /// 投入時の表示補正率が50%以下で、KOしなかった使用。
+    pub super_low_scaling_uses: u32,
     pub opponent_sa1_used: u32,
     pub opponent_sa2_used: u32,
     pub opponent_sa3_used: u32,

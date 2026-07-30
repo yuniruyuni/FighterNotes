@@ -44,5 +44,8 @@ impl Analyzer {
             self.tracker.digit_window_hint(),
         );
         self.tracker.update(video_frame as i64, left, right);
+        let attack_info =
+            video_analyzer::read_attack_info_from_meter_strip(&self.meter_buf, full_width);
+        self.attack_info_tracker.observe(video_frame, &attack_info);
     }
 }

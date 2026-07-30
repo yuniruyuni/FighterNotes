@@ -9,6 +9,7 @@ mod jumps;
 mod pressure;
 mod punishment;
 mod rounds;
+mod super_efficiency;
 mod throw_loop;
 mod throw_whiff;
 
@@ -23,6 +24,7 @@ pub(crate) use punishment::{
     detect_low_conversion, detect_punish_fail, detect_punish_missed, detect_reversal_punished,
 };
 pub(crate) use rounds::{detect_early_hits, detect_lead_loss};
+pub(crate) use super_efficiency::detect_low_scaling_super;
 pub(crate) use throw_loop::detect_throw_loop;
 pub(crate) use throw_whiff::{detect_throw_interrupted_by_invincible, detect_throw_whiff_punished};
 

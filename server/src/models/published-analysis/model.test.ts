@@ -89,7 +89,7 @@ describe("PublishedAnalysis model", () => {
       .map((match) => match[1])
       .sort();
     expect(rustFindingKinds).toEqual([...FINDING_KINDS].sort());
-    expect(adviceParameters).toContain("pub const RULESET_VERSION: u32 = 7;");
+    expect(adviceParameters).toContain("pub const RULESET_VERSION: u32 = 8;");
   });
 
   test("clientとDB migrationの閉じたIDがサーバーカタログと一致する", () => {

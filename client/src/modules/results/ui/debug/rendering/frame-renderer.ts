@@ -11,6 +11,7 @@ import type {
   DebugOverlayVisibility,
   DebugViewerData,
 } from "../debug-viewer-model.js";
+import { drawAttackInfoDebug } from "./overlays/attack-info.js";
 import {
   drawDriveBarReproduced,
   drawDriveColRow,
@@ -135,6 +136,16 @@ export class DebugFrameRenderer {
         height,
       );
     }
+    if (visibility.attackInfo && rgba) {
+      drawAttackInfoDebug(
+        context,
+        this.inspector.inspectAttackInfo(rgba, width, height),
+        this.data.attackInfo,
+        frameIndex,
+        width,
+        height,
+      );
+    }
     this.#drawFrameLabel(frameIndex, height);
   }
 
@@ -148,7 +159,8 @@ export class DebugFrameRenderer {
       !visibility.hp &&
       !visibility.drive &&
       !visibility.super &&
-      !visibility.input
+      !visibility.input &&
+      !visibility.attackInfo
     ) {
       return null;
     }

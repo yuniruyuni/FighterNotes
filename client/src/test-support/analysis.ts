@@ -72,6 +72,7 @@ export function syntheticAnalysisResult(
       video_map: {},
     },
     trackedInputs: null,
+    attackInfo: [],
     hpFeatures: [],
     frameCount: 0,
     frameTimestamps: [],

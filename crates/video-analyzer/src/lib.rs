@@ -4,6 +4,7 @@
 //! OCR・クリップエクスポート・HTML 生成は含まない。
 
 pub mod advice;
+pub mod attack_info;
 pub mod context;
 pub mod frame_data;
 pub mod frame_features;
@@ -18,6 +19,12 @@ pub mod temporal;
 pub use advice::{
     AdviceCard, AdviceKind, AdviceReport, AttributedDamageEvent, DamageBreakdown, DamageContext,
     DamageOrigin, DamageTakenEvent, EvidenceClip, InputStats, RoundSummary, TacticStats, Weakness,
+};
+pub use attack_info::{
+    attack_info_debug_json, build_attack_sequences, read_attack_info,
+    read_attack_info_from_meter_strip, AttackAttribute, AttackInfoFrameInspection,
+    AttackInfoObservation, AttackInfoRoi, AttackInfoRois, AttackInfoSide, AttackInfoSideInspection,
+    AttackInfoSideRois, AttackInfoTracker, AttackSequence, AttackSequenceStep,
 };
 pub use context::{AnalysisContext, PlayerContext};
 pub use frame_data::{character_names, punish_options, StrikeKind};
@@ -38,14 +45,17 @@ pub use input_history::{
 pub use input_tracker::{repair_row0_sequence, TrackedInput};
 pub use match_events::{
     build_match_events, build_match_events_with_context,
-    build_match_events_with_context_and_fight_markers, BurnoutCause, BurnoutPeriod, CompoundThreat,
-    ContactEvent, DamageEvent, DefenseResponse, DefenseResponseKind, DefensiveActionKind,
+    build_match_events_with_context_and_attack_info,
+    build_match_events_with_context_and_fight_markers,
+    build_match_events_with_context_and_fight_markers_and_attack_info, AttackDamageConsistency,
+    AttackEvidence, BurnoutCause, BurnoutPeriod, CompoundThreat, ContactEvent,
+    DamageAttackEvidence, DamageEvent, DefenseResponse, DefenseResponseKind, DefensiveActionKind,
     DpReachability, DriveImpactEvent, DriveImpactOutcome, DriveRushEvent, DriveRushOutcome,
     EventConfidence, GuardBreakEvent, JumpDirection, JumpEvent, JumpOutcome, MatchEvents,
     MeterState, MinusPressEvent, MinusPressOutcome, MinusSituationEvent, ProjectileThreat,
     PunishChance, PunishOrigin, PunishOutcome, PunishReachability, ReversalEvent, RoundInfo,
-    SuperArtContext, SuperArtEvent, SuperArtOutcome, TeleportContext, TeleportEvent, ThreatOutcome,
-    ThrowActionEvent, ThrowApproach, ThrowEvent, ThrowOutcome,
+    SuperArtAttackEvidence, SuperArtContext, SuperArtEvent, SuperArtOutcome, TeleportContext,
+    TeleportEvent, ThreatOutcome, ThrowActionEvent, ThrowApproach, ThrowEvent, ThrowOutcome,
 };
 pub use pipeline::{
     analyze_features, analyze_features_with_context, analyze_match, analyze_match_with_context,

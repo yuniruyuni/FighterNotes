@@ -8,7 +8,7 @@
 目的は試合を完全再現することではなく、複数の映像証拠が一致した場面を抽出し、
 利用者が動画を見直す順序を作ることである。
 
-判定は決定的なルールベース処理で、現在の `RULESET_VERSION` は 7。
+判定は決定的なルールベース処理で、現在の `RULESET_VERSION` は 8。
 機械学習モデルや外部推論 API は使わない。
 
 ## 入力条件
@@ -65,6 +65,7 @@ main thread は描画と buffer 転送を担当し、`client/src/entrypoints/ana
 | `frame-meter` | frame-meter strip | 左右 80 cell の色、明度、縞、数字相関、fresh edge |
 | `meter-tracker` | フレームごとの cell 観測 | video frame と game frame を対応させた状態 timeline |
 | `frame_features` | HUD strip | HP、Drive、SA/CA、burnout、試合画面判定、読取品質 |
+| `attack_info` | 画面中央の攻撃情報 | P1/P2別の単発・累積ダメージ、補正率、上中下段・投げ属性 |
 | `input_history` | input strip | 方向、button badge、AUTO、投げなどの row 0 観測 |
 | `input_tracker` | row 0 の時系列 | 欠測と孤立誤読を補修した `TrackedInput` |
 
@@ -110,14 +111,16 @@ viewer と event layer は、この確定済み系列を共通の入力にする
 4. damage のない誤 round を捨て、round number を振り直す。
 5. meter の停止と HP 変化から hit / block contact を作る。
 6. HP 減少の遅延を contact frame へ寄せ、freeze 前の clip anchor も保持する。
-7. repaired input を方向・button の segment へまとめる。
-8. meter、input、contact、damage を同じ行動へ帰属する。
+7. 中央攻撃情報をP1/P2別のコンボ列にし、攻撃側・round・frame・HP量が整合する被弾へ帰属する。
+8. 中央表示のコンボリセットと実HP下降がともに確認できた場合だけ、結合されたdamageを分割する。
+9. repaired input を方向・button の segment へまとめる。
+10. meter、input、contact、damage を同じ行動へ帰属する。
 
 `MatchEvents` が持つ主なイベントは次のとおり。
 
 | 分類 | 内容 |
 | --- | --- |
-| Round / damage | round 境界、勝敗、HP 減少 sequence、freeze 前 anchor |
+| Round / damage | round 境界、勝敗、HP 減少 sequence、ゲーム内damage・補正率・攻撃属性、freeze 前 anchor |
 | Contact | hit / block、projectile contact、attacker / victim |
 | Input action | jump、throw、Drive Impact、raw Drive Rush |
 | Resource | burnout 期間、SA1/2/3/CA 使用、ゲージ前後、使用文脈と結果 |
@@ -130,6 +133,8 @@ viewer と event layer は、この確定済み系列を共通の入力にする
 - DI は専用イベントへ帰属し、armor 表示を reversal と二重計上しない。
 - meter epoch をまたいで contact、recovery、punish を結ばない。
 - freeze をまたぐ combo damage は game time の近さでまとめる。
+- 中央表示は単独でHPを上書きせず、被弾とのframe・攻撃側・round整合を確認して補助証拠にする。
+- 中央表示とHPのdamageが一致しない場合は不一致として記録し、正確なdamage値として断定しない。
 - SA は両者のゲージ低下を主証拠とし、meter の発生・暗転、contact、damage を使用時点と結果の確認に使う。
 - 接触しない SA2 は `NoImmediateContact` とし、技ごとの役割が不明なまま空振り失敗とは呼ばない。
 - projectile の block や弾撃ち合いを、近距離の mashing として扱わない。
@@ -169,7 +174,7 @@ teleport defense などを確認または棄却する。
 - 練習項目
 - 解析 coverage と warning
 
-現在のカード ID は次の17種である。
+現在のカード ID は次の21種である。
 
 | ID | 対象 |
 | --- | --- |
@@ -178,14 +183,18 @@ teleport defense などを確認または棄却する。
 | `anti_air` | 相手 jump-in への対空 |
 | `own_jumps` | 自分の jump が落とされた場面 |
 | `burnout` | burnout 時間、damage 収支、突入原因 |
+| `committed_button_vs_di` | 通常技実行中に受けたDrive Impact |
 | `mashing` | 守勢の button 押下と被弾の帰属 |
 | `press_while_minus` | 不利 frame 後の最速打撃 |
 | `throw_while_minus` | 不利 frame 後の最速投げ |
 | `guard_break` | guard 方向を外した直後の被弾 |
 | `reversal_punished` | 無敵技を防がれた後の反撃 |
+| `low_scaling_super` | 低い補正率でSA/CAを組み込み、KOしなかった場面 |
 | `punish_fail` | 時間は間に合ったが届かなかった反撃 |
 | `punish_missed` | 到達可能な確定反撃機会の見逃し |
 | `low_conversion` | 確定反撃の低い return |
+| `throw_interrupted_by_invincible` | 投げ実行直後に相手の無敵技で被弾した場面 |
+| `throw_whiff_punished` | 投げ空振り後に反撃を受けた場面 |
 | `throw_loop` | 短時間の連続 throw 成立 |
 | `early_hits` | round 開始直後の被弾 |
 | `lead_loss` | 大きな HP lead を失った round |

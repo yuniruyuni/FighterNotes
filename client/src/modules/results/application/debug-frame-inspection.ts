@@ -81,6 +81,33 @@ export interface DebugInputInspection {
   p2: { side: string; rows: DebugInputRowInspection[] };
 }
 
+export interface DebugAttackInfoRoi {
+  x1: number;
+  x2: number;
+  y1: number;
+  y2: number;
+}
+
+export interface DebugAttackInfoSideInspection {
+  last_damage: number;
+  scaling_percent: number;
+  combo_damage: number;
+  max_combo_damage: number;
+  attribute: "upper" | "middle" | "lower" | "throw";
+  numeric_score: number;
+  attribute_score: number;
+  attribute_margin: number;
+}
+
+export interface DebugAttackInfoInspection {
+  p1: DebugAttackInfoSideInspection | null;
+  p2: DebugAttackInfoSideInspection | null;
+  rois: {
+    p1: { numeric: DebugAttackInfoRoi; attribute: DebugAttackInfoRoi };
+    p2: { numeric: DebugAttackInfoRoi; attribute: DebugAttackInfoRoi };
+  };
+}
+
 export interface DebugHpParallelogram {
   top_left: { x: number; y: number };
   top_right: { x: number; y: number };
@@ -116,4 +143,9 @@ export interface DebugFrameInspector {
     width: number,
     height: number,
   ): DebugInputInspection;
+  inspectAttackInfo(
+    rgba: Uint8Array,
+    width: number,
+    height: number,
+  ): DebugAttackInfoInspection;
 }

@@ -49,6 +49,22 @@ export interface TrackedInputRow {
   readonly uncertain: boolean;
 }
 
+export type AttackAttribute = "upper" | "middle" | "lower" | "throw";
+
+export interface AttackInfoSide {
+  readonly last_damage: number;
+  readonly scaling_percent: number;
+  readonly combo_damage: number;
+  readonly max_combo_damage: number;
+  readonly attribute: AttackAttribute;
+}
+
+export interface AttackInfoObservation {
+  readonly frame_index: number;
+  readonly p1: AttackInfoSide;
+  readonly p2: AttackInfoSide;
+}
+
 export interface HpFrameData {
   readonly frame_index: number;
   readonly fps: number;
@@ -82,6 +98,7 @@ export interface AnalysisResult {
     readonly p1: TrackedInputRow[];
     readonly p2: TrackedInputRow[];
   } | null;
+  readonly attackInfo: AttackInfoObservation[];
   readonly hpFeatures: HpFrameData[];
   readonly frameCount: number;
   readonly frameTimestamps: number[];

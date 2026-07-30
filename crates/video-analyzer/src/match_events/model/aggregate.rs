@@ -6,6 +6,9 @@ use super::*;
 pub struct MatchEvents {
     pub rounds: Vec<RoundInfo>,
     pub damage: Vec<DamageEvent>,
+    /// 中央のゲーム内攻撃情報表示を、HP被弾列へ時間・攻撃側で帰属した証拠。
+    #[serde(default)]
+    pub attack_evidence: AttackEvidence,
     pub jumps: Vec<JumpEvent>,
     pub throws: Vec<ThrowEvent>,
     #[serde(default)]
@@ -54,4 +57,24 @@ pub struct MatchEvents {
     /// クリーニング済み HP 系列（[0]=P1, [1]=P2、ラウンド内単調非増加）
     #[serde(skip)]
     pub hp: [Vec<f32>; 2],
+}
+
+impl MatchEvents {
+    pub fn attack_evidence_for_damage(
+        &self,
+        damage: &DamageEvent,
+    ) -> Option<&DamageAttackEvidence> {
+        self.attack_evidence.damage.iter().find(|evidence| {
+            evidence.victim == damage.victim && evidence.damage_start_frame == damage.start_frame
+        })
+    }
+
+    pub fn attack_evidence_for_super(
+        &self,
+        super_art: &SuperArtEvent,
+    ) -> Option<&SuperArtAttackEvidence> {
+        self.attack_evidence.super_arts.iter().find(|evidence| {
+            evidence.side == super_art.side && evidence.super_frame == super_art.frame
+        })
+    }
 }

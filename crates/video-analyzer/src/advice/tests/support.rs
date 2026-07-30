@@ -15,6 +15,7 @@ pub(super) fn empty_events() -> MatchEvents {
             p2_hp_end: 0.5,
         }],
         damage: vec![],
+        attack_evidence: Default::default(),
         jumps: vec![],
         throws: vec![],
         throw_actions: vec![],

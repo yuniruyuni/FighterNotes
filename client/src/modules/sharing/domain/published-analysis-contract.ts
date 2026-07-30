@@ -12,6 +12,7 @@ export const SHAREABLE_FINDING_KINDS = [
   "throw_while_minus",
   "guard_break",
   "reversal_punished",
+  "low_scaling_super",
   "punish_fail",
   "punish_missed",
   "low_conversion",

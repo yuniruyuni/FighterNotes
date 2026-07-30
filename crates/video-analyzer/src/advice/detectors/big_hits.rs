@@ -1,5 +1,57 @@
 use crate::advice::{AdviceCard, AdviceKind, EvidenceClip, BIG_HIT_LIST};
-use crate::match_events::{EventConfidence, MatchEvents, JUMP_ATTACK_MAX, JUMP_SELF_HIT_WINDOW};
+use crate::attack_info::AttackAttribute;
+use crate::match_events::{
+    AttackDamageConsistency, DamageAttackEvidence, EventConfidence, MatchEvents, JUMP_ATTACK_MAX,
+    JUMP_SELF_HIT_WINDOW,
+};
+
+fn attribute_label(attribute: AttackAttribute) -> &'static str {
+    match attribute {
+        AttackAttribute::Upper => "上段",
+        AttackAttribute::Middle => "中段",
+        AttackAttribute::Lower => "下段",
+        AttackAttribute::Throw => "投げ",
+    }
+}
+
+fn evidence_label(
+    round_no: u32,
+    drop: f32,
+    hp_after: f32,
+    attack: Option<&DamageAttackEvidence>,
+) -> String {
+    let base = format!(
+        "R{} -{:.0}% 被弾（残り HP {:.0}%）",
+        round_no,
+        drop * 100.0,
+        hp_after * 100.0
+    );
+    let Some(attack) = attack else {
+        return base;
+    };
+    if attack.hp_consistency == AttackDamageConsistency::Mismatch {
+        return format!(
+            "{base} / ゲーム内表示 {}（HPと不一致）",
+            attack.combo_damage
+        );
+    }
+    if !attack.exact_damage_is_reliable() {
+        return base;
+    }
+    let starter = attack
+        .starter_attribute
+        .map(|attribute| format!("・{}始動", attribute_label(attribute)))
+        .unwrap_or_default();
+    let sequence = if attack.sequence_count > 1 {
+        format!("・{}連係合計", attack.sequence_count)
+    } else {
+        String::new()
+    };
+    format!(
+        "{base} / {}ダメージ{starter}{sequence}・最終{}%補正",
+        attack.combo_damage, attack.final_scaling_percent
+    )
+}
 
 fn evidence_window(card_id: &str, evidence: &EvidenceClip) -> Option<(u32, u32)> {
     match card_id {
@@ -58,6 +110,23 @@ pub(crate) fn detect_big_hits(
         return None;
     }
     let hp_lost: f32 = hits.iter().map(|damage| damage.drop).sum();
+    let exact_count = hits
+        .iter()
+        .filter_map(|damage| events.attack_evidence_for_damage(damage))
+        .filter(|evidence| evidence.exact_damage_is_reliable())
+        .count();
+    let mismatch_count = hits
+        .iter()
+        .filter_map(|damage| events.attack_evidence_for_damage(damage))
+        .filter(|evidence| evidence.hp_consistency == AttackDamageConsistency::Mismatch)
+        .count();
+    let attack_note = if exact_count > 0 || mismatch_count > 0 {
+        format!(
+            " うち {exact_count} 件はゲーム内表示の累積ダメージ・補正率まで確認でき、HP表示との不一致は {mismatch_count} 件です。"
+        )
+    } else {
+        String::new()
+    };
     Some(AdviceCard {
         id: "big_hits".to_string(),
         kind: AdviceKind::Observation,
@@ -65,16 +134,18 @@ pub(crate) fn detect_big_hits(
         title: "原因を分類できなかった大ダメージ".to_string(),
         severity: hp_lost,
         description: format!(
-            "一度のコンボ・連係で HP を {:.0}% 以上失い、対空・暴れ・不利後の回答など既存の原因別カードへ分類できなかった被弾が {} 回、合計 {:.0}% あります。各場面で被弾直前の行動を確認し、同じ入り口が繰り返されているかを利用者が判断するための一覧です。",
-            BIG_HIT_LIST * 100.0, hits.len(), hp_lost * 100.0
+            "一度のコンボ・連係で HP を {:.0}% 以上失い、対空・暴れ・不利後の回答など既存の原因別カードへ分類できなかった被弾が {} 回、合計 {:.0}% あります。{}各場面で被弾直前の行動を確認し、同じ入り口が繰り返されているかを利用者が判断するための一覧です。",
+            BIG_HIT_LIST * 100.0, hits.len(), hp_lost * 100.0, attack_note
         ),
         practice: "各場面を再生し、被弾直前の行動を「差し返された／DI対応漏れ／投げ／中下段／その他」でメモします。同じ分類が複数回ある場合だけ、次に詳しく調べる改善候補にしましょう。".to_string(),
         evidence: hits.iter().map(|damage| EvidenceClip {
             frame: damage.pre_freeze_frame,
             end_frame: Some(damage.end_frame),
-            label: format!(
-                "R{} -{:.0}% 被弾（残り HP {:.0}%）",
-                damage.round_no, damage.drop * 100.0, damage.hp_after * 100.0
+            label: evidence_label(
+                damage.round_no,
+                damage.drop,
+                damage.hp_after,
+                events.attack_evidence_for_damage(damage),
             ),
         }).collect(),
     })

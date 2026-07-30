@@ -82,7 +82,7 @@ fn analyzer_keeps_buffer_and_json_contracts() {
     );
 
     let timeline: Value = serde_json::from_str(&analyzer.get_timeline()).unwrap();
-    assert_object_keys(&timeline, &["left", "right", "video_map"]);
+    assert_object_keys(&timeline, &["left", "right", "video_map", "attack_info"]);
     assert_object_keys(&timeline["left"], &["side", "segments"]);
 
     let tracked: Value = serde_json::from_str(&analyzer.get_tracked_inputs()).unwrap();
@@ -99,6 +99,9 @@ fn analyzer_keeps_buffer_and_json_contracts() {
             "uncertain",
         ],
     );
+
+    let attack_info: Value = serde_json::from_str(&analyzer.get_attack_info_json()).unwrap();
+    assert!(attack_info.is_array());
 
     let windows: Value =
         serde_json::from_str(&analyzer.get_spatial_windows_json().unwrap()).unwrap();
