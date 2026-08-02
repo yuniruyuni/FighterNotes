@@ -103,6 +103,17 @@ fn analyzer_keeps_buffer_and_json_contracts() {
     let attack_info: Value = serde_json::from_str(&analyzer.get_attack_info_json()).unwrap();
     assert!(attack_info.is_array());
 
+    let regression_events: Value =
+        serde_json::from_str(&analyzer.get_regression_events_json().unwrap()).unwrap();
+    assert_object_keys(
+        &regression_events,
+        &["rounds", "damage", "super_arts", "attack_evidence"],
+    );
+    assert_object_keys(
+        &regression_events["attack_evidence"],
+        &["sequences", "damage", "super_arts"],
+    );
+
     let windows: Value =
         serde_json::from_str(&analyzer.get_spatial_windows_json().unwrap()).unwrap();
     assert!(windows.is_array());

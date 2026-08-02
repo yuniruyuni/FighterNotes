@@ -14,6 +14,7 @@
     "check:licenses": "bun test scripts/license-policy.test.ts && bun scripts/generate-third-party-notices.ts --check",
     "check:lint": "bun run --filter '*' check:lint",
     "check:rust": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace",
+    "check:scripts": "bun test scripts/",
     "check:test": "bun run --filter '*' check:test",
     "check:type": "bun run --filter '*' check:type",
     "check:wasm-api": "bun scripts/check-wasm-api.ts",

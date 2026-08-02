@@ -152,12 +152,14 @@ export class AnalyzerWasmSession {
   finishSpatialPass(): {
     readonly report: string;
     readonly spatialObservations: string;
+    readonly regressionEvents: string;
   } {
     const state = this.#requireState();
     const spatialObservations = state.spatialAnalyzer.get_observations_json();
     return {
       report: state.analyzer.refine_with_spatial(spatialObservations),
       spatialObservations,
+      regressionEvents: state.analyzer.get_regression_events_json(),
     };
   }
 
