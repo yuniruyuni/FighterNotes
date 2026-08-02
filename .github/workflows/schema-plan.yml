@@ -129,9 +129,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          PLAN=$(cat plan_output.txt)
+          if [ -f plan_output.txt ]; then
+            PLAN=$(cat plan_output.txt)
+          else
+            PLAN="pgschema plan did not produce plan_output.txt"
+          fi
           ALERT=""
-          if echo "$PLAN" | grep -qiE "DROP|GRANT|REVOKE|PRIVILEGES"; then
+          if printf '%s' "$PLAN" | grep -qiE "DROP|GRANT|REVOKE|PRIVILEGES"; then
             ALERT="> [!CAUTION]
           > This migration includes destructive or privilege-related changes.
           > Please review carefully before merging.
@@ -144,15 +148,32 @@ jobs:
           ${PLAN}
           \`\`\`"
 
-          COMMENT_ID=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
-            --jq '.[] | select(.body | contains("<!-- fighter-pgschema-plan -->")) | .id' \
-            | head -1)
+          {
+            echo "## pgschema plan"
+            echo
+            printf '%s' "$ALERT"
+            echo '```sql'
+            printf '%s\n' "$PLAN"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ -n "$COMMENT_ID" ]; then
-            gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}" \
-              -X PATCH -f body="$BODY"
-          else
-            gh pr comment "$PR_NUMBER" --body "$BODY"
+          publish_plan_comment() {
+            local comment_id
+            comment_id=$(gh api \
+              "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              --jq 'map(select(.body | contains("<!-- fighter-pgschema-plan -->")))[0].id // empty') \
+              || return 1
+
+            if [ -n "$comment_id" ]; then
+              gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" \
+                -X PATCH -f body="$BODY" > /dev/null || return 1
+            else
+              gh pr comment "$PR_NUMBER" --body "$BODY" > /dev/null || return 1
+            fi
+          }
+
+          if ! publish_plan_comment; then
+            echo "::warning title=Schema plan comment::Could not update the PR comment; the plan remains available in the job summary."
           fi
 
       - name: Enforce successful schema plan

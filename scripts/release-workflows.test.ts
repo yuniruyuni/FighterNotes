@@ -66,6 +66,29 @@ describe("release workflow safety contracts", () => {
     expect(source).toContain("Enforce successful schema plan");
   });
 
+  test("schema plan comments are best-effort without weakening enforcement", () => {
+    const source = read(".github/workflows/schema-plan.yml");
+    const commentStart = source.indexOf("- name: Comment plan on PR");
+    const enforceStart = source.indexOf(
+      "- name: Enforce successful schema plan",
+    );
+    const stopStart = source.indexOf("- name: Stop PostgreSQL");
+    const commentStep = source.slice(commentStart, enforceStart);
+    const enforceStep = source.slice(enforceStart, stopStart);
+
+    expect(commentStart).toBeGreaterThan(-1);
+    expect(enforceStart).toBeGreaterThan(commentStart);
+    expect(stopStart).toBeGreaterThan(enforceStart);
+    expect(commentStep).toContain('>> "$GITHUB_STEP_SUMMARY"');
+    expect(commentStep).toContain("publish_plan_comment()");
+    expect(commentStep).toContain("if ! publish_plan_comment; then");
+    expect(commentStep).toContain("::warning title=Schema plan comment::");
+    expect(commentStep).not.toContain("exit 1");
+    expect(enforceStep).toContain("plan_output.txt");
+    expect(enforceStep).toContain("plan_exit_code.txt");
+    expect(enforceStep).toContain("exit 1");
+  });
+
   test("schema plan is a stable required check for every pull request", () => {
     const source = read(".github/workflows/schema-plan.yml");
     const schemaCondition =
