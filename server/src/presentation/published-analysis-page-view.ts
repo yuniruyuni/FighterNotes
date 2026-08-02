@@ -4,6 +4,7 @@ import {
   type PublishedFindingView,
   presentPublishedFindings,
 } from "./published-analysis-finding-view";
+import { presentPublishedSuperArts } from "./published-analysis-super-art-view";
 import {
   type PublishedTacticView,
   presentPublishedTactics,
@@ -28,6 +29,7 @@ export interface PublishedAnalysisPageView {
   readonly rounds: PublishedAnalysis["content"]["rounds"];
   readonly findings: readonly PublishedFindingView[];
   readonly tactics: readonly PublishedTacticView[];
+  readonly superArts: readonly PublishedTacticView[] | undefined;
   readonly createdDate: string;
   readonly expiresDate: string;
   readonly rulesetVersion: number;
@@ -71,6 +73,7 @@ export const PublishedAnalysisPageView = {
       rounds: content.rounds,
       findings,
       tactics: presentPublishedTactics(analysis),
+      superArts: presentPublishedSuperArts(analysis),
       createdDate: dateText(analysis.createdAt),
       expiresDate: dateText(analysis.expiresAt),
       rulesetVersion: content.rulesetVersion,

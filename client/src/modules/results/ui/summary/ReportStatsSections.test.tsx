@@ -329,3 +329,61 @@ describe("InputStatsSection detector coverage", () => {
     }
   });
 });
+
+describe("TacticStatsSection SA/CA availability", () => {
+  test("ruleset v9の集計不能フラグを使用0回として表示しない", () => {
+    render(
+      <TacticStatsSection
+        stats={syntheticTacticStats({
+          super_art_stats_complete: false,
+          opponent_super_art_stats_complete: false,
+          sa1_used: 0,
+          opponent_sa1_used: 0,
+        })}
+      />,
+    );
+
+    for (const label of ["自分のSA / CA", "相手のSA / CA"]) {
+      const item = screen.getByText(label).closest(".stat-item");
+      expect(item).not.toBeNull();
+      expect(
+        within(item as HTMLElement).getByText("確認不能"),
+      ).toBeInTheDocument();
+      expect(
+        within(item as HTMLElement).queryByText("0 回"),
+      ).not.toBeInTheDocument();
+    }
+    expect(screen.queryByText(/SA1 0 \/ SA2/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/自分 確認不能 \/ 相手 確認不能/),
+    ).toBeInTheDocument();
+  });
+
+  test("不完全集計でも検出済みのSA/CAは下限として表示する", () => {
+    render(
+      <TacticStatsSection
+        stats={syntheticTacticStats({
+          super_art_stats_complete: false,
+          opponent_super_art_stats_complete: false,
+          sa1_used: 0,
+          sa2_used: 1,
+          sa3_used: 0,
+          ca_used: 0,
+          opponent_sa1_used: 0,
+          opponent_sa2_used: 0,
+          opponent_sa3_used: 0,
+          opponent_ca_used: 0,
+        })}
+      />,
+    );
+
+    const item = screen.getByText("自分のSA / CA").closest(".stat-item");
+    expect(item).not.toBeNull();
+    expect(
+      within(item as HTMLElement).getByText("少なくとも 1 件"),
+    ).toBeInTheDocument();
+    expect(
+      within(item as HTMLElement).getByText(/確認できた範囲: 1 回/),
+    ).toBeInTheDocument();
+  });
+});

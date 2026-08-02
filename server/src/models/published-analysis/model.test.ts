@@ -64,6 +64,42 @@ function candidate() {
   };
 }
 
+function superArts(
+  count: number,
+  availability: "complete" | "partial" = "complete",
+) {
+  return {
+    own: {
+      availability,
+      levels: { sa1: count, sa2: count, sa3: count, ca: count },
+      outcomes: {
+        hit: count,
+        block: count,
+        noImmediateContact: count,
+        punished: count,
+        ko: count,
+      },
+      contexts: {
+        combo: count,
+        punish: count,
+        reversal: count,
+        neutral: count,
+      },
+    },
+    opponent: {
+      availability,
+      levels: { sa1: count, sa2: count, sa3: count, ca: count },
+      outcomes: {
+        hit: count,
+        block: count,
+        noImmediateContact: count,
+        punished: count,
+        ko: count,
+      },
+    },
+  };
+}
+
 describe("PublishedAnalysis model", () => {
   test("Rustの全カードIDとrulesetを共有カタログが網羅する", () => {
     const adviceDir = join(
@@ -150,6 +186,36 @@ describe("PublishedAnalysis model", () => {
     ]);
     expect(Object.isFrozen(result.value)).toBe(true);
     expect(Object.isFrozen(result.value.tactics.burnout)).toBe(true);
+  });
+
+  test("v9のSA/CA availabilityと公開集計を閉じたモデルへ保存する", () => {
+    const result = createPublishedAnalysisContent({
+      ...candidate(),
+      rulesetVersion: 9,
+      findings: candidate().findings.map((finding) => ({
+        ...finding,
+        assessment: "diagnosis" as const,
+      })),
+      superArts: superArts(2),
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.superArts).toEqual(superArts(2));
+    expect(Object.isFrozen(result.value.superArts?.own)).toBe(true);
+
+    const partial = createPublishedAnalysisContent({
+      ...candidate(),
+      rulesetVersion: 9,
+      findings: candidate().findings.map((finding) => ({
+        ...finding,
+        assessment: "diagnosis" as const,
+      })),
+      superArts: superArts(1, "partial"),
+    });
+    expect(partial.ok).toBe(true);
+    if (partial.ok) {
+      expect(partial.value.superArts?.own.availability).toBe("partial");
+    }
   });
 
   test("全キャラクターと全findingを閉じたIDとして受理する", () => {
@@ -260,6 +326,7 @@ describe("PublishedAnalysis model", () => {
 
   test("最大値を入れたモデルも4KiB目標内に収まる", () => {
     const value = candidate();
+    value.rulesetVersion = 9;
     value.rounds = { detected: 255, won: 85, lost: 85, unresolved: 85 };
     value.findings = FINDING_KINDS.map((kind) => ({
       kind,
@@ -307,7 +374,14 @@ describe("PublishedAnalysis model", () => {
         unknown: MAX_COUNT,
       },
     };
-    const result = createPublishedAnalysisContent(value);
+    const result = createPublishedAnalysisContent({
+      ...value,
+      findings: value.findings.map((finding) => ({
+        ...finding,
+        assessment: "diagnosis" as const,
+      })),
+      superArts: superArts(MAX_COUNT),
+    });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(serializedByteLength(result.value)).toBeLessThan(

@@ -91,13 +91,30 @@ export function renderPublishedAnalysisPage(
             ${renderTactics(view.tactics)}
           </section>
 
+          ${
+            view.superArts === undefined
+              ? ""
+              : html`<section
+                class="content-band"
+                aria-labelledby="super-arts-title"
+              >
+                <div class="section-heading">
+                  <div>
+                    <p class="eyebrow">SUPER ART BREAKDOWN</p>
+                    <h2 id="super-arts-title">SA / CA 集計</h2>
+                  </div>
+                </div>
+                ${renderTactics(view.superArts)}
+              </section>`
+          }
+
           <section class="share-note">
             <div>
               <p class="eyebrow">PRIVACY</p>
               <h2>動画データは含まれていません</h2>
               <p>
-                このページに保存されているのは、キャラクター、件数、集計値だけです。
-                元動画、場面クリップ、入力履歴、ファイル名は保存されていません。
+                このページに保存されているのは、キャラクター、件数、公開対象の集計値だけです。
+                元動画、場面クリップ、入力履歴、ファイル名、フレーム番号、自由文、SA/CAの正確なダメージ値と最終ゲージ量は保存されていません。
               </p>
               <p class="date-line">
                 作成 ${view.createdDate} ・ 公開期限 ${view.expiresDate}

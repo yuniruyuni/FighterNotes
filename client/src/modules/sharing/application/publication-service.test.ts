@@ -1,6 +1,9 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { AnalysisContext } from "~/modules/analysis/contracts.js";
-import { syntheticAdviceReport } from "~/test-support/analysis.js";
+import {
+  syntheticAdviceReport,
+  syntheticTacticStats,
+} from "~/test-support/analysis.js";
 import { ShareProjectionError } from "../domain/published-analysis.js";
 import type { PublishedAnalysisShare } from "../domain/share.js";
 import type { SharingServices } from "./ports.js";
@@ -102,18 +105,41 @@ describe("publication service", () => {
     );
   });
 
-  test("ruleset v9はgatewayへ送信する前に共有を拒否する", async () => {
+  test("ruleset v9はavailability付きSA/CA集計をgatewayへ送る", async () => {
     const { services, create, save } = createServices();
-    const current = syntheticAdviceReport({ ruleset_version: 9 });
+    const current = syntheticAdviceReport({
+      ruleset_version: 9,
+      tactic_stats: syntheticTacticStats({
+        super_art_stats_complete: false,
+        opponent_super_art_stats_complete: false,
+        sa1_used: 0,
+        sa2_used: 0,
+        sa3_used: 0,
+        ca_used: 0,
+        opponent_sa1_used: 0,
+        opponent_sa2_used: 0,
+        opponent_sa3_used: 0,
+        opponent_ca_used: 0,
+      }),
+    });
 
     await expect(
       createPublication(
         { report: current, context, deleteCode: "ABCD-EFGH-JKLM" },
         services,
       ),
-    ).rejects.toThrow("共有形式の更新が完了するまで公開できません");
-    expect(create).not.toHaveBeenCalled();
-    expect(save).not.toHaveBeenCalled();
+    ).resolves.toEqual({ published, storedLocally: true });
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rulesetVersion: 9,
+        superArts: {
+          own: { availability: "unavailable" },
+          opponent: { availability: "unavailable" },
+        },
+      }),
+      "ABCD-EFGH-JKLM",
+    );
+    expect(save).toHaveBeenCalledTimes(1);
   });
 
   test("不要な共有を削除し、local保存状態に応じて管理recordも消す", async () => {

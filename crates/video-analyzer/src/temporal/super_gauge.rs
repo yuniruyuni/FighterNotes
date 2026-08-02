@@ -1,7 +1,7 @@
 use crate::frame_features::{FrameFeatures, MIN_SUPER_SPEND_DROP};
 
-const LOWER_LEVEL_CONFIRM_FRAMES: usize = 12;
-const LOWER_LEVEL_LOOKAHEAD: usize = 90;
+pub(crate) const SUPER_SPEND_CONFIRM_SAMPLES: usize = 12;
+pub(crate) const SUPER_SPEND_CONFIRM_LOOKAHEAD: usize = 90;
 const HIGHER_LEVEL_CONFIRM_FRAMES: usize = 12;
 const HIGHER_LEVEL_LOOKAHEAD: usize = 45;
 const MAX_GAIN_BASE: f32 = 0.45;
@@ -75,7 +75,11 @@ fn lower_level_is_stable(
     expected_level: u8,
 ) -> bool {
     let mut confirmed = 0;
-    for feature in features.iter().skip(start).take(LOWER_LEVEL_LOOKAHEAD) {
+    for feature in features
+        .iter()
+        .skip(start)
+        .take(SUPER_SPEND_CONFIRM_LOOKAHEAD)
+    {
         let (value, uncertain, _) = get(feature, side);
         if !feature.is_match_screen || uncertain {
             continue;
@@ -84,7 +88,7 @@ fn lower_level_is_stable(
             return false;
         }
         confirmed += 1;
-        if confirmed >= LOWER_LEVEL_CONFIRM_FRAMES {
+        if confirmed >= SUPER_SPEND_CONFIRM_SAMPLES {
             return true;
         }
     }
@@ -199,7 +203,7 @@ mod tests {
         let mut values = vec![(3.0, false), (0.0, true), (0.0, true)];
         values.extend(std::iter::repeat_n(
             (0.2, false),
-            LOWER_LEVEL_CONFIRM_FRAMES,
+            SUPER_SPEND_CONFIRM_SAMPLES,
         ));
         let mut features = series(&values);
         clean_super_temporal(&mut features);
@@ -214,7 +218,7 @@ mod tests {
         values.extend(std::iter::repeat_n((0.0, true), 50));
         values.extend(std::iter::repeat_n(
             (0.2, false),
-            LOWER_LEVEL_CONFIRM_FRAMES,
+            SUPER_SPEND_CONFIRM_SAMPLES,
         ));
         let mut features = series(&values);
         clean_super_temporal(&mut features);
@@ -245,7 +249,7 @@ mod tests {
         let mut values = vec![(1.995, false), (3.0, false), (3.0, false)];
         values.extend(std::iter::repeat_n(
             (1.75, false),
-            LOWER_LEVEL_CONFIRM_FRAMES,
+            SUPER_SPEND_CONFIRM_SAMPLES,
         ));
         let mut features = series(&values);
         clean_super_temporal(&mut features);
@@ -260,7 +264,7 @@ mod tests {
         values.extend(std::iter::repeat_n((3.0, false), 10));
         values.extend(std::iter::repeat_n(
             (2.23, false),
-            LOWER_LEVEL_CONFIRM_FRAMES,
+            SUPER_SPEND_CONFIRM_SAMPLES,
         ));
         let mut features = series(&values);
         clean_super_temporal(&mut features);
@@ -274,7 +278,7 @@ mod tests {
         let mut values = vec![(3.0, false)];
         values.extend(std::iter::repeat_n(
             (0.2, false),
-            LOWER_LEVEL_CONFIRM_FRAMES,
+            SUPER_SPEND_CONFIRM_SAMPLES,
         ));
         let high_start = values.len();
         values.extend(std::iter::repeat_n(
@@ -284,7 +288,7 @@ mod tests {
         let low_start = values.len();
         values.extend(std::iter::repeat_n(
             (0.2, false),
-            LOWER_LEVEL_CONFIRM_FRAMES,
+            SUPER_SPEND_CONFIRM_SAMPLES,
         ));
         let mut features = series(&values);
         clean_super_temporal(&mut features);
@@ -302,7 +306,7 @@ mod tests {
         let mut values = vec![(3.0, false)];
         values.extend(std::iter::repeat_n(
             (0.995, false),
-            LOWER_LEVEL_CONFIRM_FRAMES,
+            SUPER_SPEND_CONFIRM_SAMPLES,
         ));
         values.push((3.0, false));
         let mut features = series(&values);

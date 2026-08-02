@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS published_analyses (
   schema_version SMALLINT NOT NULL
     CHECK (schema_version = 1),
   ruleset_version INTEGER NOT NULL
-    CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8)),
+    CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9)),
   presentation_revision SMALLINT NOT NULL
     CHECK (presentation_revision IN (1)),
   own_character TEXT NOT NULL
@@ -57,7 +57,7 @@ ALTER TABLE published_analyses
   DROP CONSTRAINT IF EXISTS published_analyses_ruleset_version_check;
 ALTER TABLE published_analyses
   ADD CONSTRAINT published_analyses_ruleset_version_check
-  CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8));
+  CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9));
 CREATE INDEX IF NOT EXISTS published_analyses_expires_at_idx
   ON published_analyses (expires_at);
 CREATE INDEX IF NOT EXISTS published_analyses_cleanup_idx
@@ -160,6 +160,51 @@ CREATE TABLE IF NOT EXISTS published_analysis_tactics (
   burnout_unknown INTEGER NOT NULL CHECK (burnout_unknown BETWEEN 0 AND 65535)
 );
 GRANT SELECT, INSERT ON published_analysis_tactics TO fighter_app;
+
+-- ruleset v9 から公開する privacy-safe な SA/CA 集計。旧 ruleset の行は
+-- marker を持たず、v9では marker が集計契約の存在を表す。complete / partialな側だけ
+-- NOT NULL count の子行を持つため、unavailable と使用0回を構造で区別する。
+CREATE TABLE IF NOT EXISTS published_analysis_super_arts (
+  analysis_id TEXT PRIMARY KEY
+    REFERENCES published_analyses (id) ON DELETE CASCADE
+);
+GRANT SELECT, INSERT ON published_analysis_super_arts TO fighter_app;
+
+CREATE TABLE IF NOT EXISTS published_analysis_own_super_arts (
+  analysis_id TEXT PRIMARY KEY
+    REFERENCES published_analysis_super_arts (analysis_id) ON DELETE CASCADE,
+  complete BOOLEAN NOT NULL,
+  sa1 INTEGER NOT NULL CHECK (sa1 BETWEEN 0 AND 65535),
+  sa2 INTEGER NOT NULL CHECK (sa2 BETWEEN 0 AND 65535),
+  sa3 INTEGER NOT NULL CHECK (sa3 BETWEEN 0 AND 65535),
+  ca INTEGER NOT NULL CHECK (ca BETWEEN 0 AND 65535),
+  hit INTEGER NOT NULL CHECK (hit BETWEEN 0 AND 65535),
+  block INTEGER NOT NULL CHECK (block BETWEEN 0 AND 65535),
+  no_immediate_contact INTEGER NOT NULL CHECK (no_immediate_contact BETWEEN 0 AND 65535),
+  punished INTEGER NOT NULL CHECK (punished BETWEEN 0 AND 65535),
+  ko INTEGER NOT NULL CHECK (ko BETWEEN 0 AND 65535),
+  combo INTEGER NOT NULL CHECK (combo BETWEEN 0 AND 65535),
+  punish INTEGER NOT NULL CHECK (punish BETWEEN 0 AND 65535),
+  reversal INTEGER NOT NULL CHECK (reversal BETWEEN 0 AND 65535),
+  neutral INTEGER NOT NULL CHECK (neutral BETWEEN 0 AND 65535)
+);
+GRANT SELECT, INSERT ON published_analysis_own_super_arts TO fighter_app;
+
+CREATE TABLE IF NOT EXISTS published_analysis_opponent_super_arts (
+  analysis_id TEXT PRIMARY KEY
+    REFERENCES published_analysis_super_arts (analysis_id) ON DELETE CASCADE,
+  complete BOOLEAN NOT NULL,
+  sa1 INTEGER NOT NULL CHECK (sa1 BETWEEN 0 AND 65535),
+  sa2 INTEGER NOT NULL CHECK (sa2 BETWEEN 0 AND 65535),
+  sa3 INTEGER NOT NULL CHECK (sa3 BETWEEN 0 AND 65535),
+  ca INTEGER NOT NULL CHECK (ca BETWEEN 0 AND 65535),
+  hit INTEGER NOT NULL CHECK (hit BETWEEN 0 AND 65535),
+  block INTEGER NOT NULL CHECK (block BETWEEN 0 AND 65535),
+  no_immediate_contact INTEGER NOT NULL CHECK (no_immediate_contact BETWEEN 0 AND 65535),
+  punished INTEGER NOT NULL CHECK (punished BETWEEN 0 AND 65535),
+  ko INTEGER NOT NULL CHECK (ko BETWEEN 0 AND 65535)
+);
+GRANT SELECT, INSERT ON published_analysis_opponent_super_arts TO fighter_app;
 
 -- Successful creation events are independent from result-row cleanup. This
 -- keeps the UTC daily quota monotonic throughout each day.

@@ -1,6 +1,6 @@
 # 分析結果の共有と保存
 
-最終確認: 2026-07-24
+最終確認: 2026-08-03
 
 ## 基本契約
 
@@ -48,9 +48,18 @@
 | `rounds` | 検出数、勝ち、負け、未確定 |
 | `findings` | 種別、assessment、件数、basis point 化した severity |
 | `tactics` | 対空、DI、raw Drive Rush、dash throw、throw whiff、minus 後の回答、burnout 集計 |
+| `superArts` | ruleset v9 の両者のSA1/2/3/CA使用数と結果、自分側だけの利用文脈。各側にcomplete / partial / unavailableを持つ |
 
 character ID、finding ID、assessment は client、server、database の全境界で allowlist にする。
 未知 ID、重複 finding、非整数、round 数の不整合、上限超過、未知 field は拒否する。
+SA/CAの件数は、全検出ラウンドの各フレームで試合画面かつその側のゲージを信頼して
+観測できた割合が70%以上あり、消費確定に必要な90フレーム内12信頼サンプル、
+最大欠測区間、ラウンド開始・終了フレームの観測条件をすべて満たす側だけ`complete`にする。
+欠落フレーム、非試合画面、不確実な読みはすべて欠測として扱う。単発の信頼フレームや検出済みSAイベントだけでは、
+ほかの使用を見逃していないと保証できないため`complete`にしない。ただし、時間方向に確定したSA/CAを
+1件以上検出できた側は`partial`とし、level、結果、自分側文脈のcountを「確認できた下限」として公開する。
+完全性を満たさず検出も0件の側は`unavailable`だけを公開し、件数0として扱わない。
+`complete`と`partial`は全countを必須にし、`unavailable`へのcount混入を拒否する。
 
 ## 公開しないデータ
 
@@ -61,6 +70,8 @@ character ID、finding ID、assessment は client、server、database の全境�
 - frame number、timestamp、evidence range
 - HP / Drive の frame-by-frame 系列
 - 入力履歴、meter timeline、spatial observation
+- SA/CAの表示damage sample・合計、low-scaling判定用の値、最終gauge量
+- 相手側のSA/CA利用文脈
 - `AdviceReport` の summary、description、practice などの自由文
 - browser の詳細な対戦履歴
 - 削除コードの平文
@@ -110,17 +121,19 @@ PostgreSQL は次の table を持つ。
 | `published_analyses` | ID、version、character、round、削除 hash、logical size、作成・期限 |
 | `published_analysis_findings` | finding の順序、種別、assessment、件数、severity |
 | `published_analysis_tactics` | 戦術統計 |
+| `published_analysis_super_arts` | ruleset v9のSA/CA公開契約が存在することを示すmarker |
+| `published_analysis_own_super_arts` | complete / partialな自分側だけが持つ、完全性flagと全列必須のSA/CA集計 |
+| `published_analysis_opponent_super_arts` | complete / partialな相手側だけが持つ、完全性flagと全列必須のSA/CA集計 |
 | `published_analysis_create_events` | UTC 日次 create quota 用の成功 event |
 | `published_analysis_rate_limits` | bucket別の共有固定窓counter（client keyはdigestのみ） |
 
-finding と tactics は parent 削除時に cascade delete する。create event は結果本体と独立させ、
+finding、tactics、super arts markerとside集計はparent削除時にcascade deleteする。create eventは結果本体と独立させ、
 同じ日に共有を削除しても日次 create 件数が減らないようにする。
 
-schema version は現在1、presentation revision は1。server は既存データ表示のため
-ruleset 3〜8 を受理する。現在のローカル解析が生成する ruleset 9 は、公開用の射影と
-表示契約を更新する [#20](https://github.com/yuniruyuni/fighter-notes/issues/20) の完了まで
-一時的に共有対象外とし、client UI・共有射影・server schema・DB制約の各境界で拒否する。
-この制限はローカルの動画解析と結果表示には影響しない。
+schema version は現在1、presentation revision は1。server はruleset 3〜9を受理し、
+新規解析はruleset 9を生成する。旧rulesetのrowはmarkerを持たず、従来どおりの公開ページを表示する。
+v9はmarkerを必須とし、side集計行が無ければ`unavailable`、行の`complete`がfalseなら`partial`、
+trueなら`complete`として復元する。
 
 ## 削除と期限
 

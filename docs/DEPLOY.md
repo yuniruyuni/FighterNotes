@@ -143,7 +143,8 @@ rollbackはrelease summaryとCloud Run revisionに記録されたapplication / s
 - `/manage` と `/manage/:id` が表示でき、削除コードで共有を削除できる。
 - 削除後と期限切れの `/s/:id` が `404` になり、cache されない。
 
-共有 payload に動画、画像、ファイル名、詳細レポートが含まれないことも Network panel で確認する。
+共有 payload に動画、画像、ファイル名、詳細レポート、frame/input、SA/CAの正確なdamage値と
+最終gauge量が含まれず、ruleset v9ではavailability付き集計だけが含まれることもNetwork panelで確認する。
 
 ## Cleanup
 

@@ -140,6 +140,33 @@ export async function inspectDatabaseReadiness(
         ('published_analysis_tactics', 'burnout_forced', 'integer', true),
         ('published_analysis_tactics', 'burnout_mixed', 'integer', true),
         ('published_analysis_tactics', 'burnout_unknown', 'integer', true),
+        ('published_analysis_super_arts', 'analysis_id', 'text', true),
+        ('published_analysis_own_super_arts', 'analysis_id', 'text', true),
+        ('published_analysis_own_super_arts', 'complete', 'boolean', true),
+        ('published_analysis_own_super_arts', 'sa1', 'integer', true),
+        ('published_analysis_own_super_arts', 'sa2', 'integer', true),
+        ('published_analysis_own_super_arts', 'sa3', 'integer', true),
+        ('published_analysis_own_super_arts', 'ca', 'integer', true),
+        ('published_analysis_own_super_arts', 'hit', 'integer', true),
+        ('published_analysis_own_super_arts', 'block', 'integer', true),
+        ('published_analysis_own_super_arts', 'no_immediate_contact', 'integer', true),
+        ('published_analysis_own_super_arts', 'punished', 'integer', true),
+        ('published_analysis_own_super_arts', 'ko', 'integer', true),
+        ('published_analysis_own_super_arts', 'combo', 'integer', true),
+        ('published_analysis_own_super_arts', 'punish', 'integer', true),
+        ('published_analysis_own_super_arts', 'reversal', 'integer', true),
+        ('published_analysis_own_super_arts', 'neutral', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'analysis_id', 'text', true),
+        ('published_analysis_opponent_super_arts', 'complete', 'boolean', true),
+        ('published_analysis_opponent_super_arts', 'sa1', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'sa2', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'sa3', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'ca', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'hit', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'block', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'no_immediate_contact', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'punished', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'ko', 'integer', true),
         ('published_analysis_create_events', 'analysis_id', 'text', true),
         ('published_analysis_create_events', 'created_at', 'timestamp with time zone', true),
         ('published_analysis_rate_limits', 'bucket', 'text', true),
@@ -178,16 +205,13 @@ export async function inspectDatabaseReadiness(
         ON attribute.attrelid = default_value.adrelid
         AND attribute.attnum = default_value.adnum
       WHERE namespace.nspname = 'public'
-    ), allowed_ruleset_constraints(definition) AS (
-      VALUES
-        ('CHECK (ruleset_version = ANY (ARRAY[3, 4, 5, 6, 7, 8]))'),
-        ('CHECK (ruleset_version = ANY (ARRAY[3, 4, 5, 6, 7, 8, 9]))')
     ), required_constraints(
       table_name, constraint_name, constraint_type, definition
     ) AS (
       VALUES
         ('published_analyses', 'published_analyses_pkey', 'p', 'PRIMARY KEY (id)'),
         ('published_analyses', 'published_analyses_schema_version_check', 'c', ${expectedSchemaConstraint}),
+        ('published_analyses', 'published_analyses_ruleset_version_check', 'c', 'CHECK (ruleset_version = ANY (ARRAY[3, 4, 5, 6, 7, 8, 9]))'),
         ('published_analyses', 'published_analyses_presentation_revision_check', 'c', 'CHECK (presentation_revision = 1)'),
         ('published_analyses', 'published_analyses_logical_size_bytes_check', 'c', 'CHECK (logical_size_bytes >= 1 AND logical_size_bytes <= 8192)'),
         ('published_analyses', 'published_analyses_check1', 'c', 'CHECK (expires_at > created_at)'),
@@ -196,6 +220,12 @@ export async function inspectDatabaseReadiness(
         ('published_analysis_findings', 'published_analysis_findings_analysis_id_fkey', 'f', 'FOREIGN KEY (analysis_id) REFERENCES published_analyses(id) ON DELETE CASCADE'),
         ('published_analysis_tactics', 'published_analysis_tactics_pkey', 'p', 'PRIMARY KEY (analysis_id)'),
         ('published_analysis_tactics', 'published_analysis_tactics_analysis_id_fkey', 'f', 'FOREIGN KEY (analysis_id) REFERENCES published_analyses(id) ON DELETE CASCADE'),
+        ('published_analysis_super_arts', 'published_analysis_super_arts_pkey', 'p', 'PRIMARY KEY (analysis_id)'),
+        ('published_analysis_super_arts', 'published_analysis_super_arts_analysis_id_fkey', 'f', 'FOREIGN KEY (analysis_id) REFERENCES published_analyses(id) ON DELETE CASCADE'),
+        ('published_analysis_own_super_arts', 'published_analysis_own_super_arts_pkey', 'p', 'PRIMARY KEY (analysis_id)'),
+        ('published_analysis_own_super_arts', 'published_analysis_own_super_arts_analysis_id_fkey', 'f', 'FOREIGN KEY (analysis_id) REFERENCES published_analysis_super_arts(analysis_id) ON DELETE CASCADE'),
+        ('published_analysis_opponent_super_arts', 'published_analysis_opponent_super_arts_pkey', 'p', 'PRIMARY KEY (analysis_id)'),
+        ('published_analysis_opponent_super_arts', 'published_analysis_opponent_super_arts_analysis_id_fkey', 'f', 'FOREIGN KEY (analysis_id) REFERENCES published_analysis_super_arts(analysis_id) ON DELETE CASCADE'),
         ('published_analysis_create_events', 'published_analysis_create_events_pkey', 'p', 'PRIMARY KEY (analysis_id)'),
         ('published_analysis_rate_limits', 'published_analysis_rate_limits_pkey', 'p', 'PRIMARY KEY (bucket, client_key_hash)'),
         ('published_analysis_rate_limits', 'published_analysis_rate_limits_bucket_check', 'c', 'CHECK (bucket = ANY (ARRAY[''create''::text, ''delete''::text, ''public_read''::text]))'),
@@ -275,14 +305,6 @@ export async function inspectDatabaseReadiness(
         EXCEPT
         SELECT * FROM present_constraints
       )
-      AND EXISTS (
-        SELECT 1
-        FROM present_constraints
-        INNER JOIN allowed_ruleset_constraints USING (definition)
-        WHERE table_name = 'published_analyses'
-          AND constraint_name = 'published_analyses_ruleset_version_check'
-          AND constraint_type = 'c'
-      )
       AND NOT EXISTS (
         SELECT * FROM required_indexes
         EXCEPT
@@ -305,6 +327,24 @@ export async function inspectDatabaseReadiness(
       )
       AND has_table_privilege(
         current_user, 'public.published_analysis_tactics', 'INSERT'
+      )
+      AND has_table_privilege(
+        current_user, 'public.published_analysis_super_arts', 'SELECT'
+      )
+      AND has_table_privilege(
+        current_user, 'public.published_analysis_super_arts', 'INSERT'
+      )
+      AND has_table_privilege(
+        current_user, 'public.published_analysis_own_super_arts', 'SELECT'
+      )
+      AND has_table_privilege(
+        current_user, 'public.published_analysis_own_super_arts', 'INSERT'
+      )
+      AND has_table_privilege(
+        current_user, 'public.published_analysis_opponent_super_arts', 'SELECT'
+      )
+      AND has_table_privilege(
+        current_user, 'public.published_analysis_opponent_super_arts', 'INSERT'
       )
       AND has_table_privilege(
         current_user, 'public.published_analysis_create_events', 'SELECT'

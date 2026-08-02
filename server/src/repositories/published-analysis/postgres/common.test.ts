@@ -7,6 +7,7 @@ import { createPublishedAnalysisContent } from "../../../models/published-analys
 import {
   candidate,
   persistableAnalysis,
+  v9Candidate,
 } from "../../test-support/published-analysis";
 import {
   type AnalysisRow,
@@ -25,6 +26,93 @@ describe("hydratePublishedAnalysis", () => {
       createdAt: persisted.createdAt,
       expiresAt: persisted.expiresAt,
     });
+  });
+
+  test("ruleset v9の両者SA/CA集計とavailabilityを復元する", () => {
+    const content = validContent(v9Candidate());
+    const { row, findings } = storageRows(content);
+
+    expect(hydratePublishedAnalysis(row, findings)?.content.superArts).toEqual(
+      content.superArts,
+    );
+    expect(
+      hydratePublishedAnalysis(
+        {
+          ...row,
+          super_art_analysis_id: null,
+          own_super_art_analysis_id: null,
+          opponent_super_art_analysis_id: null,
+        },
+        findings,
+      ),
+    ).toBeNull();
+  });
+
+  test("ruleset v9のmarker有・side行なしを集計不能として復元する", () => {
+    const input = v9Candidate();
+    input.superArts = {
+      own: { availability: "unavailable" },
+      opponent: { availability: "unavailable" },
+    };
+    const content = validContent(input);
+    const { row, findings } = storageRows(content);
+
+    expect(row.super_art_analysis_id).not.toBeNull();
+    expect(row.own_super_art_analysis_id).toBeNull();
+    expect(row.opponent_super_art_analysis_id).toBeNull();
+    expect(hydratePublishedAnalysis(row, findings)?.content.superArts).toEqual(
+      content.superArts,
+    );
+  });
+
+  test("ruleset v9のcomplete=false side行をpartialとして復元する", () => {
+    const input = v9Candidate();
+    const observed = input.superArts;
+    if (!observed || observed.own.availability === "unavailable") {
+      throw new Error("fixture is invalid");
+    }
+    input.superArts = {
+      own: { ...observed.own, availability: "partial" },
+      opponent: { availability: "unavailable" },
+    };
+    const content = validContent(input);
+    const { row, findings } = storageRows(content);
+
+    expect(row.own_super_art_complete).toBe(false);
+    expect(hydratePublishedAnalysis(row, findings)?.content.superArts).toEqual(
+      content.superArts,
+    );
+  });
+
+  test("complete=falseなのに検出済み使用が0件のdrift rowをfail closedする", () => {
+    const content = validContent(v9Candidate());
+    const { row, findings } = storageRows(content);
+
+    expect(
+      hydratePublishedAnalysis(
+        {
+          ...row,
+          own_super_art_complete: false,
+          own_sa1: 0,
+          own_sa2: 0,
+          own_sa3: 0,
+          own_ca: 0,
+        },
+        findings,
+      ),
+    ).toBeNull();
+  });
+
+  test("ruleset v8 rowにSA/CA markerが混入した場合はfail closedする", () => {
+    const legacy = candidate();
+    legacy.rulesetVersion = 8;
+    const { row, findings } = storageRows(validContent(legacy));
+    expect(
+      hydratePublishedAnalysis(
+        { ...row, super_art_analysis_id: row.id },
+        findings,
+      ),
+    ).toBeNull();
   });
 
   test("schema versionが異なる行を拒否する", () => {
@@ -92,6 +180,11 @@ function storageRows(content: PublishedAnalysisContent): {
 } {
   const persisted = persistableAnalysis();
   const { tactics } = content;
+  const own = content.superArts?.own;
+  const opponent = content.superArts?.opponent;
+  const ownObserved = own !== undefined && own.availability !== "unavailable";
+  const opponentObserved =
+    opponent !== undefined && opponent.availability !== "unavailable";
   return {
     row: {
       id: persisted.id as ShareId,
@@ -135,6 +228,44 @@ function storageRows(content: PublishedAnalysisContent): {
       burnout_forced: tactics.burnout.forced,
       burnout_mixed: tactics.burnout.mixed,
       burnout_unknown: tactics.burnout.unknown,
+      super_art_analysis_id:
+        content.superArts === undefined ? null : (persisted.id as ShareId),
+      own_super_art_analysis_id: ownObserved ? (persisted.id as ShareId) : null,
+      opponent_super_art_analysis_id: opponentObserved
+        ? (persisted.id as ShareId)
+        : null,
+      own_super_art_complete: ownObserved
+        ? own.availability === "complete"
+        : null,
+      opponent_super_art_complete: opponentObserved
+        ? opponent.availability === "complete"
+        : null,
+      own_sa1: ownObserved ? own.levels.sa1 : null,
+      own_sa2: ownObserved ? own.levels.sa2 : null,
+      own_sa3: ownObserved ? own.levels.sa3 : null,
+      own_ca: ownObserved ? own.levels.ca : null,
+      own_hit: ownObserved ? own.outcomes.hit : null,
+      own_block: ownObserved ? own.outcomes.block : null,
+      own_no_immediate_contact: ownObserved
+        ? own.outcomes.noImmediateContact
+        : null,
+      own_punished: ownObserved ? own.outcomes.punished : null,
+      own_ko: ownObserved ? own.outcomes.ko : null,
+      own_combo: ownObserved ? own.contexts.combo : null,
+      own_punish: ownObserved ? own.contexts.punish : null,
+      own_reversal: ownObserved ? own.contexts.reversal : null,
+      own_neutral: ownObserved ? own.contexts.neutral : null,
+      opponent_sa1: opponentObserved ? opponent.levels.sa1 : null,
+      opponent_sa2: opponentObserved ? opponent.levels.sa2 : null,
+      opponent_sa3: opponentObserved ? opponent.levels.sa3 : null,
+      opponent_ca: opponentObserved ? opponent.levels.ca : null,
+      opponent_hit: opponentObserved ? opponent.outcomes.hit : null,
+      opponent_block: opponentObserved ? opponent.outcomes.block : null,
+      opponent_no_immediate_contact: opponentObserved
+        ? opponent.outcomes.noImmediateContact
+        : null,
+      opponent_punished: opponentObserved ? opponent.outcomes.punished : null,
+      opponent_ko: opponentObserved ? opponent.outcomes.ko : null,
     },
     findings: content.findings.map((finding) => ({
       kind: finding.kind,

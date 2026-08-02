@@ -197,6 +197,12 @@ describe("React frontend routes", () => {
       screen.getByText(/「共有URLを生成」を選んだ場合に限り/),
     ).toBeInTheDocument();
     expect(
+      screen.getByText(/両者のSA\/CAレベル別使用回数と結果/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/正確なダメージ値および最終ゲージ量/),
+    ).toBeInTheDocument();
+    expect(
       screen.getByText(/動画本体や動画ファイル名は履歴に保存されません/),
     ).toBeInTheDocument();
     expect(

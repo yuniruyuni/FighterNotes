@@ -12,6 +12,7 @@ import { createDbReadCtx, createDbWriteCtx } from "../../common/capability";
 import {
   candidate,
   persistableAnalysis,
+  v9Candidate,
 } from "../../test-support/published-analysis";
 import { PublishedAnalysisRepository } from ".";
 
@@ -38,6 +39,48 @@ export function registerPublishedAnalysisRepositoryIntegrationTests(
         expiresAt: persisted.expiresAt,
       };
       expect(restored).toEqual(expected);
+    });
+
+    test("ruleset v9のSA/CA availabilityと両者集計を復元する", async () => {
+      const persisted = persistableAnalysis({
+        id: "Cbcdefghijklmnopqrstu_" as ShareId,
+        rulesetVersion: 9,
+      });
+      await repository.create(createDbWriteCtx(database()), persisted);
+
+      const restored = await repository.get(
+        createDbReadCtx(database()),
+        PublishedAnalysisSpec.ById(persisted.id),
+      );
+      expect(restored?.content.superArts).toEqual(persisted.content.superArts);
+    });
+
+    test("ruleset v9のpartialをcomplete=false side行から復元する", async () => {
+      const input = v9Candidate();
+      const observed = input.superArts;
+      if (!observed || observed.own.availability === "unavailable") {
+        throw new Error("fixture is invalid");
+      }
+      input.superArts = {
+        own: { ...observed.own, availability: "partial" },
+        opponent: { availability: "unavailable" },
+      };
+      const content = createPublishedAnalysisContent(input);
+      if (!content.ok) throw new Error("fixture is invalid");
+      const persisted = {
+        ...persistableAnalysis({
+          id: "Dbcdefghijklmnopqrstu_" as ShareId,
+          rulesetVersion: 9,
+        }),
+        content: content.value,
+      };
+      await repository.create(createDbWriteCtx(database()), persisted);
+
+      const restored = await repository.get(
+        createDbReadCtx(database()),
+        PublishedAnalysisSpec.ById(persisted.id),
+      );
+      expect(restored?.content.superArts).toEqual(content.value.superArts);
     });
 
     test("期限境界では作成済みモデルを返さない", async () => {

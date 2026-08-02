@@ -26,6 +26,7 @@ function analysis(
     { kind: "anti_air", occurrences: 2, severityBp: 1200 },
     { kind: "big_hits", occurrences: 1, severityBp: 2500 },
   ],
+  superArts?: unknown,
 ) {
   const content = createPublishedAnalysisContent({
     rulesetVersion,
@@ -65,6 +66,7 @@ function analysis(
         unknown: 0,
       },
     },
+    ...(superArts === undefined ? {} : { superArts }),
   });
   if (!content.ok) throw new Error("invalid fixture");
   return createPersistablePublishedAnalysis({
@@ -218,6 +220,7 @@ describe("published analysis presentation", () => {
     expect(rendered).toContain("hashtags=FighterNotes");
     expect(rendered).toContain("Xに投稿");
     expect(rendered).toContain("動画データは含まれていません");
+    expect(rendered).toContain("正確なダメージ値と最終ゲージ量");
     expect(rendered).toContain(
       "解析結果は映像からの推定です。正確な記録ではなく、見直しのための参考情報としてご利用ください。",
     );
@@ -243,6 +246,120 @@ describe("published analysis presentation", () => {
     expect(rendered).not.toContain("© 2026 yuniruyuni");
     expect(rendered).not.toContain("<script");
     expect(rendered).not.toContain("frame");
+    expect(rendered).not.toContain("SA / CA 集計");
+  });
+
+  test("ruleset v9は両者のSA/CA集計を表示し、集計不能を0回と表示しない", () => {
+    const value = analysis(9, [], {
+      own: {
+        availability: "complete",
+        levels: { sa1: 1, sa2: 2, sa3: 0, ca: 1 },
+        outcomes: {
+          hit: 2,
+          block: 1,
+          noImmediateContact: 1,
+          punished: 1,
+          ko: 1,
+        },
+        contexts: { combo: 2, punish: 1, reversal: 0, neutral: 1 },
+      },
+      opponent: { availability: "unavailable" },
+    });
+    const rendered = renderPublishedAnalysisPage(value, {
+      canonical: new URL(`https://fighter.example/s/${value.id}`),
+      home: new URL("https://fighter.example/"),
+      image: new URL("https://fighter.example/images/ogp.jpg"),
+    }).toString();
+
+    expect(rendered).toContain("SA / CA 集計");
+    expect(rendered).toContain("自分のSA / CA使用");
+    expect(rendered).toContain("SA1 1・SA2 2・SA3 0・CA 1");
+    expect(rendered).toContain("ガード 1・即時接触なし 1");
+    expect(rendered).toContain("確定反撃 1・切り返し 0・ニュートラル 1");
+    expect(rendered).toContain("相手のSA / CA");
+    expect(rendered).toContain("集計不可");
+    expect(rendered).toContain("0回とは扱いません");
+    expect(rendered).not.toContain("2500");
+    expect(rendered).not.toContain("最終ゲージ 0");
+  });
+
+  test("partialなSA/CA集計は全行を確認済み下限として表示する", () => {
+    const value = analysis(9, [], {
+      own: {
+        availability: "partial",
+        levels: { sa1: 1, sa2: 0, sa3: 0, ca: 0 },
+        outcomes: {
+          hit: 1,
+          block: 0,
+          noImmediateContact: 0,
+          punished: 0,
+          ko: 0,
+        },
+        contexts: { combo: 1, punish: 0, reversal: 0, neutral: 0 },
+      },
+      opponent: {
+        availability: "partial",
+        levels: { sa1: 0, sa2: 0, sa3: 1, ca: 0 },
+        outcomes: {
+          hit: 0,
+          block: 1,
+          noImmediateContact: 0,
+          punished: 0,
+          ko: 0,
+        },
+      },
+    });
+    const view = PublishedAnalysisPageView.from(value, {
+      canonical: new URL(`https://fighter.example/s/${value.id}`),
+      home: new URL("https://fighter.example/"),
+      image: new URL("https://fighter.example/images/ogp.jpg"),
+    });
+
+    expect(view.superArts).toHaveLength(5);
+    for (const row of view.superArts ?? []) {
+      expect(row.label).toContain("（下限）");
+      expect(`${row.value} ${row.detail}`).toMatch(/以上|確認できた範囲|下限/);
+      expect(row.value).not.toMatch(/^\d+回$/);
+      expect(row.value).not.toMatch(/^ヒット \d+回$/);
+      expect(row.value).not.toMatch(/^コンボ \d+回$/);
+    }
+    expect(view.superArts?.[0]).toMatchObject({
+      value: "1回以上",
+      detail: expect.stringContaining("各値は下限"),
+    });
+    expect(view.superArts?.[3]).toMatchObject({
+      value: "1回以上",
+      detail: expect.stringContaining("確認できた範囲"),
+    });
+  });
+
+  test("completeなSA/CA集計だけは0回を確定表示できる", () => {
+    const value = analysis(9, [], {
+      own: {
+        availability: "complete",
+        levels: { sa1: 0, sa2: 0, sa3: 0, ca: 0 },
+        outcomes: {
+          hit: 0,
+          block: 0,
+          noImmediateContact: 0,
+          punished: 0,
+          ko: 0,
+        },
+        contexts: { combo: 0, punish: 0, reversal: 0, neutral: 0 },
+      },
+      opponent: { availability: "unavailable" },
+    });
+    const view = PublishedAnalysisPageView.from(value, {
+      canonical: new URL(`https://fighter.example/s/${value.id}`),
+      home: new URL("https://fighter.example/"),
+      image: new URL("https://fighter.example/images/ogp.jpg"),
+    });
+
+    expect(view.superArts?.[0]).toMatchObject({
+      value: "0回",
+      label: "自分のSA / CA使用",
+    });
+    expect(view.superArts?.[0]?.detail).not.toContain("下限");
   });
 
   test("表示モデルがURL・日付・戦術指標をHTMLから独立して組み立てる", () => {

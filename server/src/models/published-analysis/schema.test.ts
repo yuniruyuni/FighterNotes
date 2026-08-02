@@ -74,7 +74,7 @@ function issues(value: unknown) {
 
 describe("publishedAnalysisCandidateSchema refinements", () => {
   test("support外rulesetのfieldと理由を返す", () => {
-    for (const rulesetVersion of [9, 999]) {
+    for (const rulesetVersion of [2, 10, 999]) {
       expect(issues({ ...candidate(), rulesetVersion })).toEqual([
         {
           code: "custom",
@@ -138,5 +138,172 @@ describe("publishedAnalysisCandidateSchema refinements", () => {
     expect(publishedAnalysisCandidateSchema.safeParse(value).success).toBe(
       true,
     );
+  });
+
+  test("ruleset v9だけにSA/CA集計を必須化し、旧rulesetの形を維持する", () => {
+    for (const rulesetVersion of [3, 4, 5, 6, 7, 8]) {
+      expect(
+        publishedAnalysisCandidateSchema.safeParse({
+          ...candidate(),
+          rulesetVersion,
+        }).success,
+      ).toBe(true);
+    }
+
+    const value = candidate();
+    value.rulesetVersion = 9;
+    expect(issues(value)).toEqual([
+      {
+        code: "custom",
+        path: ["superArts"],
+        message: "super art aggregates are required for ruleset v9 and later",
+      },
+    ]);
+
+    const aggregate = {
+      own: { availability: "unavailable" as const },
+      opponent: { availability: "unavailable" as const },
+    };
+    expect(
+      publishedAnalysisCandidateSchema.safeParse({
+        ...value,
+        superArts: aggregate,
+      }).success,
+    ).toBe(true);
+    expect(
+      publishedAnalysisCandidateSchema.safeParse({
+        ...value,
+        superArts: {
+          own: {
+            availability: "partial",
+            levels: { sa1: 1, sa2: 0, sa3: 0, ca: 0 },
+            outcomes: {
+              hit: 1,
+              block: 0,
+              noImmediateContact: 0,
+              punished: 0,
+              ko: 0,
+            },
+            contexts: { combo: 1, punish: 0, reversal: 0, neutral: 0 },
+          },
+          opponent: { availability: "unavailable" },
+        },
+      }).success,
+    ).toBe(true);
+    expect(issues({ ...candidate(), superArts: aggregate })).toContainEqual({
+      code: "custom",
+      path: ["superArts"],
+      message: "super art aggregates are not valid before ruleset v9",
+    });
+  });
+
+  test("unavailableに0値を付けず、completeは全集計を必須にする", () => {
+    const value = {
+      ...candidate(),
+      rulesetVersion: 9,
+      superArts: {
+        own: { availability: "unavailable", levels: { sa1: 0 } },
+        opponent: { availability: "complete" },
+      },
+    };
+    const paths = issues(value).map((issue) => issue.path.join("."));
+    expect(paths).toContain("superArts.own");
+    expect(paths).toContain("superArts.opponent.levels");
+    expect(paths).toContain("superArts.opponent.outcomes");
+  });
+
+  test("completeは0回を受理し、partialは検出済み使用を必須にする", () => {
+    const zeroLevels = { sa1: 0, sa2: 0, sa3: 0, ca: 0 };
+    const zeroOutcomes = {
+      hit: 0,
+      block: 0,
+      noImmediateContact: 0,
+      punished: 0,
+      ko: 0,
+    };
+    const zeroContexts = { combo: 0, punish: 0, reversal: 0, neutral: 0 };
+    const base = { ...candidate(), rulesetVersion: 9 };
+
+    expect(
+      publishedAnalysisCandidateSchema.safeParse({
+        ...base,
+        superArts: {
+          own: {
+            availability: "complete",
+            levels: zeroLevels,
+            outcomes: zeroOutcomes,
+            contexts: zeroContexts,
+          },
+          opponent: {
+            availability: "complete",
+            levels: zeroLevels,
+            outcomes: zeroOutcomes,
+          },
+        },
+      }).success,
+    ).toBe(true);
+
+    expect(
+      issues({
+        ...base,
+        superArts: {
+          own: {
+            availability: "partial",
+            levels: zeroLevels,
+            outcomes: zeroOutcomes,
+            contexts: zeroContexts,
+          },
+          opponent: {
+            availability: "partial",
+            levels: zeroLevels,
+            outcomes: zeroOutcomes,
+          },
+        },
+      }),
+    ).toEqual([
+      {
+        code: "custom",
+        path: ["superArts", "own", "levels"],
+        message: "partial super art aggregates require an observed use",
+      },
+      {
+        code: "custom",
+        path: ["superArts", "opponent", "levels"],
+        message: "partial super art aggregates require an observed use",
+      },
+    ]);
+  });
+
+  test("v9 aggregate内のdamage・gauge・frame・入力・自由文をstrictに拒否する", () => {
+    const aggregate = {
+      own: {
+        availability: "complete",
+        levels: { sa1: 1, sa2: 0, sa3: 0, ca: 0 },
+        outcomes: {
+          hit: 1,
+          block: 0,
+          noImmediateContact: 0,
+          punished: 0,
+          ko: 0,
+        },
+        contexts: { combo: 1, punish: 0, reversal: 0, neutral: 0 },
+        super_damage_samples: 1,
+        super_reported_combo_damage: 2500,
+        super_reported_marginal_damage: 1000,
+        super_low_scaling_uses: 1,
+        super_gauge_end: 1.5,
+        opponent_super_gauge_end: 2,
+        frame: 120,
+        input: "236236P",
+        note: "free text",
+      },
+      opponent: { availability: "unavailable" },
+    };
+    const paths = issues({
+      ...candidate(),
+      rulesetVersion: 9,
+      superArts: aggregate,
+    }).map((issue) => issue.path.join("."));
+    expect(paths).toContain("superArts.own");
   });
 });
