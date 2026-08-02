@@ -29,6 +29,7 @@ const expectedAnalyzerMethods = [
   "get_features_json(): string;",
   "get_attack_info_json(): string;",
   "get_fight_markers_json(): string;",
+  "get_regression_events_json(): string;",
   "get_spatial_windows_json(): string;",
   "get_timeline(): string;",
   "get_tracked_inputs(): string;",

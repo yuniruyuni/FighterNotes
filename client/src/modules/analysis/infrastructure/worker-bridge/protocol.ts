@@ -42,6 +42,7 @@ export interface AnalyzerWorkerDone {
   readonly trackedInputs?: string;
   readonly fightMarkers?: string;
   readonly attackInfo?: string;
+  readonly regressionEvents: string;
   readonly debugHp?: unknown[];
   readonly spatialObservations?: string;
 }

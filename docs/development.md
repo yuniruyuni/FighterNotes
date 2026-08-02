@@ -211,14 +211,44 @@ bun run build
 bun run local:e2e
 ```
 
-各caseのreport、timeline、HP、入力、空間解析結果と所要時間は
+`expect.semanticEvents`では、次の検出結果をstableなannotation IDと許容frame範囲で照合できる。
+
+- `fight`: 巨大なFIGHT表示のpeak frame
+- `round`: ラウンド開始・終了・勝者
+- `damage`: 被弾側、round、HP減少、中央表示damage・始動属性
+- `super`: 使用側、SA level、CA、round、damage
+- `attackInfo`: 中央表示から直接復元した攻撃列（未帰属も含む）
+- `attackInfoAttribution`: 中央表示をHP被弾へ帰属できた攻撃列
+- `adviceEvidence`: card IDと利用者へ提示するevidence frame
+
+`detectorGates`でdetectorごとのfalse positive / false negative、precision / recall、平均frame誤差を
+制限する。一部のeventだけをannotationする場合は、未annotationの実検出数を考慮して
+`maxFalsePositives`を設定する。全件annotationしたfixtureでは0にする。実動画から原因を切り出して
+合成testへ移植したannotationには`syntheticTest`へtest pathまたはtest名を記録する。未設定のIDは
+summaryの`syntheticCoverage.pendingIds`へ残る。
+
+各caseのreport、timeline、HP、入力、semantic event、空間解析結果、detector metrics、所要時間は
 `output/local-video-e2e/current/`へ出力される。期待値違反があればcommandは失敗する。
-実行環境を固定した速度比較では、変更前の出力directoryを残して`--baseline`で指定する。
+通常の精度確認は1回で実行できる。`performance.measuredRuns`と`warmupRuns`、または
+`--runs`と`--warmup-runs`で統計計測回数を指定できる。
+
+実行環境を固定した速度・精度比較では、変更前の出力directoryを残して`--baseline`で指定する。
+baseline比較はwarm-up後に最低3回を測り、総時間の中央値/p90とfirst pass、spatial pass、
+frame切り出し、Worker copy、meter WASM、HUD WASMの中央値を閾値判定する。閾値超過は非0終了になる。
+baseline側も1回以上のwarm-upと3回以上の計測で生成されていなければ比較を拒否する。
+動画内容のSHA-256、side・character設定、annotation・期待値の正規化hash、runner version、
+計測回数もbaseline contractへ保存する。動画・設定・期待値を削除または変更した比較は失敗する。
+baseline比較を行うcaseには、1件以上の`semanticEvents`と`detectorGates`が必要になる。
 
 ```bash
 mv output/local-video-e2e/current output/local-video-e2e/baseline
 bun run local:e2e -- --baseline output/local-video-e2e/baseline
 ```
+
+baseline指定時はreport、timeline、HP、入力、FIGHT、中央攻撃情報、semantic event、空間解析結果も
+構造比較する。差分はJSON path単位で表示され、速度が改善していても解析結果が変われば失敗する。
+意図した精度変更はdiffと実動画を確認した後にだけ、current directoryを新しいbaselineとして昇格する。
+これによりhash変更だけを黙って受け入れない。
 
 自動起動できないbrowserを使う場合は、専用profileとremote debugging portで起動し
 `--cdp http://127.0.0.1:9222`を渡す。browserが別OSから動画を読む場合だけ、manifestの

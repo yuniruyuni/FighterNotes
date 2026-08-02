@@ -34,6 +34,7 @@ describe("buildAnalysisResult", () => {
         type: "done",
         report: JSON.stringify({ ruleset_version: 1 }),
         timeline: JSON.stringify({ entries: [] }),
+        regressionEvents: "{}",
         trackedInputs: JSON.stringify({ p1: [], p2: [] }),
         attackInfo: JSON.stringify([
           {
@@ -84,6 +85,7 @@ describe("buildAnalysisResult", () => {
         report: "{}",
         timeline: "{}",
         features: "",
+        regressionEvents: "{}",
       },
       {
         analysisContext: context,

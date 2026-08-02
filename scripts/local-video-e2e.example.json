@@ -1,5 +1,12 @@
 {
   "schemaVersion": 1,
+  "performance": {
+    "measuredRuns": 3,
+    "warmupRuns": 1,
+    "maxMedianRegressionRatio": 1.1,
+    "maxP90RegressionRatio": 1.15,
+    "maxStageMedianRegressionRatio": 1.15
+  },
   "cases": [
     {
       "id": "sample-ken-vs-juri",
@@ -21,6 +28,82 @@
         },
         "coverageRatio": {
           "min": 0.8
+        },
+        "semanticEvents": [
+          {
+            "id": "round-1-fight",
+            "detector": "fight",
+            "frame": {
+              "min": 950,
+              "max": 990
+            },
+            "roundNo": 1,
+            "syntheticTest": "crates/video-analyzer/tests/pipeline_contract/multi_round.rs"
+          },
+          {
+            "id": "round-1-damage-1",
+            "detector": "damage",
+            "frame": {
+              "min": 1758,
+              "max": 1776
+            },
+            "side": "p2",
+            "roundNo": 1,
+            "hpDrop": {
+              "min": 0.23,
+              "max": 0.25
+            },
+            "reportedDamage": {
+              "min": 2350,
+              "max": 2450
+            },
+            "attribute": "lower"
+          },
+          {
+            "id": "round-3-sa3",
+            "detector": "super",
+            "frame": {
+              "min": 8400,
+              "max": 8460
+            },
+            "side": "p2",
+            "roundNo": 3,
+            "superLevel": 3,
+            "criticalArt": false
+          },
+          {
+            "id": "big-hit-card-evidence",
+            "detector": "adviceEvidence",
+            "frame": {
+              "min": 1758,
+              "max": 1776
+            },
+            "cardId": "big_hits"
+          }
+        ],
+        "detectorGates": {
+          "fight": {
+            "maxFalsePositives": 2,
+            "maxFalseNegatives": 0,
+            "minRecall": 1,
+            "maxMeanFrameError": 20
+          },
+          "damage": {
+            "maxFalsePositives": 20,
+            "maxFalseNegatives": 0,
+            "minRecall": 1,
+            "maxMeanFrameError": 12
+          },
+          "super": {
+            "maxFalsePositives": 4,
+            "maxFalseNegatives": 0,
+            "minRecall": 1,
+            "maxMeanFrameError": 30
+          },
+          "adviceEvidence": {
+            "maxFalseNegatives": 0,
+            "minRecall": 1
+          }
         }
       }
     }

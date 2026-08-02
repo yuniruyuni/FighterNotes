@@ -11,15 +11,53 @@ import {
   sep,
 } from "node:path";
 import {
-  compareTimings,
+  compareDetectorMetrics,
+  comparePerformance,
+  type DetectorId,
+  type DetectorMetrics,
+  diffSemanticValues,
   evaluateExpectations,
+  evaluateRegressionEvents,
   type LocalVideoCase,
+  type LocalVideoPerformancePolicy,
   parseLocalVideoManifest,
+  semanticSnapshot,
+  summarizeTimings,
+  type TimingSummary,
 } from "./local-video-e2e-lib";
 
 const DEFAULT_MANIFEST = "video/local-video-e2e.json";
 const DEFAULT_OUTPUT = "output/local-video-e2e/current";
 const DEFAULT_TIMEOUT_SECONDS = 600;
+const RUNNER_VERSION = 2;
+const REQUIRED_PERFORMANCE_STAGES = [
+  "firstPass",
+  "spatialPass",
+  "frameExtraction",
+  "workerCopy",
+  "meterWasm",
+  "hudWasm",
+] as const;
+const DETECTOR_IDS: readonly DetectorId[] = [
+  "round",
+  "fight",
+  "damage",
+  "super",
+  "attackInfo",
+  "attackInfoAttribution",
+  "adviceEvidence",
+];
+const CAPTURE_HASH_FIELDS = [
+  "report",
+  "timeline",
+  "features",
+  "trackedInputs",
+  "fightMarkers",
+  "attackInfo",
+  "regressionEvents",
+  "spatialWindows",
+  "spatialObservations",
+] as const;
 
 interface CliOptions {
   readonly manifestPath: string;
@@ -28,6 +66,8 @@ interface CliOptions {
   readonly cdpUrl?: string;
   readonly browserExecutable?: string;
   readonly headed: boolean;
+  readonly measuredRuns?: number;
+  readonly warmupRuns?: number;
 }
 
 interface BrowserHandle {
@@ -47,25 +87,54 @@ interface CapturedWorkerArtifacts {
   readonly trackedInputs?: string;
   readonly fightMarkers?: string;
   readonly attackInfo?: string;
+  readonly regressionEvents: string;
   readonly spatialWindows?: string;
   readonly spatialObservations?: string;
   readonly perfLogs?: string[];
+  readonly stageTimings?: Readonly<Record<string, number>>;
   readonly analysisMs: number;
 }
 
 interface CaseSummary {
   readonly id: string;
   readonly videoName: string;
+  readonly fixtureFingerprint: string;
+  readonly settings: FixtureSettings;
+  readonly expectationHash: string;
   readonly analysisMs: number;
+  readonly performance: TimingSummary;
+  readonly detectorMetrics: Partial<
+    Readonly<Record<DetectorId, DetectorMetrics>>
+  >;
+  readonly syntheticCoverage: {
+    readonly ported: number;
+    readonly pending: number;
+    readonly pendingIds: readonly string[];
+  };
   readonly assertionsPassed: boolean;
   readonly assertionFailures: readonly string[];
   readonly hashes: Readonly<Record<string, string>>;
+  readonly semanticHash: string;
+}
+
+interface FixtureSettings {
+  readonly side: "p1" | "p2";
+  readonly ownCharacter: string;
+  readonly opponentCharacter: string;
 }
 
 interface RunSummary {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 2;
+  readonly runnerVersion: number;
+  readonly warmupRuns: number;
+  readonly measuredRuns: number;
   readonly generatedAt: string;
   readonly cases: readonly CaseSummary[];
+}
+
+interface BaselineData {
+  readonly directory: string;
+  readonly summary: RunSummary;
 }
 
 const options = parseArgs(Bun.argv.slice(2));
@@ -83,10 +152,46 @@ if (!existsSync(join(staticRoot, "index.html"))) {
 const manifest = parseLocalVideoManifest(
   JSON.parse(await readFile(manifestPath, "utf8")),
 );
+const performancePolicy = manifest.performance ?? {};
+const measuredRuns =
+  options.measuredRuns ??
+  performancePolicy.measuredRuns ??
+  (options.baselineDir ? 3 : 1);
+const warmupRuns =
+  options.warmupRuns ??
+  performancePolicy.warmupRuns ??
+  (options.baselineDir ? 1 : 0);
+if (options.baselineDir && measuredRuns < 3) {
+  throw new Error(
+    "baseline performance comparison requires at least 3 measured runs",
+  );
+}
+if (options.baselineDir && warmupRuns < 1) {
+  throw new Error("baseline comparison requires at least 1 warm-up run");
+}
+const baseline = await loadBaseline(
+  options.baselineDir,
+  projectRoot,
+  outputDir,
+);
+if (
+  baseline &&
+  (baseline.summary.measuredRuns !== measuredRuns ||
+    baseline.summary.warmupRuns !== warmupRuns)
+) {
+  throw new Error(
+    `baseline measurement contract is ${baseline.summary.warmupRuns} warm-up + ${baseline.summary.measuredRuns} measured run(s), current run requested ${warmupRuns} + ${measuredRuns}`,
+  );
+}
 for (const fixture of manifest.cases) {
   if (!isAbsolute(fixture.videoPath) || !existsSync(fixture.videoPath)) {
     throw new Error(
       `${fixture.id}: videoPath must be an existing absolute local path`,
+    );
+  }
+  if (baseline && !hasAccuracyContract(fixture)) {
+    throw new Error(
+      `${fixture.id}: baseline comparison requires semanticEvents and at least one detectorGate`,
     );
   }
 }
@@ -100,19 +205,64 @@ let failed = false;
 try {
   const appUrl = `http://127.0.0.1:${staticServer.port}/`;
   for (const fixture of manifest.cases) {
-    console.log(`[local-e2e] ${fixture.id}: starting`);
-    const captured = await analyzeCase(browser.cdpUrl, appUrl, fixture);
+    const fixtureFingerprint = await sha256File(fixture.videoPath);
+    const settings: FixtureSettings = {
+      side: fixture.side,
+      ownCharacter: fixture.ownCharacter,
+      opponentCharacter: fixture.opponentCharacter,
+    };
+    const expectationHash = sha256(canonicalJson(fixture.expect ?? null));
+    console.log(
+      `[local-e2e] ${fixture.id}: ${warmupRuns} warm-up + ${measuredRuns} measured run(s)`,
+    );
+    for (let run = 0; run < warmupRuns; run += 1) {
+      console.log(
+        `[local-e2e] ${fixture.id}: warm-up ${run + 1}/${warmupRuns}`,
+      );
+      await analyzeCase(browser.cdpUrl, appUrl, fixture);
+    }
+    let captured: CapturedWorkerArtifacts | undefined;
+    let semanticDigest: string | undefined;
+    let semanticChangedBetweenRuns = false;
+    const timingRuns: Array<{
+      readonly analysisMs: number;
+      readonly stages: Readonly<Record<string, number>>;
+    }> = [];
+    for (let run = 0; run < measuredRuns; run += 1) {
+      console.log(
+        `[local-e2e] ${fixture.id}: measured ${run + 1}/${measuredRuns}`,
+      );
+      const measured = await analyzeCase(browser.cdpUrl, appUrl, fixture);
+      const digest = semanticCapturedDigest(measured);
+      if (semanticDigest === undefined) semanticDigest = digest;
+      else if (semanticDigest !== digest) semanticChangedBetweenRuns = true;
+      captured ??= measured;
+      timingRuns.push({
+        analysisMs: measured.analysisMs,
+        stages: requiredStageTimings(measured, fixture.id),
+      });
+    }
+    if (!captured)
+      throw new Error(`${fixture.id}: no measured run was captured`);
     const report = parseArtifact(captured.report, "report", fixture.id);
-    const artifacts = {
-      schemaVersion: 1,
+    const regressionEvents = parseArtifact(
+      captured.regressionEvents,
+      "regressionEvents",
+      fixture.id,
+    );
+    const performance = summarizeTimings(timingRuns);
+    const artifacts: Record<string, unknown> = {
+      schemaVersion: 2,
+      runnerVersion: RUNNER_VERSION,
       caseId: fixture.id,
       videoName: basename(fixture.videoPath),
-      settings: {
-        side: fixture.side,
-        ownCharacter: fixture.ownCharacter,
-        opponentCharacter: fixture.opponentCharacter,
+      fixtureContract: {
+        fixtureFingerprint,
+        settings,
+        expectationHash,
       },
-      analysisMs: captured.analysisMs,
+      analysisMs: performance.medianMs,
+      performance,
       report,
       timeline: parseArtifact(captured.timeline, "timeline", fixture.id),
       hpFeatures: parseArtifact(captured.features, "features", fixture.id),
@@ -131,6 +281,7 @@ try {
         "attackInfo",
         fixture.id,
       ),
+      regressionEvents,
       spatialWindows: parseOptionalArtifact(
         captured.spatialWindows,
         "spatialWindows",
@@ -146,7 +297,34 @@ try {
     const artifactText = JSON.stringify(artifacts, null, 2);
     await Bun.write(join(outputDir, `${fixture.id}.json`), `${artifactText}\n`);
 
-    const assertionFailures = evaluateExpectations(report, fixture.expect);
+    const regression = evaluateRegressionEvents(
+      {
+        report,
+        fightMarkers: artifacts.fightMarkers,
+        regressionEvents,
+      },
+      fixture.expect,
+    );
+    const assertionFailures = [
+      ...evaluateExpectations(report, fixture.expect),
+      ...regression.failures,
+      ...(semanticChangedBetweenRuns
+        ? [`${fixture.id}: semantic artifacts changed between measured runs`]
+        : []),
+      ...(baseline
+        ? await compareWithBaseline(
+            baseline,
+            fixture,
+            artifacts,
+            performance,
+            regression.metrics,
+            performancePolicy,
+            fixtureFingerprint,
+            settings,
+            expectationHash,
+          )
+        : []),
+    ];
     failed ||= assertionFailures.length > 0;
     const hashes = {
       report: sha256(captured.report),
@@ -155,19 +333,30 @@ try {
       trackedInputs: sha256(captured.trackedInputs ?? ""),
       fightMarkers: sha256(captured.fightMarkers ?? ""),
       attackInfo: sha256(captured.attackInfo ?? ""),
+      regressionEvents: sha256(captured.regressionEvents),
       spatialWindows: sha256(captured.spatialWindows ?? ""),
       spatialObservations: sha256(captured.spatialObservations ?? ""),
     };
+    const snapshotText = JSON.stringify(semanticSnapshot(artifacts));
     summaries.push({
       id: fixture.id,
       videoName: basename(fixture.videoPath),
-      analysisMs: captured.analysisMs,
+      fixtureFingerprint,
+      settings,
+      expectationHash,
+      analysisMs: performance.medianMs,
+      performance,
+      detectorMetrics: regression.metrics,
+      syntheticCoverage: regression.syntheticCoverage,
       assertionsPassed: assertionFailures.length === 0,
       assertionFailures,
       hashes,
+      semanticHash: sha256(snapshotText),
     });
     console.log(
-      `[local-e2e] ${fixture.id}: ${(captured.analysisMs / 1_000).toFixed(2)}s, ${
+      `[local-e2e] ${fixture.id}: median ${(
+        performance.medianMs / 1_000
+      ).toFixed(2)}s, p90 ${(performance.p90Ms / 1_000).toFixed(2)}s, ${
         assertionFailures.length === 0
           ? "expectations passed"
           : `${assertionFailures.length} expectation(s) failed`
@@ -183,7 +372,10 @@ try {
 }
 
 const summary: RunSummary = {
-  schemaVersion: 1,
+  schemaVersion: 2,
+  runnerVersion: RUNNER_VERSION,
+  warmupRuns,
+  measuredRuns,
   generatedAt: new Date().toISOString(),
   cases: summaries,
 };
@@ -191,8 +383,6 @@ await Bun.write(
   join(outputDir, "summary.json"),
   `${JSON.stringify(summary, null, 2)}\n`,
 );
-await printBaselineComparison(options.baselineDir, projectRoot, summaries);
-
 console.log(`[local-e2e] artifacts: ${relative(projectRoot, outputDir)}`);
 if (failed) process.exitCode = 1;
 
@@ -202,6 +392,8 @@ function parseArgs(args: readonly string[]): CliOptions {
   let baselineDir: string | undefined;
   let cdpUrl: string | undefined;
   let browserExecutable: string | undefined;
+  let measuredRuns: number | undefined;
+  let warmupRuns: number | undefined;
   let headed = false;
 
   for (let index = 0; index < args.length; index += 1) {
@@ -228,6 +420,12 @@ function parseArgs(args: readonly string[]): CliOptions {
       case "--browser":
         browserExecutable = value;
         break;
+      case "--runs":
+        measuredRuns = positiveInteger(value, "--runs", 1);
+        break;
+      case "--warmup-runs":
+        warmupRuns = positiveInteger(value, "--warmup-runs", 0);
+        break;
       default:
         throw new Error(`unknown option: ${argument}`);
     }
@@ -239,8 +437,22 @@ function parseArgs(args: readonly string[]): CliOptions {
     ...(baselineDir ? { baselineDir } : {}),
     ...(cdpUrl ? { cdpUrl } : {}),
     ...(browserExecutable ? { browserExecutable } : {}),
+    ...(measuredRuns === undefined ? {} : { measuredRuns }),
+    ...(warmupRuns === undefined ? {} : { warmupRuns }),
     headed,
   };
+}
+
+function positiveInteger(
+  value: string,
+  option: string,
+  minimum: number,
+): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < minimum) {
+    throw new Error(`${option} must be an integer >= ${minimum}`);
+  }
+  return parsed;
 }
 
 function startStaticServer(staticDirectory: string): Bun.Server<undefined> {
@@ -517,6 +729,7 @@ function captureBootstrap(): string {
       const state = {
         done: false,
         startedAt: 0,
+        firstPassAt: 0,
         workerError: undefined,
         spatialWindows: undefined,
         perfLogs: [],
@@ -537,6 +750,7 @@ function captureBootstrap(): string {
             const message = event.data;
             if (message?.type === "firstPass") {
               state.spatialWindows = message.spatialWindows;
+              state.firstPassAt = performance.now();
             }
             if (message?.type === "done") {
               state.artifacts = {
@@ -546,9 +760,14 @@ function captureBootstrap(): string {
                 trackedInputs: message.trackedInputs,
                 fightMarkers: message.fightMarkers,
                 attackInfo: message.attackInfo,
+                regressionEvents: message.regressionEvents,
                 spatialWindows: state.spatialWindows,
                 spatialObservations: message.spatialObservations,
                 perfLogs: state.perfLogs,
+                stageTimings: {
+                  firstPass: state.firstPassAt - state.startedAt,
+                  spatialPass: performance.now() - state.firstPassAt,
+                },
                 analysisMs: performance.now() - state.startedAt,
               };
               state.done = true;
@@ -744,28 +963,594 @@ function sha256(value: string): string {
   return new Bun.CryptoHasher("sha256").update(value).digest("hex");
 }
 
-async function printBaselineComparison(
-  baselineOption: string | undefined,
-  root: string,
-  current: readonly CaseSummary[],
-): Promise<void> {
-  if (!baselineOption) return;
-  const baselinePath = resolve(root, baselineOption, "summary.json");
-  const baseline = JSON.parse(
-    await readFile(baselinePath, "utf8"),
-  ) as RunSummary;
-  const comparisons = compareTimings(
-    Object.fromEntries(current.map((entry) => [entry.id, entry.analysisMs])),
-    Object.fromEntries(
-      baseline.cases.map((entry) => [entry.id, entry.analysisMs]),
-    ),
+async function sha256File(path: string): Promise<string> {
+  const hasher = new Bun.CryptoHasher("sha256");
+  for await (const chunk of Bun.file(path).stream()) hasher.update(chunk);
+  return hasher.digest("hex");
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
+  if (isRecord(value)) {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(",")}}`;
+  }
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined)
+    throw new Error("cannot canonicalize undefined");
+  return serialized;
+}
+
+function hasAccuracyContract(fixture: LocalVideoCase): boolean {
+  return (
+    (fixture.expect?.semanticEvents?.length ?? 0) > 0 &&
+    Object.values(fixture.expect?.detectorGates ?? {}).some(
+      (gate) => gate !== undefined && Object.keys(gate).length > 0,
+    )
   );
-  for (const comparison of comparisons) {
-    const delta = (comparison.ratio - 1) * 100;
-    console.log(
-      `[local-e2e] ${comparison.id}: ${comparison.currentMs.toFixed(
-        0,
-      )}ms vs ${comparison.baselineMs.toFixed(0)}ms (${delta >= 0 ? "+" : ""}${delta.toFixed(1)}%)`,
+}
+
+function extractStageTimings(
+  captured: CapturedWorkerArtifacts,
+): Readonly<Record<string, number>> {
+  const stages: Record<string, number> = { ...(captured.stageTimings ?? {}) };
+  const totalLog = [...(captured.perfLogs ?? [])]
+    .reverse()
+    .find((line) => /^\[perf\] \d+f total:/.test(line));
+  if (!totalLog) return stages;
+  const labels: Readonly<Record<string, string>> = {
+    "draw+get": "frameExtraction",
+    worker_copy: "workerCopy",
+    meter: "meterWasm",
+    hud: "hudWasm",
+  };
+  for (const match of totalLog.matchAll(/([a-z+_]+)=(\d+(?:\.\d+)?)ms/g)) {
+    const label = labels[match[1]];
+    const value = Number(match[2]);
+    if (label && Number.isFinite(value)) stages[label] = value;
+  }
+  return stages;
+}
+
+function requiredStageTimings(
+  captured: CapturedWorkerArtifacts,
+  caseId: string,
+): Readonly<Record<string, number>> {
+  const stages = extractStageTimings(captured);
+  for (const stage of REQUIRED_PERFORMANCE_STAGES) {
+    const value = stages[stage];
+    if (!Number.isFinite(value) || value < 0) {
+      throw new Error(
+        `${caseId}: required performance stage ${stage} is missing`,
+      );
+    }
+  }
+  return stages;
+}
+
+function semanticCapturedDigest(captured: CapturedWorkerArtifacts): string {
+  return sha256(
+    [
+      captured.report,
+      captured.timeline,
+      captured.features,
+      captured.trackedInputs ?? "",
+      captured.fightMarkers ?? "",
+      captured.attackInfo ?? "",
+      captured.regressionEvents,
+      captured.spatialWindows ?? "",
+      captured.spatialObservations ?? "",
+    ].join("\u0000"),
+  );
+}
+
+function parseRunSummary(value: unknown, label: string): RunSummary {
+  if (!isRecord(value)) throw new Error(`${label} must be an object`);
+  assertExactKeys(
+    value,
+    [
+      "schemaVersion",
+      "runnerVersion",
+      "warmupRuns",
+      "measuredRuns",
+      "generatedAt",
+      "cases",
+    ],
+    label,
+  );
+  if (value.schemaVersion !== 2 || value.runnerVersion !== RUNNER_VERSION) {
+    throw new Error(
+      `${label} is an incompatible baseline; regenerate it with this runner`,
     );
   }
+  const warmupRuns = requiredInteger(
+    value.warmupRuns,
+    `${label}.warmupRuns`,
+    1,
+  );
+  const measuredRuns = requiredInteger(
+    value.measuredRuns,
+    `${label}.measuredRuns`,
+    3,
+  );
+  const generatedAt = requiredString(value.generatedAt, `${label}.generatedAt`);
+  if (!Number.isFinite(Date.parse(generatedAt))) {
+    throw new Error(`${label}.generatedAt must be an ISO timestamp`);
+  }
+  if (!Array.isArray(value.cases) || value.cases.length === 0) {
+    throw new Error(`${label}.cases must contain at least one case`);
+  }
+  const cases = value.cases.map((entry, index) =>
+    parseCaseSummary(entry, `${label}.cases[${index}]`, measuredRuns),
+  );
+  const ids = new Set(cases.map((entry) => entry.id));
+  if (ids.size !== cases.length)
+    throw new Error(`${label}.cases contains duplicate ids`);
+  return {
+    schemaVersion: 2,
+    runnerVersion: RUNNER_VERSION,
+    warmupRuns,
+    measuredRuns,
+    generatedAt,
+    cases,
+  };
+}
+
+function parseCaseSummary(
+  value: unknown,
+  label: string,
+  measuredRuns: number,
+): CaseSummary {
+  if (!isRecord(value)) throw new Error(`${label} must be an object`);
+  assertExactKeys(
+    value,
+    [
+      "id",
+      "videoName",
+      "fixtureFingerprint",
+      "settings",
+      "expectationHash",
+      "analysisMs",
+      "performance",
+      "detectorMetrics",
+      "syntheticCoverage",
+      "assertionsPassed",
+      "assertionFailures",
+      "hashes",
+      "semanticHash",
+    ],
+    label,
+  );
+  const performance = parseTimingSummary(
+    value.performance,
+    `${label}.performance`,
+    measuredRuns,
+  );
+  const analysisMs = requiredFiniteNumber(
+    value.analysisMs,
+    `${label}.analysisMs`,
+    0,
+  );
+  if (Math.abs(analysisMs - performance.medianMs) > 1e-6) {
+    throw new Error(`${label}.analysisMs must equal performance.medianMs`);
+  }
+  if (typeof value.assertionsPassed !== "boolean") {
+    throw new Error(`${label}.assertionsPassed must be boolean`);
+  }
+  if (
+    !Array.isArray(value.assertionFailures) ||
+    value.assertionFailures.some((failure) => typeof failure !== "string")
+  ) {
+    throw new Error(`${label}.assertionFailures must be a string array`);
+  }
+  if (value.assertionsPassed !== (value.assertionFailures.length === 0)) {
+    throw new Error(
+      `${label}.assertionsPassed must agree with assertionFailures`,
+    );
+  }
+  if (!isRecord(value.hashes))
+    throw new Error(`${label}.hashes must be an object`);
+  assertExactKeys(value.hashes, CAPTURE_HASH_FIELDS, `${label}.hashes`);
+  const hashes = Object.fromEntries(
+    Object.entries(value.hashes).map(([key, hash]) => [
+      key,
+      requiredSha256(hash, `${label}.hashes.${key}`),
+    ]),
+  );
+  const syntheticCoverage = parseSyntheticCoverage(
+    value.syntheticCoverage,
+    `${label}.syntheticCoverage`,
+  );
+  return {
+    id: requiredString(value.id, `${label}.id`),
+    videoName: requiredString(value.videoName, `${label}.videoName`),
+    fixtureFingerprint: requiredSha256(
+      value.fixtureFingerprint,
+      `${label}.fixtureFingerprint`,
+    ),
+    settings: parseFixtureSettings(value.settings, `${label}.settings`),
+    expectationHash: requiredSha256(
+      value.expectationHash,
+      `${label}.expectationHash`,
+    ),
+    analysisMs,
+    performance,
+    detectorMetrics: parseDetectorMetrics(
+      value.detectorMetrics,
+      `${label}.detectorMetrics`,
+    ),
+    syntheticCoverage,
+    assertionsPassed: value.assertionsPassed,
+    assertionFailures: value.assertionFailures,
+    hashes,
+    semanticHash: requiredSha256(value.semanticHash, `${label}.semanticHash`),
+  };
+}
+
+function parseTimingSummary(
+  value: unknown,
+  label: string,
+  measuredRuns: number,
+): TimingSummary {
+  if (!isRecord(value)) throw new Error(`${label} must be an object`);
+  assertExactKeys(value, ["runsMs", "medianMs", "p90Ms", "stages"], label);
+  if (
+    !Array.isArray(value.runsMs) ||
+    value.runsMs.length !== measuredRuns ||
+    value.runsMs.some((run) => !isFiniteNumberAtLeast(run, 0))
+  ) {
+    throw new Error(
+      `${label}.runsMs must contain ${measuredRuns} finite values`,
+    );
+  }
+  const runsMs = value.runsMs as number[];
+  const derived = summarizeTimings(
+    runsMs.map((analysisMs) => ({ analysisMs, stages: {} })),
+  );
+  const medianMs = requiredFiniteNumber(value.medianMs, `${label}.medianMs`, 0);
+  const p90Ms = requiredFiniteNumber(value.p90Ms, `${label}.p90Ms`, 0);
+  if (
+    Math.abs(medianMs - derived.medianMs) > 1e-6 ||
+    Math.abs(p90Ms - derived.p90Ms) > 1e-6
+  ) {
+    throw new Error(`${label} median/p90 must agree with runsMs`);
+  }
+  if (!isRecord(value.stages))
+    throw new Error(`${label}.stages must be an object`);
+  const stages: Record<string, { medianMs: number; p90Ms: number }> = {};
+  for (const [stage, timing] of Object.entries(value.stages)) {
+    if (!isRecord(timing))
+      throw new Error(`${label}.stages.${stage} must be an object`);
+    assertExactKeys(timing, ["medianMs", "p90Ms"], `${label}.stages.${stage}`);
+    stages[stage] = {
+      medianMs: requiredFiniteNumber(
+        timing.medianMs,
+        `${label}.stages.${stage}.medianMs`,
+        0,
+      ),
+      p90Ms: requiredFiniteNumber(
+        timing.p90Ms,
+        `${label}.stages.${stage}.p90Ms`,
+        0,
+      ),
+    };
+  }
+  for (const stage of REQUIRED_PERFORMANCE_STAGES) {
+    if (!stages[stage]) throw new Error(`${label}.stages.${stage} is required`);
+  }
+  return {
+    runsMs,
+    medianMs,
+    p90Ms,
+    stages,
+  };
+}
+
+function parseDetectorMetrics(
+  value: unknown,
+  label: string,
+): Partial<Readonly<Record<DetectorId, DetectorMetrics>>> {
+  if (!isRecord(value)) throw new Error(`${label} must be an object`);
+  const result: Partial<Record<DetectorId, DetectorMetrics>> = {};
+  for (const [detector, metric] of Object.entries(value)) {
+    if (!DETECTOR_IDS.includes(detector as DetectorId) || !isRecord(metric)) {
+      throw new Error(`${label}.${detector} is invalid`);
+    }
+    assertExactKeys(
+      metric,
+      [
+        "expected",
+        "actual",
+        "matched",
+        "falsePositives",
+        "falseNegatives",
+        "precision",
+        "recall",
+        "meanAbsoluteFrameError",
+        "maxAbsoluteFrameError",
+      ],
+      `${label}.${detector}`,
+    );
+    const parsed: DetectorMetrics = {
+      expected: requiredInteger(
+        metric.expected,
+        `${label}.${detector}.expected`,
+        0,
+      ),
+      actual: requiredInteger(metric.actual, `${label}.${detector}.actual`, 0),
+      matched: requiredInteger(
+        metric.matched,
+        `${label}.${detector}.matched`,
+        0,
+      ),
+      falsePositives: requiredInteger(
+        metric.falsePositives,
+        `${label}.${detector}.falsePositives`,
+        0,
+      ),
+      falseNegatives: requiredInteger(
+        metric.falseNegatives,
+        `${label}.${detector}.falseNegatives`,
+        0,
+      ),
+      precision: requiredRatio(
+        metric.precision,
+        `${label}.${detector}.precision`,
+      ),
+      recall: requiredRatio(metric.recall, `${label}.${detector}.recall`),
+      meanAbsoluteFrameError: requiredFiniteNumber(
+        metric.meanAbsoluteFrameError,
+        `${label}.${detector}.meanAbsoluteFrameError`,
+        0,
+      ),
+      maxAbsoluteFrameError: requiredFiniteNumber(
+        metric.maxAbsoluteFrameError,
+        `${label}.${detector}.maxAbsoluteFrameError`,
+        0,
+      ),
+    };
+    if (
+      parsed.matched > parsed.expected ||
+      parsed.matched > parsed.actual ||
+      parsed.falsePositives !== parsed.actual - parsed.matched ||
+      parsed.falseNegatives !== parsed.expected - parsed.matched
+    ) {
+      throw new Error(`${label}.${detector} counts are inconsistent`);
+    }
+    result[detector as DetectorId] = parsed;
+  }
+  return result;
+}
+
+function parseFixtureSettings(value: unknown, label: string): FixtureSettings {
+  if (!isRecord(value)) throw new Error(`${label} must be an object`);
+  assertExactKeys(value, ["side", "ownCharacter", "opponentCharacter"], label);
+  if (value.side !== "p1" && value.side !== "p2") {
+    throw new Error(`${label}.side must be p1 or p2`);
+  }
+  return {
+    side: value.side,
+    ownCharacter: requiredString(value.ownCharacter, `${label}.ownCharacter`),
+    opponentCharacter: requiredString(
+      value.opponentCharacter,
+      `${label}.opponentCharacter`,
+    ),
+  };
+}
+
+function parseSyntheticCoverage(
+  value: unknown,
+  label: string,
+): CaseSummary["syntheticCoverage"] {
+  if (!isRecord(value)) throw new Error(`${label} must be an object`);
+  assertExactKeys(value, ["ported", "pending", "pendingIds"], label);
+  if (
+    !Array.isArray(value.pendingIds) ||
+    value.pendingIds.some((id) => typeof id !== "string")
+  ) {
+    throw new Error(`${label}.pendingIds must be a string array`);
+  }
+  const ported = requiredInteger(value.ported, `${label}.ported`, 0);
+  const pending = requiredInteger(value.pending, `${label}.pending`, 0);
+  if (pending !== value.pendingIds.length) {
+    throw new Error(`${label}.pending must equal pendingIds.length`);
+  }
+  return { ported, pending, pendingIds: value.pendingIds };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function assertExactKeys(
+  value: Readonly<Record<string, unknown>>,
+  expected: readonly string[],
+  label: string,
+): void {
+  const actual = Object.keys(value).sort();
+  const required = [...expected].sort();
+  if (
+    actual.length !== required.length ||
+    actual.some((key, index) => key !== required[index])
+  ) {
+    throw new Error(
+      `${label} fields must be ${required.join(", ")}; got ${actual.join(", ")}`,
+    );
+  }
+}
+
+function requiredString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`${label} must be a non-empty string`);
+  }
+  return value;
+}
+
+function requiredSha256(value: unknown, label: string): string {
+  const hash = requiredString(value, label);
+  if (!/^[0-9a-f]{64}$/.test(hash)) {
+    throw new Error(`${label} must be a lowercase SHA-256 digest`);
+  }
+  return hash;
+}
+
+function requiredInteger(
+  value: unknown,
+  label: string,
+  minimum: number,
+): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isInteger(value) ||
+    value < minimum
+  ) {
+    throw new Error(`${label} must be an integer >= ${minimum}`);
+  }
+  return value;
+}
+
+function isFiniteNumberAtLeast(
+  value: unknown,
+  minimum: number,
+): value is number {
+  return (
+    typeof value === "number" && Number.isFinite(value) && value >= minimum
+  );
+}
+
+function requiredFiniteNumber(
+  value: unknown,
+  label: string,
+  minimum: number,
+): number {
+  if (!isFiniteNumberAtLeast(value, minimum)) {
+    throw new Error(`${label} must be a finite number >= ${minimum}`);
+  }
+  return value;
+}
+
+function requiredRatio(value: unknown, label: string): number {
+  const ratio = requiredFiniteNumber(value, label, 0);
+  if (ratio > 1) throw new Error(`${label} must be <= 1`);
+  return ratio;
+}
+
+async function loadBaseline(
+  baselineOption: string | undefined,
+  root: string,
+  outputDirectory: string,
+): Promise<BaselineData | undefined> {
+  if (!baselineOption) return undefined;
+  const directory = resolve(root, baselineOption);
+  if (directory === outputDirectory) {
+    throw new Error("--baseline and --output must be different directories");
+  }
+  const summaryPath = join(directory, "summary.json");
+  const parsed: unknown = JSON.parse(await readFile(summaryPath, "utf8"));
+  return {
+    directory,
+    summary: parseRunSummary(parsed, relative(root, summaryPath)),
+  };
+}
+
+async function compareWithBaseline(
+  baseline: BaselineData,
+  fixture: LocalVideoCase,
+  currentArtifact: Record<string, unknown>,
+  currentPerformance: TimingSummary,
+  currentMetrics: Partial<Readonly<Record<DetectorId, DetectorMetrics>>>,
+  policy: LocalVideoPerformancePolicy,
+  fixtureFingerprint: string,
+  settings: FixtureSettings,
+  expectationHash: string,
+): Promise<string[]> {
+  const previous = baseline.summary.cases.find(
+    (candidate) => candidate.id === fixture.id,
+  );
+  if (!previous)
+    return [`${fixture.id}: case is missing from baseline summary`];
+  const failures: string[] = [];
+  if (!previous.assertionsPassed) {
+    failures.push(`${fixture.id}: baseline did not pass its assertions`);
+  }
+  if (previous.fixtureFingerprint !== fixtureFingerprint) {
+    failures.push(
+      `${fixture.id}: video content does not match the baseline fixture`,
+    );
+  }
+  if (JSON.stringify(previous.settings) !== JSON.stringify(settings)) {
+    failures.push(
+      `${fixture.id}: side or character settings do not match the baseline`,
+    );
+  }
+  if (previous.expectationHash !== expectationHash) {
+    failures.push(
+      `${fixture.id}: annotation/expectation contract changed; create and approve a new baseline`,
+    );
+  }
+  if (previous.performance.runsMs.length < 3) {
+    failures.push(
+      `${fixture.id}: baseline must contain at least 3 measured runs`,
+    );
+  }
+
+  failures.push(
+    ...comparePerformance(currentPerformance, previous.performance, policy),
+    ...compareDetectorMetrics(
+      currentMetrics,
+      previous.detectorMetrics,
+      fixture.expect?.detectorGates,
+    ),
+  );
+  const ratio = currentPerformance.medianMs / previous.performance.medianMs;
+  console.log(
+    `[local-e2e] ${fixture.id}: median ${currentPerformance.medianMs.toFixed(
+      0,
+    )}ms vs ${previous.performance.medianMs.toFixed(0)}ms (${ratio >= 1 ? "+" : ""}${(
+      (ratio - 1) * 100
+    ).toFixed(1)}%)`,
+  );
+
+  const artifactPath = join(baseline.directory, `${fixture.id}.json`);
+  if (!existsSync(artifactPath)) {
+    failures.push(`${fixture.id}: baseline artifact is missing`);
+    return failures;
+  }
+  const baselineArtifact: unknown = JSON.parse(
+    await readFile(artifactPath, "utf8"),
+  );
+  if (!baselineArtifact || typeof baselineArtifact !== "object") {
+    failures.push(`${fixture.id}: baseline artifact must be an object`);
+    return failures;
+  }
+  const baselineContract = (baselineArtifact as Record<string, unknown>)
+    .fixtureContract;
+  if (
+    !isRecord(baselineContract) ||
+    baselineContract.fixtureFingerprint !== fixtureFingerprint ||
+    baselineContract.expectationHash !== expectationHash ||
+    JSON.stringify(baselineContract.settings) !== JSON.stringify(settings)
+  ) {
+    failures.push(
+      `${fixture.id}: baseline artifact fixture contract is invalid`,
+    );
+    return failures;
+  }
+  const semanticDifferences = diffSemanticValues(
+    semanticSnapshot(baselineArtifact as Record<string, unknown>),
+    semanticSnapshot(currentArtifact),
+  );
+  if (semanticDifferences.length > 0) {
+    failures.push(
+      `${fixture.id}: semantic output changed; inspect the structured diff and promote a new baseline only after approval`,
+    );
+    console.error(`[local-e2e] ${fixture.id}: semantic diff (first 50)`);
+    for (const difference of semanticDifferences)
+      console.error(`  - ${difference}`);
+  }
+  return failures;
 }

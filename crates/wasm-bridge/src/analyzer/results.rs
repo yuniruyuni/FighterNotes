@@ -218,6 +218,43 @@ impl Analyzer {
         .unwrap_or_else(|error| format!(r#"[{{"error":"{error}"}}]"#))
     }
 
+    /// Returns the compact, semantic event set used by the local video
+    /// regression runner. Frame-by-frame meter/input series intentionally stay
+    /// in their existing diagnostics; this payload contains only events that
+    /// can be annotated and matched one-to-one.
+    pub fn get_regression_events_json(&mut self) -> Result<String, JsValue> {
+        self.ensure_events()?;
+        let events = self.events.as_ref().expect("finalized events");
+        let attack_sequences: Vec<_> = events
+            .attack_evidence
+            .sequences
+            .iter()
+            .map(|sequence| {
+                serde_json::json!({
+                    "attacker": sequence.attacker,
+                    "start_frame": sequence.start_frame,
+                    "end_frame": sequence.end_frame,
+                    "combo_damage": sequence.combo_damage,
+                    "starter_attribute": sequence.starter_attribute,
+                    "final_attribute": sequence.final_attribute,
+                    "complete": sequence.complete,
+                    "recovered_from_max": sequence.recovered_from_max,
+                })
+            })
+            .collect();
+        Ok(serde_json::json!({
+            "rounds": &events.rounds,
+            "damage": &events.damage,
+            "super_arts": &events.super_arts,
+            "attack_evidence": {
+                "sequences": attack_sequences,
+                "damage": &events.attack_evidence.damage,
+                "super_arts": &events.attack_evidence.super_arts,
+            },
+        })
+        .to_string())
+    }
+
     pub fn get_timeline(&self) -> String {
         self.imported_timeline_json
             .clone()

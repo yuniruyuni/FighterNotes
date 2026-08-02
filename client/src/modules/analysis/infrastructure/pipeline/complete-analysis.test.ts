@@ -22,6 +22,7 @@ function session(
       report: "{}",
       timeline: "{}",
       features: "[]",
+      regressionEvents: "{}",
     }),
   };
   return value;
