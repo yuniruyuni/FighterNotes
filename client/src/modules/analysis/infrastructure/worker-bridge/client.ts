@@ -3,6 +3,13 @@ import type {
   SpatialCandidateWindow,
   SpatialFrameHints,
 } from "../../domain/result.js";
+import {
+  SPATIAL_DECODER_OUTSTANDING_WATERMARKS,
+  SPATIAL_DECODER_QUEUE_WATERMARKS,
+  SPATIAL_WORKER_PENDING_WATERMARKS,
+  type SpatialDecodeStats,
+} from "../spatial-analysis/backpressure.js";
+import { HighLowWatermarkGate } from "./high-low-watermark.js";
 import type { AnalyzerWorkerDone, AnalyzerWorkerResponse } from "./protocol.js";
 import { postAnalyzerWorkerMessage } from "./protocol.js";
 
@@ -39,9 +46,13 @@ export class AnalyzerWorkerSession {
   readonly #done = deferred<AnalyzerWorkerDone>();
   readonly #frameDrainWaiters: Array<Deferred<void>> = [];
   readonly #spatialDrainWaiters: Array<Deferred<void>> = [];
+  readonly #spatialGate = new HighLowWatermarkGate(
+    SPATIAL_WORKER_PENDING_WATERMARKS.high,
+    SPATIAL_WORKER_PENDING_WATERMARKS.low,
+  );
   #spatialReset: ReturnType<typeof deferred<void>> | null = null;
   #pendingFrames = 0;
-  #pendingSpatialFrames = 0;
+  #spatialFrameCount = 0;
   #terminated = false;
   #terminationReason: unknown;
 
@@ -115,31 +126,61 @@ export class AnalyzerWorkerSession {
     return this.#spatialReset.promise;
   }
 
-  sendSpatialFrame(
+  async sendSpatialFrame(
     frameIndex: number,
-    rgbaBuf: ArrayBuffer,
+    createRgbaBuffer: () => ArrayBuffer,
     hints: SpatialFrameHints,
-  ): void {
+    signal?: AbortSignal,
+  ): Promise<void> {
     this.#throwIfTerminated();
-    this.#pendingSpatialFrames += 1;
-    postAnalyzerWorkerMessage(
-      this.#worker,
-      { type: "spatialFrame", frameIndex, rgbaBuf, hints },
-      [rgbaBuf],
-    );
+    await this.#spatialGate.acquire(signal);
+    try {
+      this.#throwIfTerminated();
+      throwIfAborted(signal);
+      const rgbaBuf = createRgbaBuffer();
+      this.#throwIfTerminated();
+      throwIfAborted(signal);
+      postAnalyzerWorkerMessage(
+        this.#worker,
+        { type: "spatialFrame", frameIndex, rgbaBuf, hints },
+        [rgbaBuf],
+      );
+      this.#spatialFrameCount += 1;
+    } catch (error) {
+      this.#spatialGate.release();
+      if (this.#spatialGate.active === 0) {
+        drain(this.#spatialDrainWaiters);
+      }
+      throw error;
+    }
   }
 
   drainSpatialFrames(): Promise<void> {
     if (this.#terminated) return rejected(this.#terminationReason);
-    if (this.#pendingSpatialFrames === 0) return Promise.resolve();
+    if (this.#spatialGate.active === 0) return Promise.resolve();
     const waiter = deferred<void>();
     this.#spatialDrainWaiters.push(waiter);
     return waiter.promise;
   }
 
-  finishSpatialPass(): void {
+  finishSpatialPass(decodeStats: SpatialDecodeStats): void {
     this.#throwIfTerminated();
-    postAnalyzerWorkerMessage(this.#worker, { type: "spatialFinish" });
+    postAnalyzerWorkerMessage(this.#worker, {
+      type: "spatialFinish",
+      spatialPerformance: {
+        frameCount: this.#spatialFrameCount,
+        decoderQueueHighWatermark: SPATIAL_DECODER_QUEUE_WATERMARKS.high,
+        decoderQueueLowWatermark: SPATIAL_DECODER_QUEUE_WATERMARKS.low,
+        decoderOutstandingHighWatermark:
+          SPATIAL_DECODER_OUTSTANDING_WATERMARKS.high,
+        decoderOutstandingLowWatermark:
+          SPATIAL_DECODER_OUTSTANDING_WATERMARKS.low,
+        workerPendingHighWatermark: SPATIAL_WORKER_PENDING_WATERMARKS.high,
+        workerPendingLowWatermark: SPATIAL_WORKER_PENDING_WATERMARKS.low,
+        peakWorkerPendingFrames: this.#spatialGate.peak,
+        ...decodeStats,
+      },
+    });
   }
 
   result(): Promise<AnalyzerWorkerDone> {
@@ -160,8 +201,8 @@ export class AnalyzerWorkerSession {
     this.#spatialReset = null;
     rejectWaiters(this.#frameDrainWaiters, reason);
     rejectWaiters(this.#spatialDrainWaiters, reason);
+    this.#spatialGate.close(reason);
     this.#pendingFrames = 0;
-    this.#pendingSpatialFrames = 0;
   }
 
   #receive(message: AnalyzerWorkerResponse): void {
@@ -183,8 +224,8 @@ export class AnalyzerWorkerSession {
         this.#spatialReset = null;
         break;
       case "spatialFrameResult":
-        this.#pendingSpatialFrames -= 1;
-        if (this.#pendingSpatialFrames === 0) {
+        this.#spatialGate.release();
+        if (this.#spatialGate.active === 0) {
           drain(this.#spatialDrainWaiters);
         }
         break;
@@ -332,6 +373,13 @@ function rejected<T>(reason: unknown): Promise<T> {
   const value = deferred<T>();
   value.reject(reason);
   return value.promise;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  throw signal.reason instanceof Error
+    ? signal.reason
+    : new Error("空間フレーム送信を中断しました");
 }
 
 function drain(waiters: Array<Deferred<void>>): void {

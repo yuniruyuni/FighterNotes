@@ -1,28 +1,198 @@
 import type { FrameSample, VideoCodecConfig } from "../../domain/result.js";
 import { FrameDecodePlan } from "./frame-decode-plan.js";
 
+export interface DecodeBackpressureOptions {
+  readonly queueHighWatermark: number;
+  readonly queueLowWatermark: number;
+  readonly outstandingHighWatermark: number;
+  readonly outstandingLowWatermark: number;
+}
+
+export interface DecodeSampleRangeStats {
+  readonly peakDecoderQueueSize: number;
+  readonly peakDecoderOutstandingFrames: number;
+}
+
 interface DecodeSampleRangeOptions {
   readonly samples: readonly FrameSample[];
   readonly videoArrayBuffer: ArrayBuffer;
   readonly codecConfig: VideoCodecConfig;
   readonly firstSampleIndex: number;
   readonly lastSampleIndex: number;
-  readonly onFrame: (frame: VideoFrame) => void;
+  readonly onFrame: (
+    frame: VideoFrame,
+    processingSignal: AbortSignal,
+  ) => void | Promise<void>;
+  /**
+   * Runs synchronously from the decoder output callback. Frames rejected here
+   * are closed immediately without consuming retained-frame capacity.
+   */
+  readonly shouldProcessFrame?: (frame: VideoFrame) => boolean;
   readonly signal?: AbortSignal;
+  readonly backpressure?: DecodeBackpressureOptions;
 }
+
+interface FlowWaiter {
+  readonly resolve: () => void;
+  readonly signal: AbortSignal;
+  readonly onAbort: () => void;
+}
+
+const DEFAULT_BACKPRESSURE: DecodeBackpressureOptions = {
+  queueHighWatermark: 12,
+  queueLowWatermark: 6,
+  outstandingHighWatermark: 12,
+  outstandingLowWatermark: 6,
+};
 
 export async function decodeSampleRange(
   options: DecodeSampleRangeOptions,
-): Promise<void> {
+): Promise<DecodeSampleRangeStats> {
   throwIfAborted(options.signal);
-  const decoder = new VideoDecoder({
-    output: options.onFrame,
-    error: () => undefined,
-  });
-  const onAbort = () => {
-    if (decoder.state !== "closed") decoder.close();
+  const limits = options.backpressure ?? DEFAULT_BACKPRESSURE;
+  validateWatermarks(limits);
+
+  let retryFrames: readonly OutputFrameIdentity[] | undefined;
+  let peakDecoderQueueSize = 0;
+  let peakDecoderOutstandingFrames = 0;
+  do {
+    const pass = await decodeSampleRangePass(options, limits, retryFrames);
+    peakDecoderQueueSize = Math.max(
+      peakDecoderQueueSize,
+      pass.peakDecoderQueueSize,
+    );
+    peakDecoderOutstandingFrames = Math.max(
+      peakDecoderOutstandingFrames,
+      pass.peakDecoderOutstandingFrames,
+    );
+    if (pass.unmatchedRetryFrames > 0) {
+      throw new Error(
+        `再デコード対象のVideoFrameを${pass.unmatchedRetryFrames}件再取得できませんでした`,
+      );
+    }
+    retryFrames = pass.deferredFrames;
+  } while (retryFrames.length > 0);
+
+  return { peakDecoderQueueSize, peakDecoderOutstandingFrames };
+}
+
+interface DecodePassResult extends DecodeSampleRangeStats {
+  readonly deferredFrames: readonly OutputFrameIdentity[];
+  readonly unmatchedRetryFrames: number;
+}
+
+interface OutputFrameIdentity {
+  readonly timestamp: number;
+  readonly timestampOrdinal: number;
+}
+
+/**
+ * Decodes one pass through the sample range.
+ *
+ * decodeQueueSize bounds encoded input admission. Actual VideoFrame objects
+ * are counted only after output and are owned by this function: onFrame may
+ * borrow them until its promise settles, after which they are closed exactly
+ * once. A decoder may legally withhold output until later input or flush. If a
+ * synchronous output burst would exceed the retained-frame watermark, the
+ * suffix is closed immediately and replayed in presentation order by a later
+ * pass instead of retaining an unbounded number of VideoFrames.
+ */
+async function decodeSampleRangePass(
+  options: DecodeSampleRangeOptions,
+  limits: DecodeBackpressureOptions,
+  retryFrames: readonly OutputFrameIdentity[] | undefined,
+): Promise<DecodePassResult> {
+  throwIfAborted(options.signal);
+
+  const processing = new AbortController();
+  const waiters: FlowWaiter[] = [];
+  const selector = new OutputFrameSelector(
+    options.shouldProcessFrame,
+    retryFrames,
+  );
+  const deferredFrames: OutputFrameIdentity[] = [];
+  let failure: { readonly reason: unknown } | undefined;
+  let decoder!: VideoDecoder;
+  let frameChain = Promise.resolve();
+  let outstandingFrames = 0;
+  let peakOutstandingFrames = 0;
+  let peakQueueSize = 0;
+  let queuePaused = false;
+  let outstandingPaused = false;
+  let deferRemainingOutput = false;
+
+  const wake = () => {
+    for (const waiter of waiters.splice(0)) {
+      waiter.signal.removeEventListener("abort", waiter.onAbort);
+      waiter.resolve();
+    }
   };
+  const closeDecoder = () => {
+    if (!decoder?.state || decoder.state === "closed") return;
+    try {
+      decoder.close();
+    } catch (error) {
+      if (!failure) {
+        failure = { reason: error };
+        processing.abort(error);
+        wake();
+      }
+    }
+  };
+  const fail = (reason: unknown) => {
+    if (failure) return;
+    failure = { reason };
+    processing.abort(reason);
+    wake();
+    closeDecoder();
+  };
+  const onAbort = () => fail(abortReason(options.signal));
+
+  decoder = new VideoDecoder({
+    output(frame) {
+      let selected: OutputFrameIdentity | undefined;
+      try {
+        selected = selector.select(frame);
+      } catch (error) {
+        safeClose(frame);
+        fail(error);
+        return;
+      }
+      if (failure || !selected) {
+        safeClose(frame);
+        return;
+      }
+      if (
+        deferRemainingOutput ||
+        outstandingFrames >= limits.outstandingHighWatermark
+      ) {
+        deferRemainingOutput = true;
+        deferredFrames.push(selected);
+        safeClose(frame);
+        return;
+      }
+      outstandingFrames += 1;
+      peakOutstandingFrames = Math.max(
+        peakOutstandingFrames,
+        outstandingFrames,
+      );
+      frameChain = frameChain.then(async () => {
+        try {
+          if (!failure) await options.onFrame(frame, processing.signal);
+        } catch (error) {
+          fail(error);
+        } finally {
+          safeClose(frame);
+          outstandingFrames -= 1;
+          wake();
+        }
+      });
+    },
+    error: fail,
+  });
+  decoder.ondequeue = wake;
   options.signal?.addEventListener("abort", onAbort, { once: true });
+
   try {
     decoder.configure({
       codec: options.codecConfig.codec,
@@ -35,19 +205,97 @@ export async function decodeSampleRange(
       sampleIndex <= options.lastSampleIndex;
       sampleIndex += 1
     ) {
-      throwIfAborted(options.signal);
+      const admission = waitForAdmission();
+      if (admission) await admission;
       const sample = options.samples[sampleIndex];
       if (!sample) continue;
       decoder.decode(encodedChunk(sample, options.videoArrayBuffer));
+      peakQueueSize = Math.max(peakQueueSize, decoder.decodeQueueSize);
     }
     await decoder.flush();
+    await frameChain;
+    throwFailure(failure);
     throwIfAborted(options.signal);
   } catch (error) {
-    throwIfAborted(options.signal);
-    throw error;
+    fail(preferredFailure(error, options.signal, failure));
   } finally {
     options.signal?.removeEventListener("abort", onAbort);
-    if (decoder.state !== "closed") decoder.close();
+    if (decoder.ondequeue === wake) decoder.ondequeue = null;
+    closeDecoder();
+    processing.abort(failure?.reason ?? new Error("decode range completed"));
+    wake();
+    await frameChain;
+  }
+
+  throwFailure(failure);
+  return {
+    peakDecoderQueueSize: peakQueueSize,
+    peakDecoderOutstandingFrames: peakOutstandingFrames,
+    deferredFrames,
+    unmatchedRetryFrames: selector.unmatchedRetryFrames,
+  };
+
+  function waitForAdmission(): Promise<void> | undefined {
+    throwFailure(failure);
+    throwIfAborted(options.signal);
+    queuePaused = pausedAtWatermarks(
+      queuePaused,
+      decoder.decodeQueueSize,
+      limits.queueHighWatermark,
+      limits.queueLowWatermark,
+    );
+    outstandingPaused = deferRemainingOutput
+      ? false
+      : pausedAtWatermarks(
+          outstandingPaused,
+          outstandingFrames + decoder.decodeQueueSize,
+          limits.outstandingHighWatermark,
+          limits.outstandingLowWatermark,
+        );
+    if (!queuePaused && !outstandingPaused) return undefined;
+    return waitForChange(processing.signal, waiters).then(() =>
+      waitForAdmission(),
+    );
+  }
+}
+
+class OutputFrameSelector {
+  readonly #shouldProcessFrame: DecodeSampleRangeOptions["shouldProcessFrame"];
+  readonly #retryOrdinals: Map<number, Set<number>> | undefined;
+  readonly #seenOrdinals = new Map<number, number>();
+  #unmatchedRetryFrames: number;
+
+  constructor(
+    shouldProcessFrame: DecodeSampleRangeOptions["shouldProcessFrame"],
+    retryFrames: readonly OutputFrameIdentity[] | undefined,
+  ) {
+    this.#shouldProcessFrame = shouldProcessFrame;
+    this.#unmatchedRetryFrames = retryFrames?.length ?? 0;
+    if (!retryFrames) return;
+    this.#retryOrdinals = new Map();
+    for (const frame of retryFrames) {
+      const ordinals = this.#retryOrdinals.get(frame.timestamp) ?? new Set();
+      ordinals.add(frame.timestampOrdinal);
+      this.#retryOrdinals.set(frame.timestamp, ordinals);
+    }
+  }
+
+  get unmatchedRetryFrames(): number {
+    return this.#unmatchedRetryFrames;
+  }
+
+  select(frame: VideoFrame): OutputFrameIdentity | undefined {
+    if (this.#shouldProcessFrame && !this.#shouldProcessFrame(frame)) {
+      return undefined;
+    }
+    const timestampOrdinal = this.#seenOrdinals.get(frame.timestamp) ?? 0;
+    this.#seenOrdinals.set(frame.timestamp, timestampOrdinal + 1);
+    const identity = { timestamp: frame.timestamp, timestampOrdinal };
+    if (!this.#retryOrdinals) return identity;
+    const ordinals = this.#retryOrdinals.get(frame.timestamp);
+    if (!ordinals?.delete(timestampOrdinal)) return undefined;
+    this.#unmatchedRetryFrames -= 1;
+    return identity;
   }
 }
 
@@ -72,12 +320,9 @@ export async function decodeFrameAt(options: {
       ...options,
       firstSampleIndex: plan.firstSampleIndex,
       lastSampleIndex: plan.lastSampleIndex,
+      shouldProcessFrame: (frame) => frame.timestamp === plan.targetTimestampUs,
       onFrame(frame) {
-        if (!result.frame && frame.timestamp === plan.targetTimestampUs) {
-          result.frame = frame;
-        } else {
-          frame.close();
-        }
+        if (!result.frame) result.frame = frame.clone();
       },
     });
   } catch (error) {
@@ -98,9 +343,89 @@ function encodedChunk(
   });
 }
 
-function throwIfAborted(signal?: AbortSignal): void {
-  if (!signal?.aborted) return;
-  throw signal.reason instanceof Error
+function pausedAtWatermarks(
+  paused: boolean,
+  value: number,
+  high: number,
+  low: number,
+): boolean {
+  if (paused) return value > low;
+  return value >= high;
+}
+
+function waitForChange(
+  signal: AbortSignal,
+  waiters: FlowWaiter[],
+): Promise<void> {
+  if (signal.aborted) return Promise.reject(abortReason(signal));
+  return new Promise<void>((resolve, reject) => {
+    const waiter: FlowWaiter = {
+      resolve,
+      signal,
+      onAbort: () => {
+        const index = waiters.indexOf(waiter);
+        if (index >= 0) waiters.splice(index, 1);
+        reject(abortReason(signal));
+      },
+    };
+    waiters.push(waiter);
+    signal.addEventListener("abort", waiter.onAbort, { once: true });
+    if (signal.aborted) waiter.onAbort();
+  });
+}
+
+function validateWatermarks(options: DecodeBackpressureOptions): void {
+  validatePair(
+    options.queueHighWatermark,
+    options.queueLowWatermark,
+    "decoder queue",
+  );
+  validatePair(
+    options.outstandingHighWatermark,
+    options.outstandingLowWatermark,
+    "decoder outstanding frame",
+  );
+}
+
+function validatePair(high: number, low: number, label: string): void {
+  if (!Number.isInteger(high) || high <= 0) {
+    throw new Error(`${label} high watermark must be a positive integer`);
+  }
+  if (!Number.isInteger(low) || low < 0 || low >= high) {
+    throw new Error(`${label} low watermark must be an integer below high`);
+  }
+}
+
+function safeClose(frame: VideoFrame): void {
+  try {
+    frame.close();
+  } catch {
+    // Preserve the first decoder or consumer failure.
+  }
+}
+
+function preferredFailure(
+  error: unknown,
+  signal: AbortSignal | undefined,
+  failure: { readonly reason: unknown } | undefined,
+): unknown {
+  if (failure) return failure.reason;
+  if (signal?.aborted) return abortReason(signal);
+  return error;
+}
+
+function throwFailure(
+  failure: { readonly reason: unknown } | undefined,
+): asserts failure is undefined {
+  if (failure) throw failure.reason;
+}
+
+function abortReason(signal?: AbortSignal): unknown {
+  return signal?.reason instanceof Error
     ? signal.reason
     : new Error("動画のデコードを中断しました");
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw abortReason(signal);
 }

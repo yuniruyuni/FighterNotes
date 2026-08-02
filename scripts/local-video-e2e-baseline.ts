@@ -4,7 +4,7 @@ import {
   type TimingSummary,
 } from "./local-video-e2e-lib";
 
-export const RUNNER_VERSION = 3;
+export const RUNNER_VERSION = 4;
 export const REQUIRED_PERFORMANCE_STAGES = [
   "firstPass",
   "spatialPass",
@@ -61,6 +61,20 @@ export interface BaselineCaseArtifact extends Record<string, unknown> {
   };
   readonly analysisMs: number;
   readonly performance: TimingSummary;
+  readonly spatialPerformance: SpatialPerformanceStats;
+}
+
+export interface SpatialPerformanceStats {
+  readonly frameCount: number;
+  readonly decoderQueueHighWatermark: number;
+  readonly decoderQueueLowWatermark: number;
+  readonly decoderOutstandingHighWatermark: number;
+  readonly decoderOutstandingLowWatermark: number;
+  readonly workerPendingHighWatermark: number;
+  readonly workerPendingLowWatermark: number;
+  readonly peakDecoderQueueSize: number;
+  readonly peakDecoderOutstandingFrames: number;
+  readonly peakWorkerPendingFrames: number;
 }
 
 export function compareFixtureIdSets(
@@ -138,6 +152,7 @@ export function parseBaselineArtifact(
       "fixtureContract",
       "analysisMs",
       "performance",
+      "spatialPerformance",
       "report",
       "timeline",
       "hpFeatures",
@@ -175,6 +190,10 @@ export function parseBaselineArtifact(
   if (Math.abs(analysisMs - performance.medianMs) > 1e-6) {
     throw new Error(`${label}.analysisMs must equal performance.medianMs`);
   }
+  const spatialPerformance = parseSpatialPerformanceStats(
+    value.spatialPerformance,
+    `${label}.spatialPerformance`,
+  );
   requireRecordPayload(value.report, `${label}.report`);
   requireRecordPayload(value.timeline, `${label}.timeline`);
   requireArrayPayload(value.hpFeatures, `${label}.hpFeatures`);
@@ -215,6 +234,102 @@ export function parseBaselineArtifact(
     },
     analysisMs,
     performance,
+    spatialPerformance,
+  };
+}
+
+export function parseSpatialPerformanceStats(
+  value: unknown,
+  label: string,
+): SpatialPerformanceStats {
+  if (!isRecord(value)) throw new Error(`${label} must be an object`);
+  const fields = [
+    "frameCount",
+    "decoderQueueHighWatermark",
+    "decoderQueueLowWatermark",
+    "decoderOutstandingHighWatermark",
+    "decoderOutstandingLowWatermark",
+    "workerPendingHighWatermark",
+    "workerPendingLowWatermark",
+    "peakDecoderQueueSize",
+    "peakDecoderOutstandingFrames",
+    "peakWorkerPendingFrames",
+  ] as const;
+  assertExactKeys(value, fields, label);
+  const parsed = Object.fromEntries(
+    fields.map((field) => [
+      field,
+      requiredInteger(value[field], `${label}.${field}`, 0),
+    ]),
+  ) as unknown as SpatialPerformanceStats;
+  validatePeak(
+    parsed.peakDecoderQueueSize,
+    parsed.decoderQueueHighWatermark,
+    `${label}.peakDecoderQueueSize`,
+  );
+  validatePeak(
+    parsed.peakDecoderOutstandingFrames,
+    parsed.decoderOutstandingHighWatermark,
+    `${label}.peakDecoderOutstandingFrames`,
+  );
+  validatePeak(
+    parsed.peakWorkerPendingFrames,
+    parsed.workerPendingHighWatermark,
+    `${label}.peakWorkerPendingFrames`,
+  );
+  validateWatermarkPair(
+    parsed.decoderQueueHighWatermark,
+    parsed.decoderQueueLowWatermark,
+    `${label}.decoderQueue`,
+  );
+  validateWatermarkPair(
+    parsed.decoderOutstandingHighWatermark,
+    parsed.decoderOutstandingLowWatermark,
+    `${label}.decoderOutstanding`,
+  );
+  validateWatermarkPair(
+    parsed.workerPendingHighWatermark,
+    parsed.workerPendingLowWatermark,
+    `${label}.workerPending`,
+  );
+  return parsed;
+}
+
+export function summarizeSpatialPerformanceStats(
+  runs: readonly SpatialPerformanceStats[],
+  label: string,
+): SpatialPerformanceStats {
+  const first = runs[0];
+  if (!first) throw new Error(`${label} requires at least one run`);
+  const stableFields = [
+    "frameCount",
+    "decoderQueueHighWatermark",
+    "decoderQueueLowWatermark",
+    "decoderOutstandingHighWatermark",
+    "decoderOutstandingLowWatermark",
+    "workerPendingHighWatermark",
+    "workerPendingLowWatermark",
+  ] as const;
+  for (const [index, run] of runs.entries()) {
+    for (const field of stableFields) {
+      if (run[field] !== first[field]) {
+        throw new Error(
+          `${label}[${index}].${field} changed from ${first[field]} to ${run[field]}`,
+        );
+      }
+    }
+  }
+  return {
+    ...first,
+    peakDecoderQueueSize: Math.max(
+      ...runs.map((run) => run.peakDecoderQueueSize),
+    ),
+    peakDecoderOutstandingFrames: Math.max(
+      ...runs.map((run) => run.peakDecoderOutstandingFrames),
+    ),
+    peakWorkerPendingFrames: Math.max(
+      ...runs.map((run) => run.peakWorkerPendingFrames),
+    ),
   };
 }
 
@@ -376,6 +491,30 @@ function requiredFiniteNumber(
     throw new Error(`${label} must be a finite number >= ${minimum}`);
   }
   return value;
+}
+
+function requiredInteger(
+  value: unknown,
+  label: string,
+  minimum: number,
+): number {
+  const parsed = requiredFiniteNumber(value, label, minimum);
+  if (!Number.isInteger(parsed)) {
+    throw new Error(`${label} must be an integer`);
+  }
+  return parsed;
+}
+
+function validatePeak(peak: number, high: number, label: string): void {
+  if (peak > high) {
+    throw new Error(`${label} exceeds its high watermark ${high}`);
+  }
+}
+
+function validateWatermarkPair(high: number, low: number, label: string): void {
+  if (high <= 0 || low >= high) {
+    throw new Error(`${label} watermarks must satisfy 0 <= low < high`);
+  }
 }
 
 function requireRecordPayload(value: unknown, label: string): void {

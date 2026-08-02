@@ -171,6 +171,12 @@ meter や入力が読めない場合、一部のイベントは HP ベースへ 
 480x270 の frame から actor anchor、bounding box、相対距離、左右順序、水平移動、
 小型移動体の軌道を抽出する。
 
+再 decode でも encoded queue と未処理 decoded frame を high/low watermark で制限する。
+RGBA buffer の Worker 転送も予約時点で pending 上限を確保し、ack が low watermark まで
+戻ったときだけ再開する。このため長い候補窓でも VideoFrame と transferable buffer の滞留量は
+窓長に比例しない。中断、decoder error、Worker error では待機中の admission を棄却し、受領済みの
+VideoFrame を閉じてから解析を終了する。
+
 空間観測は第一段の input / meter / contact 証拠を置き換えない。候補区間が実際に sampling され、
 必要数の観測と confidence を満たした場合だけ、jump、punish、dash throw、Drive Rush、
 teleport defense などを確認または棄却する。

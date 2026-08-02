@@ -140,6 +140,7 @@ async function handleMessage(
         type: "done",
         ...state.firstPassPayload,
         ...spatial,
+        spatialPerformance: message.spatialPerformance,
       });
       break;
     }

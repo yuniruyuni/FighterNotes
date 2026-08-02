@@ -116,8 +116,9 @@ WebCodecs の `VideoDecoder` へ encoded sample を供給する。各 decoded fr
 
 2 組の transferable buffer を main thread と
 `client/src/entrypoints/analyzer-worker.ts` の間で往復させる。
-デコーダの queue と Worker 未処理フレーム数には上限があり、長い動画でも
-ImageData が無制限に滞留しないよう backpressure を掛ける。
+第一段と候補区間の再デコードは、デコーダの queue、decoded frame、Worker 未処理フレーム数を
+high/low watermark で制限する。長い動画や密な候補窓でも ImageData が無制限に滞留しないよう
+backpressure を掛け、abort / error 時は VideoFrame と待機中 admission を解放する。
 
 動画解析は Secure Context と WebCodecs `VideoDecoder` を必須とする。HTTPS ではない
 LAN 内 IP、Worker、OffscreenCanvas 2D、`VideoFrame` の bitmap 切り出し、`VideoDecoder` の

@@ -12,7 +12,7 @@ function session(
     finishCount: 0,
     firstPass: async () => windows,
     resetSpatialWindow: async () => {},
-    sendSpatialFrame: () => {},
+    sendSpatialFrame: async () => {},
     drainSpatialFrames: async () => {},
     finishSpatialPass: () => {
       value.finishCount += 1;
