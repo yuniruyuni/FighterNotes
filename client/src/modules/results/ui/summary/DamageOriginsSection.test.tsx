@@ -3,7 +3,9 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type {
   AttributedDamageEvent,
+  DamageApproach,
   DamageBreakdown,
+  DamageContact,
   DamageOrigin,
   RoundSummary,
   StrikeKind,
@@ -17,6 +19,8 @@ function damage(
   hpDrop: number,
   origin: DamageOrigin,
   strikeKind?: StrikeKind,
+  approach?: DamageApproach,
+  contact?: DamageContact,
 ): AttributedDamageEvent {
   const start = sequence * 100;
   return {
@@ -33,6 +37,8 @@ function damage(
     ...(strikeKind
       ? { strike_kind: strikeKind, strike_kind_confidence: "high" as const }
       : {}),
+    ...(approach ? { approach } : {}),
+    ...(contact ? { contact, contact_confidence: "high" as const } : {}),
     contexts: origin === "throw" ? ["burnout"] : [],
   };
 }
@@ -121,6 +127,34 @@ describe("DamageOriginsSection", () => {
         label: "投げ・R1・60%",
       },
     ]);
+  });
+
+  test("接近手段と接触種別を同時に表示する", () => {
+    render(
+      <DamageOriginsSection
+        breakdown={{
+          attribution_version: 5,
+          total_hp_lost: 0.2,
+          classified_hp_lost: 0.2,
+          events: [
+            damage(
+              1,
+              1,
+              0.2,
+              "raw_drive_rush",
+              undefined,
+              "raw_drive_rush",
+              "throw",
+            ),
+          ],
+        }}
+        rounds={[round(1)]}
+        frameTimestamps={[]}
+        onSceneChange={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("生ドライブラッシュ→投げ")).toBeInTheDocument();
   });
 
   test("旧レポートには空の分析セクションを追加しない", () => {

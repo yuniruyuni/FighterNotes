@@ -27,6 +27,23 @@ pub enum DamageOrigin {
     Unclassified,
 }
 
+/// 被弾へ至った接近経路。接触種別とは独立して保持する。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DamageApproach {
+    RawDriveRush,
+}
+
+/// 接近経路とは独立した、実際の接触種別。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DamageContact {
+    Throw,
+    Strike,
+    DriveImpact,
+    Projectile,
+}
+
 /// 主起点とは独立した、被弾時の状況。複数の状況を同じ列へ付与できる。
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
@@ -54,6 +71,12 @@ pub struct AttributedDamageEvent {
     pub hp_drop: f32,
     pub origin: DamageOrigin,
     pub confidence: EventConfidence,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approach: Option<DamageApproach>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contact: Option<DamageContact>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contact_confidence: Option<EventConfidence>,
     /// 打撃起点を公式入力と照合できた場合のガード属性。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub strike_kind: Option<frame_data::StrikeKind>,

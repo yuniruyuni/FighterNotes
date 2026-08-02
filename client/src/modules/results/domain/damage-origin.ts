@@ -1,5 +1,7 @@
 import type {
   AttributedDamageEvent,
+  DamageApproach,
+  DamageContact,
   DamageOrigin,
   StrikeKind,
 } from "~/modules/analysis/contracts.js";
@@ -24,7 +26,21 @@ const STRIKE_LABELS: Record<StrikeKind, string> = {
   air: "空中攻撃",
 };
 
-export type DamageGroupKey = DamageOrigin | `strike_${StrikeKind}`;
+const APPROACH_LABELS: Record<DamageApproach, string> = {
+  raw_drive_rush: "生ドライブラッシュ",
+};
+
+const CONTACT_LABELS: Record<DamageContact, string> = {
+  throw: "投げ",
+  strike: "打撃",
+  drive_impact: "ドライブインパクト",
+  projectile: "飛び道具",
+};
+
+export type DamageGroupKey =
+  | DamageOrigin
+  | `strike_${StrikeKind}`
+  | `${DamageApproach}_${DamageContact}`;
 
 export interface DamageOriginRow {
   key: DamageGroupKey;
@@ -54,10 +70,7 @@ export function summarizeDamageOrigins(
   );
   const grouped = new Map<DamageGroupKey, AttributedDamageEvent[]>();
   for (const event of scoped) {
-    const key: DamageGroupKey =
-      event.origin === "strike" && event.strike_kind
-        ? `strike_${event.strike_kind}`
-        : event.origin;
+    const key = damageGroupKey(event);
     const group = grouped.get(key) ?? [];
     group.push(event);
     grouped.set(key, group);
@@ -66,13 +79,17 @@ export function summarizeDamageOrigins(
     .map(([key, groupedEvents]) => {
       const origin = groupedEvents[0].origin;
       const strikeKind = groupedEvents[0].strike_kind;
+      const approach = groupedEvents[0].approach;
+      const contact = groupedEvents[0].contact;
       return {
         key,
         origin,
         label:
-          origin === "strike" && strikeKind
-            ? STRIKE_LABELS[strikeKind]
-            : ORIGIN_LABELS[origin],
+          approach && contact
+            ? `${APPROACH_LABELS[approach]}→${CONTACT_LABELS[contact]}`
+            : origin === "strike" && strikeKind
+              ? STRIKE_LABELS[strikeKind]
+              : ORIGIN_LABELS[origin],
         hpLost: groupedEvents.reduce((sum, event) => sum + event.hp_drop, 0),
         compositionPercent: 0,
         events: groupedEvents,
@@ -99,6 +116,16 @@ export function summarizeDamageOrigins(
       totalHpLost > 0 ? (classifiedHpLost / totalHpLost) * 100 : 0,
     rows,
   };
+}
+
+function damageGroupKey(event: AttributedDamageEvent): DamageGroupKey {
+  if (event.approach && event.contact) {
+    return `${event.approach}_${event.contact}`;
+  }
+  if (event.origin === "strike" && event.strike_kind) {
+    return `strike_${event.strike_kind}`;
+  }
+  return event.origin;
 }
 
 function allocateCompositionTenths(values: readonly number[]): number[] {

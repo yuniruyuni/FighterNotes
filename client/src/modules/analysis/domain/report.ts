@@ -21,6 +21,10 @@ export type DamageOrigin =
   | "strike"
   | "unclassified";
 
+export type DamageApproach = "raw_drive_rush";
+
+export type DamageContact = "throw" | "strike" | "drive_impact" | "projectile";
+
 export type StrikeKind = "high" | "overhead" | "low" | "air";
 
 export type DamageContext =
@@ -61,6 +65,9 @@ export interface AttributedDamageEvent {
   hp_drop: number;
   origin: DamageOrigin;
   confidence: "low" | "medium" | "high";
+  approach?: DamageApproach;
+  contact?: DamageContact;
+  contact_confidence?: "low" | "medium" | "high";
   strike_kind?: StrikeKind;
   strike_kind_confidence?: "low" | "medium" | "high";
   contexts: DamageContext[];

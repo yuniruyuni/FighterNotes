@@ -81,7 +81,7 @@ fn damage_breakdown_prefers_compound_threat_and_adds_advice_context() {
     assert_eq!(breakdown.events[0].contexts, [DamageContext::Mashing]);
 
     let json = serde_json::to_value(&breakdown).expect("WASM report JSONへ直列化できる");
-    assert_eq!(json["attribution_version"], 4);
+    assert_eq!(json["attribution_version"], 5);
     assert_eq!(json["events"][0]["origin"], "compound_threat");
     assert_eq!(json["events"][0]["confidence"], "medium");
     assert_eq!(json["events"][0]["contexts"][0], "mashing");
