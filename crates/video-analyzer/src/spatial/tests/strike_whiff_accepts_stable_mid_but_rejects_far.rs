@@ -45,11 +45,7 @@ fn strike_whiff_accepts_stable_mid_but_rejects_far() {
         .collect();
     refine_match_events_with_spatial(&mut mid, &mid_observations, &context);
     assert_eq!(mid.punishes[0].reachability, PunishReachability::Confirmed);
-    let report = crate::advice::build_report(&[], &mid, "p2", Some("LUKE"));
-    let card = report
-        .cards
-        .iter()
-        .find(|card| card.id == "punish_fail")
+    let card = crate::advice::detect_punish_fail(&mid, 2, Some("LUKE"))
         .expect("安定した距離確認後だけ確反失敗を提示する");
     assert_eq!(card.evidence[0].frame, 200);
     assert!(card.evidence[0].label.contains("距離確認"));

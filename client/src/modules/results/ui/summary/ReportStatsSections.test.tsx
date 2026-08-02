@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { render, screen, within } from "@testing-library/react";
+import type {
+  AnalysisAvailability,
+  AnalysisCoverage,
+} from "~/modules/analysis/contracts.js";
 import { syntheticTacticStats } from "~/test-support/analysis.js";
 import {
   InputStatsSection,
@@ -18,6 +22,44 @@ const superStats = syntheticTacticStats({
   super_gauge_end: 0,
   opponent_super_gauge_end: 0,
 });
+
+function availability(
+  overrides: Partial<AnalysisAvailability> = {},
+): AnalysisAvailability {
+  return {
+    own_hp: "available",
+    opponent_hp: "available",
+    own_drive: "available",
+    opponent_drive: "available",
+    own_super: "available",
+    opponent_super: "available",
+    own_input: "available",
+    opponent_input: "available",
+    own_meter: "available",
+    opponent_meter: "available",
+    contacts: "available",
+    punishes: "available",
+    spatial: "available",
+    own_attack_info: "available",
+    opponent_attack_info: "available",
+    ...overrides,
+  };
+}
+
+function explicitCoverage(
+  overrides: Partial<AnalysisAvailability> = {},
+): AnalysisCoverage {
+  return {
+    match_frames: 100,
+    analyzed_match_frames: 100,
+    input_segments: 1,
+    analyzed_input_segments: 1,
+    detector_match_frames: 100,
+    own_super_end_reliable: true,
+    opponent_super_end_reliable: true,
+    availability: availability(overrides),
+  };
+}
 
 describe("TacticStatsSection detector coverage", () => {
   test("SAが全区間uncertainなら使用0回と表示しない", () => {
@@ -131,6 +173,86 @@ describe("TacticStatsSection detector coverage", () => {
     expect(damage).not.toBeNull();
     expect(
       within(damage as HTMLElement).getByText("確認不能"),
+    ).toBeInTheDocument();
+  });
+
+  test("新レポートは分母0を利用可能扱いせず、旧レポートだけ互換表示する", () => {
+    render(
+      <TacticStatsSection
+        stats={superStats}
+        coverage={{
+          match_frames: 0,
+          analyzed_match_frames: 0,
+          input_segments: 0,
+          analyzed_input_segments: 0,
+          detector_match_frames: 0,
+          availability: availability({
+            own_hp: "unavailable",
+            opponent_hp: "unavailable",
+            own_drive: "unavailable",
+            opponent_drive: "unavailable",
+            own_super: "unavailable",
+            opponent_super: "unavailable",
+            own_input: "unavailable",
+            opponent_input: "unavailable",
+            own_meter: "unavailable",
+            opponent_meter: "unavailable",
+            contacts: "unavailable",
+            punishes: "unavailable",
+            spatial: "not_applicable",
+            own_attack_info: "not_applicable",
+            opponent_attack_info: "not_applicable",
+          }),
+        }}
+      />,
+    );
+
+    const antiAir = screen.getByText("対空 成功 / 機会").closest(".stat-item");
+    const ownSuper = screen.getByText("自分のSA / CA").closest(".stat-item");
+    expect(
+      within(antiAir as HTMLElement).getByText("確認不能"),
+    ).toBeInTheDocument();
+    expect(
+      within(ownSuper as HTMLElement).getByText("確認不能"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("自分 確認不能 / 相手 確認不能"),
+    ).toBeInTheDocument();
+  });
+
+  test("DI・生ラッシュ・SA文脈の固有依存関係を可用性契約から使う", () => {
+    render(
+      <TacticStatsSection
+        stats={syntheticTacticStats({
+          di_faced: 1,
+          raw_drive_rushes_faced: 1,
+          sa1_used: 1,
+          sa2_used: 0,
+          sa3_used: 0,
+          ca_used: 0,
+        })}
+        coverage={explicitCoverage({
+          own_input: "unavailable",
+          opponent_drive: "unavailable",
+          punishes: "unavailable",
+        })}
+      />,
+    );
+
+    for (const label of [
+      "DI返し / 相手DI",
+      "生ラッシュ対処 / 相手の生ラッシュ",
+      "SAを使った文脈",
+    ]) {
+      const item = screen.getByText(label).closest(".stat-item");
+      expect(item).not.toBeNull();
+      expect(
+        within(item as HTMLElement).getByText("少なくとも 1 件"),
+      ).toBeInTheDocument();
+    }
+    const ownSuper = screen.getByText("自分のSA / CA").closest(".stat-item");
+    expect(
+      within(ownSuper as HTMLElement).getByText("1 回"),
     ).toBeInTheDocument();
   });
 });

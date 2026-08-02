@@ -43,6 +43,14 @@ impl DamageAttackEvidence {
             && self.confidence != EventConfidence::Low
             && self.hp_consistency != AttackDamageConsistency::Mismatch
     }
+
+    /// 断定的な表示値とcoverageの分子に使える、完全かつHP整合済みの証拠。
+    pub fn exact_damage_is_strictly_reliable(&self) -> bool {
+        self.complete
+            && !self.recovered_from_max
+            && self.confidence == EventConfidence::High
+            && self.hp_consistency == AttackDamageConsistency::Consistent
+    }
 }
 
 /// SA/CA使用へ帰属できたゲーム内コンボ表示。

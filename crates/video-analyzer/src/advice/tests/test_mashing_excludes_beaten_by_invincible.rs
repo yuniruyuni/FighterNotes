@@ -52,7 +52,7 @@ fn test_mashing_excludes_beaten_by_invincible() {
         *s = MeterState::Invincible;
     }
     ev.meter_state = [vec![MeterState::Free; n], opp_state];
-    let report = build_report(&[], &ev, "p1", None);
+    let report = detector_test_report(&ev, "p1");
     assert!(
         report.cards.iter().all(|c| c.id != "mashing"),
         "弾抜け（無敵技）に狩られた場面は暴れにしない"

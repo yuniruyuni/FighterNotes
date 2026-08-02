@@ -47,29 +47,68 @@ pub(crate) fn build_advice_cards(
 
 fn card_has_required_coverage(card: &AdviceCard, coverage: &AnalysisCoverage) -> bool {
     let total = coverage.detector_match_frames;
-    let own_input = detector_coverage_is_sufficient(coverage.own_input_observed_frames, total);
-    let opponent_input =
-        detector_coverage_is_sufficient(coverage.opponent_input_observed_frames, total);
-    let own_hp = detector_coverage_is_sufficient(coverage.own_hp_reliable_frames, total);
-    let opponent_hp = detector_coverage_is_sufficient(coverage.opponent_hp_reliable_frames, total);
-    let both_meter = detector_coverage_is_sufficient(
-        coverage
-            .own_meter_mapped_frames
-            .min(coverage.opponent_meter_mapped_frames),
-        total,
+    let legacy_detector = |observed| detector_coverage_is_sufficient(observed, total);
+    let status = coverage.availability.as_ref();
+    let own_input = status.map_or_else(
+        || legacy_detector(coverage.own_input_observed_frames),
+        |value| value.own_input.is_available(),
     );
-    let own_drive = detector_coverage_is_sufficient(coverage.own_drive_reliable_frames, total);
-    let own_super = super_coverage_is_sufficient(coverage.own_super_reliable_frames, total);
-    let spatial = detector_coverage_is_sufficient(
-        coverage.spatial_sampled_frames,
-        coverage.spatial_candidate_frames,
-    ) && spatial_coverage_is_sufficient(
-        coverage.spatial_usable_frames,
-        coverage.spatial_candidate_frames,
+    let opponent_input = status.map_or_else(
+        || legacy_detector(coverage.opponent_input_observed_frames),
+        |value| value.opponent_input.is_available(),
     );
-    let attack_info = detector_coverage_is_sufficient(
-        coverage.attack_damage_linked,
-        coverage.attack_damage_events,
+    let own_hp = status.map_or_else(
+        || legacy_detector(coverage.own_hp_reliable_frames),
+        |value| value.own_hp.is_available(),
+    );
+    let opponent_hp = status.map_or_else(
+        || legacy_detector(coverage.opponent_hp_reliable_frames),
+        |value| value.opponent_hp.is_available(),
+    );
+    let both_meter = status.map_or_else(
+        || {
+            legacy_detector(
+                coverage
+                    .own_meter_mapped_frames
+                    .min(coverage.opponent_meter_mapped_frames),
+            )
+        },
+        |value| value.own_meter.is_available() && value.opponent_meter.is_available(),
+    );
+    let own_drive = status.map_or_else(
+        || legacy_detector(coverage.own_drive_reliable_frames),
+        |value| value.own_drive.is_available(),
+    );
+    let own_super = status.map_or_else(
+        || super_coverage_is_sufficient(coverage.own_super_reliable_frames, total),
+        |value| value.own_super.is_available(),
+    );
+    let spatial = status.map_or_else(
+        || {
+            detector_coverage_is_sufficient(
+                coverage.spatial_sampled_frames,
+                coverage.spatial_candidate_frames,
+            ) && spatial_coverage_is_sufficient(
+                coverage.spatial_usable_frames,
+                coverage.spatial_candidate_frames,
+            )
+        },
+        |value| value.spatial.is_available(),
+    );
+    let contacts = status.map_or(both_meter && own_hp && opponent_hp, |value| {
+        value.contacts.is_available()
+    });
+    let punishes = status.map_or(contacts && own_input && opponent_input, |value| {
+        value.punishes.is_available()
+    });
+    let own_attack_info = status.map_or_else(
+        || {
+            detector_coverage_is_sufficient(
+                coverage.attack_damage_linked,
+                coverage.attack_damage_events,
+            )
+        },
+        |value| value.own_attack_info.is_available(),
     );
 
     match card.id.as_str() {
@@ -82,20 +121,20 @@ fn card_has_required_coverage(card: &AdviceCard, coverage: &AnalysisCoverage) ->
         "mashing"
         | "press_while_minus"
         | "throw_while_minus"
-        | "guard_break"
         | "throw_interrupted_by_invincible"
         | "throw_whiff_punished" => own_input && both_meter && own_hp,
+        "guard_break" => own_input && contacts && own_hp,
         // 発生・硬直・接触をフレームメーターから作るカード。
-        "reversal_punished" => both_meter && own_hp,
-        "low_conversion" => both_meter && opponent_hp,
+        "reversal_punished" => punishes && own_hp,
+        "low_conversion" => punishes && opponent_hp,
         // 到達距離まで断定するカードは候補区間の空間観測も必要。
-        "punish_fail" => both_meter && spatial && own_hp,
+        "punish_fail" => punishes && spatial && own_hp,
         "teleport_defense" => both_meter && spatial && own_hp,
-        "punish_missed" => both_meter && spatial && own_hp,
+        "punish_missed" => punishes && spatial && own_hp,
         // 複合攻撃の成立自体はmeter/contactから確定し、距離は使わない。
-        "layered_defense" => both_meter && own_hp,
+        "layered_defense" => contacts && own_hp,
         "burnout" => own_drive && own_hp && opponent_hp,
-        "low_scaling_super" => own_super && attack_info && opponent_hp,
+        "low_scaling_super" => own_super && contacts && own_attack_info && opponent_hp,
         "early_hits" | "big_hits" => own_hp,
         "lead_loss" => own_hp && opponent_hp,
         _ => true,

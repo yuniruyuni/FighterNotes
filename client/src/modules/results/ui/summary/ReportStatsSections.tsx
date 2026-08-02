@@ -1,4 +1,5 @@
 import type {
+  AnalysisAvailability,
   AnalysisCoverage,
   InputStats,
   TacticStats,
@@ -17,13 +18,18 @@ function coverageRatioIsSufficient(
   total: number,
   requiredPercent: number,
 ): boolean {
+  // availabilityが無いruleset v8以前だけの互換計算。新レポートの分母0は
+  // Rust側の明示的なunavailable/not_applicableを使う。
   return total === 0 || (observed ?? 0) * 100 >= total * requiredPercent;
 }
 
 function detectorCoverageIsSufficient(
   coverage: AnalysisCoverage | undefined,
+  key: keyof AnalysisAvailability,
   observed: number | undefined,
 ): boolean {
+  const explicit = coverage?.availability?.[key];
+  if (explicit !== undefined) return explicit === "available";
   const total = coverage?.detector_match_frames ?? 0;
   return coverageRatioIsSufficient(
     observed,
@@ -34,10 +40,22 @@ function detectorCoverageIsSufficient(
 
 function superCoverageIsSufficient(
   coverage: AnalysisCoverage | undefined,
+  key: "own_super" | "opponent_super",
   observed: number | undefined,
 ): boolean {
+  const explicit = coverage?.availability?.[key];
+  if (explicit !== undefined) return explicit === "available";
   const total = coverage?.detector_match_frames ?? 0;
   return coverageRatioIsSufficient(observed, total, MIN_SUPER_COVERAGE_PERCENT);
+}
+
+function explicitOrLegacyAvailability(
+  coverage: AnalysisCoverage | undefined,
+  key: keyof AnalysisAvailability,
+  legacy: () => boolean,
+): boolean {
+  const explicit = coverage?.availability?.[key];
+  return explicit === undefined ? legacy() : explicit === "available";
 }
 
 type StatItem = [string, string, string?];
@@ -69,23 +87,30 @@ export function InputStatsSection({
 }) {
   const inputCoverageMissing = !detectorCoverageIsSufficient(
     coverage,
+    "own_input",
     coverage?.own_input_observed_frames,
   );
   const ownHpAvailable = detectorCoverageIsSufficient(
     coverage,
+    "own_hp",
     coverage?.own_hp_reliable_frames,
   );
   const opponentHpAvailable = detectorCoverageIsSufficient(
     coverage,
+    "opponent_hp",
     coverage?.opponent_hp_reliable_frames,
   );
-  const meterAvailable = detectorCoverageIsSufficient(
-    coverage,
-    Math.min(
-      coverage?.own_meter_mapped_frames ?? 0,
-      coverage?.opponent_meter_mapped_frames ?? 0,
-    ),
-  );
+  const meterAvailable =
+    detectorCoverageIsSufficient(
+      coverage,
+      "own_meter",
+      coverage?.own_meter_mapped_frames,
+    ) &&
+    detectorCoverageIsSufficient(
+      coverage,
+      "opponent_meter",
+      coverage?.opponent_meter_mapped_frames,
+    );
   return (
     <section className="summary-section" data-wm="Stats">
       <h2>入力習慣の統計</h2>
@@ -150,56 +175,91 @@ export function TacticStatsSection({
     (stats.opponent_ca_used ?? 0);
   const ownInputAvailable = detectorCoverageIsSufficient(
     coverage,
+    "own_input",
     coverage?.own_input_observed_frames,
   );
   const opponentInputAvailable = detectorCoverageIsSufficient(
     coverage,
+    "opponent_input",
     coverage?.opponent_input_observed_frames,
   );
   const ownHpAvailable = detectorCoverageIsSufficient(
     coverage,
+    "own_hp",
     coverage?.own_hp_reliable_frames,
   );
   const opponentHpAvailable = detectorCoverageIsSufficient(
     coverage,
+    "opponent_hp",
     coverage?.opponent_hp_reliable_frames,
   );
-  const meterAvailable = detectorCoverageIsSufficient(
-    coverage,
-    Math.min(
-      coverage?.own_meter_mapped_frames ?? 0,
-      coverage?.opponent_meter_mapped_frames ?? 0,
-    ),
-  );
+  const meterAvailable =
+    detectorCoverageIsSufficient(
+      coverage,
+      "own_meter",
+      coverage?.own_meter_mapped_frames,
+    ) &&
+    detectorCoverageIsSufficient(
+      coverage,
+      "opponent_meter",
+      coverage?.opponent_meter_mapped_frames,
+    );
   const driveAvailable = detectorCoverageIsSufficient(
     coverage,
+    "own_drive",
     coverage?.own_drive_reliable_frames,
+  );
+  const opponentDriveAvailable = detectorCoverageIsSufficient(
+    coverage,
+    "opponent_drive",
+    coverage?.opponent_drive_reliable_frames,
   );
   const ownSuperAvailable = superCoverageIsSufficient(
     coverage,
+    "own_super",
     coverage?.own_super_reliable_frames,
   );
   const opponentSuperAvailable = superCoverageIsSufficient(
     coverage,
+    "opponent_super",
     coverage?.opponent_super_reliable_frames,
   );
-  const attackInfoAvailable = coverageRatioIsSufficient(
-    coverage?.attack_damage_linked,
-    coverage?.attack_damage_events ?? 0,
-    MIN_DETECTOR_COVERAGE_PERCENT,
+  const attackInfoAvailable = explicitOrLegacyAvailability(
+    coverage,
+    "own_attack_info",
+    () =>
+      coverageRatioIsSufficient(
+        coverage?.attack_damage_linked,
+        coverage?.attack_damage_events ?? 0,
+        MIN_DETECTOR_COVERAGE_PERCENT,
+      ),
   );
   const spatialCandidates = coverage?.spatial_candidate_frames ?? 0;
-  const spatialAvailable =
-    coverageRatioIsSufficient(
-      coverage?.spatial_sampled_frames,
-      spatialCandidates,
-      MIN_DETECTOR_COVERAGE_PERCENT,
-    ) &&
-    coverageRatioIsSufficient(
-      coverage?.spatial_usable_frames,
-      spatialCandidates,
-      MIN_SPATIAL_COVERAGE_PERCENT,
-    );
+  const spatialAvailable = explicitOrLegacyAvailability(
+    coverage,
+    "spatial",
+    () =>
+      coverageRatioIsSufficient(
+        coverage?.spatial_sampled_frames,
+        spatialCandidates,
+        MIN_DETECTOR_COVERAGE_PERCENT,
+      ) &&
+      coverageRatioIsSufficient(
+        coverage?.spatial_usable_frames,
+        spatialCandidates,
+        MIN_SPATIAL_COVERAGE_PERCENT,
+      ),
+  );
+  const contactsAvailable = explicitOrLegacyAvailability(
+    coverage,
+    "contacts",
+    () => meterAvailable && ownHpAvailable && opponentHpAvailable,
+  );
+  const punishesAvailable = explicitOrLegacyAvailability(
+    coverage,
+    "punishes",
+    () => contactsAvailable && ownInputAvailable && opponentInputAvailable,
+  );
   const items: StatItem[] = [
     coverageAwareItem(
       opponentInputAvailable && ownHpAvailable && opponentHpAvailable,
@@ -215,8 +275,10 @@ export function TacticStatsSection({
       "相手入力または両者のHPバーの認識率が不足しています。",
     ),
     coverageAwareItem(
-      opponentInputAvailable &&
+      ownInputAvailable &&
+        opponentInputAvailable &&
         meterAvailable &&
+        contactsAvailable &&
         ownHpAvailable &&
         opponentHpAvailable,
       [
@@ -232,11 +294,13 @@ export function TacticStatsSection({
         ),
       ],
       stats.di_faced + stats.di_unconfirmed,
-      "相手入力、フレームメーター、または両者のHPバーの認識率が不足しています。",
+      "自分・相手の入力、フレームメーター、接触、または両者のHPバーの認識率が不足しています。",
     ),
     coverageAwareItem(
       opponentInputAvailable &&
+        opponentDriveAvailable &&
         meterAvailable &&
+        contactsAvailable &&
         ownHpAvailable &&
         spatialAvailable,
       [
@@ -252,11 +316,12 @@ export function TacticStatsSection({
         ),
       ],
       stats.raw_drive_rushes_faced + stats.raw_drive_rushes_unconfirmed,
-      "相手入力、フレームメーター、自分のHPバー、または空間解析の認識率が不足しています。",
+      "相手入力・Driveゲージ、フレームメーター、接触、自分のHPバー、または空間解析の認識率が不足しています。",
     ),
     coverageAwareItem(
       opponentInputAvailable &&
         meterAvailable &&
+        contactsAvailable &&
         ownHpAvailable &&
         spatialAvailable,
       [`${stats.dash_throws_faced} 回`, "前ステップ投げを受けた"],
@@ -270,7 +335,10 @@ export function TacticStatsSection({
       "自分の入力またはフレームメーターの認識率が不足しています。",
     ),
     coverageAwareItem(
-      ownInputAvailable && meterAvailable && ownHpAvailable,
+      ownInputAvailable &&
+        meterAvailable &&
+        contactsAvailable &&
+        ownHpAvailable,
       [
         formatTacticCount(
           stats.fastest_strike_losses,
@@ -283,7 +351,10 @@ export function TacticStatsSection({
       "自分の入力、フレームメーター、または自分のHPバーの認識率が不足しています。",
     ),
     coverageAwareItem(
-      ownInputAvailable && meterAvailable && ownHpAvailable,
+      ownInputAvailable &&
+        meterAvailable &&
+        contactsAvailable &&
+        ownHpAvailable,
       [
         formatTacticCount(
           stats.fastest_throw_losses,
@@ -308,18 +379,26 @@ export function TacticStatsSection({
   ];
   if (stats.sa1_used !== undefined) {
     const hasDetectorCoverage = (coverage?.detector_match_frames ?? 0) > 0;
+    const hasExplicitAvailability = coverage?.availability !== undefined;
     const ownSuperEndAvailable =
-      !hasDetectorCoverage || coverage?.own_super_end_reliable === true;
+      ownSuperAvailable &&
+      (coverage?.own_super_end_reliable === true ||
+        (!hasExplicitAvailability && !hasDetectorCoverage));
     const opponentSuperEndAvailable =
-      !hasDetectorCoverage || coverage?.opponent_super_end_reliable === true;
-    const ownSuperOutcomeDetail =
-      ownHpAvailable && opponentHpAvailable
-        ? `SA1 ${stats.sa1_used ?? 0} / SA2 ${stats.sa2_used ?? 0} / SA3 ${stats.sa3_used ?? 0} / CA ${stats.ca_used ?? 0}・ヒット ${stats.super_hits ?? 0} / ガード ${stats.super_blocked ?? 0} / 即時接触なし ${stats.super_no_immediate_contact ?? 0} / 反撃を受けた ${stats.super_punished ?? 0} / KO ${stats.super_kos ?? 0}`
-        : `SA1 ${stats.sa1_used ?? 0} / SA2 ${stats.sa2_used ?? 0} / SA3 ${stats.sa3_used ?? 0} / CA ${stats.ca_used ?? 0}・HPバー認識率不足のため結果内訳は確認不能`;
-    const opponentSuperOutcomeDetail =
-      ownHpAvailable && opponentHpAvailable
-        ? `SA1 ${stats.opponent_sa1_used ?? 0} / SA2 ${stats.opponent_sa2_used ?? 0} / SA3 ${stats.opponent_sa3_used ?? 0} / CA ${stats.opponent_ca_used ?? 0}・ヒット ${stats.opponent_super_hits ?? 0} / ガード ${stats.opponent_super_blocked ?? 0} / 即時接触なし ${stats.opponent_super_no_immediate_contact ?? 0} / 反撃を受けた ${stats.opponent_super_punished ?? 0} / KO ${stats.opponent_super_kos ?? 0}`
-        : `SA1 ${stats.opponent_sa1_used ?? 0} / SA2 ${stats.opponent_sa2_used ?? 0} / SA3 ${stats.opponent_sa3_used ?? 0} / CA ${stats.opponent_ca_used ?? 0}・HPバー認識率不足のため結果内訳は確認不能`;
+      opponentSuperAvailable &&
+      (coverage?.opponent_super_end_reliable === true ||
+        (!hasExplicitAvailability && !hasDetectorCoverage));
+    const superOutcomeAvailable =
+      contactsAvailable &&
+      punishesAvailable &&
+      ownHpAvailable &&
+      opponentHpAvailable;
+    const ownSuperOutcomeDetail = superOutcomeAvailable
+      ? `SA1 ${stats.sa1_used ?? 0} / SA2 ${stats.sa2_used ?? 0} / SA3 ${stats.sa3_used ?? 0} / CA ${stats.ca_used ?? 0}・ヒット ${stats.super_hits ?? 0} / ガード ${stats.super_blocked ?? 0} / 即時接触なし ${stats.super_no_immediate_contact ?? 0} / 反撃を受けた ${stats.super_punished ?? 0} / KO ${stats.super_kos ?? 0}`
+      : `SA1 ${stats.sa1_used ?? 0} / SA2 ${stats.sa2_used ?? 0} / SA3 ${stats.sa3_used ?? 0} / CA ${stats.ca_used ?? 0}・接触、確反、またはHPバーの認識率不足のため結果内訳は確認不能`;
+    const opponentSuperOutcomeDetail = superOutcomeAvailable
+      ? `SA1 ${stats.opponent_sa1_used ?? 0} / SA2 ${stats.opponent_sa2_used ?? 0} / SA3 ${stats.opponent_sa3_used ?? 0} / CA ${stats.opponent_ca_used ?? 0}・ヒット ${stats.opponent_super_hits ?? 0} / ガード ${stats.opponent_super_blocked ?? 0} / 即時接触なし ${stats.opponent_super_no_immediate_contact ?? 0} / 反撃を受けた ${stats.opponent_super_punished ?? 0} / KO ${stats.opponent_super_kos ?? 0}`
+      : `SA1 ${stats.opponent_sa1_used ?? 0} / SA2 ${stats.opponent_sa2_used ?? 0} / SA3 ${stats.opponent_sa3_used ?? 0} / CA ${stats.opponent_ca_used ?? 0}・接触、確反、またはHPバーの認識率不足のため結果内訳は確認不能`;
     items.push(
       coverageAwareItem(
         ownSuperAvailable,
@@ -328,17 +407,22 @@ export function TacticStatsSection({
         "自分のSAゲージ認識率が不足しているため、全使用回数は確認不能です。",
       ),
       coverageAwareItem(
-        ownSuperAvailable && ownHpAvailable && opponentHpAvailable,
+        ownSuperAvailable &&
+          meterAvailable &&
+          contactsAvailable &&
+          punishesAvailable,
         [
           `コンボ ${stats.super_combo_uses ?? 0} / 確反 ${stats.super_punish_uses ?? 0} / 切り返し ${stats.super_reversal_uses ?? 0} / 単発 ${stats.super_neutral_uses ?? 0}`,
           "SAを使った文脈",
         ],
         superUsed,
-        "自分のSAゲージまたは両者のHPバーの認識率が不足しているため、全使用場面は確認不能です。",
+        "自分のSAゲージ、フレームメーター、接触、または確反解析の認識率が不足しているため、全使用文脈は確認不能です。",
       ),
       ...((stats.super_damage_samples ?? 0) > 0 ||
       (superUsed > 0 &&
-        (coverage?.attack_damage_events ?? 0) > 0 &&
+        (coverage?.own_attack_damage_events ??
+          coverage?.attack_damage_events ??
+          0) > 0 &&
         !attackInfoAvailable)
         ? ([
             coverageAwareItem(

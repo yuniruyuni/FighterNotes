@@ -49,7 +49,7 @@ fn test_mashing_ignores_projectile_block_context() {
     for k in 997..=1000 {
         ev.meter_state[0][k] = MeterState::Startup;
     }
-    let report = build_report(&[], &ev, "p1", None);
+    let report = detector_test_report(&ev, "p1");
     assert!(
         report.cards.iter().all(|c| c.id != "mashing"),
         "弾ガードは被圧の証拠にしない"
@@ -57,6 +57,6 @@ fn test_mashing_ignores_projectile_block_context() {
 
     // 対照: 非弾（密着）ガードなら被圧として計上される
     ev.contacts[0].projectile = false;
-    let report = build_report(&[], &ev, "p1", None);
+    let report = detector_test_report(&ev, "p1");
     assert!(report.cards.iter().any(|c| c.id == "mashing"));
 }

@@ -148,6 +148,35 @@ export interface AnalysisCoverage {
   attack_damage_consistent?: number;
   attack_damage_mismatched?: number;
   attack_damage_unverified?: number;
+  own_attack_damage_events?: number;
+  own_attack_damage_usable?: number;
+  opponent_attack_damage_events?: number;
+  opponent_attack_damage_usable?: number;
+  /** ruleset v9以降は解析器が依存関係と閾値を解決して付与する。 */
+  availability?: AnalysisAvailability;
+}
+
+export type EvidenceAvailability =
+  | "available"
+  | "unavailable"
+  | "not_applicable";
+
+export interface AnalysisAvailability {
+  own_hp: EvidenceAvailability;
+  opponent_hp: EvidenceAvailability;
+  own_drive: EvidenceAvailability;
+  opponent_drive: EvidenceAvailability;
+  own_super: EvidenceAvailability;
+  opponent_super: EvidenceAvailability;
+  own_input: EvidenceAvailability;
+  opponent_input: EvidenceAvailability;
+  own_meter: EvidenceAvailability;
+  opponent_meter: EvidenceAvailability;
+  contacts: EvidenceAvailability;
+  punishes: EvidenceAvailability;
+  spatial: EvidenceAvailability;
+  own_attack_info: EvidenceAvailability;
+  opponent_attack_info: EvidenceAvailability;
 }
 
 export interface InputStats {

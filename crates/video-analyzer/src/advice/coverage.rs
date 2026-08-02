@@ -10,15 +10,49 @@ pub(crate) const MIN_SUPER_COVERAGE_PERCENT: u64 = 20;
 pub(crate) const MIN_SPATIAL_COVERAGE_PERCENT: u64 = 20;
 
 pub(crate) fn detector_coverage_is_sufficient(observed: u32, total: u32) -> bool {
-    total == 0 || u64::from(observed) * 100 >= u64::from(total) * MIN_DETECTOR_COVERAGE_PERCENT
+    total > 0 && u64::from(observed) * 100 >= u64::from(total) * MIN_DETECTOR_COVERAGE_PERCENT
 }
 
 pub(crate) fn super_coverage_is_sufficient(observed: u32, total: u32) -> bool {
-    total == 0 || u64::from(observed) * 100 >= u64::from(total) * MIN_SUPER_COVERAGE_PERCENT
+    total > 0 && u64::from(observed) * 100 >= u64::from(total) * MIN_SUPER_COVERAGE_PERCENT
 }
 
 pub(crate) fn spatial_coverage_is_sufficient(observed: u32, total: u32) -> bool {
-    total == 0 || u64::from(observed) * 100 >= u64::from(total) * MIN_SPATIAL_COVERAGE_PERCENT
+    total > 0 && u64::from(observed) * 100 >= u64::from(total) * MIN_SPATIAL_COVERAGE_PERCENT
+}
+
+fn detector_availability(observed: u32, total: u32) -> EvidenceAvailability {
+    if detector_coverage_is_sufficient(observed, total) {
+        EvidenceAvailability::Available
+    } else {
+        EvidenceAvailability::Unavailable
+    }
+}
+
+fn super_availability(observed: u32, total: u32) -> EvidenceAvailability {
+    if super_coverage_is_sufficient(observed, total) {
+        EvidenceAvailability::Available
+    } else {
+        EvidenceAvailability::Unavailable
+    }
+}
+
+fn opportunity_availability(
+    usable: u32,
+    total: u32,
+    sufficient: impl FnOnce(u32, u32) -> bool,
+) -> EvidenceAvailability {
+    if total == 0 {
+        EvidenceAvailability::NotApplicable
+    } else if sufficient(usable, total) {
+        EvidenceAvailability::Available
+    } else {
+        EvidenceAvailability::Unavailable
+    }
+}
+
+fn strict_attack_evidence(evidence: &crate::match_events::DamageAttackEvidence) -> bool {
+    evidence.exact_damage_is_strictly_reliable()
 }
 
 pub(crate) fn build_coverage(
@@ -156,7 +190,30 @@ pub(crate) fn build_coverage(
     };
     let attack_damage_events = events.damage.len() as u32;
     let attack_evidence: Vec<_> = events.attack_evidence.damage.iter().collect();
-    let coverage = AnalysisCoverage {
+    let own_attack_damage_events = events
+        .damage
+        .iter()
+        .filter(|damage| damage.victim as usize == opponent_index + 1)
+        .count() as u32;
+    let opponent_attack_damage_events = events
+        .damage
+        .iter()
+        .filter(|damage| damage.victim as usize == own_index + 1)
+        .count() as u32;
+    let own_attack_damage_usable = attack_evidence
+        .iter()
+        .filter(|evidence| evidence.attacker as usize == own_index + 1)
+        .filter(|evidence| strict_attack_evidence(evidence))
+        .count() as u32;
+    let own_attack_damage_usable = own_attack_damage_usable.min(own_attack_damage_events);
+    let opponent_attack_damage_usable = attack_evidence
+        .iter()
+        .filter(|evidence| evidence.attacker as usize == opponent_index + 1)
+        .filter(|evidence| strict_attack_evidence(evidence))
+        .count() as u32;
+    let opponent_attack_damage_usable =
+        opponent_attack_damage_usable.min(opponent_attack_damage_events);
+    let mut coverage = AnalysisCoverage {
         match_frames,
         analyzed_match_frames,
         input_segments,
@@ -203,7 +260,101 @@ pub(crate) fn build_coverage(
             .iter()
             .filter(|evidence| evidence.hp_consistency == AttackDamageConsistency::Unverified)
             .count() as u32,
+        own_attack_damage_events,
+        own_attack_damage_usable,
+        opponent_attack_damage_events,
+        opponent_attack_damage_usable,
+        availability: None,
     };
+    let own_hp = detector_availability(
+        coverage.own_hp_reliable_frames,
+        coverage.detector_match_frames,
+    );
+    let opponent_hp = detector_availability(
+        coverage.opponent_hp_reliable_frames,
+        coverage.detector_match_frames,
+    );
+    let own_meter = detector_availability(
+        coverage.own_meter_mapped_frames,
+        coverage.detector_match_frames,
+    );
+    let opponent_meter = detector_availability(
+        coverage.opponent_meter_mapped_frames,
+        coverage.detector_match_frames,
+    );
+    let own_input = detector_availability(
+        coverage.own_input_observed_frames,
+        coverage.detector_match_frames,
+    );
+    let opponent_input = detector_availability(
+        coverage.opponent_input_observed_frames,
+        coverage.detector_match_frames,
+    );
+    let contacts = if own_hp.is_available()
+        && opponent_hp.is_available()
+        && own_meter.is_available()
+        && opponent_meter.is_available()
+    {
+        EvidenceAvailability::Available
+    } else {
+        EvidenceAvailability::Unavailable
+    };
+    let punishes =
+        if contacts.is_available() && own_input.is_available() && opponent_input.is_available() {
+            EvidenceAvailability::Available
+        } else {
+            EvidenceAvailability::Unavailable
+        };
+    let spatial = if coverage.spatial_candidate_frames == 0 {
+        EvidenceAvailability::NotApplicable
+    } else if detector_coverage_is_sufficient(
+        coverage.spatial_sampled_frames,
+        coverage.spatial_candidate_frames,
+    ) && spatial_coverage_is_sufficient(
+        coverage.spatial_usable_frames,
+        coverage.spatial_candidate_frames,
+    ) {
+        EvidenceAvailability::Available
+    } else {
+        EvidenceAvailability::Unavailable
+    };
+    coverage.availability = Some(AnalysisAvailability {
+        own_hp,
+        opponent_hp,
+        own_drive: detector_availability(
+            coverage.own_drive_reliable_frames,
+            coverage.detector_match_frames,
+        ),
+        opponent_drive: detector_availability(
+            coverage.opponent_drive_reliable_frames,
+            coverage.detector_match_frames,
+        ),
+        own_super: super_availability(
+            coverage.own_super_reliable_frames,
+            coverage.detector_match_frames,
+        ),
+        opponent_super: super_availability(
+            coverage.opponent_super_reliable_frames,
+            coverage.detector_match_frames,
+        ),
+        own_input,
+        opponent_input,
+        own_meter,
+        opponent_meter,
+        contacts,
+        punishes,
+        spatial,
+        own_attack_info: opportunity_availability(
+            coverage.own_attack_damage_usable,
+            coverage.own_attack_damage_events,
+            detector_coverage_is_sufficient,
+        ),
+        opponent_attack_info: opportunity_availability(
+            coverage.opponent_attack_damage_usable,
+            coverage.opponent_attack_damage_events,
+            detector_coverage_is_sufficient,
+        ),
+    });
     let warnings = analysis_warnings(&coverage, events.rounds.len(), round_summaries);
     (coverage, warnings)
 }
@@ -231,16 +382,26 @@ fn analysis_warnings(
                 .to_string(),
         );
     }
-    if coverage.attack_damage_events > 0
-        && !detector_coverage_is_sufficient(
-            coverage.attack_damage_linked,
-            coverage.attack_damage_events,
-        )
-    {
-        warnings.push(format!(
-            "中央攻撃表示をHP被弾列へ帰属できた割合が60%未満です（{} / {} 件）。表示値に依存する統計とカードを確認不能として扱います。",
-            coverage.attack_damage_linked, coverage.attack_damage_events
-        ));
+    let availability = coverage.availability.as_ref();
+    for (label, usable, total, status) in [
+        (
+            "自分の攻撃",
+            coverage.own_attack_damage_usable,
+            coverage.own_attack_damage_events,
+            availability.map(|value| value.own_attack_info),
+        ),
+        (
+            "相手の攻撃",
+            coverage.opponent_attack_damage_usable,
+            coverage.opponent_attack_damage_events,
+            availability.map(|value| value.opponent_attack_info),
+        ),
+    ] {
+        if total > 0 && status == Some(EvidenceAvailability::Unavailable) {
+            warnings.push(format!(
+                "{label}の中央攻撃表示を厳格条件で利用できた割合が60%未満です（{usable} / {total} 件）。不完全表示・復元値・低確度・HP不整合値に依存する統計とカードを確認不能として扱います。"
+            ));
+        }
     }
     if coverage.attack_damage_mismatched > 0 {
         warnings.push(format!(
@@ -255,7 +416,12 @@ fn analysis_warnings(
         ));
     }
     let total = coverage.detector_match_frames;
-    if total > 0 {
+    if total == 0 && rounds_detected > 0 {
+        warnings.push(
+            "確定ラウンド内に解析対象フレームがないため、HUD・入力・フレームメーター由来の数値を確認不能として扱います。"
+                .to_string(),
+        );
+    } else if total > 0 {
         if !detector_coverage_is_sufficient(
             coverage
                 .own_hp_reliable_frames

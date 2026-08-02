@@ -21,6 +21,42 @@ pub struct RoundSummary {
 }
 
 /// レポート内の数値が、動画のどの範囲を母集団にしているかを明示する。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EvidenceAvailability {
+    Available,
+    #[default]
+    Unavailable,
+    NotApplicable,
+}
+
+impl EvidenceAvailability {
+    pub(crate) fn is_available(self) -> bool {
+        self == Self::Available
+    }
+}
+
+/// 閾値と依存関係を解析器側で解決した、表示・カード共通の可用性契約。
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct AnalysisAvailability {
+    pub own_hp: EvidenceAvailability,
+    pub opponent_hp: EvidenceAvailability,
+    pub own_drive: EvidenceAvailability,
+    pub opponent_drive: EvidenceAvailability,
+    pub own_super: EvidenceAvailability,
+    pub opponent_super: EvidenceAvailability,
+    pub own_input: EvidenceAvailability,
+    pub opponent_input: EvidenceAvailability,
+    pub own_meter: EvidenceAvailability,
+    pub opponent_meter: EvidenceAvailability,
+    pub contacts: EvidenceAvailability,
+    pub punishes: EvidenceAvailability,
+    pub spatial: EvidenceAvailability,
+    pub own_attack_info: EvidenceAvailability,
+    pub opponent_attack_info: EvidenceAvailability,
+}
+
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct AnalysisCoverage {
@@ -55,6 +91,15 @@ pub struct AnalysisCoverage {
     pub attack_damage_consistent: u32,
     pub attack_damage_mismatched: u32,
     pub attack_damage_unverified: u32,
+    /// 自分の攻撃（相手側HP減少）に対する中央攻撃表示の母数と厳格利用可能数。
+    pub own_attack_damage_events: u32,
+    pub own_attack_damage_usable: u32,
+    /// 相手の攻撃（自分側HP減少）に対する中央攻撃表示の母数と厳格利用可能数。
+    pub opponent_attack_damage_events: u32,
+    pub opponent_attack_damage_usable: u32,
+    /// None はruleset v8以前の保存済みレポートだけを表す。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub availability: Option<AnalysisAvailability>,
 }
 
 /// 入力習慣の統計（自分側）。

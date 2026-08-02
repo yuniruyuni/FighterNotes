@@ -53,7 +53,7 @@ fn test_mashing_excludes_jump_attributed_damage() {
         round_no: 1,
     });
 
-    let report = build_report(&[], &ev, "p1", None);
+    let report = detector_test_report(&ev, "p1");
     // ジャンプ帰属の f1200 は除外され、純正暴れ f1000 だけを確認場面にする。
     let card = report
         .cards
@@ -67,7 +67,7 @@ fn test_mashing_excludes_jump_attributed_damage() {
 
     // ジャンプが無ければ両方暴れとして計上される（対照実験）
     ev.jumps.clear();
-    let report = build_report(&[], &ev, "p1", None);
+    let report = detector_test_report(&ev, "p1");
     let card = report
         .cards
         .iter()

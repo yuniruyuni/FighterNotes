@@ -41,7 +41,7 @@ fn cause_specific_observation_owns_the_same_big_damage() {
         round_no: 1,
     });
 
-    let report = build_report(&[], &ev, "p1", None);
+    let report = detector_test_report(&ev, "p1");
     assert!(report
         .cards
         .iter()

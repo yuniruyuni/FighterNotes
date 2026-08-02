@@ -111,4 +111,37 @@ impl MatchEvents {
             evidence.side == super_art.side && evidence.super_frame == super_art.frame
         })
     }
+
+    /// SA/CA自身へ結び付いた中央表示と、その対象HP被弾列がともに厳格条件を
+    /// 満たす場合だけ返す。別サイドや別被弾の良好な表示で補完しない。
+    pub fn reliable_attack_evidence_for_super(
+        &self,
+        super_art: &SuperArtEvent,
+    ) -> Option<&SuperArtAttackEvidence> {
+        let super_evidence = self.attack_evidence_for_super(super_art)?;
+        if super_evidence.confidence != EventConfidence::High {
+            return None;
+        }
+        let linked = self
+            .attack_evidence
+            .damage
+            .iter()
+            .filter(|evidence| evidence.victim == 3 - super_art.side)
+            .filter_map(|evidence| {
+                let damage = self.damage.iter().find(|damage| {
+                    damage.victim == evidence.victim
+                        && damage.start_frame == evidence.damage_start_frame
+                        && damage.round_no == super_art.round_no
+                })?;
+                let in_result_window = damage.start_frame >= super_art.frame.saturating_sub(10)
+                    && damage.start_frame <= super_art.frame.saturating_add(360);
+                let freeze_distance = damage.pre_freeze_frame.abs_diff(super_art.frame);
+                (in_result_window || freeze_distance <= 30).then_some((evidence, freeze_distance))
+            })
+            .min_by_key(|(_, distance)| *distance)
+            .map(|(evidence, _)| evidence)?;
+        linked
+            .exact_damage_is_strictly_reliable()
+            .then_some(super_evidence)
+    }
 }

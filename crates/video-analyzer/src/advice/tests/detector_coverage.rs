@@ -153,6 +153,20 @@ fn report_exposes_detector_specific_numerators_and_attack_states() {
     assert_eq!(coverage.attack_damage_consistent, 1);
     assert_eq!(coverage.attack_damage_mismatched, 1);
     assert_eq!(coverage.attack_damage_unverified, 1);
+    assert_eq!(coverage.own_attack_damage_events, 0);
+    assert_eq!(coverage.own_attack_damage_usable, 0);
+    assert_eq!(coverage.opponent_attack_damage_events, 3);
+    assert_eq!(coverage.opponent_attack_damage_usable, 1);
+    let availability = coverage.availability.as_ref().expect("new report status");
+    assert_eq!(
+        availability.own_attack_info,
+        EvidenceAvailability::NotApplicable
+    );
+    assert_eq!(
+        availability.opponent_attack_info,
+        EvidenceAvailability::Unavailable
+    );
+    assert_eq!(availability.spatial, EvidenceAvailability::Unavailable);
     assert!(report.input_stats.is_some());
     assert!(report
         .analysis_warnings
@@ -291,14 +305,99 @@ fn legacy_coverage_json_defaults_new_detector_fields() {
     assert_eq!(coverage.attack_damage_unverified, 0);
     assert_eq!(coverage.spatial_candidate_frames, 0);
     assert_eq!(coverage.spatial_usable_frames, 0);
+    assert!(coverage.availability.is_none());
 }
 
 #[test]
 fn detector_thresholds_are_inclusive_and_sa_uses_temporal_threshold() {
+    assert!(!detector_coverage_is_sufficient(0, 0));
     assert!(!detector_coverage_is_sufficient(59, 100));
     assert!(detector_coverage_is_sufficient(60, 100));
+    assert!(!super_coverage_is_sufficient(0, 0));
     assert!(!super_coverage_is_sufficient(19, 100));
     assert!(super_coverage_is_sufficient(20, 100));
+    assert!(!spatial_coverage_is_sufficient(0, 0));
     assert!(!spatial_coverage_is_sufficient(19, 100));
     assert!(spatial_coverage_is_sufficient(20, 100));
+}
+
+#[test]
+fn p2_coverage_maps_sides_and_includes_both_round_endpoints() {
+    let mut events = empty_events();
+    events.rounds[0].start_frame = 10;
+    events.rounds[0].end_frame = 20;
+    events.input_coverage = crate::match_events::InputCoverage {
+        measured: true,
+        p1_observed_frames: 7,
+        p2_observed_frames: 3,
+        p1_repaired_frames: 4,
+        p2_repaired_frames: 8,
+    };
+    events.spatial_coverage = crate::match_events::SpatialCoverage {
+        candidate_frames: 5,
+        sampled_frames: 5,
+        usable_frames: 5,
+        p1_observed_frames: 4,
+        p2_observed_frames: 2,
+    };
+    let mut own_damage = damage(10);
+    own_damage.victim = 1;
+    let mut opponent_damage = damage(20);
+    opponent_damage.victim = 2;
+    events.damage = vec![own_damage, opponent_damage];
+    let own_attack = attack(10, AttackDamageConsistency::Consistent);
+    let mut opponent_attack = attack(20, AttackDamageConsistency::Mismatch);
+    opponent_attack.victim = 2;
+    opponent_attack.attacker = 1;
+    events.attack_evidence.damage = vec![own_attack, opponent_attack];
+    events.meter_game_frame = [
+        (0..22).map(i64::from).collect(),
+        (0..22)
+            .map(|frame| {
+                if frame == 10 || frame == 20 {
+                    frame
+                } else {
+                    -1
+                }
+            })
+            .collect(),
+    ];
+    let features: Vec<_> = (9..=21)
+        .map(|frame| {
+            let mut value = feature(frame);
+            value.right_hp_raw_quality = if frame == 10 || frame == 20 { 0.0 } else { 1.0 };
+            value.right_drive_uncertain = frame != 10 && frame != 20;
+            value
+        })
+        .collect();
+
+    let report = build_report(&features, &events, "p2", None);
+    let coverage = report.coverage;
+
+    assert_eq!(coverage.detector_match_frames, 11);
+    assert_eq!(coverage.own_hp_reliable_frames, 2);
+    assert_eq!(coverage.opponent_hp_reliable_frames, 11);
+    assert_eq!(coverage.own_drive_reliable_frames, 2);
+    assert_eq!(coverage.opponent_drive_reliable_frames, 11);
+    assert_eq!(coverage.own_input_observed_frames, 3);
+    assert_eq!(coverage.opponent_input_observed_frames, 7);
+    assert_eq!(coverage.own_meter_mapped_frames, 2);
+    assert_eq!(coverage.opponent_meter_mapped_frames, 11);
+    assert_eq!(coverage.own_spatial_observed_frames, 2);
+    assert_eq!(coverage.opponent_spatial_observed_frames, 4);
+    assert_eq!(coverage.own_attack_damage_events, 1);
+    assert_eq!(coverage.own_attack_damage_usable, 1);
+    assert_eq!(coverage.opponent_attack_damage_events, 1);
+    assert_eq!(coverage.opponent_attack_damage_usable, 0);
+    let availability = coverage.availability.expect("new report status");
+    assert_eq!(availability.own_hp, EvidenceAvailability::Unavailable);
+    assert_eq!(availability.opponent_hp, EvidenceAvailability::Available);
+    assert_eq!(
+        availability.own_attack_info,
+        EvidenceAvailability::Available
+    );
+    assert_eq!(
+        availability.opponent_attack_info,
+        EvidenceAvailability::Unavailable
+    );
 }

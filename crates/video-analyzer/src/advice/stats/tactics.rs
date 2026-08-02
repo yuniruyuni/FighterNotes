@@ -164,7 +164,7 @@ pub(crate) fn build_tactic_stats(
                 SuperArtContext::Neutral => stats.super_neutral_uses += 1,
                 SuperArtContext::Unknown => {}
             }
-            if let Some(evidence) = events.attack_evidence_for_super(event) {
+            if let Some(evidence) = events.reliable_attack_evidence_for_super(event) {
                 stats.super_damage_samples += 1;
                 stats.super_reported_combo_damage += evidence.combo_damage;
                 if let Some(marginal) = evidence.marginal_damage {

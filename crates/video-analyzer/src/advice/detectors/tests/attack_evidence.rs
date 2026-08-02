@@ -150,6 +150,11 @@ fn low_scaling_super_reports_marginal_damage_and_updates_stats() {
         confidence: EventConfidence::High,
         round_no: 1,
     });
+    events.damage.push(damage(220, 2, 0.3));
+    events
+        .attack_evidence
+        .damage
+        .push(attack(220, 2, 3000, AttackAttribute::Upper));
     events
         .attack_evidence
         .super_arts
@@ -173,4 +178,57 @@ fn low_scaling_super_reports_marginal_damage_and_updates_stats() {
     assert_eq!(stats.super_reported_combo_damage, 3000);
     assert_eq!(stats.super_reported_marginal_damage, 1000);
     assert_eq!(stats.super_low_scaling_uses, 1);
+
+    events.attack_evidence.damage[0].hp_consistency = AttackDamageConsistency::Mismatch;
+    assert!(detect_low_scaling_super(&events, 1).is_none());
+    let stats = build_tactic_stats(&[], &events, 1, 2);
+    assert_eq!(stats.super_damage_samples, 0);
+    assert_eq!(stats.super_reported_combo_damage, 0);
+    assert_eq!(stats.super_low_scaling_uses, 0);
+}
+
+#[test]
+fn opposite_side_attack_evidence_does_not_validate_super_damage() {
+    let mut events = empty_events();
+    events.super_arts.push(SuperArtEvent {
+        side: 1,
+        frame: 200,
+        gauge_drop_frame: 210,
+        level: 1,
+        critical_art: false,
+        gauge_before: 1.0,
+        gauge_after: 0.0,
+        context: SuperArtContext::Combo,
+        outcome: SuperArtOutcome::Hit,
+        contact_frame: Some(220),
+        damage: 0.1,
+        ko: false,
+        punished: false,
+        punished_damage: 0.0,
+        confidence: EventConfidence::High,
+        round_no: 1,
+    });
+    events
+        .attack_evidence
+        .super_arts
+        .push(SuperArtAttackEvidence {
+            side: 1,
+            super_frame: 200,
+            combo_damage: 1000,
+            marginal_damage: Some(500),
+            entry_scaling_percent: Some(40),
+            final_scaling_percent: 40,
+            confidence: EventConfidence::High,
+        });
+    events.damage.push(damage(220, 1, 0.1));
+    events
+        .attack_evidence
+        .damage
+        .push(attack(220, 1, 1000, AttackAttribute::Upper));
+
+    assert!(detect_low_scaling_super(&events, 1).is_none());
+    assert_eq!(
+        build_tactic_stats(&[], &events, 1, 2).super_damage_samples,
+        0
+    );
 }

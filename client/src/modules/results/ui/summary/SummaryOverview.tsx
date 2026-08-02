@@ -93,9 +93,15 @@ export function SummaryOverview({
   }
   const attackEvents = report.coverage?.attack_damage_events ?? 0;
   if (report.coverage && attackEvents > 0) {
-    badges.push(
-      `攻撃表示 帰属 ${report.coverage.attack_damage_linked ?? 0} / ${attackEvents}（HP整合 ${report.coverage.attack_damage_consistent ?? 0}・不一致 ${report.coverage.attack_damage_mismatched ?? 0}・未照合 ${report.coverage.attack_damage_unverified ?? 0}）`,
-    );
+    if (report.coverage.own_attack_damage_events !== undefined) {
+      badges.push(
+        `攻撃表示 厳格利用 自分 ${report.coverage.own_attack_damage_usable ?? 0} / ${report.coverage.own_attack_damage_events}・相手 ${report.coverage.opponent_attack_damage_usable ?? 0} / ${report.coverage.opponent_attack_damage_events ?? 0}（全帰属 ${report.coverage.attack_damage_linked ?? 0} / ${attackEvents}）`,
+      );
+    } else {
+      badges.push(
+        `攻撃表示 帰属 ${report.coverage.attack_damage_linked ?? 0} / ${attackEvents}（HP整合 ${report.coverage.attack_damage_consistent ?? 0}・不一致 ${report.coverage.attack_damage_mismatched ?? 0}・未照合 ${report.coverage.attack_damage_unverified ?? 0}）`,
+      );
+    }
   }
   if (report.analyzer_build_id) {
     badges.push(`解析器 ${report.analyzer_build_id}`);

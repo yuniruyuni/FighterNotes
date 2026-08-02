@@ -17,6 +17,7 @@ export {
 export type {
   AdviceCard,
   AdviceReport,
+  AnalysisAvailability,
   AnalysisCoverage,
   AttributedDamageEvent,
   DamageApproach,
@@ -25,6 +26,7 @@ export type {
   DamageContext,
   DamageOrigin,
   DamageTakenEvent,
+  EvidenceAvailability,
   EvidenceClip,
   InputStats,
   RoundSummary,

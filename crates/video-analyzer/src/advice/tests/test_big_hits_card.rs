@@ -34,7 +34,7 @@ fn test_big_hits_card() {
         drop: 0.5,
         round_no: 1,
     });
-    let report = build_report(&[], &ev, "p1", None);
+    let report = detector_test_report(&ev, "p1");
     let card = report
         .cards
         .iter()

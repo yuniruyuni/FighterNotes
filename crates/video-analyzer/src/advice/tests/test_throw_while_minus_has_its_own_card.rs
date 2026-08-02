@@ -51,7 +51,7 @@ fn test_throw_while_minus_has_its_own_card() {
             round_no: 1,
         }))
         .collect();
-    let report = build_report(&[], &ev, "p1", None);
+    let report = detector_test_report(&ev, "p1");
     assert!(report
         .cards
         .iter()

@@ -7,7 +7,7 @@ fn single_punished_throw_whiff_is_an_observation_and_owns_the_big_hit() {
     events.throw_actions.push(whiff(100, 105));
     events.damage.push(damage(130, 170, 0.20));
 
-    let report = build_report(&[], &events, "p1", None);
+    let report = detector_test_report(&events, "p1");
     let card = report
         .cards
         .iter()
@@ -29,7 +29,7 @@ fn consecutive_throw_whiffs_before_one_hit_form_one_diagnosis_clip() {
     events.throw_actions = vec![whiff(100, 105), whiff(140, 145)];
     events.damage.push(damage(180, 230, 0.28));
 
-    let report = build_report(&[], &events, "p1", None);
+    let report = detector_test_report(&events, "p1");
     let card = report
         .cards
         .iter()
@@ -53,7 +53,7 @@ fn unpunished_or_unconfirmed_throw_whiffs_do_not_emit_advice() {
     events.throw_actions.push(uncertain);
     events.damage.push(damage(400, 430, 0.20));
 
-    let report = build_report(&[], &events, "p1", None);
+    let report = detector_test_report(&events, "p1");
     assert!(report
         .cards
         .iter()
@@ -76,7 +76,7 @@ fn throw_interrupted_by_invincible_has_neutral_advice_and_is_not_a_whiff() {
     });
     events.damage.push(damage(109, 170, 0.20));
 
-    let report = build_report(&[], &events, "p1", None);
+    let report = detector_test_report(&events, "p1");
     let card = report
         .cards
         .iter()

@@ -34,7 +34,7 @@ fn diagnoses_sort_before_higher_severity_observations() {
         },
     ];
 
-    let report = build_report(&[], &ev, "p1", None);
+    let report = detector_test_report(&ev, "p1");
     assert_eq!(report.ruleset_version, 9);
     assert_eq!(report.cards[0].id, "throw_loop");
     assert_eq!(report.cards[0].kind, AdviceKind::Diagnosis);
