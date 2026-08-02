@@ -21,6 +21,7 @@ export type {
   AnalysisCoverage,
   AttributedDamageEvent,
   DamageApproach,
+  DamageAttackEvidence,
   DamageBreakdown,
   DamageContact,
   DamageContext,

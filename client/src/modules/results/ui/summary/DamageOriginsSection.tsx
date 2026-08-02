@@ -5,7 +5,12 @@ import type {
   RoundSummary,
 } from "~/modules/analysis/contracts.js";
 import { summarizeDamageOrigins } from "../../domain/damage-origin.js";
+import { frameToSeconds } from "../../domain/frame-time.js";
 import type { SceneSelection } from "../../domain/scene-selection.js";
+import {
+  attackEvidenceSceneRange,
+  attackEvidenceStatus,
+} from "./attack-evidence-format.js";
 import { DamageOriginDetails } from "./DamageOriginDetails.js";
 import { formatHpRatio, formatPercent } from "./damage-origin-format.js";
 
@@ -39,6 +44,14 @@ export function DamageOriginsSection({
     () => summarizeDamageOrigins(breakdown?.events ?? [], selectedRound),
     [breakdown, selectedRound],
   );
+  const mismatchEvents = (breakdown?.events ?? []).filter((event) => {
+    const evidence = event.attack_evidence;
+    return (
+      (selectedRound === "all" || event.round_no === selectedRound) &&
+      evidence !== undefined &&
+      attackEvidenceStatus(evidence) === "mismatch"
+    );
+  });
 
   if (!breakdown) return null;
 
@@ -93,6 +106,41 @@ export function DamageOriginsSection({
         <p className="muted-note">被ダメージは検出されませんでした。</p>
       ) : (
         <>
+          {mismatchEvents.length > 0 ? (
+            <div className="attack-evidence-warning" role="note">
+              <p>
+                ⚠ ゲーム内表示damageとHPバー推定が一致しない場面が
+                {mismatchEvents.length}
+                件あります。表示値を断定に使わず、動画で確認してください。
+              </p>
+              <div>
+                {mismatchEvents.map((event) => {
+                  const label = `HP表示不一致・R${event.round_no}・${formatHpRatio(event.hp_drop)}`;
+                  const sceneRange = attackEvidenceSceneRange(event);
+                  const time = frameToSeconds(
+                    sceneRange.frame,
+                    frameTimestamps,
+                  ).toFixed(1);
+                  return (
+                    <button
+                      type="button"
+                      key={`${event.round_no}-${event.sequence_no}`}
+                      aria-label={`${label}。${time}秒を動画で確認`}
+                      onClick={() =>
+                        onSceneChange({
+                          ...sceneRange,
+                          card: null,
+                          label,
+                        })
+                      }
+                    >
+                      R{event.round_no}・{time}s
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
           <div className="damage-origin-overview">
             <DamageMetric
               value={formatHpRatio(summary.totalHpLost)}

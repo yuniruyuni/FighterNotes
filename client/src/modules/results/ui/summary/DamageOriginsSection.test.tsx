@@ -5,6 +5,7 @@ import type {
   AnalysisAvailability,
   AttributedDamageEvent,
   DamageApproach,
+  DamageAttackEvidence,
   DamageBreakdown,
   DamageContact,
   DamageOrigin,
@@ -64,6 +65,28 @@ function damage(
     ...(approach ? { approach } : {}),
     ...(contact ? { contact, contact_confidence: "high" as const } : {}),
     contexts: origin === "throw" ? ["burnout"] : [],
+  };
+}
+
+function attackEvidence(
+  overrides: Partial<DamageAttackEvidence> = {},
+): DamageAttackEvidence {
+  return {
+    victim: 1,
+    attacker: 2,
+    damage_start_frame: 90,
+    sequence_start_frame: 100,
+    sequence_end_frame: 140,
+    combo_damage: 1_200,
+    sequence_count: 1,
+    final_scaling_percent: 100,
+    starter_attribute: "throw",
+    final_attribute: "throw",
+    complete: true,
+    recovered_from_max: false,
+    confidence: "high",
+    hp_consistency: "consistent",
+    ...overrides,
   };
 }
 
@@ -179,6 +202,194 @@ describe("DamageOriginsSection", () => {
     );
 
     expect(screen.getByText("生ドライブラッシュ→投げ")).toBeInTheDocument();
+  });
+
+  test("中央攻撃情報の4状態と根拠を折りたたみ表示し、scene labelにも含める", async () => {
+    const user = userEvent.setup();
+    const evidenceEvents = [
+      {
+        ...damage(1, 1, 0.12, "throw"),
+        attack_evidence: attackEvidence(),
+      },
+      {
+        ...damage(2, 1, 0.2, "strike", "low"),
+        attack_evidence: attackEvidence({
+          damage_start_frame: 190,
+          sequence_start_frame: 200,
+          sequence_end_frame: 240,
+          combo_damage: 1_800,
+          sequence_count: 2,
+          final_scaling_percent: 80,
+          starter_attribute: "lower",
+          final_attribute: "middle",
+          hp_consistency: "mismatch",
+        }),
+      },
+      {
+        ...damage(3, 1, 0.1, "strike", "high"),
+        attack_evidence: attackEvidence({
+          damage_start_frame: 290,
+          sequence_start_frame: 300,
+          sequence_end_frame: 340,
+          combo_damage: 0,
+          hp_consistency: "unverified",
+        }),
+      },
+      {
+        ...damage(4, 1, 0.08, "unclassified"),
+        attack_evidence: attackEvidence({
+          damage_start_frame: 390,
+          sequence_start_frame: 400,
+          sequence_end_frame: 440,
+          combo_damage: 800,
+          complete: false,
+          recovered_from_max: true,
+          confidence: "medium",
+        }),
+      },
+    ];
+    const { container } = render(
+      <DamageOriginsSection
+        breakdown={{
+          attribution_version: 5,
+          total_hp_lost: 0.5,
+          classified_hp_lost: 0.42,
+          events: evidenceEvents,
+        }}
+        rounds={[round(1)]}
+        frameTimestamps={Array.from({ length: 500 }, (_, frame) => frame / 60)}
+        onSceneChange={() => undefined}
+      />,
+    );
+
+    expect(
+      container.querySelector(
+        '.attack-evidence-status[data-status="consistent"]',
+      ),
+    ).toHaveTextContent("HPバーと整合");
+    expect(
+      container.querySelector(
+        '.attack-evidence-status[data-status="mismatch"]',
+      ),
+    ).toHaveTextContent("HPバーと不一致");
+    expect(
+      container.querySelector(
+        '.attack-evidence-status[data-status="unverified"]',
+      ),
+    ).toHaveTextContent("HP未照合");
+    expect(
+      container.querySelector(
+        '.attack-evidence-status[data-status="incomplete"]',
+      ),
+    ).toHaveTextContent("表示認識が不完全");
+    expect(screen.getByText("ゲーム内表示 0")).toBeInTheDocument();
+
+    const consistentDetails = container.querySelector(
+      'details.attack-evidence-details[data-status="consistent"]',
+    );
+    expect(consistentDetails).not.toHaveAttribute("open");
+    await user.click(consistentDetails!.querySelector("summary")!);
+    expect(consistentDetails).toHaveAttribute("open");
+    expect(consistentDetails).toHaveTextContent("HPバーの標準10,000換算1,200");
+    expect(consistentDetails).toHaveTextContent("表示damageとの差0");
+    expect(consistentDetails).toHaveTextContent("始動 投げ → 最終 投げ");
+    expect(consistentDetails).toHaveTextContent("帰属した攻撃連係1件");
+
+    expect(
+      screen.getByRole("button", {
+        name: /ゲーム内表示 累積ダメージ 1,200、1連係合計、最終補正 100%、始動 投げ、最終 投げ、HPバーと整合、認識確度 高/,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: /ゲーム内表示 累積ダメージ 1,800、2連係合計/,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  test("HP不一致warningから該当sceneへ移動し、根拠なしeventは従来表示を保つ", async () => {
+    const user = userEvent.setup();
+    const selected: Array<Omit<SceneSelection, "key">> = [];
+    const mismatch = {
+      ...damage(2, 1, 0.2, "strike", "low"),
+      attack_evidence: attackEvidence({
+        damage_start_frame: 190,
+        sequence_start_frame: 70,
+        sequence_end_frame: 275,
+        combo_damage: 1_500,
+        hp_consistency: "mismatch" as const,
+      }),
+    };
+    const incompleteMismatch = {
+      ...damage(3, 1, 0.1, "strike", "high"),
+      attack_evidence: attackEvidence({
+        damage_start_frame: 290,
+        sequence_start_frame: 300,
+        sequence_end_frame: 340,
+        combo_damage: 900,
+        complete: false,
+        hp_consistency: "mismatch" as const,
+      }),
+    };
+    const recoveredMismatch = {
+      ...damage(4, 1, 0.1, "strike", "high"),
+      attack_evidence: attackEvidence({
+        damage_start_frame: 390,
+        sequence_start_frame: 400,
+        sequence_end_frame: 440,
+        combo_damage: 900,
+        recovered_from_max: true,
+        hp_consistency: "mismatch" as const,
+      }),
+    };
+    const { container } = render(
+      <DamageOriginsSection
+        breakdown={{
+          attribution_version: 5,
+          total_hp_lost: 0.8,
+          classified_hp_lost: 0.8,
+          events: [
+            damage(1, 1, 0.6, "throw"),
+            mismatch,
+            incompleteMismatch,
+            recoveredMismatch,
+          ],
+        }}
+        rounds={[round(1)]}
+        frameTimestamps={Array.from({ length: 300 }, (_, frame) => frame / 60)}
+        onSceneChange={(scene) => selected.push(scene)}
+      />,
+    );
+
+    expect(
+      screen.getByText(/HPバー推定が一致しない場面が1件/),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", {
+        name: "HP表示不一致・R1・20%。1.2秒を動画で確認",
+      }),
+    );
+    expect(selected).toEqual([
+      {
+        frame: 70,
+        endFrame: 275,
+        card: null,
+        label: "HP表示不一致・R1・20%",
+      },
+    ]);
+    expect(
+      container.querySelectorAll("details.attack-evidence-details"),
+    ).toHaveLength(3);
+    expect(
+      container.querySelectorAll(
+        '.attack-evidence-details[data-status="incomplete"]',
+      ),
+    ).toHaveLength(2);
+    expect(
+      screen.getByRole("button", {
+        name: "投げ・R1・60%。判定確度 高。状況 バーンアウト中。動画で確認",
+      }),
+    ).toBeInTheDocument();
   });
 
   test("旧レポートには空の分析セクションを追加しない", () => {
