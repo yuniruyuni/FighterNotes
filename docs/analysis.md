@@ -25,8 +25,11 @@
 
 ファイル選択時に MP4 metadata を段階的に読み、表示・coded 寸法がともに 1920x1080、
 59〜61fps、固定 frame rate、回転なしであることを解析開始前に検証する。固定 frame rate は
-presentation timestamp の差分で判定し、timebase の整数丸めによる1 tick差だけを許容する。
+presentation timestamp を表示順へ並べ、60/1 または 60000/1001fps の一貫した整数量子化に
+全sampleが一致する場合だけ固定frame rateと判定する。単発のframe欠落はVFRとして拒否する。
 fragmented MP4 は `moov` だけで全区間の固定 frame rate を証明できないため、現在は受け付けない。
+`ftyp` は先頭のmajor brandを明示したMP4 allowlistと照合し、HEIC、AVIF、3GP、QuickTimeを
+compatible brandだけでMP4と誤認しないようにする。
 track matrix は標準的な 0/90/180/270 度だけを解釈し、回転、反転、scale、skew がある入力は拒否する。
 
 metadata 条件の通過後に、動画固有 codec の `VideoDecoder.isConfigSupported` と、実際の

@@ -102,14 +102,37 @@ describe("MP4 video metadata parser", () => {
     expect(rotationFromTrackMatrix(undefined)).toBeNull();
   });
 
-  test("CTS差分からinteger timebaseのCFR揺れとVFRを区別する", () => {
+  test("B-frame CTSを表示順に並べ、59.94fpsの一貫した量子化だけをCFRにする", () => {
     expect(
       summarizeFrameTiming(
-        [{ cts: 0 }, { cts: 1501 }, { cts: 3003 }, { cts: 4504 }],
+        [{ cts: 0 }, { cts: 2002 }, { cts: 1001 }, { cts: 3003 }],
+        60_000,
+        4,
+      ),
+    ).toMatchObject({
+      constantFrameRate: true,
+      framesPerSecond: 59.94005994005994,
+    });
+    expect(
+      summarizeFrameTiming(
+        [{ cts: 0 }, { cts: 3003 }, { cts: 1501 }, { cts: 4504 }],
         90_000,
         4,
       ),
     ).toMatchObject({ constantFrameRate: true });
+    const oneDroppedFrame = Array.from({ length: 120 }, (_, cts) => ({ cts }));
+    oneDroppedFrame.splice(60, 1);
+    expect(summarizeFrameTiming(oneDroppedFrame, 60, 119)).toMatchObject({
+      constantFrameRate: false,
+      framesPerSecond: 59.49579831932773,
+    });
+    const ntscLookalikeDrop = Array.from({ length: 1200 }, (_, cts) => ({
+      cts,
+    }));
+    ntscLookalikeDrop.splice(500, 1);
+    expect(
+      summarizeFrameTiming(ntscLookalikeDrop, 60, ntscLookalikeDrop.length),
+    ).toMatchObject({ constantFrameRate: false });
     expect(
       summarizeFrameTiming(
         [{ cts: 0 }, { cts: 1000 }, { cts: 2000 }, { cts: 4000 }],
@@ -126,6 +149,50 @@ describe("MP4 video metadata parser", () => {
       const result = summarizeFrameTiming(samples, timescale, count);
       expect(result.constantFrameRate).toBe(false);
       expect(result.framesPerSecond).toBeNaN();
+    }
+  });
+
+  test("130k超のsamplesを引数spreadやdelta配列なしで集計する", () => {
+    const frameCount = 130_001;
+    const samples = Array.from({ length: frameCount }, (_, cts) => ({ cts }));
+    expect(summarizeFrameTiming(samples, 60, frameCount)).toEqual({
+      framesPerSecond: 60,
+      constantFrameRate: true,
+    });
+  });
+
+  test("先頭のmajor brandだけをMP4 allowlistと照合する", () => {
+    const file = {} as ISOFile;
+    for (const majorBrand of ["isom", "mp42", "M4V "]) {
+      expect(
+        inspectMovie(
+          file,
+          {
+            brands: [majorBrand],
+            isFragmented: false,
+            videoTracks: [],
+          } as unknown as Movie,
+          0,
+        ).container,
+      ).toBe("mp4");
+    }
+    for (const brands of [
+      ["mif1", "heic", "isom"],
+      ["avif", "isom"],
+      ["3gp6", "isom"],
+      ["qt  ", "mp42"],
+    ]) {
+      expect(
+        inspectMovie(
+          file,
+          {
+            brands,
+            isFragmented: false,
+            videoTracks: [],
+          } as unknown as Movie,
+          0,
+        ).container,
+      ).toBe("other");
     }
   });
 

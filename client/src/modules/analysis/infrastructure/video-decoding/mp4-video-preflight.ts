@@ -17,6 +17,27 @@ const METADATA_CHUNK_BYTES = 1024 * 1024;
 const ROTATION_SCALE = 1 << 16;
 const MATRIX_TOLERANCE = 1 / ROTATION_SCALE;
 const PERSPECTIVE_SCALE = 2 ** 30;
+const MINIMUM_QUANTIZED_TICKS_PER_FRAME = 2;
+const SUPPORTED_FRAME_CADENCES = [
+  { numerator: 60, denominator: 1 },
+  { numerator: 60_000, denominator: 1001 },
+] as const;
+const MP4_MAJOR_BRANDS = new Set([
+  "isom",
+  "iso2",
+  "iso3",
+  "iso4",
+  "iso5",
+  "iso6",
+  "iso7",
+  "iso8",
+  "iso9",
+  "mp41",
+  "mp42",
+  "avc1",
+  "m4v",
+  "msnv",
+]);
 
 export class Mp4InspectionError extends Error {
   readonly code: "non_mp4" | "invalid_mp4";
@@ -164,23 +185,53 @@ export function summarizeFrameTiming(
     return { framesPerSecond: Number.NaN, constantFrameRate: false };
   }
   const timestamps = samples.map(({ cts }) => cts).sort((a, b) => a - b);
-  const deltas: number[] = [];
+  const firstTimestamp = timestamps[0];
+  if (!Number.isSafeInteger(firstTimestamp)) {
+    return { framesPerSecond: Number.NaN, constantFrameRate: false };
+  }
+  const cadenceStates = SUPPORTED_FRAME_CADENCES.flatMap(
+    ({ numerator, denominator }) => {
+      const ticksPerFrame = (timescale * denominator) / numerator;
+      const quantized = !Number.isInteger(ticksPerFrame);
+      if (quantized && ticksPerFrame < MINIMUM_QUANTIZED_TICKS_PER_FRAME) {
+        return [];
+      }
+      return [
+        {
+          ticksPerFrame,
+          floor: true,
+          round: true,
+          ceil: true,
+        },
+      ];
+    },
+  );
+  let previousTimestamp = firstTimestamp;
   for (let index = 1; index < timestamps.length; index += 1) {
-    const delta = timestamps[index] - timestamps[index - 1];
-    if (!Number.isFinite(delta) || delta <= 0) {
+    const timestamp = timestamps[index];
+    const delta = timestamp - previousTimestamp;
+    if (!Number.isSafeInteger(timestamp) || delta <= 0) {
       return { framesPerSecond: Number.NaN, constantFrameRate: false };
     }
-    deltas.push(delta);
+    const elapsed = timestamp - firstTimestamp;
+    for (const state of cadenceStates) {
+      const expected = index * state.ticksPerFrame;
+      const tolerance = floatingPointTolerance(expected);
+      state.floor &&= elapsed === Math.floor(expected + tolerance);
+      state.round &&= elapsed === Math.floor(expected + 0.5 + tolerance);
+      state.ceil &&= elapsed === Math.ceil(expected - tolerance);
+    }
+    previousTimestamp = timestamp;
   }
-  const totalDelta = deltas.reduce((sum, delta) => sum + delta, 0);
-  const averageDelta = totalDelta / deltas.length;
-  const minimumDelta = Math.min(...deltas);
-  const maximumDelta = Math.max(...deltas);
+  const totalDelta = previousTimestamp - firstTimestamp;
   return {
-    framesPerSecond: timescale / averageDelta,
-    // A rational CFR can alternate by one timebase tick after integer
-    // quantization (for example 59.94fps in a 90kHz timescale).
-    constantFrameRate: maximumDelta - minimumDelta <= 1,
+    framesPerSecond: (timescale * (timestamps.length - 1)) / totalDelta,
+    // Require every CTS to follow one consistent integer quantization of a
+    // supported 60fps cadence. Merely allowing adjacent one-tick deltas would
+    // misclassify a dropped frame as CFR.
+    constantFrameRate: cadenceStates.some(
+      ({ floor, round, ceil }) => floor || round || ceil,
+    ),
   };
 }
 
@@ -254,7 +305,15 @@ function hasMp4SelectionHint(file: File): boolean {
 }
 
 function isMp4Container(brands: readonly string[]): boolean {
-  return brands.some((brand) => brand.trim().toLowerCase() !== "qt");
+  const majorBrand = brands[0]?.trim().toLowerCase();
+  return majorBrand !== undefined && MP4_MAJOR_BRANDS.has(majorBrand);
+}
+
+function floatingPointTolerance(value: number): number {
+  return Math.min(
+    0.25,
+    Math.max(1e-9, Number.EPSILON * Math.max(1, Math.abs(value)) * 8),
+  );
 }
 
 function positiveDimension(value: number, fallback: number): number {
