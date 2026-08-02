@@ -66,7 +66,9 @@ schema 関連 path の pull request では `schema-plan.yml` が次を行う。
 4. plan を pull request comment へ反映する。
 
 `DROP`、`GRANT`、`REVOKE`、privilege 変更を含む plan は特に確認する。`pgschema plan` の comment は
-review 補助であり、データ移行、lock 時間、rollback 可能性の判断を代替しない。
+成功・失敗のどちらでも更新するが、plan command が失敗した check は comment 投稿後に必ず失敗する。
+branch protection では `Schema Plan / plan` を必須 check にする。comment は review 補助であり、
+データ移行、lock 時間、rollback 可能性の判断を代替しない。
 
 migration は application より先に production DB へ適用される。したがって schema 変更は、少なくとも
 直前の application image と新しい image の両方から利用できる後方互換な段階に分ける。
