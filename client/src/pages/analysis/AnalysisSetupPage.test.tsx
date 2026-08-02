@@ -60,6 +60,42 @@ describe("AnalysisSetupPage", () => {
     await waitFor(() => expect(analyze).toHaveBeenCalledTimes(1));
     expect(capture).toHaveBeenCalledTimes(1);
     expect(analyzeButton.disabled).toBe(false);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "動画解析が完了しました。",
+    );
+  });
+
+  test("小数の可視進捗と名前付きprogressbar、工程live statusを表示する", async () => {
+    const analyzeImplementation: AnalysisServices["engine"]["analyze"] = (
+      _file,
+      _side,
+      onProgress,
+      _context,
+      signal,
+    ) => {
+      onProgress(0.426, "フレーム 426 / 1000");
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), {
+          once: true,
+        });
+      });
+    };
+    const rendered = renderSetup(analysisServices(analyzeImplementation));
+    configureAnalysis();
+
+    fireEvent.click(screen.getByRole("button", { name: "解析する" }));
+
+    const progress = await screen.findByRole("progressbar", {
+      name: "動画解析の進捗",
+    });
+    expect(progress).toHaveAttribute("value", "42.6");
+    expect(
+      screen.getByText("42.6%", { selector: "span.analysis-progress-percent" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "動画フレームを解析中です。",
+    );
+    rendered.unmount();
   });
 
   test("解析を一度だけ中止し、同じ設定ですぐ再試行できる", async () => {
@@ -107,6 +143,23 @@ describe("AnalysisSetupPage", () => {
         .value,
     ).toBe("KEN");
     expect(screen.getByRole("button", { name: "解析する" })).toBeEnabled();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "動画解析を中止しました。",
+    );
+  });
+
+  test("解析失敗をassertive live regionへ即時通知する", async () => {
+    const services = analysisServices(async () => {
+      throw new Error("decoder failure");
+    });
+    renderSetup(services);
+    configureAnalysis();
+
+    fireEvent.click(screen.getByRole("button", { name: "解析する" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "エラー: decoder failure",
+    );
   });
 
   test("中止後に遅れて完了しても結果として採用しない", async () => {

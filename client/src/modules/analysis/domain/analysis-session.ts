@@ -104,7 +104,10 @@ export const AnalysisSession = {
         if (state.phase !== "analyzing") return state;
         return {
           ...state,
-          progress: Math.round(action.progress * 100),
+          progress: Math.max(
+            state.progress,
+            Math.round(Math.max(0, Math.min(1, action.progress)) * 1000) / 10,
+          ),
           status: action.status,
         };
       case "cancel":

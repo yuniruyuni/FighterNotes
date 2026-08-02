@@ -189,7 +189,7 @@ describe("analysis session reducer", () => {
     });
   });
 
-  test("進捗を百分率に変換する", () => {
+  test("進捗を小数百分率へ変換し、遅延通知でも後退させない", () => {
     const started = AnalysisSession.reduce(AnalysisSession.initial(), {
       type: "start",
     });
@@ -200,7 +200,14 @@ describe("analysis session reducer", () => {
     });
 
     expect(progressed.phase).toBe("analyzing");
-    expect(progressed.progress).toBe(43);
+    expect(progressed.progress).toBe(42.6);
     expect(progressed.status).toBe("HUDを解析中");
+    expect(
+      AnalysisSession.reduce(progressed, {
+        type: "progress",
+        progress: 0.4,
+        status: "遅れて届いた進捗",
+      }).progress,
+    ).toBe(42.6);
   });
 });

@@ -59,12 +59,37 @@ export function AnalysisSetupPage() {
                     : "解析中…"}
               </h2>
               {busy && (
-                <progress max={100} value={state.progress}>
-                  {state.progress}%
-                </progress>
+                <>
+                  <div className="analysis-progress-track" aria-hidden="true">
+                    <span
+                      className="analysis-progress-value"
+                      style={{ width: `${state.progress}%` }}
+                    />
+                  </div>
+                  <progress
+                    className="visually-hidden"
+                    max={100}
+                    value={state.progress}
+                    aria-label="動画解析の進捗"
+                    aria-describedby="analysis-progress-detail"
+                  >
+                    {state.progress}%
+                  </progress>
+                </>
               )}
-              <div className={state.error ? "analysis-error" : "status"}>
-                {state.error || state.status}
+              <div
+                id={busy ? "analysis-progress-detail" : undefined}
+                className={state.error ? "analysis-error" : "status"}
+              >
+                <span>{state.error || state.status}</span>
+                {busy && (
+                  <span
+                    className="analysis-progress-percent"
+                    aria-hidden="true"
+                  >
+                    {formatProgress(state.progress)}%
+                  </span>
+                )}
               </div>
               {busy && (
                 <button
@@ -87,4 +112,8 @@ export function AnalysisSetupPage() {
       </div>
     </div>
   );
+}
+
+function formatProgress(progress: number): string {
+  return progress.toFixed(1).replace(/\.0$/, "");
 }

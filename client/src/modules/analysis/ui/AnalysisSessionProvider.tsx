@@ -21,6 +21,10 @@ import {
 } from "../domain/analysis-session.js";
 import type { AnalysisSide } from "../domain/context.js";
 import type { AnalysisRuntimeReadiness } from "../domain/runtime.js";
+import {
+  AnalysisProgressReporter,
+  analysisProgressStage,
+} from "./analysis-progress-reporter.js";
 
 interface AnalysisSessionValue {
   state: AnalysisSessionState;
@@ -37,6 +41,7 @@ interface AnalysisSessionValue {
 interface ActiveAnalysisRun {
   readonly id: number;
   readonly controller: AbortController;
+  readonly progress: AnalysisProgressReporter;
 }
 
 const AnalysisSessionContext = createContext<AnalysisSessionValue | null>(null);
@@ -69,7 +74,9 @@ export function AnalysisSessionProvider({
     return () => {
       mounted.current = false;
       window.removeEventListener("beforeunload", confirmNavigation);
-      activeRun.current?.controller.abort(new AnalysisCanceledError());
+      const run = activeRun.current;
+      run?.progress.dispose();
+      run?.controller.abort(new AnalysisCanceledError());
     };
   }, []);
 
@@ -94,6 +101,7 @@ export function AnalysisSessionProvider({
   const cancel = useCallback(() => {
     const run = activeRun.current;
     if (!run || run.controller.signal.aborted) return;
+    run.progress.dispose();
     dispatch({ type: "cancel" });
     run.controller.abort(new AnalysisCanceledError());
   }, []);
@@ -109,9 +117,14 @@ export function AnalysisSessionProvider({
       return null;
     }
 
+    const runId = nextRunId.current++;
     const run: ActiveAnalysisRun = {
-      id: nextRunId.current++,
+      id: runId,
       controller: new AbortController(),
+      progress: new AnalysisProgressReporter((progress, status) => {
+        if (!mounted.current || activeRun.current?.id !== runId) return;
+        dispatch({ type: "progress", progress, status });
+      }),
     };
     activeRun.current = run;
     dispatch({ type: "start" });
@@ -123,7 +136,7 @@ export function AnalysisSessionProvider({
           ownCharacter,
           opponentCharacter,
         },
-        (progress, status) => dispatch({ type: "progress", progress, status }),
+        run.progress.report,
         services,
         run.controller.signal,
       );
@@ -137,6 +150,7 @@ export function AnalysisSessionProvider({
         }
         return null;
       }
+      run.progress.finish();
       const { result, report, context } = completed;
       dispatch({ type: "complete", result, report, context });
       return completed;
@@ -150,6 +164,7 @@ export function AnalysisSessionProvider({
       dispatch({ type: "fail", error: `エラー: ${message}` });
       return null;
     } finally {
+      run.progress.dispose();
       if (activeRun.current?.id === run.id) activeRun.current = null;
     }
   }, [runtime, services, state]);
@@ -181,9 +196,45 @@ export function AnalysisSessionProvider({
 
   return (
     <AnalysisSessionContext.Provider value={value}>
+      <span
+        className="visually-hidden"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {analysisStatusAnnouncement(state)}
+      </span>
+      {state.error && (
+        <span
+          className="visually-hidden"
+          role="alert"
+          aria-live="assertive"
+          aria-atomic="true"
+        >
+          {state.error}
+        </span>
+      )}
       {children}
     </AnalysisSessionContext.Provider>
   );
+}
+
+function analysisStatusAnnouncement(state: AnalysisSessionState): string {
+  if (state.error) return "";
+  if (state.phase === "ready") return "動画解析が完了しました。";
+  if (state.phase === "canceling") return "動画解析を中止しています。";
+  if (state.phase === "canceled") return "動画解析を中止しました。";
+  if (state.phase !== "analyzing") return "";
+  switch (analysisProgressStage(state.status)) {
+    case "frames":
+      return "動画フレームを解析中です。";
+    case "spatial":
+      return "位置関係を確認中です。";
+    case "report":
+      return "解析レポートを生成中です。";
+    default:
+      return state.status;
+  }
 }
 
 export function useAnalysisSession(): AnalysisSessionValue {
