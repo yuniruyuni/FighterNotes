@@ -1,12 +1,33 @@
 import { describe, expect, test } from "bun:test";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import {
-  syntheticAdviceReport,
-  syntheticAnalysisAvailability,
-} from "~/test-support/analysis.js";
+import type { AnalysisAvailability } from "~/modules/analysis/contracts.js";
+import { syntheticAdviceReport } from "~/test-support/analysis.js";
 import type { SceneSelection } from "../../domain/scene-selection.js";
 import { RoundSection } from "./RoundSection.js";
+
+function availability(
+  overrides: Partial<AnalysisAvailability> = {},
+): AnalysisAvailability {
+  return {
+    own_hp: "available",
+    opponent_hp: "available",
+    own_drive: "available",
+    opponent_drive: "available",
+    own_super: "available",
+    opponent_super: "available",
+    own_input: "available",
+    opponent_input: "available",
+    own_meter: "available",
+    opponent_meter: "available",
+    contacts: "available",
+    punishes: "available",
+    spatial: "available",
+    own_attack_info: "available",
+    opponent_attack_info: "available",
+    ...overrides,
+  };
+}
 
 const round = {
   round_no: 1,
@@ -75,7 +96,7 @@ describe("RoundSection", () => {
             analyzed_match_frames: 100,
             input_segments: 1,
             analyzed_input_segments: 1,
-            availability: syntheticAnalysisAvailability({
+            availability: availability({
               own_hp: "unavailable",
             }),
           },
@@ -102,7 +123,7 @@ describe("RoundSection", () => {
             analyzed_match_frames: 100,
             input_segments: 1,
             analyzed_input_segments: 1,
-            availability: syntheticAnalysisAvailability({
+            availability: availability({
               own_drive: "unavailable",
             }),
           },
