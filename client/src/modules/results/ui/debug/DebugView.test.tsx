@@ -38,6 +38,13 @@ describe("DebugView navigation", () => {
       history: {
         save: async () => {},
         load: async () => [],
+        delete: async () => {},
+        clear: async () => {},
+        getSavingPreference: async () => ({
+          enabled: true,
+          persistent: true,
+        }),
+        setSavingEnabled: async () => {},
       },
     };
     const result = {

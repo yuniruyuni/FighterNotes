@@ -3,6 +3,10 @@ import {
   ANALYSIS_HISTORY_ID_PREFIX,
   type AnalysisHistoryRecord,
 } from "../../domain/history.js";
+import {
+  loadAnalysisHistorySavingPreference,
+  saveAnalysisHistorySavingPreference,
+} from "./analysis-history-preference.js";
 
 const DATABASE_NAME = "fighter-notes";
 const DATABASE_VERSION = 2;
@@ -67,7 +71,12 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
 export async function saveAnalysisHistoryRecord(
   record: AnalysisHistoryRecord,
 ): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
+  if (
+    typeof indexedDB === "undefined" ||
+    !loadAnalysisHistorySavingPreference().enabled
+  ) {
+    return;
+  }
   const database = await openDatabase();
   try {
     const transaction = database.transaction(STORE_NAME, "readwrite");
@@ -92,6 +101,11 @@ export async function saveAnalysisHistoryRecord(
 export const browserAnalysisHistoryRepository: AnalysisHistoryRepository = {
   save: saveAnalysisHistoryRecord,
   load: loadAnalysisHistory,
+  delete: deleteAnalysisHistoryRecord,
+  clear: clearAnalysisHistory,
+  getSavingPreference: async () => loadAnalysisHistorySavingPreference(),
+  setSavingEnabled: async (enabled) =>
+    saveAnalysisHistorySavingPreference(enabled),
 };
 
 export async function loadAnalysisHistory(
@@ -108,5 +122,29 @@ export async function loadAnalysisHistory(
     );
   } finally {
     if (!existingDatabase) database.close();
+  }
+}
+
+export async function deleteAnalysisHistoryRecord(id: string): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  const database = await openDatabase();
+  try {
+    const transaction = database.transaction(STORE_NAME, "readwrite");
+    transaction.objectStore(STORE_NAME).delete(id);
+    await transactionDone(transaction);
+  } finally {
+    database.close();
+  }
+}
+
+export async function clearAnalysisHistory(): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  const database = await openDatabase();
+  try {
+    const transaction = database.transaction(STORE_NAME, "readwrite");
+    transaction.objectStore(STORE_NAME).clear();
+    await transactionDone(transaction);
+  } finally {
+    database.close();
   }
 }

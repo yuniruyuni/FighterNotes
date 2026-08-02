@@ -697,6 +697,172 @@
 .history-table th:first-child {
   text-align: left;
 }
+.history-storage-panel {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.035);
+}
+.history-storage-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem 1.2rem;
+  align-items: flex-start;
+}
+.history-storage-heading strong {
+  color: var(--text-hi);
+  font-size: 0.84rem;
+}
+.history-storage-heading p,
+.history-storage-disclosure,
+.history-management > p {
+  margin-top: 0.25rem;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+.history-saving-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 0.45rem;
+  align-items: center;
+  min-height: 32px;
+  color: var(--text-hi);
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+.history-saving-toggle:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+.history-saving-toggle input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--purple);
+}
+.history-storage-disclosure {
+  margin-top: 0.65rem;
+  padding-left: 0.7rem;
+  border-left: 3px solid var(--sa);
+}
+.history-storage-warning,
+.history-storage-notice {
+  margin-top: 0.65rem;
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+.history-storage-warning,
+.history-storage-notice[data-tone="error"] {
+  color: #ff9ab8;
+}
+.history-storage-notice[data-tone="status"] {
+  color: var(--drive);
+}
+.history-management {
+  margin-top: 0.8rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--line);
+}
+.history-management summary {
+  width: fit-content;
+  color: var(--sa);
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+.history-management summary:focus-visible,
+.history-management button:focus-visible,
+.history-saving-toggle input:focus-visible {
+  outline: 2px solid var(--sa);
+  outline-offset: 2px;
+}
+.history-record-list {
+  max-height: 19rem;
+  margin-top: 0.7rem;
+  overflow-y: auto;
+  list-style: none;
+}
+.history-record-list > li {
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.history-record-description {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+}
+.history-record-description strong {
+  color: var(--text-hi);
+  font-size: 0.78rem;
+}
+.history-record-description span,
+.history-confirmation > span,
+.history-clear-confirmation > span {
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+.history-management button {
+  min-height: 30px;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.history-management button:hover:not(:disabled) {
+  border-color: var(--sa);
+  color: var(--text-hi);
+}
+.history-management button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+.history-confirmation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+.history-confirmation > span {
+  flex-basis: 100%;
+  text-align: right;
+}
+.history-clear-controls {
+  margin-top: 0.8rem;
+}
+.history-clear-confirmation {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.65rem;
+  border: 1px solid rgba(255, 79, 121, 0.48);
+  background: rgba(255, 79, 121, 0.07);
+}
+.history-clear-confirmation strong {
+  color: #ffb1c4;
+  font-size: 0.76rem;
+}
+.history-clear-confirmation > div {
+  display: flex;
+  gap: 0.4rem;
+}
+.history-management .history-danger-button {
+  border-color: rgba(255, 79, 121, 0.62);
+  color: #ffb1c4;
+}
+.history-management .history-danger-button:hover:not(:disabled) {
+  border-color: var(--punish);
+  background: rgba(255, 79, 121, 0.12);
+}
 
 /* 入力統計 */
 .stat-grid {
@@ -774,6 +940,15 @@
   }
   .sidebar-footer {
     display: none;
+  }
+  .history-storage-heading {
+    display: grid;
+  }
+  .history-saving-toggle {
+    justify-self: start;
+  }
+  .history-record-list > li {
+    align-items: flex-start;
   }
   .app-footer--compact {
     display: none;
