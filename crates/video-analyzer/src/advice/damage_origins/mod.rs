@@ -4,14 +4,26 @@ use super::{AdviceCard, AttributedDamageEvent, DamageBreakdown, DamageOrigin};
 use crate::attack_info::AttackAttribute;
 use crate::frame_data::StrikeKind;
 use crate::frame_features::FrameFeatures;
-use crate::match_events::{DamageEvent, EventConfidence, MatchEvents};
+use crate::match_events::{AttackDamageConsistency, DamageEvent, EventConfidence, MatchEvents};
 
 mod candidate;
 mod classification;
 mod contexts;
 mod strike;
 
-pub(crate) const DAMAGE_ATTRIBUTION_VERSION: u32 = 3;
+pub(crate) const DAMAGE_ATTRIBUTION_VERSION: u32 = 4;
+
+fn centrally_confirms_throw(events: &MatchEvents, damage: &DamageEvent) -> bool {
+    events
+        .attack_evidence_for_damage(damage)
+        .is_some_and(|evidence| {
+            evidence.complete
+                && !evidence.recovered_from_max
+                && evidence.confidence == EventConfidence::High
+                && evidence.hp_consistency == AttackDamageConsistency::Consistent
+                && evidence.starter_attribute == Some(AttackAttribute::Throw)
+        })
+}
 
 fn observed_strike_kind(
     events: &MatchEvents,
@@ -46,7 +58,23 @@ pub(crate) fn build_damage_breakdown(
         .enumerate()
         .map(|(index, damage)| {
             let candidate = classification::classify_damage(events, own, damage);
-            let strike = (candidate.origin == DamageOrigin::Strike)
+            // 中央表示は接触属性の証拠なので、Drive Rushやjump-inなどの接近起点は
+            // 保持する。単純な打撃または未分類だけを、厳格に整合した投げ表示で補う。
+            let origin = if centrally_confirms_throw(events, damage)
+                && matches!(
+                    candidate.origin,
+                    DamageOrigin::Strike | DamageOrigin::Unclassified
+                ) {
+                DamageOrigin::Throw
+            } else {
+                candidate.origin
+            };
+            let confidence = if origin == DamageOrigin::Throw && origin != candidate.origin {
+                EventConfidence::High
+            } else {
+                candidate.confidence
+            };
+            let strike = (origin == DamageOrigin::Strike)
                 .then(|| {
                     observed_strike_kind(events, damage).or_else(|| {
                         strike::strike_attribution(
@@ -75,8 +103,8 @@ pub(crate) fn build_damage_breakdown(
                 hp_before: damage.hp_before,
                 hp_after: damage.hp_after,
                 hp_drop: damage.drop,
-                origin: candidate.origin,
-                confidence: candidate.confidence,
+                origin,
+                confidence,
                 strike_kind: strike.map(|value| value.kind),
                 strike_kind_confidence: strike.map(|value| value.confidence),
                 contexts: contexts::damage_contexts(events, own, damage),
