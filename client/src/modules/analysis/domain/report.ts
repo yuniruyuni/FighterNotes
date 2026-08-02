@@ -114,10 +114,33 @@ export interface AnalysisCoverage {
   analyzed_match_frames: number;
   input_segments: number;
   analyzed_input_segments: number;
+  /** 確定ラウンド内の試合フレーム数。以下のHUD/入力系coverageの共通分母。 */
+  detector_match_frames?: number;
+  own_hp_reliable_frames?: number;
+  opponent_hp_reliable_frames?: number;
+  own_drive_reliable_frames?: number;
+  opponent_drive_reliable_frames?: number;
+  own_super_reliable_frames?: number;
+  opponent_super_reliable_frames?: number;
+  own_super_end_reliable?: boolean;
+  opponent_super_end_reliable?: boolean;
+  own_input_observed_frames?: number;
+  opponent_input_observed_frames?: number;
+  own_input_repaired_frames?: number;
+  opponent_input_repaired_frames?: number;
+  own_meter_mapped_frames?: number;
+  opponent_meter_mapped_frames?: number;
+  /** 空間解析は全試合ではなく候補区間だけを分母にする。 */
+  spatial_candidate_frames?: number;
+  spatial_sampled_frames?: number;
+  spatial_usable_frames?: number;
+  own_spatial_observed_frames?: number;
+  opponent_spatial_observed_frames?: number;
   attack_damage_events?: number;
   attack_damage_linked?: number;
   attack_damage_consistent?: number;
   attack_damage_mismatched?: number;
+  attack_damage_unverified?: number;
 }
 
 export interface InputStats {

@@ -1,6 +1,34 @@
 use super::super::threats::{CompoundThreat, ProjectileThreat, TeleportEvent};
 use super::*;
 
+/// 候補区間だけを復号する空間解析パスの実行状況。
+///
+/// `candidate_frames` は重複を統合した候補区間の総フレーム数、
+/// `sampled_frames` は実際に空間観測を受け取れた一意なフレーム数。
+/// side 別の値は、補間ではなくそのフレームで人物を直接観測できた数。
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SpatialCoverage {
+    pub candidate_frames: u32,
+    pub sampled_frames: u32,
+    /// 両者を十分な信頼度で追跡でき、距離を利用できる一意なフレーム数。
+    pub usable_frames: u32,
+    pub p1_observed_frames: u32,
+    pub p2_observed_frames: u32,
+}
+
+/// 入力確定層をフレーム単位で数えたcoverage。
+///
+/// segmentへ畳んだ後ではround境界をまたぐ区間内の内訳を復元できないため、
+/// production pipelineでは`TrackedInput`から直接集計して保持する。
+#[derive(Debug, Clone, Copy, Default)]
+pub struct InputCoverage {
+    pub measured: bool,
+    pub p1_observed_frames: u32,
+    pub p2_observed_frames: u32,
+    pub p1_repaired_frames: u32,
+    pub p2_repaired_frames: u32,
+}
+
 /// イベント層の出力一式。
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MatchEvents {
@@ -52,6 +80,12 @@ pub struct MatchEvents {
     /// フレームメーターのゲーム内フレーム番号。溜め時間等でヒットストップを除く。
     #[serde(skip)]
     pub meter_game_frame: [Vec<i64>; 2],
+    /// 候補区間に限定した空間解析パスのcoverage。
+    #[serde(skip)]
+    pub spatial_coverage: SpatialCoverage,
+    /// 確定ラウンド内の入力履歴を、segment化前のフレーム列から数えたcoverage。
+    #[serde(skip)]
+    pub input_coverage: InputCoverage,
     /// 入力セグメント（[0]=P1, [1]=P2）
     pub segments: [Vec<InputSegment>; 2],
     /// クリーニング済み HP 系列（[0]=P1, [1]=P2、ラウンド内単調非増加）

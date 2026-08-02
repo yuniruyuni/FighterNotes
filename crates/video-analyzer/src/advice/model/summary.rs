@@ -28,10 +28,33 @@ pub struct AnalysisCoverage {
     pub analyzed_match_frames: u32,
     pub input_segments: u32,
     pub analyzed_input_segments: u32,
+    /// 検出器別の読取率に共通して使う、確定ラウンド内の試合フレーム数。
+    pub detector_match_frames: u32,
+    pub own_hp_reliable_frames: u32,
+    pub opponent_hp_reliable_frames: u32,
+    pub own_drive_reliable_frames: u32,
+    pub opponent_drive_reliable_frames: u32,
+    pub own_super_reliable_frames: u32,
+    pub opponent_super_reliable_frames: u32,
+    pub own_super_end_reliable: bool,
+    pub opponent_super_end_reliable: bool,
+    pub own_input_observed_frames: u32,
+    pub opponent_input_observed_frames: u32,
+    pub own_input_repaired_frames: u32,
+    pub opponent_input_repaired_frames: u32,
+    pub own_meter_mapped_frames: u32,
+    pub opponent_meter_mapped_frames: u32,
+    /// 空間解析は全試合ではなく、意味イベントから選んだ候補区間だけが分母。
+    pub spatial_candidate_frames: u32,
+    pub spatial_sampled_frames: u32,
+    pub spatial_usable_frames: u32,
+    pub own_spatial_observed_frames: u32,
+    pub opponent_spatial_observed_frames: u32,
     pub attack_damage_events: u32,
     pub attack_damage_linked: u32,
     pub attack_damage_consistent: u32,
     pub attack_damage_mismatched: u32,
+    pub attack_damage_unverified: u32,
 }
 
 /// 入力習慣の統計（自分側）。

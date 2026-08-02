@@ -5,16 +5,19 @@ fn input_stats_and_coverage_use_only_validated_rounds() {
     use crate::match_events::InputSegment;
     let mut ev = empty_events();
     ev.rounds[0].end_frame = 99;
-    let press = |frame: u32| InputSegment {
-        start_frame: frame,
-        end_frame: frame + 4,
+    let press = |start_frame: u32, end_frame: u32| InputSegment {
+        start_frame,
+        end_frame,
         dir: "N".to_string(),
         badges: vec!["弱".to_string()],
         auto: false,
         throw: false,
-        evidence: Default::default(),
+        evidence: crate::match_events::InputEvidence {
+            observed_frames: end_frame - start_frame + 1,
+            repaired_frames: 0,
+        },
     };
-    ev.segments[0] = vec![press(10), press(200)];
+    ev.segments[0] = vec![press(0, 99), press(200, 204)];
     let features: Vec<_> = (0..300u32)
         .map(|frame_index| FrameFeatures {
             frame_index,

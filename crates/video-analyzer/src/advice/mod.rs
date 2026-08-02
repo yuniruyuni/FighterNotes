@@ -41,7 +41,10 @@ pub use model::*;
 pub use parameters::RULESET_VERSION;
 
 pub(crate) use cards::build_advice_cards;
-pub(crate) use coverage::build_coverage;
+pub(crate) use coverage::{
+    build_coverage, detector_coverage_is_sufficient, spatial_coverage_is_sufficient,
+    super_coverage_is_sufficient,
+};
 pub(crate) use detectors::*;
 pub(crate) use parameters::*;
 pub(crate) use stats::*;

@@ -35,18 +35,23 @@ pub fn build_report_with_context(
 
     let damage_taken_events = build_damage_taken_events(events, own);
     let round_summaries = build_round_summaries(events, own, opp);
-    let input_stats = build_input_stats(features, events, own, own_index);
-    let tactic_stats = build_tactic_stats(features, events, own, opp);
     let (coverage, analysis_warnings) =
         build_coverage(features, events, own_index, &round_summaries);
+    let input_stats = detector_coverage_is_sufficient(
+        coverage.own_input_observed_frames,
+        coverage.detector_match_frames,
+    )
+    .then(|| build_input_stats(features, events, own, own_index))
+    .flatten();
+    let tactic_stats = build_tactic_stats(features, events, own, opp);
     let cards = build_advice_cards(
         features,
         events,
         own,
-        opp,
         own_index,
         context.own_character(),
         &round_summaries,
+        &coverage,
     );
 
     let mut damage_breakdown =
