@@ -9,7 +9,7 @@ import type {
 } from "../../domain/result.js";
 import { decodeSpatialWindows } from "../spatial-analysis/spatial-pass.js";
 import type { AnalyzerWorkerDone } from "../worker-bridge/protocol.js";
-import { throwIfAborted } from "./abort.js";
+import { throwIfAborted, waitForAbort } from "./abort.js";
 import { buildAnalysisResult } from "./analysis-result-builder.js";
 
 export interface AnalysisCompletionSession {
@@ -53,7 +53,8 @@ export async function completeAnalysis(
   } = options;
 
   throwIfAborted(signal);
-  const windows = await session.firstPass();
+  const windows = await waitForAbort(session.firstPass(), signal);
+  throwIfAborted(signal);
   const codecConfig = getCodecConfig();
   if (windows.length > 0) {
     if (!codecConfig) {
@@ -66,11 +67,11 @@ export async function completeAnalysis(
       frameToSampleIdx,
       videoArrayBuffer,
       codecConfig,
-      resetWindow: () => session.resetSpatialWindow(),
+      resetWindow: () => waitForAbort(session.resetSpatialWindow(), signal),
       sendFrame: (frameIndex, rgbaBuf, hints) => {
         session.sendSpatialFrame(frameIndex, rgbaBuf, hints);
       },
-      drain: () => session.drainSpatialFrames(),
+      drain: () => waitForAbort(session.drainSpatialFrames(), signal),
       onProgress,
       signal,
     });
@@ -78,7 +79,8 @@ export async function completeAnalysis(
 
   throwIfAborted(signal);
   session.finishSpatialPass();
-  const message = await session.result();
+  const message = await waitForAbort(session.result(), signal);
+  throwIfAborted(signal);
   if (message.debugHp && message.debugHp.length > 0) {
     console.log(
       "[DEBUG HP] 500f毎サンプル（match/lscore/rscoreでis_match_screen判定を確認）",
