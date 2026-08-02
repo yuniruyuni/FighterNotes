@@ -30,14 +30,15 @@ export function createContext(
   const rawRepos = createRawRepos();
   const repos = bindAllRepos(rawRepos, createFullCtx(db));
 
+  const config = options.config ?? RuntimeConfig.fromEnvironment();
   const ctx: Context = {
     now: options.now ?? new Date(),
     logger,
     db,
     rawRepos,
     repos,
-    config: options.config ?? RuntimeConfig.fromEnvironment(),
-    services: options.services ?? createRuntimeServices(),
+    config,
+    services: options.services ?? createRuntimeServices(db, config),
   };
 
   // 3. Context 構築後に遅延初期化

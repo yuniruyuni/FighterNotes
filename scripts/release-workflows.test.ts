@@ -158,6 +158,17 @@ describe("release workflow safety contracts", () => {
     expect(build).toContain("GCP_BUILDER_SERVICE_ACCOUNT:");
   });
 
+  test("Cloudflare client IP is trusted only behind internal Cloud Run ingress", () => {
+    const service = read("cloudrun.yaml");
+    expect(service).toContain("run.googleapis.com/ingress: internal");
+    expect(service).toMatch(
+      /- name: PUBLIC_BASE_URL\n\s+value: https:\/\/fighter\.yuniruyuni\.net/,
+    );
+    expect(service).toMatch(
+      /- name: TRUST_CLOUDFLARE_CONNECTING_IP\n\s+value: "true"/,
+    );
+  });
+
   test("image builds pass only non-secret digests into the release job", () => {
     const deploy = read(".github/workflows/deploy.yml");
     const build = read(".github/workflows/build-image.yml");

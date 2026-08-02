@@ -157,3 +157,22 @@ CREATE INDEX IF NOT EXISTS published_analysis_create_events_created_at_idx
 -- The scheduled cleanup job intentionally reuses the runtime DB role. DELETE
 -- is needed to prune old quota events; ownership and DDL remain migration-only.
 GRANT SELECT, INSERT, DELETE ON published_analysis_create_events TO fighter_app;
+
+-- One row per client/bucket keeps fixed-window counters durable across Cloud
+-- Run instances and revision changes without retaining a plaintext IP address.
+CREATE TABLE IF NOT EXISTS published_analysis_rate_limits (
+  bucket TEXT NOT NULL
+    CHECK (bucket IN ('create', 'delete', 'public_read')),
+  client_key_hash TEXT NOT NULL
+    CHECK (client_key_hash ~ '^[0-9a-f]{64}$'),
+  window_started_at TIMESTAMPTZ NOT NULL,
+  request_count INTEGER NOT NULL
+    CHECK (request_count BETWEEN 1 AND 100001),
+  PRIMARY KEY (bucket, client_key_hash)
+);
+CREATE INDEX IF NOT EXISTS published_analysis_rate_limits_window_idx
+  ON published_analysis_rate_limits (window_started_at);
+-- UPDATE is limited to the shared counters. Ownership, DELETE and DDL stay
+-- migration-only until bounded pruning is introduced.
+GRANT SELECT, INSERT, UPDATE
+  ON published_analysis_rate_limits TO fighter_app;

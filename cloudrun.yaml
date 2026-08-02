@@ -38,8 +38,18 @@ spec:
               value: "30"
             - name: SHARE_CREATE_RATE_LIMIT_PER_MINUTE
               value: "10"
+            - name: SHARE_DELETE_RATE_LIMIT_PER_MINUTE
+              value: "10"
             - name: SHARE_GET_RATE_LIMIT_PER_MINUTE
               value: "120"
+            - name: TRUST_CLOUDFLARE_CONNECTING_IP
+              value: "true"
+            - name: SHARE_ARGON2_CONCURRENCY
+              value: "2"
+            - name: SHARE_ARGON2_QUEUE_LIMIT
+              value: "8"
+            - name: SHARE_ARGON2_WAIT_MS
+              value: "250"
             - name: SHARE_DAILY_CREATE_LIMIT
               value: "1000"
             - name: SHARE_ACTIVE_LIMIT

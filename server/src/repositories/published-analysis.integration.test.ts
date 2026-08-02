@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createContext } from "../context";
 import { inspectDatabaseReadiness, PgDatabase, sql } from "../infra/db";
+import { PostgresSharingRateLimit } from "../infra/db/shared-rate-limit";
 import { ConsoleLogger } from "../infra/logger";
 import type { ILogger } from "../infra/logger/types";
 import {
@@ -67,7 +68,7 @@ integration("Postgres repositories + published analysis flow", () => {
   beforeEach(async () => {
     await db.queryRun(
       sql.raw(
-        "TRUNCATE published_analysis_create_events, published_analyses CASCADE",
+        "TRUNCATE published_analysis_rate_limits, published_analysis_create_events, published_analyses CASCADE",
       ),
     );
   });
@@ -114,6 +115,43 @@ integration("Postgres repositories + published analysis flow", () => {
           CHECK (schema_version = 1)`),
       );
     }
+  });
+
+  test("2 instanceとcold startで同じrate limit bucketをatomicに共有する", async () => {
+    const firstInstance = new PostgresSharingRateLimit(db);
+    const secondInstance = new PostgresSharingRateLimit(db);
+    const attempts = await Promise.all(
+      Array.from({ length: 20 }, (_, index) =>
+        (index % 2 === 0 ? firstInstance : secondInstance).consume(
+          "create",
+          "203.0.113.20",
+          10,
+        ),
+      ),
+    );
+    expect(attempts.filter((decision) => decision.allowed)).toHaveLength(10);
+    expect(
+      await new PostgresSharingRateLimit(db).consume(
+        "create",
+        "203.0.113.20",
+        10,
+      ),
+    ).toMatchObject({ allowed: false });
+    expect(await secondInstance.consume("delete", "203.0.113.20", 10)).toEqual({
+      allowed: true,
+      retryAfterSeconds: 0,
+    });
+    expect(
+      await firstInstance.consume("public_read", "203.0.113.20", 120),
+    ).toEqual({ allowed: true, retryAfterSeconds: 0 });
+
+    const stored = await db.queryGet<{ client_key_hash: string }>(
+      sql.raw(`SELECT client_key_hash
+        FROM published_analysis_rate_limits
+        WHERE bucket = 'create'`),
+    );
+    expect(stored?.client_key_hash).toHaveLength(64);
+    expect(stored?.client_key_hash).not.toContain("203.0.113.20");
   });
 
   registerPublishedAnalysisRepositoryIntegrationTests(() => db);
@@ -281,6 +319,10 @@ integration("Postgres repositories + published analysis flow", () => {
       app_events_insert: boolean;
       app_events_update: boolean;
       app_events_delete: boolean;
+      app_limits_select: boolean;
+      app_limits_insert: boolean;
+      app_limits_update: boolean;
+      app_limits_delete: boolean;
     }>(
       sql.raw(`
       SELECT
@@ -311,7 +353,27 @@ integration("Postgres repositories + published analysis flow", () => {
           'fighter_app',
           'published_analysis_create_events',
           'DELETE'
-        ) AS app_events_delete
+        ) AS app_events_delete,
+        has_table_privilege(
+          'fighter_app',
+          'published_analysis_rate_limits',
+          'SELECT'
+        ) AS app_limits_select,
+        has_table_privilege(
+          'fighter_app',
+          'published_analysis_rate_limits',
+          'INSERT'
+        ) AS app_limits_insert,
+        has_table_privilege(
+          'fighter_app',
+          'published_analysis_rate_limits',
+          'UPDATE'
+        ) AS app_limits_update,
+        has_table_privilege(
+          'fighter_app',
+          'published_analysis_rate_limits',
+          'DELETE'
+        ) AS app_limits_delete
     `),
     );
     expect(privileges).toEqual({
@@ -323,6 +385,10 @@ integration("Postgres repositories + published analysis flow", () => {
       app_events_insert: true,
       app_events_update: false,
       app_events_delete: true,
+      app_limits_select: true,
+      app_limits_insert: true,
+      app_limits_update: true,
+      app_limits_delete: false,
     });
   });
 

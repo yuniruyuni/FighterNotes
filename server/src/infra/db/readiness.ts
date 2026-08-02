@@ -138,7 +138,11 @@ export async function inspectDatabaseReadiness(
         ('published_analysis_tactics', 'burnout_mixed'),
         ('published_analysis_tactics', 'burnout_unknown'),
         ('published_analysis_create_events', 'analysis_id'),
-        ('published_analysis_create_events', 'created_at')
+        ('published_analysis_create_events', 'created_at'),
+        ('published_analysis_rate_limits', 'bucket'),
+        ('published_analysis_rate_limits', 'client_key_hash'),
+        ('published_analysis_rate_limits', 'window_started_at'),
+        ('published_analysis_rate_limits', 'request_count')
     ), present_columns AS (
       SELECT table_name, column_name
       FROM information_schema.columns
@@ -182,6 +186,15 @@ export async function inspectDatabaseReadiness(
       )
       AND has_table_privilege(
         current_user, 'public.published_analysis_create_events', 'DELETE'
+      )
+      AND has_table_privilege(
+        current_user, 'public.published_analysis_rate_limits', 'SELECT'
+      )
+      AND has_table_privilege(
+        current_user, 'public.published_analysis_rate_limits', 'INSERT'
+      )
+      AND has_table_privilege(
+        current_user, 'public.published_analysis_rate_limits', 'UPDATE'
       )
     ) AS compatible
   `);

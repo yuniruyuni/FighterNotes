@@ -27,7 +27,10 @@ Cloudflare、PostgreSQL login、Secret Manager、IAM binding、cleanup の Sched
 runtime と cleanup は DML 用 password、migration だけが DDL 用 owner password を使う。
 
 Web service は internal ingress、最大 2 instance、container concurrency 80、timeout 60 秒である。
-外部公開経路は Cloud Run manifest の外側にある。
+外部公開経路は Cloud Run manifest の外側にある。`CF-Connecting-IP` をrate-limit keyとして
+信頼するのは、internal ingressを維持し、Cloudflare経路だけがoriginへ到達できる構成に限る。
+`TRUST_CLOUDFLARE_CONNECTING_IP=true` のreleaseではlive ingressとCloudflare tunnel / routeを
+監査し、Cloud Runへの別経路が無いことを確認する。
 
 ## GitHub 設定
 

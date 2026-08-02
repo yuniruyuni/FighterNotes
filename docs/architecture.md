@@ -40,7 +40,7 @@ SPA の配信、軽量な共有結果の保存と公開、期限切れデータ�
 | Meter tracker | `crates/meter-tracker` | セル観測からゲームフレーム単位の状態タイムラインを復元 |
 | Video analyzer | `crates/video-analyzer` | HUD・入力の確定、イベント帰属、空間再評価、助言レポート生成 |
 | Server | `server/src` | 静的配信、共有 API、公開ページ、rate limit、cleanup batch |
-| Database | `schema` | 共有結果、指摘、戦術統計、作成 quota event の保存 |
+| Database | `schema` | 共有結果、指摘、戦術統計、作成 quota event、共有rate-limit counterの保存 |
 | Delivery | `Dockerfile`、`cloudrun*.yaml`、`.github/workflows` | build、migration、Cloud Run service / Job のリリース |
 
 ## ブラウザ側
@@ -163,8 +163,10 @@ Worker は JavaScript 側の buffer をその領域へコピーし、フレー�
 | Infrastructure | `server/src/infra` | DB pool、parameterized SQL、logger |
 
 Repository は read / write capability と transaction context を明示的に受け取る。
-共有作成では advisory lock の取得、日次件数・active row・relation size の確認、
-quota event と結果本体の insert を同じ transaction で行う。
+共有作成では Argon2id の前に日次件数・active row・relation size を事前確認し、hash 後の
+transaction で advisory lock を取得して quota を再確認する。quota event と結果本体の insert は
+同じ transaction で行う。共有rate limitはclient keyのdigestとbucketをPostgreSQLの原子的
+upsertで更新し、instanceやcold startをまたいで共有する。
 
 ### HTTP surface
 

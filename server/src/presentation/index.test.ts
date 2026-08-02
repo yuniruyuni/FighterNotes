@@ -7,6 +7,10 @@ import { RuntimeConfig } from "../config";
 import type { Database } from "../infra/db";
 import type { ILogger } from "../infra/logger/types";
 import type { Context } from "../usecases/context";
+import type {
+  RuntimeServices,
+  SharingRateLimitBucket,
+} from "../usecases/services";
 import { createApp } from "./index";
 
 let app: Hono;
@@ -27,14 +31,54 @@ const logger: ILogger = {
 const INDEX_HTML =
   "<!DOCTYPE html><html><body>fighter-notes test</body></html>";
 
+function testServices(): RuntimeServices {
+  const counts = new Map<string, number>();
+  return {
+    publishedAnalysisSecurity: {
+      generateShareId() {
+        throw new Error("unexpected share id generation");
+      },
+      async hashDeletePassword() {
+        throw new Error("unexpected password hash");
+      },
+      async verifyDeletePassword() {
+        throw new Error("unexpected password verification");
+      },
+    },
+    sharingRateLimit: {
+      async consume(
+        bucket: SharingRateLimitBucket,
+        clientKey: string,
+        limit: number,
+      ) {
+        const key = `${bucket}:${clientKey}`;
+        const count = (counts.get(key) ?? 0) + 1;
+        counts.set(key, count);
+        return {
+          allowed: count <= limit,
+          retryAfterSeconds: count <= limit ? 0 : 60,
+        };
+      },
+    },
+  };
+}
+
 beforeAll(async () => {
   staticDir = mkdtempSync(join(tmpdir(), "fighter-static-"));
   writeFileSync(join(staticDir, "index.html"), INDEX_HTML);
   writeFileSync(join(staticDir, "app.js"), "console.log('ok');");
   writeFileSync(join(staticDir, "analyzer.wasm"), "wasm-test");
   // このsuiteはDBへ進む正常なmutationを呼ばないため、Contextはstubで十分。
-  const config = RuntimeConfig.fromEnvironment({ STATIC_DIR: staticDir });
-  app = createApp({ logger, config } as unknown as Context);
+  const config = RuntimeConfig.fromEnvironment({
+    STATIC_DIR: staticDir,
+    K_SERVICE: "fighter-test",
+    TRUST_CLOUDFLARE_CONNECTING_IP: "true",
+  });
+  app = createApp({
+    logger,
+    config,
+    services: testServices(),
+  } as unknown as Context);
 });
 
 afterAll(() => {
@@ -176,6 +220,101 @@ describe("共有結果ページ", () => {
       expect(res.headers.get("cache-control")).toBe("no-store");
       expect(res.headers.get("x-content-type-options")).toBe("nosniff");
     }
+  });
+});
+
+describe("共有rate-limit store過負荷の隔離", () => {
+  test("共有requestをfail closedにしても静的配信とhealthを維持する", async () => {
+    const services = testServices();
+    services.sharingRateLimit.consume = async () => {
+      throw new Error("private database overload detail");
+    };
+    const overloadedWarnings: unknown[][] = [];
+    const overloadedLogger: ILogger = {
+      ...logger,
+      warn(message, ...args) {
+        overloadedWarnings.push([message, ...args]);
+      },
+      child() {
+        return this;
+      },
+    };
+    const overloaded = createApp({
+      logger: overloadedLogger,
+      config: RuntimeConfig.fromEnvironment({
+        STATIC_DIR: staticDir,
+        K_SERVICE: "fighter-test",
+        TRUST_CLOUDFLARE_CONNECTING_IP: "true",
+      }),
+      services,
+    } as unknown as Context);
+
+    const responses = await Promise.all(
+      Array.from({ length: 25 }, (_, index) =>
+        Promise.all([
+          overloaded.request("/health"),
+          overloaded.request("/app.js"),
+          overloaded.request("/s/AAAAAAAAAAAAAAAAAAAAAA", {
+            headers: { "CF-Connecting-IP": `203.0.113.${index + 1}` },
+          }),
+          overloaded.request("/api/trpc/publishedAnalysis.create", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "CF-Connecting-IP": `203.0.113.${index + 1}`,
+            },
+            body: "{}",
+          }),
+        ]),
+      ),
+    );
+
+    for (const [health, staticAsset, publicRead, create] of responses) {
+      expect(health.status).toBe(200);
+      expect(staticAsset.status).toBe(200);
+      expect(publicRead.status).toBe(503);
+      expect(publicRead.headers.get("cache-control")).toBe("no-store");
+      expect(create.status).toBe(503);
+    }
+    expect(JSON.stringify(overloadedWarnings)).not.toContain(
+      "private database overload detail",
+    );
+    expect(
+      overloadedWarnings.every(
+        ([message, fields]) =>
+          message === "Published analysis rate limit unavailable" &&
+          (fields as { bucket?: string }).bucket !== undefined,
+      ),
+    ).toBe(true);
+  });
+
+  test("緊急停止はrate-limit storeに依存せずcreateとpublic readを拒否する", async () => {
+    const services = testServices();
+    services.sharingRateLimit.consume = async () => {
+      throw new Error("rate limit store must not be called");
+    };
+    const disabled = createApp({
+      logger,
+      config: RuntimeConfig.fromEnvironment({
+        STATIC_DIR: staticDir,
+        SHARE_RESULTS_ENABLED: "false",
+      }),
+      services,
+    } as unknown as Context);
+
+    const publicRead = await disabled.request("/s/AAAAAAAAAAAAAAAAAAAAAA");
+    expect(publicRead.status).toBe(404);
+    const create = await disabled.request(
+      "/api/trpc/publishedAnalysis.create",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      },
+    );
+    // input validation is intentionally earlier than the router's disabled 404,
+    // but a rate-limit-store 503 must not mask emergency shutdown.
+    expect(create.status).toBe(400);
   });
 });
 

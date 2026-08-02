@@ -3,7 +3,11 @@ import type { ShareCreateLimits } from "./models/published-analysis";
 const DEFAULT_PUBLIC_BASE_URL = "https://fighter.yuniruyuni.net";
 const DEFAULT_SHARE_RETENTION_DAYS = 30;
 const DEFAULT_SHARE_CREATE_RATE_LIMIT = 10;
+const DEFAULT_SHARE_DELETE_RATE_LIMIT = 10;
 const DEFAULT_SHARE_GET_RATE_LIMIT = 120;
+const DEFAULT_ARGON2_CONCURRENCY = 2;
+const DEFAULT_ARGON2_QUEUE_LIMIT = 8;
+const DEFAULT_ARGON2_WAIT_MILLIS = 250;
 const DEFAULT_SHARE_DAILY_CREATE_LIMIT = 1_000;
 const DEFAULT_SHARE_ACTIVE_LIMIT = 50_000;
 const DEFAULT_SHARE_STORAGE_LIMIT_BYTES = 1024 * 1024 * 1024;
@@ -40,7 +44,14 @@ export interface RuntimeConfig {
     enabled: boolean;
     retentionDays: number;
     createRateLimit: number;
+    deleteRateLimit: number;
     getRateLimit: number;
+    trustCloudflareConnectingIp: boolean;
+    argon2: {
+      concurrency: number;
+      queueLimit: number;
+      waitMillis: number;
+    };
     createLimits: ShareCreateLimits;
   };
   cleanup: CleanupSettings;
@@ -56,10 +67,24 @@ export const RuntimeConfig = {
       1,
       3650,
     );
+    const configuredPublicBaseUrl = publicBaseUrl(environment.PUBLIC_BASE_URL);
+    const trustCloudflareConnectingIp = booleanSetting(
+      environment,
+      "TRUST_CLOUDFLARE_CONNECTING_IP",
+      false,
+    );
+    if (
+      trustCloudflareConnectingIp &&
+      (!environment.K_SERVICE || configuredPublicBaseUrl.protocol !== "https:")
+    ) {
+      throw new Error(
+        "TRUST_CLOUDFLARE_CONNECTING_IP requires Cloud Run and an HTTPS public URL",
+      );
+    }
     return {
       port: integerSetting(environment, "PORT", 3000, 1, 65_535),
       staticDir: environment.STATIC_DIR ?? "./static",
-      publicBaseUrl: publicBaseUrl(environment.PUBLIC_BASE_URL),
+      publicBaseUrl: configuredPublicBaseUrl,
       sharing: {
         enabled: environment.SHARE_RESULTS_ENABLED !== "false",
         retentionDays,
@@ -70,6 +95,13 @@ export const RuntimeConfig = {
           1,
           1_000,
         ),
+        deleteRateLimit: integerSetting(
+          environment,
+          "SHARE_DELETE_RATE_LIMIT_PER_MINUTE",
+          DEFAULT_SHARE_DELETE_RATE_LIMIT,
+          1,
+          1_000,
+        ),
         getRateLimit: integerSetting(
           environment,
           "SHARE_GET_RATE_LIMIT_PER_MINUTE",
@@ -77,6 +109,30 @@ export const RuntimeConfig = {
           1,
           100_000,
         ),
+        trustCloudflareConnectingIp,
+        argon2: {
+          concurrency: integerSetting(
+            environment,
+            "SHARE_ARGON2_CONCURRENCY",
+            DEFAULT_ARGON2_CONCURRENCY,
+            1,
+            16,
+          ),
+          queueLimit: integerSetting(
+            environment,
+            "SHARE_ARGON2_QUEUE_LIMIT",
+            DEFAULT_ARGON2_QUEUE_LIMIT,
+            0,
+            1_000,
+          ),
+          waitMillis: integerSetting(
+            environment,
+            "SHARE_ARGON2_WAIT_MS",
+            DEFAULT_ARGON2_WAIT_MILLIS,
+            1,
+            10_000,
+          ),
+        },
         createLimits: {
           dailyCreates: integerSetting(
             environment,
@@ -168,6 +224,18 @@ function databaseSettings(environment: Environment): DatabaseSettings {
       600_000,
     ),
   };
+}
+
+function booleanSetting(
+  environment: Environment,
+  name: string,
+  fallback: boolean,
+): boolean {
+  const raw = environment[name];
+  if (raw === undefined) return fallback;
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  throw new Error(`${name} must be true or false`);
 }
 
 function publicBaseUrl(configured = DEFAULT_PUBLIC_BASE_URL): URL {

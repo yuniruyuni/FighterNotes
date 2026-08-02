@@ -152,8 +152,13 @@ cleanup batch は次のどちらかを満たす parent row を削除する。
 | public HTML `200` | 有効期限を超えない最大15秒 cache |
 | error response | `no-store` |
 
-application rate limiter は process 内の固定窓で、instance 間では共有しない。
-これとは別に create transaction は PostgreSQL advisory lock の内側で hard quota を確認する。
+application rate limiter は PostgreSQL の原子的 upsert を使う固定窓で、Cloud Run instance と
+cold start をまたいで共有する。create、delete、public read は別 bucket とし、client key は
+SHA-256 digest だけを保存する。counter store が利用できない場合は共有 request だけを `503` で
+fail closed にし、静的配信と `/health` は継続する。
+
+create は hard quota の事前確認後に Argon2id を実行し、書込み transaction の advisory lock 内で
+quota を再確認する。hash / verify は process ごとに合計同時実行数と待機 queue を制限する。
 
 | Hard quota | 既定値 |
 | --- | ---: |
@@ -170,8 +175,13 @@ quota 到達時は fail closed とし、cleanup lag や濫用の原因を確認�
 | `SHARE_RESULTS_ENABLED` | `true` | `false` で create と公開 read を停止 |
 | `PUBLIC_BASE_URL` | `https://fighter.yuniruyuni.net` | 共有 URL と許可 origin |
 | `SHARE_RETENTION_DAYS` | `30` | 公開期限と cleanup cutoff |
-| `SHARE_CREATE_RATE_LIMIT_PER_MINUTE` | `10` | create / delete の process-local limit |
-| `SHARE_GET_RATE_LIMIT_PER_MINUTE` | `120` | `/s/:id` の process-local limit |
+| `SHARE_CREATE_RATE_LIMIT_PER_MINUTE` | `10` | create の共有DB固定窓 limit |
+| `SHARE_DELETE_RATE_LIMIT_PER_MINUTE` | `10` | delete の共有DB固定窓 limit |
+| `SHARE_GET_RATE_LIMIT_PER_MINUTE` | `120` | `/s/:id` の共有DB固定窓 limit |
+| `TRUST_CLOUDFLARE_CONNECTING_IP` | `false` | internal Cloud Run ingress + HTTPS originでだけCloudflare client IPを信頼 |
+| `SHARE_ARGON2_CONCURRENCY` | `2` | hash / verify 合計同時実行数 |
+| `SHARE_ARGON2_QUEUE_LIMIT` | `8` | Argon2待機 request 上限 |
+| `SHARE_ARGON2_WAIT_MS` | `250` | Argon2待機時間上限 |
 | `SHARE_DAILY_CREATE_LIMIT` | `1000` | DB hard quota |
 | `SHARE_ACTIVE_LIMIT` | `50000` | DB hard quota |
 | `SHARE_STORAGE_LIMIT_BYTES` | `1073741824` | DB hard quota |

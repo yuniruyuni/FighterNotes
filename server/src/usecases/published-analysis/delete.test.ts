@@ -12,7 +12,7 @@ import {
   createFullCtx,
 } from "../../repositories/common/capability";
 import type { Context } from "../context";
-import type { RuntimeServices } from "../services";
+import { type RuntimeServices, SecurityCapacityError } from "../services";
 import { deletePublishedAnalysisUsecase } from "./delete";
 
 const ID = "Abcdefghijklmnopqrstu_" as ShareId;
@@ -101,6 +101,42 @@ describe("deletePublishedAnalysisUsecase", () => {
     expect(ctx.db.readTransactions).toBe(0);
     expect(ctx.db.writeTransactions).toBe(0);
   });
+
+  test("Argon2 capacity超過は低cardinalityで拒否しdeleteへ進まない", async () => {
+    const ctx = createTestContext();
+    let deleted = false;
+    ctx.rawRepos.publishedAnalysisLifecycle.list = async () => ({
+      items: [
+        {
+          id: ID,
+          deletePasswordHash: DELETE_PASSWORD_HASH,
+          createdAt: ctx.now,
+          expiresAt: new Date("2026-08-15T00:00:00.000Z"),
+        },
+      ],
+      hasMore: false,
+    });
+    ctx.rawRepos.publishedAnalysisLifecycle.delete = async () => {
+      deleted = true;
+      return 1;
+    };
+    ctx.services.publishedAnalysisSecurity.verifyDeletePassword = async () => {
+      throw new SecurityCapacityError();
+    };
+
+    const result = await deletePublishedAnalysisUsecase(
+      ID,
+      DELETE_PASSWORD,
+    ).run(ctx);
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "RESOURCE_LIMIT" },
+    });
+    expect(deleted).toBe(false);
+    expect(ctx.db.writeTransactions).toBe(0);
+    expect(ctx.logs).toEqual(["Published analysis security capacity reached"]);
+  });
 });
 
 class TransactionCountingDatabase implements Database {
@@ -175,6 +211,9 @@ function testServices(): RuntimeServices {
       hashDeletePassword: async () => DELETE_PASSWORD_HASH,
       verifyDeletePassword: async (password, hash) =>
         password === DELETE_PASSWORD && hash === DELETE_PASSWORD_HASH,
+    },
+    sharingRateLimit: {
+      consume: async () => ({ allowed: true, retryAfterSeconds: 0 }),
     },
   };
 }

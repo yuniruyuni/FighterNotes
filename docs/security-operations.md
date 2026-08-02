@@ -73,7 +73,7 @@ live alert の有無と通知先を定期的に棚卸しする。
 | --- | --- |
 | Service availability | `/health` の失敗、5xx、revision 起動失敗、latency |
 | DB path | `/ready`、共有 read / create / delete、connection / statement / lock timeout |
-| Abuse control | mutation / GET の 429 増加、daily / active / storage quota 到達理由 |
+| Abuse control | bucket別429/503、Argon2 capacity、daily / active / storage quota 到達理由 |
 | Cleanup | Scheduler 最終成功時刻、Job exit、削除件数、batch 安全上限、backlog |
 | Capacity | active row 数、relation size、DB connection、Cloud Run instance 数 |
 | Identity | IAM policy 変更、Secret Manager access、Workload Identity の失敗 |
