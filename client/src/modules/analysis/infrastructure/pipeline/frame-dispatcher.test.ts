@@ -87,4 +87,56 @@ describe("FrameDispatcher", () => {
 
     expect(read).toEqual([1, 2, 3, 4, 5, 6]);
   });
+
+  test("closes queued frames once and reports the first failure in order", async () => {
+    const abort = new DOMException("cancelled", "AbortError");
+    const laterFailure = new Error("late bitmap failure");
+    const errors: unknown[] = [];
+    const events: string[] = [];
+    const frames = [frame(1), frame(2), frame(3)];
+    for (const item of frames) {
+      item.close = () => {
+        item.closes += 1;
+        events.push(`close:${item.id}`);
+      };
+    }
+    const extractor: StripFrameExtractor<FakeFrame, number> = {
+      createBitmaps: (item) => item.id,
+      readBitmaps: async (pending) => {
+        events.push(`read:${pending}`);
+        if (pending === 2) throw laterFailure;
+        return pixels;
+      },
+    };
+    const dispatcher = new FrameDispatcher({
+      extractor,
+      sendFrame: async (index) => {
+        events.push(`send:${index}`);
+        throw abort;
+      },
+      onError: (error) => {
+        errors.push(error);
+        events.push("error");
+      },
+      now: () => 0,
+    });
+
+    dispatcher.dispatch(frames[0], 0);
+    dispatcher.dispatch(frames[1], 1);
+    dispatcher.dispatch(frames[2], 2);
+
+    await expect(dispatcher.drain()).rejects.toBe(abort);
+    expect(frames.map((item) => item.closes)).toEqual([1, 1, 1]);
+    expect(errors).toEqual([abort]);
+    expect(events).toEqual([
+      "read:1",
+      "send:0",
+      "close:1",
+      "error",
+      "read:2",
+      "close:2",
+      "read:3",
+      "close:3",
+    ]);
+  });
 });
