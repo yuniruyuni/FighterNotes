@@ -267,4 +267,25 @@ describe("share projection", () => {
       PublishedAnalysisCandidate.from(context, tooManyRounds).rounds,
     ).toEqual({ detected: 255, won: 0, lost: 0, unresolved: 255 });
   });
+
+  test("ruleset v3からv8だけを共有し、v9は更新完了まで理由付きで拒否する", () => {
+    const context: AnalysisContext = {
+      ownSide: "p1",
+      p1: { character: "LUKE" },
+      p2: { character: "CHUN_LI" },
+    };
+    for (const rulesetVersion of [3, 4, 5, 6, 7, 8]) {
+      const value = report();
+      value.ruleset_version = rulesetVersion;
+      expect(
+        PublishedAnalysisCandidate.from(context, value).rulesetVersion,
+      ).toBe(rulesetVersion);
+    }
+
+    const current = report();
+    current.ruleset_version = 9;
+    expect(() => PublishedAnalysisCandidate.from(context, current)).toThrow(
+      "共有形式の更新が完了するまで公開できません",
+    );
+  });
 });

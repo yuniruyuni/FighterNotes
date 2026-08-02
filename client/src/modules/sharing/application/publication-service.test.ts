@@ -102,6 +102,20 @@ describe("publication service", () => {
     );
   });
 
+  test("ruleset v9はgatewayへ送信する前に共有を拒否する", async () => {
+    const { services, create, save } = createServices();
+    const current = syntheticAdviceReport({ ruleset_version: 9 });
+
+    await expect(
+      createPublication(
+        { report: current, context, deleteCode: "ABCD-EFGH-JKLM" },
+        services,
+      ),
+    ).rejects.toThrow("共有形式の更新が完了するまで公開できません");
+    expect(create).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
+
   test("不要な共有を削除し、local保存状態に応じて管理recordも消す", async () => {
     const first = createServices();
     const source = { report, context, deleteCode: "ABCD-EFGH-JKLM" };

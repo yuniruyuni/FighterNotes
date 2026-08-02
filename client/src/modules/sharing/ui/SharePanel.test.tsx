@@ -97,4 +97,60 @@ describe("SharePanel", () => {
       ),
     ).toBeInTheDocument();
   });
+
+  test("ruleset v9は理由を表示して共有操作とAPI呼出を無効にする", () => {
+    const create = mock(async () => ({
+      id: "Abcdefghijklmnopqrstu_",
+      url: "https://fighter.example/s/Abcdefghijklmnopqrstu_",
+      expiresAt: "2026-08-23T00:00:00.000Z",
+    }));
+    const services: SharingServices = {
+      gateway: {
+        create,
+        delete: async () => undefined,
+        errorMessage: () => "共有URLを作成できませんでした。",
+      },
+      managedShares: {
+        save: () => true,
+        load: () => ({ available: true, shares: [] }),
+        remove: () => true,
+        subscribe: () => () => undefined,
+      },
+      capabilities: {
+        copyText: async () => undefined,
+        canShare: () => false,
+        share: async () => undefined,
+        confirm: () => true,
+        origin: () => "https://fighter.example",
+        isCancelledShare: () => false,
+      },
+      generateDeleteCode: () => "ABCD-EFGH-JKLM",
+      now: () => new Date("2026-07-24T00:00:00.000Z"),
+    };
+    const location = memoryLocation({ path: "/", record: true });
+
+    render(
+      <Router hook={location.hook}>
+        <SharingServicesProvider services={services}>
+          <PublicationProvider
+            routes={{ home: "/", share: (id) => `/s/${id}` }}
+          >
+            <SharePanel
+              context={context}
+              manageHref="/manage"
+              report={syntheticAdviceReport({ ruleset_version: 9 })}
+            />
+          </PublicationProvider>
+        </SharingServicesProvider>
+      </Router>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "共有URLを生成" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "共有形式の更新が完了するまで公開できません",
+    );
+    expect(create).not.toHaveBeenCalled();
+  });
 });

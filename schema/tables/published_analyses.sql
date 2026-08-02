@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS published_analyses (
   schema_version SMALLINT NOT NULL
     CHECK (schema_version = 1),
   ruleset_version INTEGER NOT NULL
-    CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9)),
+    CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8)),
   presentation_revision SMALLINT NOT NULL
     CHECK (presentation_revision IN (1)),
   own_character TEXT NOT NULL
@@ -49,7 +49,7 @@ ALTER TABLE published_analyses
   DROP CONSTRAINT IF EXISTS published_analyses_ruleset_version_check;
 ALTER TABLE published_analyses
   ADD CONSTRAINT published_analyses_ruleset_version_check
-  CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9));
+  CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8));
 CREATE INDEX IF NOT EXISTS published_analyses_expires_at_idx
   ON published_analyses (expires_at);
 GRANT SELECT, INSERT, DELETE ON published_analyses TO fighter_app;

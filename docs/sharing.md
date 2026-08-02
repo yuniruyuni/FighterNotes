@@ -116,7 +116,10 @@ finding と tactics は parent 削除時に cascade delete する。create event
 同じ日に共有を削除しても日次 create 件数が減らないようにする。
 
 schema version は現在1、presentation revision は1。server は既存データ表示のため
-ruleset 3、4、5、6、7 を受理し、新規解析は ruleset 7 を生成する。
+ruleset 3〜8 を受理する。現在のローカル解析が生成する ruleset 9 は、公開用の射影と
+表示契約を更新する [#20](https://github.com/yuniruyuni/fighter-notes/issues/20) の完了まで
+一時的に共有対象外とし、client UI・共有射影・server schema・DB制約の各境界で拒否する。
+この制限はローカルの動画解析と結果表示には影響しない。
 
 ## 削除と期限
 
