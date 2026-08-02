@@ -252,7 +252,13 @@ fn has_complete_super_coverage(
             return false;
         }
         let expected_frames = u64::from(round.end_frame - round.start_frame) + 1;
-        if (features.len() as u64) * 100 < expected_frames * SUPER_STATS_MIN_COVERAGE_PERCENT {
+        let round_feature_count = features
+            .iter()
+            .filter(|feature| {
+                feature.frame_index >= round.start_frame && feature.frame_index <= round.end_frame
+            })
+            .count() as u64;
+        if round_feature_count * 100 < expected_frames * SUPER_STATS_MIN_COVERAGE_PERCENT {
             return false;
         }
         let Ok(expected_frames) = usize::try_from(expected_frames) else {

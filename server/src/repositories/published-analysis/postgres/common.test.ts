@@ -40,9 +40,38 @@ describe("hydratePublishedAnalysis", () => {
         {
           ...row,
           super_art_analysis_id: null,
-          own_available: null,
-          opponent_available: null,
+          own_super_art_analysis_id: null,
+          opponent_super_art_analysis_id: null,
         },
+        findings,
+      ),
+    ).toBeNull();
+  });
+
+  test("ruleset v9のmarker有・side行なしを集計不能として復元する", () => {
+    const input = v9Candidate();
+    input.superArts = {
+      own: { availability: "unavailable" },
+      opponent: { availability: "unavailable" },
+    };
+    const content = validContent(input);
+    const { row, findings } = storageRows(content);
+
+    expect(row.super_art_analysis_id).not.toBeNull();
+    expect(row.own_super_art_analysis_id).toBeNull();
+    expect(row.opponent_super_art_analysis_id).toBeNull();
+    expect(hydratePublishedAnalysis(row, findings)?.content.superArts).toEqual(
+      content.superArts,
+    );
+  });
+
+  test("ruleset v8 rowにSA/CA markerが混入した場合はfail closedする", () => {
+    const legacy = candidate();
+    legacy.rulesetVersion = 8;
+    const { row, findings } = storageRows(validContent(legacy));
+    expect(
+      hydratePublishedAnalysis(
+        { ...row, super_art_analysis_id: row.id },
         findings,
       ),
     ).toBeNull();
@@ -160,10 +189,12 @@ function storageRows(content: PublishedAnalysisContent): {
       burnout_unknown: tactics.burnout.unknown,
       super_art_analysis_id:
         content.superArts === undefined ? null : (persisted.id as ShareId),
-      own_available:
-        own === undefined ? null : own.availability === "available",
-      opponent_available:
-        opponent === undefined ? null : opponent.availability === "available",
+      own_super_art_analysis_id:
+        own?.availability === "available" ? (persisted.id as ShareId) : null,
+      opponent_super_art_analysis_id:
+        opponent?.availability === "available"
+          ? (persisted.id as ShareId)
+          : null,
       own_sa1: own?.availability === "available" ? own.levels.sa1 : null,
       own_sa2: own?.availability === "available" ? own.levels.sa2 : null,
       own_sa3: own?.availability === "available" ? own.levels.sa3 : null,

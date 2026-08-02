@@ -58,8 +58,8 @@ export interface AnalysisRow extends QueryResultRow {
   burnout_mixed: number;
   burnout_unknown: number;
   super_art_analysis_id: string | null;
-  own_available: boolean | null;
-  opponent_available: boolean | null;
+  own_super_art_analysis_id: string | null;
+  opponent_super_art_analysis_id: string | null;
   own_sa1: number | null;
   own_sa2: number | null;
   own_sa3: number | null;
@@ -192,7 +192,7 @@ function hydrateSuperArts(row: AnalysisRow): unknown | undefined {
   if (row.super_art_analysis_id === null) return undefined;
   return {
     own:
-      row.own_available === true
+      row.own_super_art_analysis_id !== null
         ? {
             availability: "available",
             levels: {
@@ -215,11 +215,9 @@ function hydrateSuperArts(row: AnalysisRow): unknown | undefined {
               neutral: row.own_neutral,
             },
           }
-        : row.own_available === false
-          ? { availability: "unavailable" }
-          : { availability: null },
+        : { availability: "unavailable" },
     opponent:
-      row.opponent_available === true
+      row.opponent_super_art_analysis_id !== null
         ? {
             availability: "available",
             levels: {
@@ -236,9 +234,7 @@ function hydrateSuperArts(row: AnalysisRow): unknown | undefined {
               ko: row.opponent_ko,
             },
           }
-        : row.opponent_available === false
-          ? { availability: "unavailable" }
-          : { availability: null },
+        : { availability: "unavailable" },
   };
 }
 

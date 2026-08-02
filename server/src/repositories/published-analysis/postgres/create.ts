@@ -80,40 +80,38 @@ export async function create(
     const own = content.superArts.own;
     const opponent = content.superArts.opponent;
     await db.queryRun(sql`
-      INSERT INTO published_analysis_super_arts (
-        analysis_id, own_available, opponent_available,
-        own_sa1, own_sa2, own_sa3, own_ca,
-        own_hit, own_block, own_no_immediate_contact, own_punished, own_ko,
-        own_combo, own_punish, own_reversal, own_neutral,
-        opponent_sa1, opponent_sa2, opponent_sa3, opponent_ca,
-        opponent_hit, opponent_block, opponent_no_immediate_contact,
-        opponent_punished, opponent_ko
-      ) VALUES (
-        ${analysis.id}, ${own.availability === "available"},
-        ${opponent.availability === "available"},
-        ${own.availability === "available" ? own.levels.sa1 : null},
-        ${own.availability === "available" ? own.levels.sa2 : null},
-        ${own.availability === "available" ? own.levels.sa3 : null},
-        ${own.availability === "available" ? own.levels.ca : null},
-        ${own.availability === "available" ? own.outcomes.hit : null},
-        ${own.availability === "available" ? own.outcomes.block : null},
-        ${own.availability === "available" ? own.outcomes.noImmediateContact : null},
-        ${own.availability === "available" ? own.outcomes.punished : null},
-        ${own.availability === "available" ? own.outcomes.ko : null},
-        ${own.availability === "available" ? own.contexts.combo : null},
-        ${own.availability === "available" ? own.contexts.punish : null},
-        ${own.availability === "available" ? own.contexts.reversal : null},
-        ${own.availability === "available" ? own.contexts.neutral : null},
-        ${opponent.availability === "available" ? opponent.levels.sa1 : null},
-        ${opponent.availability === "available" ? opponent.levels.sa2 : null},
-        ${opponent.availability === "available" ? opponent.levels.sa3 : null},
-        ${opponent.availability === "available" ? opponent.levels.ca : null},
-        ${opponent.availability === "available" ? opponent.outcomes.hit : null},
-        ${opponent.availability === "available" ? opponent.outcomes.block : null},
-        ${opponent.availability === "available" ? opponent.outcomes.noImmediateContact : null},
-        ${opponent.availability === "available" ? opponent.outcomes.punished : null},
-        ${opponent.availability === "available" ? opponent.outcomes.ko : null}
-      )
+      INSERT INTO published_analysis_super_arts (analysis_id)
+      VALUES (${analysis.id})
     `);
+    if (own.availability === "available") {
+      await db.queryRun(sql`
+        INSERT INTO published_analysis_own_super_arts (
+          analysis_id, sa1, sa2, sa3, ca,
+          hit, block, no_immediate_contact, punished, ko,
+          combo, punish, reversal, neutral
+        ) VALUES (
+          ${analysis.id}, ${own.levels.sa1}, ${own.levels.sa2},
+          ${own.levels.sa3}, ${own.levels.ca}, ${own.outcomes.hit},
+          ${own.outcomes.block}, ${own.outcomes.noImmediateContact},
+          ${own.outcomes.punished}, ${own.outcomes.ko},
+          ${own.contexts.combo}, ${own.contexts.punish},
+          ${own.contexts.reversal}, ${own.contexts.neutral}
+        )
+      `);
+    }
+    if (opponent.availability === "available") {
+      await db.queryRun(sql`
+        INSERT INTO published_analysis_opponent_super_arts (
+          analysis_id, sa1, sa2, sa3, ca,
+          hit, block, no_immediate_contact, punished, ko
+        ) VALUES (
+          ${analysis.id}, ${opponent.levels.sa1}, ${opponent.levels.sa2},
+          ${opponent.levels.sa3}, ${opponent.levels.ca},
+          ${opponent.outcomes.hit}, ${opponent.outcomes.block},
+          ${opponent.outcomes.noImmediateContact},
+          ${opponent.outcomes.punished}, ${opponent.outcomes.ko}
+        )
+      `);
+    }
   }
 }

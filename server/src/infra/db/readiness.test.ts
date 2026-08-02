@@ -87,11 +87,9 @@ describe("database readiness", () => {
     expect(compatibilityQuery).toContain("published_analysis_rate_limits");
     expect(compatibilityQuery).toContain("published_analysis_rate_limits_pkey");
     expect(compatibilityQuery).toContain("published_analysis_super_arts");
+    expect(compatibilityQuery).toContain("published_analysis_own_super_arts");
     expect(compatibilityQuery).toContain(
-      "published_analysis_super_arts_own_availability_check",
-    );
-    expect(compatibilityQuery).toContain(
-      "published_analysis_super_arts_opponent_availability_check",
+      "published_analysis_opponent_super_arts",
     );
     expect(compatibilityQuery).toContain("ARRAY[3, 4, 5, 6, 7, 8, 9]");
     expect(compatibilityQuery).toContain("'DELETE'");

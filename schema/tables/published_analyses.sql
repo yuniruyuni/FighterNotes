@@ -162,74 +162,47 @@ CREATE TABLE IF NOT EXISTS published_analysis_tactics (
 GRANT SELECT, INSERT ON published_analysis_tactics TO fighter_app;
 
 -- ruleset v9 から公開する privacy-safe な SA/CA 集計。旧 ruleset の行は
--- 子行を持たないため、そのまま従来の共有ページとして読み出せる。
+-- marker を持たず、v9では marker が集計契約の存在を表す。集計可能な側だけ
+-- NOT NULL count の子行を持つため、unavailable と使用0回を構造で区別する。
 CREATE TABLE IF NOT EXISTS published_analysis_super_arts (
   analysis_id TEXT PRIMARY KEY
-    REFERENCES published_analyses (id) ON DELETE CASCADE,
-  own_available BOOLEAN NOT NULL,
-  opponent_available BOOLEAN NOT NULL,
-  own_sa1 INTEGER CHECK (own_sa1 BETWEEN 0 AND 65535),
-  own_sa2 INTEGER CHECK (own_sa2 BETWEEN 0 AND 65535),
-  own_sa3 INTEGER CHECK (own_sa3 BETWEEN 0 AND 65535),
-  own_ca INTEGER CHECK (own_ca BETWEEN 0 AND 65535),
-  own_hit INTEGER CHECK (own_hit BETWEEN 0 AND 65535),
-  own_block INTEGER CHECK (own_block BETWEEN 0 AND 65535),
-  own_no_immediate_contact INTEGER CHECK (own_no_immediate_contact BETWEEN 0 AND 65535),
-  own_punished INTEGER CHECK (own_punished BETWEEN 0 AND 65535),
-  own_ko INTEGER CHECK (own_ko BETWEEN 0 AND 65535),
-  own_combo INTEGER CHECK (own_combo BETWEEN 0 AND 65535),
-  own_punish INTEGER CHECK (own_punish BETWEEN 0 AND 65535),
-  own_reversal INTEGER CHECK (own_reversal BETWEEN 0 AND 65535),
-  own_neutral INTEGER CHECK (own_neutral BETWEEN 0 AND 65535),
-  opponent_sa1 INTEGER CHECK (opponent_sa1 BETWEEN 0 AND 65535),
-  opponent_sa2 INTEGER CHECK (opponent_sa2 BETWEEN 0 AND 65535),
-  opponent_sa3 INTEGER CHECK (opponent_sa3 BETWEEN 0 AND 65535),
-  opponent_ca INTEGER CHECK (opponent_ca BETWEEN 0 AND 65535),
-  opponent_hit INTEGER CHECK (opponent_hit BETWEEN 0 AND 65535),
-  opponent_block INTEGER CHECK (opponent_block BETWEEN 0 AND 65535),
-  opponent_no_immediate_contact INTEGER CHECK (opponent_no_immediate_contact BETWEEN 0 AND 65535),
-  opponent_punished INTEGER CHECK (opponent_punished BETWEEN 0 AND 65535),
-  opponent_ko INTEGER CHECK (opponent_ko BETWEEN 0 AND 65535),
-  CONSTRAINT published_analysis_super_arts_own_availability_check CHECK (
-    (
-      own_available
-      AND own_sa1 IS NOT NULL AND own_sa2 IS NOT NULL
-      AND own_sa3 IS NOT NULL AND own_ca IS NOT NULL
-      AND own_hit IS NOT NULL AND own_block IS NOT NULL
-      AND own_no_immediate_contact IS NOT NULL
-      AND own_punished IS NOT NULL AND own_ko IS NOT NULL
-      AND own_combo IS NOT NULL AND own_punish IS NOT NULL
-      AND own_reversal IS NOT NULL AND own_neutral IS NOT NULL
-    ) OR (
-      NOT own_available
-      AND own_sa1 IS NULL AND own_sa2 IS NULL
-      AND own_sa3 IS NULL AND own_ca IS NULL
-      AND own_hit IS NULL AND own_block IS NULL
-      AND own_no_immediate_contact IS NULL
-      AND own_punished IS NULL AND own_ko IS NULL
-      AND own_combo IS NULL AND own_punish IS NULL
-      AND own_reversal IS NULL AND own_neutral IS NULL
-    )
-  ),
-  CONSTRAINT published_analysis_super_arts_opponent_availability_check CHECK (
-    (
-      opponent_available
-      AND opponent_sa1 IS NOT NULL AND opponent_sa2 IS NOT NULL
-      AND opponent_sa3 IS NOT NULL AND opponent_ca IS NOT NULL
-      AND opponent_hit IS NOT NULL AND opponent_block IS NOT NULL
-      AND opponent_no_immediate_contact IS NOT NULL
-      AND opponent_punished IS NOT NULL AND opponent_ko IS NOT NULL
-    ) OR (
-      NOT opponent_available
-      AND opponent_sa1 IS NULL AND opponent_sa2 IS NULL
-      AND opponent_sa3 IS NULL AND opponent_ca IS NULL
-      AND opponent_hit IS NULL AND opponent_block IS NULL
-      AND opponent_no_immediate_contact IS NULL
-      AND opponent_punished IS NULL AND opponent_ko IS NULL
-    )
-  )
+    REFERENCES published_analyses (id) ON DELETE CASCADE
 );
 GRANT SELECT, INSERT ON published_analysis_super_arts TO fighter_app;
+
+CREATE TABLE IF NOT EXISTS published_analysis_own_super_arts (
+  analysis_id TEXT PRIMARY KEY
+    REFERENCES published_analysis_super_arts (analysis_id) ON DELETE CASCADE,
+  sa1 INTEGER NOT NULL CHECK (sa1 BETWEEN 0 AND 65535),
+  sa2 INTEGER NOT NULL CHECK (sa2 BETWEEN 0 AND 65535),
+  sa3 INTEGER NOT NULL CHECK (sa3 BETWEEN 0 AND 65535),
+  ca INTEGER NOT NULL CHECK (ca BETWEEN 0 AND 65535),
+  hit INTEGER NOT NULL CHECK (hit BETWEEN 0 AND 65535),
+  block INTEGER NOT NULL CHECK (block BETWEEN 0 AND 65535),
+  no_immediate_contact INTEGER NOT NULL CHECK (no_immediate_contact BETWEEN 0 AND 65535),
+  punished INTEGER NOT NULL CHECK (punished BETWEEN 0 AND 65535),
+  ko INTEGER NOT NULL CHECK (ko BETWEEN 0 AND 65535),
+  combo INTEGER NOT NULL CHECK (combo BETWEEN 0 AND 65535),
+  punish INTEGER NOT NULL CHECK (punish BETWEEN 0 AND 65535),
+  reversal INTEGER NOT NULL CHECK (reversal BETWEEN 0 AND 65535),
+  neutral INTEGER NOT NULL CHECK (neutral BETWEEN 0 AND 65535)
+);
+GRANT SELECT, INSERT ON published_analysis_own_super_arts TO fighter_app;
+
+CREATE TABLE IF NOT EXISTS published_analysis_opponent_super_arts (
+  analysis_id TEXT PRIMARY KEY
+    REFERENCES published_analysis_super_arts (analysis_id) ON DELETE CASCADE,
+  sa1 INTEGER NOT NULL CHECK (sa1 BETWEEN 0 AND 65535),
+  sa2 INTEGER NOT NULL CHECK (sa2 BETWEEN 0 AND 65535),
+  sa3 INTEGER NOT NULL CHECK (sa3 BETWEEN 0 AND 65535),
+  ca INTEGER NOT NULL CHECK (ca BETWEEN 0 AND 65535),
+  hit INTEGER NOT NULL CHECK (hit BETWEEN 0 AND 65535),
+  block INTEGER NOT NULL CHECK (block BETWEEN 0 AND 65535),
+  no_immediate_contact INTEGER NOT NULL CHECK (no_immediate_contact BETWEEN 0 AND 65535),
+  punished INTEGER NOT NULL CHECK (punished BETWEEN 0 AND 65535),
+  ko INTEGER NOT NULL CHECK (ko BETWEEN 0 AND 65535)
+);
+GRANT SELECT, INSERT ON published_analysis_opponent_super_arts TO fighter_app;
 
 -- Successful creation events are independent from result-row cleanup. This
 -- keeps the UTC daily quota monotonic throughout each day.

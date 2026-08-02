@@ -1,6 +1,6 @@
 # 分析結果の共有と保存
 
-最終確認: 2026-07-24
+最終確認: 2026-08-03
 
 ## 基本契約
 
@@ -120,16 +120,18 @@ PostgreSQL は次の table を持つ。
 | `published_analyses` | ID、version、character、round、削除 hash、logical size、作成・期限 |
 | `published_analysis_findings` | finding の順序、種別、assessment、件数、severity |
 | `published_analysis_tactics` | 戦術統計 |
-| `published_analysis_super_arts` | ruleset v9のprivacy-safeなSA/CA集計とavailability |
+| `published_analysis_super_arts` | ruleset v9のSA/CA公開契約が存在することを示すmarker |
+| `published_analysis_own_super_arts` | availableな自分側だけが持つ、全列必須のSA/CA集計 |
+| `published_analysis_opponent_super_arts` | availableな相手側だけが持つ、全列必須のSA/CA集計 |
 | `published_analysis_create_events` | UTC 日次 create quota 用の成功 event |
 | `published_analysis_rate_limits` | bucket別の共有固定窓counter（client keyはdigestのみ） |
 
-finding、tactics、super arts は parent 削除時に cascade delete する。create event は結果本体と独立させ、
+finding、tactics、super arts markerとside集計はparent削除時にcascade deleteする。create eventは結果本体と独立させ、
 同じ日に共有を削除しても日次 create 件数が減らないようにする。
 
 schema version は現在1、presentation revision は1。server はruleset 3〜9を受理し、
-新規解析はruleset 9を生成する。旧rulesetのrowは
-`published_analysis_super_arts`を持たず、従来どおりの公開ページを表示する。
+新規解析はruleset 9を生成する。旧rulesetのrowはmarkerを持たず、従来どおりの公開ページを表示する。
+v9はmarkerを必須とし、side集計行が無ければその側を`unavailable`、行があれば`available`として復元する。
 
 ## 削除と期限
 

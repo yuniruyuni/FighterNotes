@@ -141,30 +141,30 @@ export async function inspectDatabaseReadiness(
         ('published_analysis_tactics', 'burnout_mixed', 'integer', true),
         ('published_analysis_tactics', 'burnout_unknown', 'integer', true),
         ('published_analysis_super_arts', 'analysis_id', 'text', true),
-        ('published_analysis_super_arts', 'own_available', 'boolean', true),
-        ('published_analysis_super_arts', 'opponent_available', 'boolean', true),
-        ('published_analysis_super_arts', 'own_sa1', 'integer', false),
-        ('published_analysis_super_arts', 'own_sa2', 'integer', false),
-        ('published_analysis_super_arts', 'own_sa3', 'integer', false),
-        ('published_analysis_super_arts', 'own_ca', 'integer', false),
-        ('published_analysis_super_arts', 'own_hit', 'integer', false),
-        ('published_analysis_super_arts', 'own_block', 'integer', false),
-        ('published_analysis_super_arts', 'own_no_immediate_contact', 'integer', false),
-        ('published_analysis_super_arts', 'own_punished', 'integer', false),
-        ('published_analysis_super_arts', 'own_ko', 'integer', false),
-        ('published_analysis_super_arts', 'own_combo', 'integer', false),
-        ('published_analysis_super_arts', 'own_punish', 'integer', false),
-        ('published_analysis_super_arts', 'own_reversal', 'integer', false),
-        ('published_analysis_super_arts', 'own_neutral', 'integer', false),
-        ('published_analysis_super_arts', 'opponent_sa1', 'integer', false),
-        ('published_analysis_super_arts', 'opponent_sa2', 'integer', false),
-        ('published_analysis_super_arts', 'opponent_sa3', 'integer', false),
-        ('published_analysis_super_arts', 'opponent_ca', 'integer', false),
-        ('published_analysis_super_arts', 'opponent_hit', 'integer', false),
-        ('published_analysis_super_arts', 'opponent_block', 'integer', false),
-        ('published_analysis_super_arts', 'opponent_no_immediate_contact', 'integer', false),
-        ('published_analysis_super_arts', 'opponent_punished', 'integer', false),
-        ('published_analysis_super_arts', 'opponent_ko', 'integer', false),
+        ('published_analysis_own_super_arts', 'analysis_id', 'text', true),
+        ('published_analysis_own_super_arts', 'sa1', 'integer', true),
+        ('published_analysis_own_super_arts', 'sa2', 'integer', true),
+        ('published_analysis_own_super_arts', 'sa3', 'integer', true),
+        ('published_analysis_own_super_arts', 'ca', 'integer', true),
+        ('published_analysis_own_super_arts', 'hit', 'integer', true),
+        ('published_analysis_own_super_arts', 'block', 'integer', true),
+        ('published_analysis_own_super_arts', 'no_immediate_contact', 'integer', true),
+        ('published_analysis_own_super_arts', 'punished', 'integer', true),
+        ('published_analysis_own_super_arts', 'ko', 'integer', true),
+        ('published_analysis_own_super_arts', 'combo', 'integer', true),
+        ('published_analysis_own_super_arts', 'punish', 'integer', true),
+        ('published_analysis_own_super_arts', 'reversal', 'integer', true),
+        ('published_analysis_own_super_arts', 'neutral', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'analysis_id', 'text', true),
+        ('published_analysis_opponent_super_arts', 'sa1', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'sa2', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'sa3', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'ca', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'hit', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'block', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'no_immediate_contact', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'punished', 'integer', true),
+        ('published_analysis_opponent_super_arts', 'ko', 'integer', true),
         ('published_analysis_create_events', 'analysis_id', 'text', true),
         ('published_analysis_create_events', 'created_at', 'timestamp with time zone', true),
         ('published_analysis_rate_limits', 'bucket', 'text', true),
@@ -220,8 +220,10 @@ export async function inspectDatabaseReadiness(
         ('published_analysis_tactics', 'published_analysis_tactics_analysis_id_fkey', 'f', 'FOREIGN KEY (analysis_id) REFERENCES published_analyses(id) ON DELETE CASCADE'),
         ('published_analysis_super_arts', 'published_analysis_super_arts_pkey', 'p', 'PRIMARY KEY (analysis_id)'),
         ('published_analysis_super_arts', 'published_analysis_super_arts_analysis_id_fkey', 'f', 'FOREIGN KEY (analysis_id) REFERENCES published_analyses(id) ON DELETE CASCADE'),
-        ('published_analysis_super_arts', 'published_analysis_super_arts_own_availability_check', 'c', 'CHECK (own_available AND own_sa1 IS NOT NULL AND own_sa2 IS NOT NULL AND own_sa3 IS NOT NULL AND own_ca IS NOT NULL AND own_hit IS NOT NULL AND own_block IS NOT NULL AND own_no_immediate_contact IS NOT NULL AND own_punished IS NOT NULL AND own_ko IS NOT NULL AND own_combo IS NOT NULL AND own_punish IS NOT NULL AND own_reversal IS NOT NULL AND own_neutral IS NOT NULL OR NOT own_available AND own_sa1 IS NULL AND own_sa2 IS NULL AND own_sa3 IS NULL AND own_ca IS NULL AND own_hit IS NULL AND own_block IS NULL AND own_no_immediate_contact IS NULL AND own_punished IS NULL AND own_ko IS NULL AND own_combo IS NULL AND own_punish IS NULL AND own_reversal IS NULL AND own_neutral IS NULL)'),
-        ('published_analysis_super_arts', 'published_analysis_super_arts_opponent_availability_check', 'c', 'CHECK (opponent_available AND opponent_sa1 IS NOT NULL AND opponent_sa2 IS NOT NULL AND opponent_sa3 IS NOT NULL AND opponent_ca IS NOT NULL AND opponent_hit IS NOT NULL AND opponent_block IS NOT NULL AND opponent_no_immediate_contact IS NOT NULL AND opponent_punished IS NOT NULL AND opponent_ko IS NOT NULL OR NOT opponent_available AND opponent_sa1 IS NULL AND opponent_sa2 IS NULL AND opponent_sa3 IS NULL AND opponent_ca IS NULL AND opponent_hit IS NULL AND opponent_block IS NULL AND opponent_no_immediate_contact IS NULL AND opponent_punished IS NULL AND opponent_ko IS NULL)'),
+        ('published_analysis_own_super_arts', 'published_analysis_own_super_arts_pkey', 'p', 'PRIMARY KEY (analysis_id)'),
+        ('published_analysis_own_super_arts', 'published_analysis_own_super_arts_analysis_id_fkey', 'f', 'FOREIGN KEY (analysis_id) REFERENCES published_analysis_super_arts(analysis_id) ON DELETE CASCADE'),
+        ('published_analysis_opponent_super_arts', 'published_analysis_opponent_super_arts_pkey', 'p', 'PRIMARY KEY (analysis_id)'),
+        ('published_analysis_opponent_super_arts', 'published_analysis_opponent_super_arts_analysis_id_fkey', 'f', 'FOREIGN KEY (analysis_id) REFERENCES published_analysis_super_arts(analysis_id) ON DELETE CASCADE'),
         ('published_analysis_create_events', 'published_analysis_create_events_pkey', 'p', 'PRIMARY KEY (analysis_id)'),
         ('published_analysis_rate_limits', 'published_analysis_rate_limits_pkey', 'p', 'PRIMARY KEY (bucket, client_key_hash)'),
         ('published_analysis_rate_limits', 'published_analysis_rate_limits_bucket_check', 'c', 'CHECK (bucket = ANY (ARRAY[''create''::text, ''delete''::text, ''public_read''::text]))'),
@@ -329,6 +331,18 @@ export async function inspectDatabaseReadiness(
       )
       AND has_table_privilege(
         current_user, 'public.published_analysis_super_arts', 'INSERT'
+      )
+      AND has_table_privilege(
+        current_user, 'public.published_analysis_own_super_arts', 'SELECT'
+      )
+      AND has_table_privilege(
+        current_user, 'public.published_analysis_own_super_arts', 'INSERT'
+      )
+      AND has_table_privilege(
+        current_user, 'public.published_analysis_opponent_super_arts', 'SELECT'
+      )
+      AND has_table_privilege(
+        current_user, 'public.published_analysis_opponent_super_arts', 'INSERT'
       )
       AND has_table_privilege(
         current_user, 'public.published_analysis_create_events', 'SELECT'

@@ -12,6 +12,7 @@ import { createDbReadCtx, createDbWriteCtx } from "../../common/capability";
 import {
   candidate,
   persistableAnalysis,
+  v9Candidate,
 } from "../../test-support/published-analysis";
 import { PublishedAnalysisRepository } from ".";
 
@@ -52,6 +53,32 @@ export function registerPublishedAnalysisRepositoryIntegrationTests(
         PublishedAnalysisSpec.ById(persisted.id),
       );
       expect(restored?.content.superArts).toEqual(persisted.content.superArts);
+    });
+
+    test("ruleset v9の集計不能側をmarker有・side行なしで復元する", async () => {
+      const input = v9Candidate();
+      input.superArts = {
+        own: { availability: "unavailable" },
+        opponent: input.superArts?.opponent ?? {
+          availability: "unavailable",
+        },
+      };
+      const content = createPublishedAnalysisContent(input);
+      if (!content.ok) throw new Error("fixture is invalid");
+      const persisted = {
+        ...persistableAnalysis({
+          id: "Dbcdefghijklmnopqrstu_" as ShareId,
+          rulesetVersion: 9,
+        }),
+        content: content.value,
+      };
+      await repository.create(createDbWriteCtx(database()), persisted);
+
+      const restored = await repository.get(
+        createDbReadCtx(database()),
+        PublishedAnalysisSpec.ById(persisted.id),
+      );
+      expect(restored?.content.superArts).toEqual(content.value.superArts);
     });
 
     test("期限境界では作成済みモデルを返さない", async () => {
