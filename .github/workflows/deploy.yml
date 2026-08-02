@@ -1,61 +1,125 @@
 name: Deploy to Cloud Run
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
-
-concurrency:
-  group: deploy-${{ github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
-  id-token: write
-  packages: write
-
-env:
-  GCP_REGION: us-west1
-  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  SERVICE_NAME: fighter
-  SHA: ${{ github.sha }}
-  TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
+  release-gate:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      source_sha: ${{ steps.release.outputs.source_sha }}
+      image_tag: ${{ steps.release.outputs.image_tag }}
+    steps:
+      - name: Bind release to the successful CI revision
+        id: release
+        env:
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if ! printf '%s' "$SOURCE_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "CI workflow did not provide a full source SHA" >&2
+            exit 1
+          fi
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${SOURCE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+
   build-app:
+    needs: release-gate
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
     uses: ./.github/workflows/build-image.yml
     with:
+      source_sha: ${{ needs.release-gate.outputs.source_sha }}
+      image_tag: ${{ needs.release-gate.outputs.image_tag }}
       dockerfile: Dockerfile
       image_name: fighter
-      build_args: FIGHTER_NOTES_BUILD_SHA=${{ github.sha }}
-    secrets: inherit
+      build_args: FIGHTER_NOTES_BUILD_SHA=${{ needs.release-gate.outputs.source_sha }}
+    secrets:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GCP_BUILDER_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_BUILDER_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_BUILDER_SERVICE_ACCOUNT: ${{ secrets.GCP_BUILDER_SERVICE_ACCOUNT }}
 
   build-migration:
+    needs: release-gate
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
     uses: ./.github/workflows/build-image.yml
     with:
+      source_sha: ${{ needs.release-gate.outputs.source_sha }}
+      image_tag: ${{ needs.release-gate.outputs.image_tag }}
       dockerfile: Dockerfile.migration
       image_name: fighter-migration
-    secrets: inherit
+    secrets:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GCP_BUILDER_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_BUILDER_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_BUILDER_SERVICE_ACCOUNT: ${{ secrets.GCP_BUILDER_SERVICE_ACCOUNT }}
 
-  migrate:
-    needs: [build-app, build-migration]
+  release:
+    needs: [release-gate, build-app, build-migration]
     runs-on: ubuntu-latest
     environment: production
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: fighter-production-release
+      cancel-in-progress: false
+    env:
+      GCP_REGION: us-west1
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      SERVICE_NAME: fighter
+      SOURCE_SHA: ${{ needs.release-gate.outputs.source_sha }}
+      APP_IMAGE_REF: ${{ needs.build-app.outputs.artifact_image_ref }}
+      MIGRATION_IMAGE_REF: ${{ needs.build-migration.outputs.artifact_image_ref }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release-gate.outputs.source_sha }}
+          fetch-depth: 1
+
+      - name: Skip a release superseded before migration
+        id: current-main
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          CURRENT_MAIN_SHA=$(git rev-parse refs/remotes/origin/main)
+          if [ "$SOURCE_SHA" = "$CURRENT_MAIN_SHA" ]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "Releasing current main revision $SOURCE_SHA."
+          else
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping superseded revision $SOURCE_SHA; current main is $CURRENT_MAIN_SHA."
+          fi
 
       - name: Authenticate to Google Cloud
+        if: steps.current-main.outputs.should_release == 'true'
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.GCP_DEPLOYER_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
 
       - name: Setup gcloud
+        if: steps.current-main.outputs.should_release == 'true'
         uses: google-github-actions/setup-gcloud@v3
 
       - name: Run migration
+        id: migration
+        if: steps.current-main.outputs.should_release == 'true'
         run: |
-          MIGRATE_TAG="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/fighter/${SERVICE_NAME}-migration:${TAG}"
-          sed -i "s|IMAGE_PLACEHOLDER|$MIGRATE_TAG|g" cloudrun-job.yaml
+          sed -i "s|IMAGE_PLACEHOLDER|$MIGRATION_IMAGE_REF|g" cloudrun-job.yaml
           gcloud run jobs replace cloudrun-job.yaml \
             --region "$GCP_REGION" \
             --project "$GCP_PROJECT_ID"
@@ -65,36 +129,46 @@ jobs:
             --wait
 
       - name: Install cleanup job
+        id: cleanup
+        if: steps.current-main.outputs.should_release == 'true'
         run: |
-          IMAGE_TAG="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/fighter/${SERVICE_NAME}:${TAG}"
-          sed -i "s|IMAGE_PLACEHOLDER|$IMAGE_TAG|g" cloudrun-cleanup-job.yaml
+          sed -i "s|IMAGE_PLACEHOLDER|$APP_IMAGE_REF|g" cloudrun-cleanup-job.yaml
           gcloud run jobs replace cloudrun-cleanup-job.yaml \
             --region "$GCP_REGION" \
             --project "$GCP_PROJECT_ID"
 
-  deploy:
-    needs: [build-app, migrate]
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v3
-        with:
-          workload_identity_provider: ${{ secrets.GCP_DEPLOYER_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
-
-      - name: Setup gcloud
-        uses: google-github-actions/setup-gcloud@v3
-
       - name: Deploy to Cloud Run
+        id: service
+        if: steps.current-main.outputs.should_release == 'true'
         run: |
-          IMAGE_TAG="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/fighter/${SERVICE_NAME}:${TAG}"
-          sed -i "s|IMAGE_PLACEHOLDER|$IMAGE_TAG|g" cloudrun.yaml
+          sed -i "s|IMAGE_PLACEHOLDER|$APP_IMAGE_REF|g" cloudrun.yaml
           gcloud run services replace cloudrun.yaml \
             --region "$GCP_REGION" \
             --project "$GCP_PROJECT_ID"
 
       - name: Smoke test deployed service
+        id: smoke
+        if: steps.current-main.outputs.should_release == 'true'
         run: curl --fail --silent --show-error https://fighter.yuniruyuni.net/health
+
+      - name: Record release outcome
+        if: always()
+        env:
+          SHOULD_RELEASE: ${{ steps.current-main.outputs.should_release }}
+          MIGRATION_OUTCOME: ${{ steps.migration.outcome }}
+          CLEANUP_OUTCOME: ${{ steps.cleanup.outcome }}
+          SERVICE_OUTCOME: ${{ steps.service.outcome }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+        run: |
+          {
+            echo "## Production release"
+            echo
+            echo "- Source: \`$SOURCE_SHA\`"
+            echo "- Application: \`$APP_IMAGE_REF\`"
+            echo "- Migration: \`$MIGRATION_IMAGE_REF\`"
+            echo "- Current-main gate: \`${SHOULD_RELEASE:-unknown}\`"
+            echo "- Migration stage: \`${MIGRATION_OUTCOME:-not-run}\`"
+            echo "- Cleanup stage: \`${CLEANUP_OUTCOME:-not-run}\`"
+            echo "- Service stage: \`${SERVICE_OUTCOME:-not-run}\`"
+            echo "- Smoke test: \`${SMOKE_OUTCOME:-not-run}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
