@@ -50,7 +50,11 @@ export class AnalyzerWorkerSession {
     this.#callbacks = callbacks;
     worker.onerror = (event) => this.#fail(event);
     worker.onmessage = (event: MessageEvent<AnalyzerWorkerResponse>) => {
-      this.#receive(event.data);
+      try {
+        this.#receive(event.data);
+      } catch (error) {
+        this.#fail(error);
+      }
     };
   }
 

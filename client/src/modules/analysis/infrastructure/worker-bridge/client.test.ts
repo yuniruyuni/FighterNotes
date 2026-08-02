@@ -97,6 +97,48 @@ describe("AnalyzerWorkerSession", () => {
       }),
     ).rejects.toBe(reason);
   });
+
+  test("malformed first-pass results fail and settle the entire session", async () => {
+    const worker = new FakeWorker();
+    const callbackErrors: unknown[] = [];
+    const workerSession = new AnalyzerWorkerSession(worker.asWorker(), {
+      onFrameResult: () => {},
+      onError: (error) => callbackErrors.push(error),
+    });
+    worker.receive({ type: "ready" });
+    await workerSession.sendFrame({
+      slot: 0,
+      frameIndex: 0,
+      hudBuf: new ArrayBuffer(1),
+      inputBuf: new ArrayBuffer(1),
+    });
+    const frameDrain = workerSession.drainFrames();
+    const firstPass = workerSession.firstPass();
+    const spatialReset = workerSession.resetSpatialWindow();
+    workerSession.sendSpatialFrame(0, new ArrayBuffer(1), {
+      p1Teleport: false,
+      p2Teleport: false,
+      p1Airborne: false,
+      p2Airborne: false,
+    });
+    const spatialDrain = workerSession.drainSpatialFrames();
+    const result = workerSession.result();
+
+    expect(() =>
+      worker.receive({ type: "firstPass", spatialWindows: "{" }),
+    ).not.toThrow();
+
+    expect(callbackErrors).toHaveLength(1);
+    const reason = callbackErrors[0];
+    expect(reason).toBeInstanceOf(SyntaxError);
+    await expectRejectedWith(
+      [frameDrain, firstPass, spatialReset, spatialDrain, result],
+      reason,
+    );
+    expect(worker.terminateCount).toBe(1);
+    await expect(workerSession.drainFrames()).rejects.toBe(reason);
+    await expect(workerSession.drainSpatialFrames()).rejects.toBe(reason);
+  });
 });
 
 describe("MeterWorkerSession", () => {
