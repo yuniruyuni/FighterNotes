@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Hono } from "hono";
 import { RuntimeConfig } from "../config";
+import type { Database } from "../infra/db";
 import type { ILogger } from "../infra/logger/types";
 import type { Context } from "../usecases/context";
 import { createApp } from "./index";
@@ -45,6 +46,48 @@ describe("/health", () => {
     const res = await app.request("/health");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ status: "ok" });
+  });
+});
+
+describe("/ready", () => {
+  function appWithReadiness(result: boolean | Error): Hono {
+    let queryCount = 0;
+    const transaction = {
+      async queryGet() {
+        queryCount += 1;
+        if (queryCount === 1) return { statement_timeout: "750ms" };
+        return { compatible: result };
+      },
+    } as unknown as Database;
+    const db = {
+      async readTransaction<T>(fn: (tx: Database) => Promise<T>) {
+        if (result instanceof Error) throw result;
+        return fn(transaction);
+      },
+    } as Database;
+    const config = RuntimeConfig.fromEnvironment({ STATIC_DIR: staticDir });
+    return createApp({ logger, config, db } as unknown as Context);
+  }
+
+  test("DBとschemaが互換なら固定responseで200を返す", async () => {
+    const res = await appWithReadiness(true).request("/ready");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: "ready" });
+  });
+
+  test("DB異常は詳細を開示せず503にし、livenessは維持する", async () => {
+    const failure = appWithReadiness(
+      new Error("password authentication failed: secret-value"),
+    );
+    const ready = await failure.request("/ready");
+    expect(ready.status).toBe(503);
+    const body = await ready.text();
+    expect(JSON.parse(body)).toEqual({ status: "unavailable" });
+    expect(body).not.toContain("secret-value");
+
+    const health = await failure.request("/health");
+    expect(health.status).toBe(200);
+    expect(await health.json()).toEqual({ status: "ok" });
   });
 });
 

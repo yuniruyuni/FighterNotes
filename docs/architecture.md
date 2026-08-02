@@ -170,7 +170,8 @@ quota event と結果本体の insert を同じ transaction で行う。
 
 | Method / path | 用途 |
 | --- | --- |
-| `GET /health` | service health check |
+| `GET /health` | DB非依存のprocess liveness |
+| `GET /ready` | runtime app role・DB tunnel・必要schema/grantのreadiness |
 | `POST /api/trpc/publishedAnalysis.create` | 軽量な共有結果を作成 |
 | `POST /api/trpc/publishedAnalysis.delete` | 削除コードで共有を削除 |
 | `GET /s/:id` | PostgreSQL の共有結果から HTML を生成 |

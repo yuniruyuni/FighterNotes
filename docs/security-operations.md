@@ -72,7 +72,7 @@ live alert の有無と通知先を定期的に棚卸しする。
 | Signal | 確認内容 |
 | --- | --- |
 | Service availability | `/health` の失敗、5xx、revision 起動失敗、latency |
-| DB path | 共有 read / create / delete の失敗、connection / statement / lock timeout |
+| DB path | `/ready`、共有 read / create / delete、connection / statement / lock timeout |
 | Abuse control | mutation / GET の 429 増加、daily / active / storage quota 到達理由 |
 | Cleanup | Scheduler 最終成功時刻、Job exit、削除件数、batch 安全上限、backlog |
 | Capacity | active row 数、relation size、DB connection、Cloud Run instance 数 |
@@ -80,8 +80,9 @@ live alert の有無と通知先を定期的に棚卸しする。
 | DB tunnel | Cloudflare Access deny、token 認証失敗、sidecar startup probe 失敗 |
 | Delivery | 対象CI run / SHA、production environment実行者、image digest、migration / cleanup / deployの結果 |
 
-`/health` は DB を query しない。HTTP 200 だけで共有機能が正常とは判断せず、closed schema の
-test data で read / create / delete を確認する。実利用者の共有 ID や削除コードを probe に使わない。
+`/health` は DB を query しない。`/ready`はruntime app roleのread-only queryだけを実行し、失敗時も
+DB host、credential、schema差分をresponseへ出さない。`/ready`成功後もclosed schemaのtest dataで
+read / create / deleteを確認し、実利用者の共有IDや削除コードをprobeに使わない。
 
 ## 共有の緊急停止
 

@@ -9,7 +9,7 @@ import {
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createContext } from "../context";
-import { PgDatabase, sql } from "../infra/db";
+import { inspectDatabaseReadiness, PgDatabase, sql } from "../infra/db";
 import { ConsoleLogger } from "../infra/logger";
 import type { ILogger } from "../infra/logger/types";
 import {
@@ -74,6 +74,46 @@ integration("Postgres repositories + published analysis flow", () => {
 
   afterAll(async () => {
     await db?.close();
+  });
+
+  async function appRoleReadiness(): Promise<boolean> {
+    return db.readTransaction(async (tx) => {
+      await tx.queryRun(sql.raw("SET LOCAL ROLE fighter_app"));
+      return inspectDatabaseReadiness(tx);
+    });
+  }
+
+  test("app roleのread-only queryでschema versionと必要grantを確認する", async () => {
+    expect(await appRoleReadiness()).toBe(true);
+  });
+
+  test("app roleの必要grant欠落をreadiness異常にする", async () => {
+    await db.queryRun(
+      sql.raw("REVOKE SELECT ON published_analysis_findings FROM fighter_app"),
+    );
+    try {
+      expect(await appRoleReadiness()).toBe(false);
+    } finally {
+      await db.queryRun(
+        sql.raw("GRANT SELECT ON published_analysis_findings TO fighter_app"),
+      );
+    }
+  });
+
+  test("schema version contract欠落をreadiness異常にする", async () => {
+    await db.queryRun(
+      sql.raw(`ALTER TABLE published_analyses
+        DROP CONSTRAINT published_analyses_schema_version_check`),
+    );
+    try {
+      expect(await appRoleReadiness()).toBe(false);
+    } finally {
+      await db.queryRun(
+        sql.raw(`ALTER TABLE published_analyses
+          ADD CONSTRAINT published_analyses_schema_version_check
+          CHECK (schema_version = 1)`),
+      );
+    }
   });
 
   registerPublishedAnalysisRepositoryIntegrationTests(() => db);

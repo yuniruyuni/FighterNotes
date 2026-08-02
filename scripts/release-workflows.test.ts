@@ -151,6 +151,8 @@ describe("release workflow safety contracts", () => {
     expect(deploy).not.toContain("secrets: inherit");
     expect(deploy).toContain("artifact_image_digest");
     expect(deploy).toContain("environment: production");
+    expect(deploy).toContain("https://fighter.yuniruyuni.net/health");
+    expect(deploy).toContain("https://fighter.yuniruyuni.net/ready");
     expect(build).toContain("workflow_call:");
     expect(build).toContain("GCP_BUILDER_WORKLOAD_IDENTITY_PROVIDER:");
     expect(build).toContain("GCP_BUILDER_SERVICE_ACCOUNT:");

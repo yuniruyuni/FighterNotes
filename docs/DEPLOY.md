@@ -57,7 +57,8 @@ reusable build workflow は `workflow_call.secrets` で builder 用3項目だけ
 5. application と migration image を build し、application の `/health` を smoke test する。
 
 `/health` は process の HTTP 応答だけを確認し、DB query は行わない。DB を含む read / create / delete は
-PostgreSQL integration test と release 後の共有経路で別に確認する。
+PostgreSQL integration testで確認する。production deployはさらに`/ready`でruntime app roleからの
+read-only query、必要schema versionとtable grantを短いtimeout内に確認する。
 
 `deploy.yml` は `main` pushを直接契機にせず、同じSHAに対する `CI` workflowの `push` runが成功した
 `workflow_run` だけを受け付ける。branch protectionでは `CI / test`、`CI / security`、`CI / docker` と、
@@ -103,7 +104,7 @@ image tagは `<git-sha>-<deploy-run-id>-<run-attempt>` で再実行を含め一�
 4. migration Job manifest をmigration image digestで置換し、Jobを同期実行する。
 5. cleanup Job manifest をapplication image digestで置換する。
 6. Web service manifest を同じapplication image digestで置換する。
-7. `https://fighter.yuniruyuni.net/health` をsmoke testする。
+7. `https://fighter.yuniruyuni.net/health`と`/ready`をsmoke testする。
 
 build jobは並行できるが、migration、cleanup、service更新、smoke testは1つの
 `fighter-production-release` concurrency groupで直列実行し、後続pushから開始済みreleaseをcancelしない。
@@ -132,6 +133,7 @@ rollbackはrelease summaryとCloud Run revisionに記録されたapplication / s
 
 - `/` が静的 asset と WASM を読み込む。
 - `/health` が `200` と `{ "status": "ok" }` を返す。
+- `/ready` が `200` と `{ "status": "ready" }` を返す。
 - 実動画の解析が完了し、結果画面を表示できる。
 - 新規共有を作成し、発行された `/s/:id` を別 session で取得できる。
 - `/manage` と `/manage/:id` が表示でき、削除コードで共有を削除できる。

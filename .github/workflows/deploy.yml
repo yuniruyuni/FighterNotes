@@ -187,7 +187,9 @@ jobs:
       - name: Smoke test deployed service
         id: smoke
         if: steps.current-main.outputs.should_release == 'true'
-        run: curl --fail --silent --show-error https://fighter.yuniruyuni.net/health
+        run: |
+          curl --fail --silent --show-error https://fighter.yuniruyuni.net/health
+          curl --fail --silent --show-error https://fighter.yuniruyuni.net/ready
 
       - name: Record release outcome
         if: always()
