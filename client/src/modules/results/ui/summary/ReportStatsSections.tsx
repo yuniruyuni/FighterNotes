@@ -53,9 +53,13 @@ function explicitOrLegacyAvailability(
   coverage: AnalysisCoverage | undefined,
   key: keyof AnalysisAvailability,
   legacy: () => boolean,
+  notApplicableIsUsable = false,
 ): boolean {
   const explicit = coverage?.availability?.[key];
-  return explicit === undefined ? legacy() : explicit === "available";
+  return explicit === undefined
+    ? legacy()
+    : explicit === "available" ||
+        (notApplicableIsUsable && explicit === "not_applicable");
 }
 
 type StatItem = [string, string, string?];
@@ -249,6 +253,7 @@ export function TacticStatsSection({
         spatialCandidates,
         MIN_SPATIAL_COVERAGE_PERCENT,
       ),
+    true,
   );
   const contactsAvailable = explicitOrLegacyAvailability(
     coverage,

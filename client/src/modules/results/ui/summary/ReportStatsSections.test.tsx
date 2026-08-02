@@ -220,6 +220,31 @@ describe("TacticStatsSection detector coverage", () => {
     ).toBeInTheDocument();
   });
 
+  test("空間解析が機会なしなら生ラッシュと前ステップ投げを欠測扱いしない", () => {
+    render(
+      <TacticStatsSection
+        stats={syntheticTacticStats()}
+        coverage={explicitCoverage({ spatial: "not_applicable" })}
+      />,
+    );
+
+    const driveRush = screen
+      .getByText("生ラッシュ対処 / 相手の生ラッシュ")
+      .closest(".stat-item");
+    const dashThrow = screen
+      .getByText("前ステップ投げを受けた")
+      .closest(".stat-item");
+    expect(
+      within(driveRush as HTMLElement).getByText("確認なし"),
+    ).toBeInTheDocument();
+    expect(
+      within(driveRush as HTMLElement).queryByText("確認不能"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dashThrow as HTMLElement).getByText("0 回"),
+    ).toBeInTheDocument();
+  });
+
   test("DI・生ラッシュ・SA文脈の固有依存関係を可用性契約から使う", () => {
     render(
       <TacticStatsSection

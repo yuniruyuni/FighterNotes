@@ -21,11 +21,21 @@ export function AdviceSection({
 }: AdviceSectionProps) {
   const cards = report.cards ?? [];
   const suppressed = report.suppressed_cards ?? [];
+  const evidenceIncomplete = Object.values(
+    report.coverage?.availability ?? {},
+  ).includes("unavailable");
   return (
     <section className="summary-section" data-wm="Weak Points">
       <h2>指摘事項</h2>
       {cards.length === 0 && suppressed.length === 0 ? (
-        <p className="muted-note">顕著な改善ポイントは検出されませんでした。</p>
+        <p
+          className="muted-note"
+          role={evidenceIncomplete ? "note" : undefined}
+        >
+          {evidenceIncomplete
+            ? "認識率不足のため、改善ポイントを十分に判定できませんでした。改善点がないという意味ではありません。"
+            : "顕著な改善ポイントは検出されませんでした。"}
+        </p>
       ) : (
         cards.map((card) => (
           <AdviceResultCard

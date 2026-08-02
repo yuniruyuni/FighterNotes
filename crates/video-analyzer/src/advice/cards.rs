@@ -169,13 +169,18 @@ fn card_missing_requirements(
         // 到達距離まで断定するカードは候補区間の空間観測も必要。
         "punish_fail" => vec![(punishes, Punishes), (spatial, Spatial), (own_hp, OwnHp)],
         "teleport_defense" => vec![
+            (opponent_input, OpponentInput),
             (both_meter, FrameMeter),
             (spatial, Spatial),
             (own_hp, OwnHp),
         ],
         "punish_missed" => vec![(punishes, Punishes), (spatial, Spatial), (own_hp, OwnHp)],
         // 複合攻撃の成立自体はmeter/contactから確定し、距離は使わない。
-        "layered_defense" => vec![(contacts, Contacts), (own_hp, OwnHp)],
+        "layered_defense" => vec![
+            (opponent_input, OpponentInput),
+            (contacts, Contacts),
+            (own_hp, OwnHp),
+        ],
         "burnout" => vec![
             (own_drive, OwnDrive),
             (own_hp, OwnHp),
@@ -220,4 +225,58 @@ fn sort_cards(cards: &mut [AdviceCard]) {
             })
             .then_with(|| left.id.cmp(&right.id))
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn available_coverage_with_opponent_input_missing() -> AnalysisCoverage {
+        let available = EvidenceAvailability::Available;
+        AnalysisCoverage {
+            availability: Some(AnalysisAvailability {
+                own_hp: available,
+                opponent_hp: available,
+                own_drive: available,
+                opponent_drive: available,
+                own_super: available,
+                opponent_super: available,
+                own_input: available,
+                opponent_input: EvidenceAvailability::Unavailable,
+                own_meter: available,
+                opponent_meter: available,
+                contacts: available,
+                punishes: available,
+                spatial: available,
+                own_attack_info: available,
+                opponent_attack_info: available,
+            }),
+            ..AnalysisCoverage::default()
+        }
+    }
+
+    fn card(id: &str) -> AdviceCard {
+        AdviceCard {
+            id: id.to_string(),
+            kind: AdviceKind::Diagnosis,
+            confidence: EventConfidence::High,
+            title: id.to_string(),
+            severity: 0.0,
+            description: String::new(),
+            practice: String::new(),
+            evidence: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn teleport_cards_require_the_opponents_observed_input() {
+        let coverage = available_coverage_with_opponent_input_missing();
+
+        for id in ["teleport_defense", "layered_defense"] {
+            assert_eq!(
+                card_missing_requirements(&card(id), &coverage),
+                vec![EvidenceRequirement::OpponentInput]
+            );
+        }
+    }
 }

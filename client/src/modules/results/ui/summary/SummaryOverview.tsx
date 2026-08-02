@@ -36,11 +36,16 @@ export function SummaryOverview({
   const observationCount = cards.filter(
     (card) => card.kind === "observation" || card.kind === undefined,
   ).length;
+  const ownHpAvailable =
+    report.coverage?.availability === undefined ||
+    report.coverage.availability.own_hp === "available";
   const badges = [
     `${report.rounds_detected} ラウンド`,
-    `被弾候補 ${report.damage_taken_events.length} 件`,
-    `改善ポイント ${diagnosisCount} 件`,
-    `確認場面 ${observationCount} 件`,
+    ownHpAvailable
+      ? `被弾候補 ${report.damage_taken_events.length} 件`
+      : "被弾候補 確認不能",
+    `検出済み改善ポイント ${diagnosisCount} 件`,
+    `検出済み確認場面 ${observationCount} 件`,
   ];
   if (report.coverage && report.coverage.match_frames > 0) {
     badges.push(

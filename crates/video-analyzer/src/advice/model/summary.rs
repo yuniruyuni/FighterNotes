@@ -57,6 +57,31 @@ pub struct AnalysisAvailability {
     pub opponent_attack_info: EvidenceAvailability,
 }
 
+impl AnalysisAvailability {
+    /// 「改善点なし」と結論できるだけの知覚層が揃っているか。
+    /// 機会自体が無い `NotApplicable` は欠測ではないため許容する。
+    pub(crate) fn supports_no_findings_claim(&self) -> bool {
+        ![
+            self.own_hp,
+            self.opponent_hp,
+            self.own_drive,
+            self.opponent_drive,
+            self.own_super,
+            self.opponent_super,
+            self.own_input,
+            self.opponent_input,
+            self.own_meter,
+            self.opponent_meter,
+            self.contacts,
+            self.punishes,
+            self.spatial,
+            self.own_attack_info,
+            self.opponent_attack_info,
+        ]
+        .contains(&EvidenceAvailability::Unavailable)
+    }
+}
+
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct AnalysisCoverage {

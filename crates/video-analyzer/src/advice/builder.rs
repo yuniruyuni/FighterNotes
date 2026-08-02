@@ -62,6 +62,7 @@ pub fn build_report_with_context(
         &suppressed_cards,
         rounds_detected,
         damage_taken_events.len(),
+        &coverage,
     );
 
     AdviceReport {

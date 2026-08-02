@@ -248,6 +248,30 @@ fn low_hp_coverage_suppresses_even_generic_big_hit_card() {
 }
 
 #[test]
+fn missing_evidence_without_any_candidate_does_not_claim_no_findings() {
+    let mut events = empty_events();
+    events.rounds[0].end_frame = 99;
+    let features: Vec<_> = (0..100)
+        .map(|frame| {
+            let mut value = feature(frame);
+            value.left_hp_raw_quality = 1.0;
+            value.right_hp_raw_quality = 1.0;
+            value
+        })
+        .collect();
+
+    let report = build_report(&features, &events, "p1", None);
+
+    assert!(report.cards.is_empty());
+    assert!(report.suppressed_cards.is_empty());
+    assert!(report.summary.contains("被弾件数は確認不能"));
+    assert!(report.summary.contains("改善点なしとは判定していません"));
+    assert!(!report
+        .summary
+        .contains("顕著な改善ポイントは検出されません"));
+}
+
+#[test]
 fn missing_attack_info_linkage_is_reported() {
     let mut events = empty_events();
     events.rounds[0].end_frame = 99;
