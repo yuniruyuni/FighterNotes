@@ -66,6 +66,54 @@ const tacticStatsSchema = z.strictObject({
   }),
 });
 
+const superArtLevelsSchema = z.strictObject({
+  sa1: countSchema,
+  sa2: countSchema,
+  sa3: countSchema,
+  ca: countSchema,
+});
+
+const superArtOutcomesSchema = z.strictObject({
+  hit: countSchema,
+  block: countSchema,
+  noImmediateContact: countSchema,
+  punished: countSchema,
+  ko: countSchema,
+});
+
+const unavailableSuperArtStatsSchema = z.strictObject({
+  availability: z.literal("unavailable"),
+});
+
+const ownSuperArtStatsSchema = z.discriminatedUnion("availability", [
+  unavailableSuperArtStatsSchema,
+  z.strictObject({
+    availability: z.literal("available"),
+    levels: superArtLevelsSchema,
+    outcomes: superArtOutcomesSchema,
+    contexts: z.strictObject({
+      combo: countSchema,
+      punish: countSchema,
+      reversal: countSchema,
+      neutral: countSchema,
+    }),
+  }),
+]);
+
+const opponentSuperArtStatsSchema = z.discriminatedUnion("availability", [
+  unavailableSuperArtStatsSchema,
+  z.strictObject({
+    availability: z.literal("available"),
+    levels: superArtLevelsSchema,
+    outcomes: superArtOutcomesSchema,
+  }),
+]);
+
+const superArtStatsSchema = z.strictObject({
+  own: ownSuperArtStatsSchema,
+  opponent: opponentSuperArtStatsSchema,
+});
+
 const findingSchema = z.strictObject({
   kind: z.enum(FINDING_KINDS),
   // ruleset v3-v5の保存候補には存在しない。旧規則は全体transformで復元する。
@@ -89,8 +137,12 @@ export const publishedAnalysisCandidateSchema = z
     rounds: roundStatsSchema,
     findings: z.array(findingSchema).max(FINDING_KINDS.length),
     tactics: tacticStatsSchema,
+    superArts: superArtStatsSchema.optional(),
   })
   .superRefine((value, ctx) => {
+    const supportedRuleset = (
+      SUPPORTED_RULESET_VERSIONS as readonly number[]
+    ).includes(value.rulesetVersion);
     const { detected, won, lost, unresolved } = value.rounds;
     if (won + lost + unresolved !== detected) {
       ctx.addIssue({
@@ -118,6 +170,29 @@ export const publishedAnalysisCandidateSchema = z
         });
       }
     });
+
+    if (
+      supportedRuleset &&
+      value.rulesetVersion >= 9 &&
+      value.superArts === undefined
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["superArts"],
+        message: "super art aggregates are required for ruleset v9 and later",
+      });
+    }
+    if (
+      supportedRuleset &&
+      value.rulesetVersion < 9 &&
+      value.superArts !== undefined
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["superArts"],
+        message: "super art aggregates are not valid before ruleset v9",
+      });
+    }
 
     // Stryker disable all: Schema-valid payloads are already bounded below the 4 KiB target; this guard protects future schema growth.
     if (serializedByteLength(value) > MAX_PUBLISHED_ANALYSIS_BYTES) {

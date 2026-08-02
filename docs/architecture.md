@@ -1,6 +1,6 @@
 # システムアーキテクチャ
 
-最終確認: 2026-07-22
+最終確認: 2026-08-03
 
 ## 目的
 
@@ -40,7 +40,7 @@ SPA の配信、軽量な共有結果の保存と公開、期限切れデータ�
 | Meter tracker | `crates/meter-tracker` | セル観測からゲームフレーム単位の状態タイムラインを復元 |
 | Video analyzer | `crates/video-analyzer` | HUD・入力の確定、イベント帰属、空間再評価、助言レポート生成 |
 | Server | `server/src` | 静的配信、共有 API、公開ページ、rate limit、cleanup batch |
-| Database | `schema` | 共有結果、指摘、戦術統計、作成 quota event、共有rate-limit counterの保存 |
+| Database | `schema` | 共有結果、指摘、戦術統計、SA/CA公開集計、作成 quota event、共有rate-limit counterの保存 |
 | Delivery | `Dockerfile`、`cloudrun*.yaml`、`.github/workflows` | build、migration、Cloud Run service / Job のリリース |
 
 ## ブラウザ側
@@ -209,7 +209,11 @@ DELETEを完結させる。storage quotaはparentに記録したlogical sizeの�
 | 共有 ID と削除コード | localStorage | 共有期限まで、または削除まで |
 | 公開用集計 | PostgreSQL | 既定 30 日、または手動削除まで |
 
-動画、場面画像、証拠フレーム、ファイル名、詳細レポートは PostgreSQL へ保存しない。
+動画、場面画像、証拠フレーム、ファイル名、詳細レポート、SA/CAの正確なdamage値と最終gauge量は
+PostgreSQLへ保存しない。ruleset v9は両者のlevel別使用数と結果、自分側の利用文脈だけを保存し、
+全ラウンドのゲージ観測被覆を満たさない側を0回と区別するavailabilityも保持する。
+単発の信頼フレームやSAイベントは全使用回数の完全性を証明しないため、availabilityを
+強制的にavailableへ変えない。
 共有境界の詳細は [sharing.md](./sharing.md) を参照する。
 
 解析履歴の IndexedDB と、共有管理情報の localStorage は独立した lifecycle を持つ。
@@ -234,5 +238,5 @@ Cloud Run では application service、schema migration Job、cleanup Job を分
 - UI は Rust の event / report JSON を表示し、判定ロジックを重複実装しない。
 - viewer 表示と event layer は、時間方向に確定済みの同じ特徴量を使う。
 - 空間解析は第一段の証拠を置き換えず、候補の確認または棄却に使う。
-- 公開モデルへ自由文、動画依存値、削除コードを混ぜない。
+- 公開モデルへ自由文、動画依存値、正確なdamage・最終gauge、削除コードを混ぜない。
 - live infrastructure の状態を repository manifest だけから断定しない。

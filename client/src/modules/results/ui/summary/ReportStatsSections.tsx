@@ -218,16 +218,20 @@ export function TacticStatsSection({
     "opponent_drive",
     coverage?.opponent_drive_reliable_frames,
   );
-  const ownSuperAvailable = superCoverageIsSufficient(
-    coverage,
-    "own_super",
-    coverage?.own_super_reliable_frames,
-  );
-  const opponentSuperAvailable = superCoverageIsSufficient(
-    coverage,
-    "opponent_super",
-    coverage?.opponent_super_reliable_frames,
-  );
+  const ownSuperAvailable =
+    (stats.super_art_stats_available ?? true) &&
+    superCoverageIsSufficient(
+      coverage,
+      "own_super",
+      coverage?.own_super_reliable_frames,
+    );
+  const opponentSuperAvailable =
+    (stats.opponent_super_art_stats_available ?? true) &&
+    superCoverageIsSufficient(
+      coverage,
+      "opponent_super",
+      coverage?.opponent_super_reliable_frames,
+    );
   const attackInfoAvailable = explicitOrLegacyAvailability(
     coverage,
     "own_attack_info",

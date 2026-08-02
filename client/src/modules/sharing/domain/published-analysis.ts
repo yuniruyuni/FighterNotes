@@ -8,6 +8,7 @@ import {
 } from "~/modules/analysis/contracts.js";
 import type { PublishedAnalysisCandidate as Candidate } from "./published-analysis-contract.js";
 import { projectPublishedFindings } from "./published-finding-projection.js";
+import { projectPublishedSuperArts } from "./published-super-art-projection.js";
 import { projectPublishedTactics } from "./published-tactic-projection.js";
 import {
   boundedInteger,
@@ -19,14 +20,11 @@ import {
 export type PublishedAnalysisCandidate = Candidate;
 export { ShareProjectionError } from "./share-projection-value.js";
 
-export const SHAREABLE_RULESET_VERSIONS = [3, 4, 5, 6, 7, 8] as const;
-export const RULESET_V9_SHARE_UNAVAILABLE =
-  "この解析結果（ruleset v9）は共有形式の更新が完了するまで公開できません。ローカルの解析結果は引き続き利用できます。";
+export const SHAREABLE_RULESET_VERSIONS = [3, 4, 5, 6, 7, 8, 9] as const;
 
 export function sharingUnavailableReason(
   rulesetVersion: number,
 ): string | undefined {
-  if (rulesetVersion === 9) return RULESET_V9_SHARE_UNAVAILABLE;
   if (
     Number.isInteger(rulesetVersion) &&
     (SHAREABLE_RULESET_VERSIONS as readonly number[]).includes(rulesetVersion)
@@ -44,7 +42,6 @@ export const PublishedAnalysisCandidate = {
     const won = rounds.filter((round) => round.won === true).length;
     const lost = rounds.filter((round) => round.won === false).length;
     const detected = rounds.length;
-
     const rulesetVersion = boundedInteger(
       report.ruleset_version,
       MAX_COUNT,
@@ -65,6 +62,9 @@ export const PublishedAnalysisCandidate = {
       },
       findings: projectPublishedFindings(report.cards),
       tactics: projectPublishedTactics(report.tactic_stats),
+      ...(rulesetVersion >= 9
+        ? { superArts: projectPublishedSuperArts(report.tactic_stats) }
+        : {}),
     };
   },
 };

@@ -184,6 +184,10 @@ pub struct TacticStats {
     pub burnout_forced: u32,
     pub burnout_mixed: u32,
     pub burnout_unknown: u32,
+    /// 全有効ラウンドで自分側の SA 使用を欠測なく集計できる観測被覆がある。
+    pub super_art_stats_available: bool,
+    /// 全有効ラウンドで相手側の SA 使用を欠測なく集計できる観測被覆がある。
+    pub opponent_super_art_stats_available: bool,
     pub sa1_used: u32,
     pub sa2_used: u32,
     pub sa3_used: u32,

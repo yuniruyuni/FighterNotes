@@ -57,6 +57,31 @@ export interface AnalysisRow extends QueryResultRow {
   burnout_forced: number;
   burnout_mixed: number;
   burnout_unknown: number;
+  super_art_analysis_id: string | null;
+  own_available: boolean | null;
+  opponent_available: boolean | null;
+  own_sa1: number | null;
+  own_sa2: number | null;
+  own_sa3: number | null;
+  own_ca: number | null;
+  own_hit: number | null;
+  own_block: number | null;
+  own_no_immediate_contact: number | null;
+  own_punished: number | null;
+  own_ko: number | null;
+  own_combo: number | null;
+  own_punish: number | null;
+  own_reversal: number | null;
+  own_neutral: number | null;
+  opponent_sa1: number | null;
+  opponent_sa2: number | null;
+  opponent_sa3: number | null;
+  opponent_ca: number | null;
+  opponent_hit: number | null;
+  opponent_block: number | null;
+  opponent_no_immediate_contact: number | null;
+  opponent_punished: number | null;
+  opponent_ko: number | null;
 }
 
 export interface FindingRow extends QueryResultRow {
@@ -91,6 +116,7 @@ export function hydratePublishedAnalysis(
     return null;
   }
 
+  const superArts = hydrateSuperArts(row);
   const candidate = {
     rulesetVersion: row.ruleset_version,
     ownCharacter: row.own_character as CharacterId,
@@ -150,6 +176,7 @@ export function hydratePublishedAnalysis(
         unknown: row.burnout_unknown,
       },
     },
+    ...(superArts === undefined ? {} : { superArts }),
   };
   const content = createPublishedAnalysisContent(candidate);
   if (!content.ok) return null;
@@ -158,6 +185,60 @@ export function hydratePublishedAnalysis(
     content: content.value as PublishedAnalysisContent,
     createdAt: toDate(row.created_at),
     expiresAt: toDate(row.expires_at),
+  };
+}
+
+function hydrateSuperArts(row: AnalysisRow): unknown | undefined {
+  if (row.super_art_analysis_id === null) return undefined;
+  return {
+    own:
+      row.own_available === true
+        ? {
+            availability: "available",
+            levels: {
+              sa1: row.own_sa1,
+              sa2: row.own_sa2,
+              sa3: row.own_sa3,
+              ca: row.own_ca,
+            },
+            outcomes: {
+              hit: row.own_hit,
+              block: row.own_block,
+              noImmediateContact: row.own_no_immediate_contact,
+              punished: row.own_punished,
+              ko: row.own_ko,
+            },
+            contexts: {
+              combo: row.own_combo,
+              punish: row.own_punish,
+              reversal: row.own_reversal,
+              neutral: row.own_neutral,
+            },
+          }
+        : row.own_available === false
+          ? { availability: "unavailable" }
+          : { availability: null },
+    opponent:
+      row.opponent_available === true
+        ? {
+            availability: "available",
+            levels: {
+              sa1: row.opponent_sa1,
+              sa2: row.opponent_sa2,
+              sa3: row.opponent_sa3,
+              ca: row.opponent_ca,
+            },
+            outcomes: {
+              hit: row.opponent_hit,
+              block: row.opponent_block,
+              noImmediateContact: row.opponent_no_immediate_contact,
+              punished: row.opponent_punished,
+              ko: row.opponent_ko,
+            },
+          }
+        : row.opponent_available === false
+          ? { availability: "unavailable" }
+          : { availability: null },
   };
 }
 

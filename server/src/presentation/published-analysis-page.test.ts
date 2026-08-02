@@ -26,6 +26,7 @@ function analysis(
     { kind: "anti_air", occurrences: 2, severityBp: 1200 },
     { kind: "big_hits", occurrences: 1, severityBp: 2500 },
   ],
+  superArts?: unknown,
 ) {
   const content = createPublishedAnalysisContent({
     rulesetVersion,
@@ -65,6 +66,7 @@ function analysis(
         unknown: 0,
       },
     },
+    ...(superArts === undefined ? {} : { superArts }),
   });
   if (!content.ok) throw new Error("invalid fixture");
   return createPersistablePublishedAnalysis({
@@ -218,6 +220,7 @@ describe("published analysis presentation", () => {
     expect(rendered).toContain("hashtags=FighterNotes");
     expect(rendered).toContain("Xに投稿");
     expect(rendered).toContain("動画データは含まれていません");
+    expect(rendered).toContain("正確なダメージ値と最終ゲージ量");
     expect(rendered).toContain(
       "解析結果は映像からの推定です。正確な記録ではなく、見直しのための参考情報としてご利用ください。",
     );
@@ -243,6 +246,41 @@ describe("published analysis presentation", () => {
     expect(rendered).not.toContain("© 2026 yuniruyuni");
     expect(rendered).not.toContain("<script");
     expect(rendered).not.toContain("frame");
+    expect(rendered).not.toContain("SA / CA 集計");
+  });
+
+  test("ruleset v9は両者のSA/CA集計を表示し、集計不能を0回と表示しない", () => {
+    const value = analysis(9, [], {
+      own: {
+        availability: "available",
+        levels: { sa1: 1, sa2: 2, sa3: 0, ca: 1 },
+        outcomes: {
+          hit: 2,
+          block: 1,
+          noImmediateContact: 1,
+          punished: 1,
+          ko: 1,
+        },
+        contexts: { combo: 2, punish: 1, reversal: 0, neutral: 1 },
+      },
+      opponent: { availability: "unavailable" },
+    });
+    const rendered = renderPublishedAnalysisPage(value, {
+      canonical: new URL(`https://fighter.example/s/${value.id}`),
+      home: new URL("https://fighter.example/"),
+      image: new URL("https://fighter.example/images/ogp.jpg"),
+    }).toString();
+
+    expect(rendered).toContain("SA / CA 集計");
+    expect(rendered).toContain("自分のSA / CA使用");
+    expect(rendered).toContain("SA1 1・SA2 2・SA3 0・CA 1");
+    expect(rendered).toContain("ガード 1・即時接触なし 1");
+    expect(rendered).toContain("確定反撃 1・切り返し 0・ニュートラル 1");
+    expect(rendered).toContain("相手のSA / CA");
+    expect(rendered).toContain("集計不可");
+    expect(rendered).toContain("0回とは扱いません");
+    expect(rendered).not.toContain("2500");
+    expect(rendered).not.toContain("最終ゲージ 0");
   });
 
   test("表示モデルがURL・日付・戦術指標をHTMLから独立して組み立てる", () => {

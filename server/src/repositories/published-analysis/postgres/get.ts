@@ -33,9 +33,20 @@ export async function get(
       t.burnout_count, t.burnout_duration_deciseconds,
       t.burnout_hp_lost_bp, t.burnout_hp_dealt_bp,
       t.burnout_self_initiated, t.burnout_forced, t.burnout_mixed,
-      t.burnout_unknown
+      t.burnout_unknown,
+      s.analysis_id AS super_art_analysis_id,
+      s.own_available, s.opponent_available,
+      s.own_sa1, s.own_sa2, s.own_sa3, s.own_ca,
+      s.own_hit, s.own_block, s.own_no_immediate_contact,
+      s.own_punished, s.own_ko,
+      s.own_combo, s.own_punish, s.own_reversal, s.own_neutral,
+      s.opponent_sa1, s.opponent_sa2, s.opponent_sa3, s.opponent_ca,
+      s.opponent_hit, s.opponent_block,
+      s.opponent_no_immediate_contact,
+      s.opponent_punished, s.opponent_ko
     FROM published_analyses a
     INNER JOIN published_analysis_tactics t ON t.analysis_id = a.id
+    LEFT JOIN published_analysis_super_arts s ON s.analysis_id = a.id
     WHERE ${where}
     LIMIT 1
   `);

@@ -44,6 +44,7 @@ import {
   DELETE_PASSWORD,
   DELETE_PASSWORD_HASH,
   FIXTURE_ID,
+  v9Candidate,
 } from "./test-support/published-analysis";
 import { registerTransactionLockRepositoryIntegrationTests } from "./transaction-lock/postgres/integration-suite";
 
@@ -114,6 +115,21 @@ integration("Postgres repositories + published analysis flow", () => {
     } finally {
       await db.queryRun(
         sql.raw("GRANT SELECT ON published_analysis_findings TO fighter_app"),
+      );
+    }
+  });
+
+  test("SA/CA集計tableのgrant欠落をreadiness異常にする", async () => {
+    await db.queryRun(
+      sql.raw(
+        "REVOKE SELECT ON published_analysis_super_arts FROM fighter_app",
+      ),
+    );
+    try {
+      expect(await appRoleReadiness()).toBe(false);
+    } finally {
+      await db.queryRun(
+        sql.raw("GRANT SELECT ON published_analysis_super_arts TO fighter_app"),
       );
     }
   });
@@ -193,6 +209,49 @@ integration("Postgres repositories + published analysis flow", () => {
         ADD CONSTRAINT published_analysis_findings_analysis_id_fkey
         FOREIGN KEY (analysis_id) REFERENCES published_analyses (id)
         ON DELETE CASCADE`,
+    );
+    await expectSchemaDrift(
+      `ALTER TABLE published_analysis_super_arts
+        DROP CONSTRAINT published_analysis_super_arts_analysis_id_fkey;
+       ALTER TABLE published_analysis_super_arts
+        ADD CONSTRAINT published_analysis_super_arts_analysis_id_fkey
+        FOREIGN KEY (analysis_id) REFERENCES published_analyses (id)`,
+      `ALTER TABLE published_analysis_super_arts
+        DROP CONSTRAINT published_analysis_super_arts_analysis_id_fkey;
+       ALTER TABLE published_analysis_super_arts
+        ADD CONSTRAINT published_analysis_super_arts_analysis_id_fkey
+        FOREIGN KEY (analysis_id) REFERENCES published_analyses (id)
+        ON DELETE CASCADE`,
+    );
+  });
+
+  test("SA/CA availability制約欠落をreadiness異常にする", async () => {
+    await expectSchemaDrift(
+      `ALTER TABLE published_analysis_super_arts
+        DROP CONSTRAINT published_analysis_super_arts_own_availability_check`,
+      `ALTER TABLE published_analysis_super_arts
+        ADD CONSTRAINT published_analysis_super_arts_own_availability_check
+        CHECK (
+          (
+            own_available
+            AND own_sa1 IS NOT NULL AND own_sa2 IS NOT NULL
+            AND own_sa3 IS NOT NULL AND own_ca IS NOT NULL
+            AND own_hit IS NOT NULL AND own_block IS NOT NULL
+            AND own_no_immediate_contact IS NOT NULL
+            AND own_punished IS NOT NULL AND own_ko IS NOT NULL
+            AND own_combo IS NOT NULL AND own_punish IS NOT NULL
+            AND own_reversal IS NOT NULL AND own_neutral IS NOT NULL
+          ) OR (
+            NOT own_available
+            AND own_sa1 IS NULL AND own_sa2 IS NULL
+            AND own_sa3 IS NULL AND own_ca IS NULL
+            AND own_hit IS NULL AND own_block IS NULL
+            AND own_no_immediate_contact IS NULL
+            AND own_punished IS NULL AND own_ko IS NULL
+            AND own_combo IS NULL AND own_punish IS NULL
+            AND own_reversal IS NULL AND own_neutral IS NULL
+          )
+        )`,
     );
   });
 
@@ -308,6 +367,7 @@ integration("Postgres repositories + published analysis flow", () => {
       "published_analyses",
       "published_analysis_findings",
       "published_analysis_tactics",
+      "published_analysis_super_arts",
     ]) {
       const row = await db.queryGet<{ count: string }>(
         sql.raw(`SELECT count(*) AS count FROM ${table}`),
@@ -619,6 +679,10 @@ integration("Postgres repositories + published analysis flow", () => {
       app_limits_insert: boolean;
       app_limits_update: boolean;
       app_limits_delete: boolean;
+      app_super_arts_select: boolean;
+      app_super_arts_insert: boolean;
+      app_super_arts_update: boolean;
+      app_super_arts_delete: boolean;
     }>(
       sql.raw(`
       SELECT
@@ -681,7 +745,27 @@ integration("Postgres repositories + published analysis flow", () => {
           'fighter_app',
           'published_analysis_rate_limits',
           'DELETE'
-        ) AS app_limits_delete
+        ) AS app_limits_delete,
+        has_table_privilege(
+          'fighter_app',
+          'published_analysis_super_arts',
+          'SELECT'
+        ) AS app_super_arts_select,
+        has_table_privilege(
+          'fighter_app',
+          'published_analysis_super_arts',
+          'INSERT'
+        ) AS app_super_arts_insert,
+        has_table_privilege(
+          'fighter_app',
+          'published_analysis_super_arts',
+          'UPDATE'
+        ) AS app_super_arts_update,
+        has_table_privilege(
+          'fighter_app',
+          'published_analysis_super_arts',
+          'DELETE'
+        ) AS app_super_arts_delete
     `),
     );
     expect(privileges).toEqual({
@@ -699,6 +783,10 @@ integration("Postgres repositories + published analysis flow", () => {
       app_limits_insert: true,
       app_limits_update: true,
       app_limits_delete: true,
+      app_super_arts_select: true,
+      app_super_arts_insert: true,
+      app_super_arts_update: false,
+      app_super_arts_delete: false,
     });
   });
 
@@ -761,6 +849,7 @@ integration("Postgres repositories + published analysis flow", () => {
         "published_analyses",
         "published_analysis_findings",
         "published_analysis_tactics",
+        "published_analysis_super_arts",
       ]) {
         const remaining = await tx.queryGet<{ count: string }>(
           sql.raw(`SELECT count(*) AS count FROM ${table}`),
@@ -776,8 +865,8 @@ integration("Postgres repositories + published analysis flow", () => {
     });
   });
 
-  test("transaction失敗時は3テーブルすべてrollbackする", async () => {
-    const content = createPublishedAnalysisContent(candidate());
+  test("transaction失敗時は4テーブルすべてrollbackする", async () => {
+    const content = createPublishedAnalysisContent(v9Candidate());
     if (!content.ok) throw new Error("fixture is invalid");
     const created = createPersistablePublishedAnalysis({
       id: FIXTURE_ID,
@@ -816,8 +905,29 @@ integration("Postgres repositories + published analysis flow", () => {
     ).rejects.toThrow();
   });
 
+  test("DB制約がSA/CA集計不能と0回を混同する行を拒否する", async () => {
+    const content = createPublishedAnalysisContent(v9Candidate());
+    if (!content.ok) throw new Error("fixture is invalid");
+    const created = createPersistablePublishedAnalysis({
+      id: FIXTURE_ID,
+      content: content.value,
+      deletePasswordHash: DELETE_PASSWORD_HASH,
+      now: new Date(),
+      retentionDays: 365,
+    });
+    await repository.create(createDbWriteCtx(db), created.analysis);
+
+    await expect(
+      db.queryRun(sql`
+        UPDATE published_analysis_super_arts
+        SET own_available = false
+        WHERE analysis_id = ${created.analysis.id}
+      `),
+    ).rejects.toThrow();
+  });
+
   test("最大モデルの実データ行サイズが8KiB未満", async () => {
-    const content = createPublishedAnalysisContent(candidate(true));
+    const content = createPublishedAnalysisContent(v9Candidate(true));
     if (!content.ok) throw new Error("fixture is invalid");
     const created = createPersistablePublishedAnalysis({
       id: FIXTURE_ID,
@@ -829,7 +939,7 @@ integration("Postgres repositories + published analysis flow", () => {
     await repository.create(createDbWriteCtx(db), created.analysis);
     const row = await db.queryGet<{ bytes: number }>(sql`
       SELECT
-        pg_column_size(a.*) + pg_column_size(t.*) +
+        pg_column_size(a.*) + pg_column_size(t.*) + pg_column_size(s.*) +
         COALESCE((
           SELECT sum(pg_column_size(f.*))
           FROM published_analysis_findings f
@@ -837,6 +947,7 @@ integration("Postgres repositories + published analysis flow", () => {
         ), 0)::integer AS bytes
       FROM published_analyses a
       INNER JOIN published_analysis_tactics t ON t.analysis_id = a.id
+      INNER JOIN published_analysis_super_arts s ON s.analysis_id = a.id
       WHERE a.id = ${created.analysis.id}
     `);
     expect(row?.bytes).toBeLessThan(8 * 1024);
@@ -847,7 +958,9 @@ integration("Postgres repositories + published analysis flow", () => {
     const context = createContext(db, logger);
     context.now = new Date();
     const caller = appRouter.createCaller(context);
-    const created = await caller.publishedAnalysis.create(createInput());
+    const created = await caller.publishedAnalysis.create(
+      createInput(v9Candidate()),
+    );
     expect(created.url).toMatch(
       /^https:\/\/fighter\.yuniruyuni\.net\/s\/[A-Za-z0-9_-]{22}$/,
     );
@@ -869,6 +982,8 @@ integration("Postgres repositories + published analysis flow", () => {
     );
     const pageBody = await page.text();
     expect(pageBody).toContain("LUKE vs CHUN-LI 分析結果");
+    expect(pageBody).toContain("SA / CA 集計");
+    expect(pageBody).toContain("自分のSA / CA使用");
     expect(pageBody).toContain('property="og:title"');
     expect(pageBody).toContain(`/manage/${id}`);
 

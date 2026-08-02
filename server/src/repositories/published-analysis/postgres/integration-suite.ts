@@ -40,6 +40,20 @@ export function registerPublishedAnalysisRepositoryIntegrationTests(
       expect(restored).toEqual(expected);
     });
 
+    test("ruleset v9のSA/CA availabilityと両者集計を復元する", async () => {
+      const persisted = persistableAnalysis({
+        id: "Cbcdefghijklmnopqrstu_" as ShareId,
+        rulesetVersion: 9,
+      });
+      await repository.create(createDbWriteCtx(database()), persisted);
+
+      const restored = await repository.get(
+        createDbReadCtx(database()),
+        PublishedAnalysisSpec.ById(persisted.id),
+      );
+      expect(restored?.content.superArts).toEqual(persisted.content.superArts);
+    });
+
     test("期限境界では作成済みモデルを返さない", async () => {
       const persisted = persistableAnalysis();
       await repository.create(createDbWriteCtx(database()), persisted);

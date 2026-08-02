@@ -7,6 +7,7 @@ import { createPublishedAnalysisContent } from "../../../models/published-analys
 import {
   candidate,
   persistableAnalysis,
+  v9Candidate,
 } from "../../test-support/published-analysis";
 import {
   type AnalysisRow,
@@ -25,6 +26,26 @@ describe("hydratePublishedAnalysis", () => {
       createdAt: persisted.createdAt,
       expiresAt: persisted.expiresAt,
     });
+  });
+
+  test("ruleset v9の両者SA/CA集計とavailabilityを復元する", () => {
+    const content = validContent(v9Candidate());
+    const { row, findings } = storageRows(content);
+
+    expect(hydratePublishedAnalysis(row, findings)?.content.superArts).toEqual(
+      content.superArts,
+    );
+    expect(
+      hydratePublishedAnalysis(
+        {
+          ...row,
+          super_art_analysis_id: null,
+          own_available: null,
+          opponent_available: null,
+        },
+        findings,
+      ),
+    ).toBeNull();
   });
 
   test("schema versionが異なる行を拒否する", () => {
@@ -92,6 +113,8 @@ function storageRows(content: PublishedAnalysisContent): {
 } {
   const persisted = persistableAnalysis();
   const { tactics } = content;
+  const own = content.superArts?.own;
+  const opponent = content.superArts?.opponent;
   return {
     row: {
       id: persisted.id as ShareId,
@@ -135,6 +158,54 @@ function storageRows(content: PublishedAnalysisContent): {
       burnout_forced: tactics.burnout.forced,
       burnout_mixed: tactics.burnout.mixed,
       burnout_unknown: tactics.burnout.unknown,
+      super_art_analysis_id:
+        content.superArts === undefined ? null : (persisted.id as ShareId),
+      own_available:
+        own === undefined ? null : own.availability === "available",
+      opponent_available:
+        opponent === undefined ? null : opponent.availability === "available",
+      own_sa1: own?.availability === "available" ? own.levels.sa1 : null,
+      own_sa2: own?.availability === "available" ? own.levels.sa2 : null,
+      own_sa3: own?.availability === "available" ? own.levels.sa3 : null,
+      own_ca: own?.availability === "available" ? own.levels.ca : null,
+      own_hit: own?.availability === "available" ? own.outcomes.hit : null,
+      own_block: own?.availability === "available" ? own.outcomes.block : null,
+      own_no_immediate_contact:
+        own?.availability === "available"
+          ? own.outcomes.noImmediateContact
+          : null,
+      own_punished:
+        own?.availability === "available" ? own.outcomes.punished : null,
+      own_ko: own?.availability === "available" ? own.outcomes.ko : null,
+      own_combo: own?.availability === "available" ? own.contexts.combo : null,
+      own_punish:
+        own?.availability === "available" ? own.contexts.punish : null,
+      own_reversal:
+        own?.availability === "available" ? own.contexts.reversal : null,
+      own_neutral:
+        own?.availability === "available" ? own.contexts.neutral : null,
+      opponent_sa1:
+        opponent?.availability === "available" ? opponent.levels.sa1 : null,
+      opponent_sa2:
+        opponent?.availability === "available" ? opponent.levels.sa2 : null,
+      opponent_sa3:
+        opponent?.availability === "available" ? opponent.levels.sa3 : null,
+      opponent_ca:
+        opponent?.availability === "available" ? opponent.levels.ca : null,
+      opponent_hit:
+        opponent?.availability === "available" ? opponent.outcomes.hit : null,
+      opponent_block:
+        opponent?.availability === "available" ? opponent.outcomes.block : null,
+      opponent_no_immediate_contact:
+        opponent?.availability === "available"
+          ? opponent.outcomes.noImmediateContact
+          : null,
+      opponent_punished:
+        opponent?.availability === "available"
+          ? opponent.outcomes.punished
+          : null,
+      opponent_ko:
+        opponent?.availability === "available" ? opponent.outcomes.ko : null,
     },
     findings: content.findings.map((finding) => ({
       kind: finding.kind,

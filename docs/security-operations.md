@@ -22,7 +22,7 @@ GitHub Actions の運用判断を扱う。browser 内の動画解析そのもの
 | --- | --- |
 | 元動画、decoded frame、証拠画像 | browser 内限定。server request、DB、log へ送らない |
 | 詳細な解析 report、timeline、入力履歴 | browser 内限定。公開 payload へ追加しない |
-| 公開用集計 | public URL で誰でも閲覧可能。個人情報や自由文を入れない |
+| 公開用集計 | public URL で誰でも閲覧可能。SA/CAはlevel・結果・自分側文脈のcountだけとし、個人情報、自由文、正確なdamage、最終gaugeを入れない |
 | 共有 ID | 公開 URL の識別子。認証 credential とみなさない |
 | 削除コード | secret。結果画面、localStorage、create / delete request だけで扱い、DB には Argon2id hash だけを置く |
 | DB / Cloudflare / GitHub credential | secret manager または GitHub secret だけで管理する |

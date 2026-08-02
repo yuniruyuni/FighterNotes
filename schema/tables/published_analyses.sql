@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS published_analyses (
   schema_version SMALLINT NOT NULL
     CHECK (schema_version = 1),
   ruleset_version INTEGER NOT NULL
-    CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8)),
+    CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9)),
   presentation_revision SMALLINT NOT NULL
     CHECK (presentation_revision IN (1)),
   own_character TEXT NOT NULL
@@ -57,7 +57,7 @@ ALTER TABLE published_analyses
   DROP CONSTRAINT IF EXISTS published_analyses_ruleset_version_check;
 ALTER TABLE published_analyses
   ADD CONSTRAINT published_analyses_ruleset_version_check
-  CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8));
+  CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9));
 CREATE INDEX IF NOT EXISTS published_analyses_expires_at_idx
   ON published_analyses (expires_at);
 CREATE INDEX IF NOT EXISTS published_analyses_cleanup_idx
@@ -160,6 +160,76 @@ CREATE TABLE IF NOT EXISTS published_analysis_tactics (
   burnout_unknown INTEGER NOT NULL CHECK (burnout_unknown BETWEEN 0 AND 65535)
 );
 GRANT SELECT, INSERT ON published_analysis_tactics TO fighter_app;
+
+-- ruleset v9 から公開する privacy-safe な SA/CA 集計。旧 ruleset の行は
+-- 子行を持たないため、そのまま従来の共有ページとして読み出せる。
+CREATE TABLE IF NOT EXISTS published_analysis_super_arts (
+  analysis_id TEXT PRIMARY KEY
+    REFERENCES published_analyses (id) ON DELETE CASCADE,
+  own_available BOOLEAN NOT NULL,
+  opponent_available BOOLEAN NOT NULL,
+  own_sa1 INTEGER CHECK (own_sa1 BETWEEN 0 AND 65535),
+  own_sa2 INTEGER CHECK (own_sa2 BETWEEN 0 AND 65535),
+  own_sa3 INTEGER CHECK (own_sa3 BETWEEN 0 AND 65535),
+  own_ca INTEGER CHECK (own_ca BETWEEN 0 AND 65535),
+  own_hit INTEGER CHECK (own_hit BETWEEN 0 AND 65535),
+  own_block INTEGER CHECK (own_block BETWEEN 0 AND 65535),
+  own_no_immediate_contact INTEGER CHECK (own_no_immediate_contact BETWEEN 0 AND 65535),
+  own_punished INTEGER CHECK (own_punished BETWEEN 0 AND 65535),
+  own_ko INTEGER CHECK (own_ko BETWEEN 0 AND 65535),
+  own_combo INTEGER CHECK (own_combo BETWEEN 0 AND 65535),
+  own_punish INTEGER CHECK (own_punish BETWEEN 0 AND 65535),
+  own_reversal INTEGER CHECK (own_reversal BETWEEN 0 AND 65535),
+  own_neutral INTEGER CHECK (own_neutral BETWEEN 0 AND 65535),
+  opponent_sa1 INTEGER CHECK (opponent_sa1 BETWEEN 0 AND 65535),
+  opponent_sa2 INTEGER CHECK (opponent_sa2 BETWEEN 0 AND 65535),
+  opponent_sa3 INTEGER CHECK (opponent_sa3 BETWEEN 0 AND 65535),
+  opponent_ca INTEGER CHECK (opponent_ca BETWEEN 0 AND 65535),
+  opponent_hit INTEGER CHECK (opponent_hit BETWEEN 0 AND 65535),
+  opponent_block INTEGER CHECK (opponent_block BETWEEN 0 AND 65535),
+  opponent_no_immediate_contact INTEGER CHECK (opponent_no_immediate_contact BETWEEN 0 AND 65535),
+  opponent_punished INTEGER CHECK (opponent_punished BETWEEN 0 AND 65535),
+  opponent_ko INTEGER CHECK (opponent_ko BETWEEN 0 AND 65535),
+  CONSTRAINT published_analysis_super_arts_own_availability_check CHECK (
+    (
+      own_available
+      AND own_sa1 IS NOT NULL AND own_sa2 IS NOT NULL
+      AND own_sa3 IS NOT NULL AND own_ca IS NOT NULL
+      AND own_hit IS NOT NULL AND own_block IS NOT NULL
+      AND own_no_immediate_contact IS NOT NULL
+      AND own_punished IS NOT NULL AND own_ko IS NOT NULL
+      AND own_combo IS NOT NULL AND own_punish IS NOT NULL
+      AND own_reversal IS NOT NULL AND own_neutral IS NOT NULL
+    ) OR (
+      NOT own_available
+      AND own_sa1 IS NULL AND own_sa2 IS NULL
+      AND own_sa3 IS NULL AND own_ca IS NULL
+      AND own_hit IS NULL AND own_block IS NULL
+      AND own_no_immediate_contact IS NULL
+      AND own_punished IS NULL AND own_ko IS NULL
+      AND own_combo IS NULL AND own_punish IS NULL
+      AND own_reversal IS NULL AND own_neutral IS NULL
+    )
+  ),
+  CONSTRAINT published_analysis_super_arts_opponent_availability_check CHECK (
+    (
+      opponent_available
+      AND opponent_sa1 IS NOT NULL AND opponent_sa2 IS NOT NULL
+      AND opponent_sa3 IS NOT NULL AND opponent_ca IS NOT NULL
+      AND opponent_hit IS NOT NULL AND opponent_block IS NOT NULL
+      AND opponent_no_immediate_contact IS NOT NULL
+      AND opponent_punished IS NOT NULL AND opponent_ko IS NOT NULL
+    ) OR (
+      NOT opponent_available
+      AND opponent_sa1 IS NULL AND opponent_sa2 IS NULL
+      AND opponent_sa3 IS NULL AND opponent_ca IS NULL
+      AND opponent_hit IS NULL AND opponent_block IS NULL
+      AND opponent_no_immediate_contact IS NULL
+      AND opponent_punished IS NULL AND opponent_ko IS NULL
+    )
+  )
+);
+GRANT SELECT, INSERT ON published_analysis_super_arts TO fighter_app;
 
 -- Successful creation events are independent from result-row cleanup. This
 -- keeps the UTC daily quota monotonic throughout each day.

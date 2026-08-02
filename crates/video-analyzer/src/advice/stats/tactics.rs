@@ -1,4 +1,9 @@
 use super::super::*;
+use crate::temporal::{SUPER_SPEND_CONFIRM_LOOKAHEAD, SUPER_SPEND_CONFIRM_SAMPLES};
+
+const SUPER_STATS_MIN_COVERAGE_PERCENT: u64 = 70;
+const SUPER_STATS_MAX_UNRELIABLE_RUN: usize =
+    SUPER_SPEND_CONFIRM_LOOKAHEAD - SUPER_SPEND_CONFIRM_SAMPLES;
 
 pub(crate) fn build_tactic_stats(
     features: &[FrameFeatures],
@@ -14,7 +19,15 @@ pub(crate) fn build_tactic_stats(
     let event_in_round = |round_no: u32, frame: u32| {
         crate::match_events::round_of(&events.rounds, frame) == Some(round_no)
     };
-    let mut stats = TacticStats::default();
+    let mut stats = TacticStats {
+        super_art_stats_available: has_complete_super_coverage(features, &events.rounds, own),
+        opponent_super_art_stats_available: has_complete_super_coverage(
+            features,
+            &events.rounds,
+            opponent,
+        ),
+        ..TacticStats::default()
+    };
     for jump in events.jumps.iter().filter(|jump| {
         event_in_round(jump.round_no, jump.frame)
             && jump.side == opponent
@@ -213,4 +226,79 @@ pub(crate) fn build_tactic_stats(
         }
     }
     stats
+}
+
+/// A detected spend proves that at least one SA occurred, but it does not prove
+/// that no other spend was hidden. Missing features, non-match frames, and
+/// uncertain reads are all gaps: compressing them out would turn a long blind
+/// interval into adjacent observations.
+///
+/// The temporal cleaner needs 12 reliable lower-gauge samples within its next
+/// 90 input frames. The dense timeline applies the same contract to every
+/// round. Requiring the exact first and last round frames also makes a spend
+/// too close to the end fail closed: an unconfirmed lower reading is marked
+/// uncertain by the cleaner, and the round boundary is not implicit evidence.
+fn has_complete_super_coverage(
+    features: &[FrameFeatures],
+    rounds: &[crate::match_events::RoundInfo],
+    side: u8,
+) -> bool {
+    if rounds.is_empty() || !matches!(side, 1 | 2) {
+        return false;
+    }
+
+    rounds.iter().all(|round| {
+        if round.end_frame < round.start_frame {
+            return false;
+        }
+        let expected_frames = u64::from(round.end_frame - round.start_frame) + 1;
+        if (features.len() as u64) * 100 < expected_frames * SUPER_STATS_MIN_COVERAGE_PERCENT {
+            return false;
+        }
+        let Ok(expected_frames) = usize::try_from(expected_frames) else {
+            return false;
+        };
+        let mut reliable = vec![false; expected_frames];
+        for feature in features.iter().filter(|feature| {
+            feature.frame_index >= round.start_frame && feature.frame_index <= round.end_frame
+        }) {
+            let certain = feature.is_match_screen
+                && match side {
+                    1 => !feature.left_super_uncertain,
+                    2 => !feature.right_super_uncertain,
+                    _ => false,
+                };
+            if certain {
+                reliable[(feature.frame_index - round.start_frame) as usize] = true;
+            }
+        }
+        let reliable_count = reliable.iter().filter(|&&sample| sample).count();
+        if reliable_count < SUPER_SPEND_CONFIRM_SAMPLES
+            || (reliable_count as u64) * 100
+                < (reliable.len() as u64) * SUPER_STATS_MIN_COVERAGE_PERCENT
+        {
+            return false;
+        }
+        if reliable.first() != Some(&true) || reliable.last() != Some(&true) {
+            return false;
+        }
+
+        let mut unreliable_run = 0;
+        for &sample in &reliable {
+            if sample {
+                unreliable_run = 0;
+            } else {
+                unreliable_run += 1;
+                if unreliable_run > SUPER_STATS_MAX_UNRELIABLE_RUN {
+                    return false;
+                }
+            }
+        }
+
+        reliable
+            .windows(SUPER_SPEND_CONFIRM_LOOKAHEAD)
+            .all(|window| {
+                window.iter().filter(|&&sample| sample).count() >= SUPER_SPEND_CONFIRM_SAMPLES
+            })
+    })
 }

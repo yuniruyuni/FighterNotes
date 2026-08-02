@@ -86,8 +86,13 @@ describe("database readiness", () => {
     expect(compatibilityQuery).toContain("ON DELETE CASCADE");
     expect(compatibilityQuery).toContain("published_analysis_rate_limits");
     expect(compatibilityQuery).toContain("published_analysis_rate_limits_pkey");
-    expect(compatibilityQuery).toContain("allowed_ruleset_constraints");
-    expect(compatibilityQuery).toContain("ARRAY[3, 4, 5, 6, 7, 8]");
+    expect(compatibilityQuery).toContain("published_analysis_super_arts");
+    expect(compatibilityQuery).toContain(
+      "published_analysis_super_arts_own_availability_check",
+    );
+    expect(compatibilityQuery).toContain(
+      "published_analysis_super_arts_opponent_availability_check",
+    );
     expect(compatibilityQuery).toContain("ARRAY[3, 4, 5, 6, 7, 8, 9]");
     expect(compatibilityQuery).toContain("'DELETE'");
     expect(compatibilityQuery).toContain("has_table_privilege");

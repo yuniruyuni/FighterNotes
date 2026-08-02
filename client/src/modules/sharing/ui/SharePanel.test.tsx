@@ -4,7 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 import type { AnalysisContext } from "~/modules/analysis/contracts.js";
-import { syntheticAdviceReport } from "~/test-support/analysis.js";
+import {
+  syntheticAdviceReport,
+  syntheticTacticStats,
+} from "~/test-support/analysis.js";
 import type { SharingServices } from "../application/ports.js";
 import { PublicationProvider } from "./PublicationProvider.js";
 import { SharePanel } from "./SharePanel.js";
@@ -61,7 +64,26 @@ describe("SharePanel", () => {
             <SharePanel
               context={context}
               manageHref="/manage"
-              report={syntheticAdviceReport()}
+              report={syntheticAdviceReport({
+                ruleset_version: 9,
+                tactic_stats: syntheticTacticStats({
+                  super_art_stats_available: true,
+                  opponent_super_art_stats_available: false,
+                  sa1_used: 1,
+                  sa2_used: 0,
+                  sa3_used: 0,
+                  ca_used: 0,
+                  super_hits: 1,
+                  super_blocked: 0,
+                  super_no_immediate_contact: 0,
+                  super_punished: 0,
+                  super_kos: 0,
+                  super_combo_uses: 1,
+                  super_punish_uses: 0,
+                  super_reversal_uses: 0,
+                  super_neutral_uses: 0,
+                }),
+              })}
             />
           </PublicationProvider>
         </SharingServicesProvider>
@@ -78,6 +100,12 @@ describe("SharePanel", () => {
       screen.getByText(/「共有URLを生成」を押したときだけ/),
     ).toBeInTheDocument();
     expect(
+      screen.getByText(/両者のSA\/CAレベル別使用回数と結果/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/正確なダメージ値と最終ゲージ量/),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("link", { name: "プライバシーポリシー" }),
     ).toHaveAttribute("href", "/privacy");
 
@@ -88,6 +116,10 @@ describe("SharePanel", () => {
       expect.objectContaining({
         ownCharacter: "JURI",
         opponentCharacter: "KEN",
+        superArts: {
+          own: expect.objectContaining({ availability: "available" }),
+          opponent: { availability: "unavailable" },
+        },
       }),
       "ABCD-EFGH-JKLM",
     );
@@ -98,7 +130,7 @@ describe("SharePanel", () => {
     ).toBeInTheDocument();
   });
 
-  test("ruleset v9は理由を表示して共有操作とAPI呼出を無効にする", () => {
+  test("未対応rulesetは理由を表示して共有操作とAPI呼出を無効にする", () => {
     const create = mock(async () => ({
       id: "Abcdefghijklmnopqrstu_",
       url: "https://fighter.example/s/Abcdefghijklmnopqrstu_",
@@ -138,7 +170,7 @@ describe("SharePanel", () => {
             <SharePanel
               context={context}
               manageHref="/manage"
-              report={syntheticAdviceReport({ ruleset_version: 9 })}
+              report={syntheticAdviceReport({ ruleset_version: 10 })}
             />
           </PublicationProvider>
         </SharingServicesProvider>
@@ -149,7 +181,7 @@ describe("SharePanel", () => {
       screen.getByRole("button", { name: "共有URLを生成" }),
     ).toBeDisabled();
     expect(screen.getByRole("note")).toHaveTextContent(
-      "共有形式の更新が完了するまで公開できません",
+      "この解析ルール世代は共有に対応していません",
     );
     expect(create).not.toHaveBeenCalled();
   });

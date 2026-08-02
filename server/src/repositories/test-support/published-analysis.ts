@@ -82,13 +82,57 @@ export function candidate(maximum = false): PublishedAnalysisCandidate {
   };
 }
 
+export function v9Candidate(maximum = false): PublishedAnalysisCandidate {
+  const value = candidate(maximum);
+  const count = maximum ? MAX_COUNT : 2;
+  return {
+    ...value,
+    rulesetVersion: 9,
+    superArts: {
+      own: {
+        availability: "available",
+        levels: { sa1: count, sa2: count, sa3: count, ca: count },
+        outcomes: {
+          hit: count,
+          block: count,
+          noImmediateContact: count,
+          punished: count,
+          ko: count,
+        },
+        contexts: {
+          combo: count,
+          punish: count,
+          reversal: count,
+          neutral: count,
+        },
+      },
+      opponent: {
+        availability: "available",
+        levels: { sa1: count, sa2: count, sa3: count, ca: count },
+        outcomes: {
+          hit: count,
+          block: count,
+          noImmediateContact: count,
+          punished: count,
+          ko: count,
+        },
+      },
+    },
+  };
+}
+
 export function persistableAnalysis(options?: {
   id?: ShareId;
   now?: Date;
   retentionDays?: number;
   maximum?: boolean;
+  rulesetVersion?: 3 | 9;
 }) {
-  const content = createPublishedAnalysisContent(candidate(options?.maximum));
+  const content = createPublishedAnalysisContent(
+    options?.rulesetVersion === 9
+      ? v9Candidate(options.maximum)
+      : candidate(options?.maximum),
+  );
   if (!content.ok) throw new Error("published analysis fixture is invalid");
   return createPersistablePublishedAnalysis({
     id: options?.id ?? FIXTURE_ID,

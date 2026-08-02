@@ -82,6 +82,48 @@ export interface PublishedTacticStats {
   };
 }
 
+export interface PublishedSuperArtLevels {
+  sa1: number;
+  sa2: number;
+  sa3: number;
+  ca: number;
+}
+
+export interface PublishedSuperArtOutcomes {
+  hit: number;
+  block: number;
+  noImmediateContact: number;
+  punished: number;
+  ko: number;
+}
+
+export type PublishedOwnSuperArtStats =
+  | { availability: "unavailable" }
+  | {
+      availability: "available";
+      levels: PublishedSuperArtLevels;
+      outcomes: PublishedSuperArtOutcomes;
+      contexts: {
+        combo: number;
+        punish: number;
+        reversal: number;
+        neutral: number;
+      };
+    };
+
+export type PublishedOpponentSuperArtStats =
+  | { availability: "unavailable" }
+  | {
+      availability: "available";
+      levels: PublishedSuperArtLevels;
+      outcomes: PublishedSuperArtOutcomes;
+    };
+
+export interface PublishedSuperArtStats {
+  own: PublishedOwnSuperArtStats;
+  opponent: PublishedOpponentSuperArtStats;
+}
+
 export interface PublishedAnalysisCandidate {
   rulesetVersion: number;
   ownCharacter: CharacterId;
@@ -94,4 +136,6 @@ export interface PublishedAnalysisCandidate {
   };
   findings: PublishedFindingCandidate[];
   tactics: PublishedTacticStats;
+  /** ruleset v9 以降だけが持つ、公開可能な SA/CA 集計。 */
+  superArts?: PublishedSuperArtStats;
 }
