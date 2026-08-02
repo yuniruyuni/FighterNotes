@@ -58,12 +58,19 @@ export function SummaryView({
       <RoundSection report={report} onSceneChange={onSceneChange} />
       <DamageOriginsSection
         breakdown={report.damage_breakdown}
+        coverage={report.coverage}
         rounds={report.round_summaries ?? []}
         frameTimestamps={frameTimestamps}
         onSceneChange={onSceneChange}
       />
-      <InputStatsSection stats={report.input_stats} />
-      <TacticStatsSection stats={report.tactic_stats} />
+      <InputStatsSection
+        stats={report.input_stats}
+        coverage={report.coverage}
+      />
+      <TacticStatsSection
+        stats={report.tactic_stats}
+        coverage={report.coverage}
+      />
       <MatchupHistorySection file={file} context={context} report={report} />
       <PracticeSection items={report.practice_items} />
     </section>

@@ -45,7 +45,7 @@ fn test_mashing_excludes_projectile_press() {
         *s = MeterState::ProjectileActive;
     }
     ev.meter_state = [own_state, vec![MeterState::Free; n]];
-    let report = build_report(&[], &ev, "p1", None);
+    let report = detector_test_report(&ev, "p1");
     assert!(
         report.cards.iter().all(|c| c.id != "mashing"),
         "弾を撃った押しは暴れにしない"
@@ -53,6 +53,6 @@ fn test_mashing_excludes_projectile_press() {
 
     // 対照: メーター無し（弾の証拠なし）なら計上される
     ev.meter_state = [vec![], vec![]];
-    let report = build_report(&[], &ev, "p1", None);
+    let report = detector_test_report(&ev, "p1");
     assert!(report.cards.iter().any(|c| c.id == "mashing"));
 }

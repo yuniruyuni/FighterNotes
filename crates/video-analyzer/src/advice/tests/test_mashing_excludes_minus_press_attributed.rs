@@ -61,7 +61,7 @@ fn test_mashing_excludes_minus_press_attributed() {
             round_no: 1,
         })
         .collect();
-    let report = build_report(&[], &ev, "p1", None);
+    let report = detector_test_report(&ev, "p1");
     assert!(
         report.cards.iter().all(|c| c.id != "mashing"),
         "press_while_minus に帰属した被弾は mashing に出さない"

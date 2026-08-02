@@ -349,6 +349,33 @@ fn build_match_events_with_optional_fight_markers(
         build_segments(features, p1_inputs),
         build_segments(features, p2_inputs),
     ];
+    let input_coverage_for = |inputs: &[TrackedInput], repaired: bool| {
+        features
+            .iter()
+            .enumerate()
+            .filter(|(_, feature)| {
+                feature.is_match_screen && round_of(&rounds, feature.frame_index).is_some()
+            })
+            .filter(|(index, _)| {
+                inputs.get(*index).is_some_and(|input| {
+                    !input.uncertain
+                        && input.count.is_some()
+                        && if repaired {
+                            input.repaired
+                        } else {
+                            !input.repaired
+                        }
+                })
+            })
+            .count() as u32
+    };
+    let input_coverage = InputCoverage {
+        measured: true,
+        p1_observed_frames: input_coverage_for(p1_inputs, false),
+        p2_observed_frames: input_coverage_for(p2_inputs, false),
+        p1_repaired_frames: input_coverage_for(p1_inputs, true),
+        p2_repaired_frames: input_coverage_for(p2_inputs, true),
+    };
 
     // ── 確定反撃の機会と結果 ─────────────────────────────────────────────
     let meter_gf: [Vec<i64>; 2] = match meter {
@@ -537,6 +564,8 @@ fn build_match_events_with_optional_fight_markers(
         meter_state,
         meter_confidence,
         meter_game_frame: meter_gf,
+        spatial_coverage: Default::default(),
+        input_coverage,
         segments,
         hp: mono,
     }

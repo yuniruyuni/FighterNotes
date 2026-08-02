@@ -21,7 +21,7 @@ pub(crate) fn detect_low_scaling_super(events: &MatchEvents, own: u8) -> Option<
         .iter()
         .filter(|event| event.side == own && !event.ko)
         .filter_map(|event| {
-            let evidence = events.attack_evidence_for_super(event)?;
+            let evidence = events.reliable_attack_evidence_for_super(event)?;
             let entry = evidence.entry_scaling_percent?;
             let marginal = evidence.marginal_damage?;
             (entry <= LOW_ENTRY_SCALING && evidence.confidence != EventConfidence::Low)

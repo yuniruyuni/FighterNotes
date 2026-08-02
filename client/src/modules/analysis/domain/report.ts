@@ -21,6 +21,10 @@ export type DamageOrigin =
   | "strike"
   | "unclassified";
 
+export type DamageApproach = "raw_drive_rush";
+
+export type DamageContact = "throw" | "strike" | "drive_impact" | "projectile";
+
 export type StrikeKind = "high" | "overhead" | "low" | "air";
 
 export type DamageContext =
@@ -61,6 +65,9 @@ export interface AttributedDamageEvent {
   hp_drop: number;
   origin: DamageOrigin;
   confidence: "low" | "medium" | "high";
+  approach?: DamageApproach;
+  contact?: DamageContact;
+  contact_confidence?: "low" | "medium" | "high";
   strike_kind?: StrikeKind;
   strike_kind_confidence?: "low" | "medium" | "high";
   contexts: DamageContext[];
@@ -94,6 +101,28 @@ export interface AdviceCard {
   evidence: EvidenceClip[];
 }
 
+export type EvidenceRequirement =
+  | "own_hp"
+  | "opponent_hp"
+  | "own_drive"
+  | "opponent_drive"
+  | "own_super"
+  | "opponent_super"
+  | "own_input"
+  | "opponent_input"
+  | "frame_meter"
+  | "contacts"
+  | "punishes"
+  | "spatial"
+  | "own_attack_info"
+  | "opponent_attack_info";
+
+export interface SuppressedAdviceCard {
+  id: string;
+  title: string;
+  missing_requirements: EvidenceRequirement[];
+}
+
 export interface RoundSummary {
   round_no: number;
   start_frame: number;
@@ -114,10 +143,62 @@ export interface AnalysisCoverage {
   analyzed_match_frames: number;
   input_segments: number;
   analyzed_input_segments: number;
+  /** 確定ラウンド内の試合フレーム数。以下のHUD/入力系coverageの共通分母。 */
+  detector_match_frames?: number;
+  own_hp_reliable_frames?: number;
+  opponent_hp_reliable_frames?: number;
+  own_drive_reliable_frames?: number;
+  opponent_drive_reliable_frames?: number;
+  own_super_reliable_frames?: number;
+  opponent_super_reliable_frames?: number;
+  own_super_end_reliable?: boolean;
+  opponent_super_end_reliable?: boolean;
+  own_input_observed_frames?: number;
+  opponent_input_observed_frames?: number;
+  own_input_repaired_frames?: number;
+  opponent_input_repaired_frames?: number;
+  own_meter_mapped_frames?: number;
+  opponent_meter_mapped_frames?: number;
+  /** 空間解析は全試合ではなく候補区間だけを分母にする。 */
+  spatial_candidate_frames?: number;
+  spatial_sampled_frames?: number;
+  spatial_usable_frames?: number;
+  own_spatial_observed_frames?: number;
+  opponent_spatial_observed_frames?: number;
   attack_damage_events?: number;
   attack_damage_linked?: number;
   attack_damage_consistent?: number;
   attack_damage_mismatched?: number;
+  attack_damage_unverified?: number;
+  own_attack_damage_events?: number;
+  own_attack_damage_usable?: number;
+  opponent_attack_damage_events?: number;
+  opponent_attack_damage_usable?: number;
+  /** ruleset v9以降は解析器が依存関係と閾値を解決して付与する。 */
+  availability?: AnalysisAvailability;
+}
+
+export type EvidenceAvailability =
+  | "available"
+  | "unavailable"
+  | "not_applicable";
+
+export interface AnalysisAvailability {
+  own_hp: EvidenceAvailability;
+  opponent_hp: EvidenceAvailability;
+  own_drive: EvidenceAvailability;
+  opponent_drive: EvidenceAvailability;
+  own_super: EvidenceAvailability;
+  opponent_super: EvidenceAvailability;
+  own_input: EvidenceAvailability;
+  opponent_input: EvidenceAvailability;
+  own_meter: EvidenceAvailability;
+  opponent_meter: EvidenceAvailability;
+  contacts: EvidenceAvailability;
+  punishes: EvidenceAvailability;
+  spatial: EvidenceAvailability;
+  own_attack_info: EvidenceAvailability;
+  opponent_attack_info: EvidenceAvailability;
 }
 
 export interface InputStats {
@@ -213,6 +294,8 @@ export interface AdviceReport {
   practice_items: string[];
   summary: string;
   cards: AdviceCard[];
+  /** ruleset v8以前の保存済みレポートでは省略。 */
+  suppressed_cards?: SuppressedAdviceCard[];
   round_summaries: RoundSummary[];
   input_stats: InputStats | null;
   tactic_stats: TacticStats;

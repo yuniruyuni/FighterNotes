@@ -31,6 +31,8 @@ pub(in crate::spatial::tests) fn empty_events() -> MatchEvents {
         meter_state: [vec![], vec![]],
         meter_confidence: [vec![], vec![]],
         meter_game_frame: [vec![], vec![]],
+        spatial_coverage: Default::default(),
+        input_coverage: Default::default(),
         segments: [vec![], vec![]],
         hp: [vec![], vec![]],
     }

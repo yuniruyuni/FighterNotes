@@ -2,8 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type {
+  AnalysisAvailability,
   AttributedDamageEvent,
+  DamageApproach,
   DamageBreakdown,
+  DamageContact,
   DamageOrigin,
   RoundSummary,
   StrikeKind,
@@ -11,12 +14,37 @@ import type {
 import type { SceneSelection } from "../../domain/scene-selection.js";
 import { DamageOriginsSection } from "./DamageOriginsSection.js";
 
+function availability(
+  overrides: Partial<AnalysisAvailability> = {},
+): AnalysisAvailability {
+  return {
+    own_hp: "available",
+    opponent_hp: "available",
+    own_drive: "available",
+    opponent_drive: "available",
+    own_super: "available",
+    opponent_super: "available",
+    own_input: "available",
+    opponent_input: "available",
+    own_meter: "available",
+    opponent_meter: "available",
+    contacts: "available",
+    punishes: "available",
+    spatial: "available",
+    own_attack_info: "available",
+    opponent_attack_info: "available",
+    ...overrides,
+  };
+}
+
 function damage(
   sequence: number,
   round: number,
   hpDrop: number,
   origin: DamageOrigin,
   strikeKind?: StrikeKind,
+  approach?: DamageApproach,
+  contact?: DamageContact,
 ): AttributedDamageEvent {
   const start = sequence * 100;
   return {
@@ -33,6 +61,8 @@ function damage(
     ...(strikeKind
       ? { strike_kind: strikeKind, strike_kind_confidence: "high" as const }
       : {}),
+    ...(approach ? { approach } : {}),
+    ...(contact ? { contact, contact_confidence: "high" as const } : {}),
     contexts: origin === "throw" ? ["burnout"] : [],
   };
 }
@@ -123,6 +153,34 @@ describe("DamageOriginsSection", () => {
     ]);
   });
 
+  test("接近手段と接触種別を同時に表示する", () => {
+    render(
+      <DamageOriginsSection
+        breakdown={{
+          attribution_version: 5,
+          total_hp_lost: 0.2,
+          classified_hp_lost: 0.2,
+          events: [
+            damage(
+              1,
+              1,
+              0.2,
+              "raw_drive_rush",
+              undefined,
+              "raw_drive_rush",
+              "throw",
+            ),
+          ],
+        }}
+        rounds={[round(1)]}
+        frameTimestamps={[]}
+        onSceneChange={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("生ドライブラッシュ→投げ")).toBeInTheDocument();
+  });
+
   test("旧レポートには空の分析セクションを追加しない", () => {
     const { container } = render(
       <DamageOriginsSection
@@ -134,5 +192,31 @@ describe("DamageOriginsSection", () => {
     );
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  test("自分HPが利用不能なら既存の値を0件や0%として表示しない", () => {
+    render(
+      <DamageOriginsSection
+        breakdown={breakdown}
+        coverage={{
+          match_frames: 100,
+          analyzed_match_frames: 100,
+          input_segments: 1,
+          analyzed_input_segments: 1,
+          availability: availability({
+            own_hp: "unavailable",
+          }),
+        }}
+        rounds={[round(1), round(2)]}
+        frameTimestamps={[]}
+        onSceneChange={() => undefined}
+      />,
+    );
+
+    expect(
+      screen.getByText(/被ダメージ量・件数・起点は確認不能/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("150%")).not.toBeInTheDocument();
+    expect(screen.queryByText("未分類（要確認）")).not.toBeInTheDocument();
   });
 });

@@ -638,6 +638,12 @@
 :where(
   .damage-origin-chart span,
   .damage-origin-swatch
+)[data-origin^="raw_drive_rush_"] {
+  background: var(--drive);
+}
+:where(
+  .damage-origin-chart span,
+  .damage-origin-swatch
 )[data-origin="own_jump_caught"] {
   background: var(--sa);
 }

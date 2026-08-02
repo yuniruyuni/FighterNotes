@@ -39,7 +39,7 @@ fn test_anti_air_card() {
             round_no: 1,
         });
     }
-    let report = build_report(&[], &ev, "p1", None);
+    let report = detector_test_report(&ev, "p1");
     let card = report
         .cards
         .iter()

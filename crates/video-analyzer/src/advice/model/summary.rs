@@ -21,6 +21,67 @@ pub struct RoundSummary {
 }
 
 /// レポート内の数値が、動画のどの範囲を母集団にしているかを明示する。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EvidenceAvailability {
+    Available,
+    #[default]
+    Unavailable,
+    NotApplicable,
+}
+
+impl EvidenceAvailability {
+    pub(crate) fn is_available(self) -> bool {
+        self == Self::Available
+    }
+}
+
+/// 閾値と依存関係を解析器側で解決した、表示・カード共通の可用性契約。
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct AnalysisAvailability {
+    pub own_hp: EvidenceAvailability,
+    pub opponent_hp: EvidenceAvailability,
+    pub own_drive: EvidenceAvailability,
+    pub opponent_drive: EvidenceAvailability,
+    pub own_super: EvidenceAvailability,
+    pub opponent_super: EvidenceAvailability,
+    pub own_input: EvidenceAvailability,
+    pub opponent_input: EvidenceAvailability,
+    pub own_meter: EvidenceAvailability,
+    pub opponent_meter: EvidenceAvailability,
+    pub contacts: EvidenceAvailability,
+    pub punishes: EvidenceAvailability,
+    pub spatial: EvidenceAvailability,
+    pub own_attack_info: EvidenceAvailability,
+    pub opponent_attack_info: EvidenceAvailability,
+}
+
+impl AnalysisAvailability {
+    /// 「改善点なし」と結論できるだけの知覚層が揃っているか。
+    /// 機会自体が無い `NotApplicable` は欠測ではないため許容する。
+    pub(crate) fn supports_no_findings_claim(&self) -> bool {
+        ![
+            self.own_hp,
+            self.opponent_hp,
+            self.own_drive,
+            self.opponent_drive,
+            self.own_super,
+            self.opponent_super,
+            self.own_input,
+            self.opponent_input,
+            self.own_meter,
+            self.opponent_meter,
+            self.contacts,
+            self.punishes,
+            self.spatial,
+            self.own_attack_info,
+            self.opponent_attack_info,
+        ]
+        .contains(&EvidenceAvailability::Unavailable)
+    }
+}
+
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct AnalysisCoverage {
@@ -28,10 +89,42 @@ pub struct AnalysisCoverage {
     pub analyzed_match_frames: u32,
     pub input_segments: u32,
     pub analyzed_input_segments: u32,
+    /// 検出器別の読取率に共通して使う、確定ラウンド内の試合フレーム数。
+    pub detector_match_frames: u32,
+    pub own_hp_reliable_frames: u32,
+    pub opponent_hp_reliable_frames: u32,
+    pub own_drive_reliable_frames: u32,
+    pub opponent_drive_reliable_frames: u32,
+    pub own_super_reliable_frames: u32,
+    pub opponent_super_reliable_frames: u32,
+    pub own_super_end_reliable: bool,
+    pub opponent_super_end_reliable: bool,
+    pub own_input_observed_frames: u32,
+    pub opponent_input_observed_frames: u32,
+    pub own_input_repaired_frames: u32,
+    pub opponent_input_repaired_frames: u32,
+    pub own_meter_mapped_frames: u32,
+    pub opponent_meter_mapped_frames: u32,
+    /// 空間解析は全試合ではなく、意味イベントから選んだ候補区間だけが分母。
+    pub spatial_candidate_frames: u32,
+    pub spatial_sampled_frames: u32,
+    pub spatial_usable_frames: u32,
+    pub own_spatial_observed_frames: u32,
+    pub opponent_spatial_observed_frames: u32,
     pub attack_damage_events: u32,
     pub attack_damage_linked: u32,
     pub attack_damage_consistent: u32,
     pub attack_damage_mismatched: u32,
+    pub attack_damage_unverified: u32,
+    /// 自分の攻撃（相手側HP減少）に対する中央攻撃表示の母数と厳格利用可能数。
+    pub own_attack_damage_events: u32,
+    pub own_attack_damage_usable: u32,
+    /// 相手の攻撃（自分側HP減少）に対する中央攻撃表示の母数と厳格利用可能数。
+    pub opponent_attack_damage_events: u32,
+    pub opponent_attack_damage_usable: u32,
+    /// None はruleset v8以前の保存済みレポートだけを表す。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub availability: Option<AnalysisAvailability>,
 }
 
 /// 入力習慣の統計（自分側）。

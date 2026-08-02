@@ -30,7 +30,7 @@ fn test_throw_loop_needs_streak() {
             round_no: 1,
         },
     ];
-    let report = build_report(&[], &ev, "p1", None);
+    let report = detector_test_report(&ev, "p1");
     let card = report.cards.iter().find(|c| c.id == "throw_loop").unwrap();
     assert_eq!(card.kind, AdviceKind::Observation);
     assert_invites_user_review(card);
@@ -57,7 +57,7 @@ fn test_throw_loop_needs_streak() {
             round_no: 1,
         },
     ];
-    let report = build_report(&[], &ev, "p1", None);
+    let report = detector_test_report(&ev, "p1");
     let card = report.cards.iter().find(|c| c.id == "throw_loop").unwrap();
     assert_eq!(card.kind, AdviceKind::Diagnosis);
 }

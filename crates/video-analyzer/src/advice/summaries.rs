@@ -70,8 +70,10 @@ pub(crate) fn build_round_summaries(
 
 pub(crate) fn build_compatibility_summary(
     cards: &[AdviceCard],
+    suppressed_cards: &[SuppressedAdviceCard],
     rounds_detected: u32,
     damage_count: usize,
+    coverage: &AnalysisCoverage,
 ) -> (Vec<Weakness>, Vec<String>, String) {
     let weaknesses = cards
         .iter()
@@ -82,21 +84,46 @@ pub(crate) fn build_compatibility_summary(
         })
         .collect();
     let practice_items = cards.iter().map(|card| card.practice.clone()).collect();
+    let own_hp_available = coverage
+        .availability
+        .as_ref()
+        .is_none_or(|availability| availability.own_hp.is_available());
+    let scope = if own_hp_available {
+        format!("{rounds_detected}ラウンド検出、被弾 {damage_count} 件。")
+    } else {
+        format!("{rounds_detected}ラウンド検出。HPバーの認識率不足により、被弾件数は確認不能です。")
+    };
+    let supports_no_findings_claim = coverage
+        .availability
+        .as_ref()
+        .is_none_or(AnalysisAvailability::supports_no_findings_claim);
     let summary = match cards
         .iter()
         .find(|card| card.kind == AdviceKind::Diagnosis)
     {
-        Some(priority) => format!(
-            "{rounds_detected}ラウンド検出、被弾 {damage_count} 件。優先改善: {}",
-            priority.title
+        Some(priority) => format!("{scope} 優先改善: {}", priority.title),
+        None if cards.is_empty() && !suppressed_cards.is_empty() => format!(
+            "{scope} {}件の指摘候補は証拠不足で確認不能です。改善点なしとは判定していません。",
+            suppressed_cards.len()
+        ),
+        None if cards.is_empty() && !supports_no_findings_claim => format!(
+            "{scope} 認識率不足のため、改善ポイントを十分に判定できませんでした。改善点なしとは判定していません。"
         ),
         None if cards.is_empty() => format!(
-            "{rounds_detected}ラウンド検出、被弾 {damage_count} 件。顕著な改善ポイントは検出されませんでした。"
+            "{scope} 顕著な改善ポイントは検出されませんでした。"
         ),
         None => format!(
-            "{rounds_detected}ラウンド検出、被弾 {damage_count} 件。原因を断定できる改善指摘はなく、要確認: {}",
+            "{scope} 原因を断定できる改善指摘はなく、要確認: {}",
             cards[0].title
         ),
+    };
+    let summary = if !cards.is_empty() && !suppressed_cards.is_empty() {
+        format!(
+            "{summary} なお、{}件の候補は証拠不足で確認不能です。",
+            suppressed_cards.len()
+        )
+    } else {
+        summary
     };
     (weaknesses, practice_items, summary)
 }

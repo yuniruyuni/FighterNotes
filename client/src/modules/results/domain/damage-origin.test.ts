@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type {
   AttributedDamageEvent,
+  DamageApproach,
+  DamageContact,
   DamageOrigin,
   StrikeKind,
 } from "~/modules/analysis/contracts.js";
@@ -12,6 +14,8 @@ function damage(
   hpDrop: number,
   origin: DamageOrigin,
   strikeKind?: StrikeKind,
+  approach?: DamageApproach,
+  contact?: DamageContact,
 ): AttributedDamageEvent {
   return {
     sequence_no: sequence,
@@ -25,6 +29,8 @@ function damage(
     origin,
     confidence: origin === "unclassified" ? "low" : "high",
     ...(strikeKind ? { strike_kind: strikeKind } : {}),
+    ...(approach ? { approach } : {}),
+    ...(contact ? { contact, contact_confidence: "high" as const } : {}),
     contexts: [],
   };
 }
@@ -141,6 +147,29 @@ describe("damage origin summary", () => {
     expect(summary.rows.map(({ key, label }) => [key, label])).toEqual([
       ["throw", "投げ"],
       ["strike", "打撃（属性不明）"],
+    ]);
+  });
+
+  test("接近手段と接触種別を直交した分類として保持する", () => {
+    const summary = summarizeDamageOrigins(
+      [
+        damage(
+          1,
+          1,
+          0.2,
+          "raw_drive_rush",
+          undefined,
+          "raw_drive_rush",
+          "throw",
+        ),
+        damage(2, 1, 0.1, "raw_drive_rush"),
+      ],
+      "all",
+    );
+
+    expect(summary.rows.map(({ key, label }) => [key, label])).toEqual([
+      ["raw_drive_rush_throw", "生ドライブラッシュ→投げ"],
+      ["raw_drive_rush", "生ドライブラッシュ"],
     ]);
   });
 

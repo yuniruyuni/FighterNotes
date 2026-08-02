@@ -17,16 +17,22 @@ export {
 export type {
   AdviceCard,
   AdviceReport,
+  AnalysisAvailability,
   AnalysisCoverage,
   AttributedDamageEvent,
+  DamageApproach,
   DamageBreakdown,
+  DamageContact,
   DamageContext,
   DamageOrigin,
   DamageTakenEvent,
+  EvidenceAvailability,
   EvidenceClip,
+  EvidenceRequirement,
   InputStats,
   RoundSummary,
   StrikeKind,
+  SuppressedAdviceCard,
   TacticStats,
 } from "./domain/report.js";
 export type {

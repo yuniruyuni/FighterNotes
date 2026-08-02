@@ -4,6 +4,7 @@ import type {
   AdviceReport,
   AnalysisContext,
 } from "~/modules/analysis/contracts.js";
+import { sharingUnavailableReason } from "../domain/published-analysis.js";
 import { buildXIntentUrl, NATIVE_SHARE_TEXT } from "../domain/share-links.js";
 import { usePublication } from "./PublicationProvider.js";
 import { useSharingServices } from "./SharingServicesProvider.js";
@@ -25,6 +26,7 @@ export function SharePanel({
   const showCreate = !published && !showRetry;
   const retryLabel =
     phase === "deleted" ? "共有URLを再作成" : "共有URLを再試行";
+  const unavailableReason = sharingUnavailableReason(report.ruleset_version);
 
   const copy = async (value: string, label: string) => {
     try {
@@ -67,8 +69,8 @@ export function SharePanel({
             type="button"
             className="share-command share-command-primary"
             aria-describedby="share-disclosure"
-            title="共有URLを生成"
-            disabled={busy}
+            title={unavailableReason ?? "共有URLを生成"}
+            disabled={busy || unavailableReason !== undefined}
             onClick={() => void publish(report, context)}
           >
             <Share2 size={18} aria-hidden="true" />
@@ -81,7 +83,7 @@ export function SharePanel({
             className="share-command share-command-primary"
             aria-describedby="share-disclosure"
             title={retryLabel}
-            disabled={!source}
+            disabled={!source || unavailableReason !== undefined}
             onClick={() => void retry()}
           >
             <Share2 size={18} aria-hidden="true" />
@@ -135,6 +137,12 @@ export function SharePanel({
           </div>
         )}
       </div>
+
+      {!published && unavailableReason && (
+        <p className="share-disclosure" role="note">
+          {unavailableReason}
+        </p>
+      )}
 
       {!published && (
         <p className="share-disclosure" id="share-disclosure">

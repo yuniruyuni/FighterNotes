@@ -74,13 +74,25 @@ function issues(value: unknown) {
 
 describe("publishedAnalysisCandidateSchema refinements", () => {
   test("support外rulesetのfieldと理由を返す", () => {
-    expect(issues({ ...candidate(), rulesetVersion: 999 })).toEqual([
-      {
-        code: "custom",
-        path: ["rulesetVersion"],
-        message: "unsupported ruleset version",
-      },
-    ]);
+    for (const rulesetVersion of [9, 999]) {
+      expect(issues({ ...candidate(), rulesetVersion })).toEqual([
+        {
+          code: "custom",
+          path: ["rulesetVersion"],
+          message: "unsupported ruleset version",
+        },
+      ]);
+    }
+  });
+
+  test("ruleset v3からv8を引き続き受理する", () => {
+    for (const rulesetVersion of [3, 4, 5, 6, 7, 8]) {
+      const value = candidate();
+      value.rulesetVersion = rulesetVersion;
+      expect(publishedAnalysisCandidateSchema.safeParse(value).success).toBe(
+        true,
+      );
+    }
   });
 
   test("round合計不一致のfieldと理由を返す", () => {
