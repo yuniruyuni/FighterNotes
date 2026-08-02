@@ -8,6 +8,7 @@ import {
   type AnalysisRuntimeCapabilities,
   type AnalysisRuntimeReadiness,
 } from "../../domain/runtime.js";
+import { LinkedAbortController } from "./linked-abort-controller.js";
 import {
   AnalysisProgressWatchdog,
   browserAnalysisWatchdogHost,
@@ -27,6 +28,7 @@ export async function analyzeVideo(
   ownSide: string,
   onProgress: AnalysisProgress,
   ownCharOrContext: string | AnalysisContextInput = "",
+  signal: AbortSignal = new AbortController().signal,
 ): Promise<AnalysisResult> {
   const capabilities = browserRuntimeCapabilities();
   const runtime = AnalysisRuntime.evaluate(capabilities);
@@ -38,7 +40,7 @@ export async function analyzeVideo(
     visibilityState: document.visibilityState,
   });
 
-  const abortController = new AbortController();
+  const abortController = new LinkedAbortController(signal);
   const watchdog = new AnalysisProgressWatchdog(
     browserAnalysisWatchdogHost(),
     ANALYSIS_STALL_TIMEOUT_MS,
@@ -67,6 +69,7 @@ export async function analyzeVideo(
     );
   } finally {
     watchdog.dispose();
+    abortController.dispose();
   }
 }
 

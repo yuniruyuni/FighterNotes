@@ -80,4 +80,49 @@ describe("completeAnalysis", () => {
     ).rejects.toThrow("cancelled");
     expect(workerSession.finishCount).toBe(0);
   });
+
+  test("settles when cancellation interrupts the first-pass wait", async () => {
+    const workerSession = {
+      ...session(),
+      firstPass: () => new Promise<never>(() => {}),
+    };
+    const controller = new AbortController();
+    const reason = new Error("cancelled during first pass");
+    const completion = completeAnalysis({
+      ...options(workerSession),
+      signal: controller.signal,
+    });
+
+    controller.abort(reason);
+
+    expect(await completion.catch((error) => error)).toBe(reason);
+    expect(workerSession.finishCount).toBe(0);
+  });
+
+  test("settles when cancellation interrupts the final-result wait", async () => {
+    let resultStarted!: () => void;
+    const waitingForResult = new Promise<void>((resolve) => {
+      resultStarted = resolve;
+    });
+    const baseSession = session();
+    const workerSession = {
+      ...baseSession,
+      result: () => {
+        resultStarted();
+        return new Promise<never>(() => {});
+      },
+    };
+    const controller = new AbortController();
+    const reason = new Error("cancelled during result");
+    const completion = completeAnalysis({
+      ...options(workerSession),
+      signal: controller.signal,
+    });
+    await waitingForResult;
+
+    controller.abort(reason);
+
+    expect(await completion.catch((error) => error)).toBe(reason);
+    expect(baseSession.finishCount).toBe(1);
+  });
 });

@@ -48,6 +48,50 @@ test("Mp4VideoSource starts extraction before asynchronous decoder setup finishe
   expect(onSamples).toHaveBeenCalledTimes(1);
 });
 
+test("Mp4VideoSource stops extraction and drops samples while decoder setup is pending", async () => {
+  const calls: string[] = [];
+  let resolveTrack!: () => void;
+  const trackReady = new Promise<void>((resolve) => {
+    resolveTrack = resolve;
+  });
+  const movie = {
+    videoTracks: [
+      {
+        id: 1,
+        nb_samples: 1,
+        codec: "avc1.42c028",
+        video: { width: 1920, height: 1080 },
+      },
+    ],
+  } as unknown as Movie;
+  const onSamples = mock(() => calls.push("samples"));
+  const source = new Mp4VideoSource(
+    new ArrayBuffer(0),
+    {
+      onTrack: async () => {
+        calls.push("track");
+        await trackReady;
+      },
+      onSamples,
+      onError: (error) => {
+        throw error;
+      },
+    },
+    fakeFile(movie, calls),
+  );
+
+  source.start();
+  source.stop();
+  source.stop();
+  resolveTrack();
+  await trackReady;
+  await Promise.resolve();
+
+  expect(calls).toContain("stop");
+  expect(calls.filter((call) => call === "stop")).toHaveLength(1);
+  expect(onSamples).not.toHaveBeenCalled();
+});
+
 function fakeFile(movie: Movie, calls: string[]): ISOFile {
   const file = {
     onReady: undefined as ((info: Movie) => void) | undefined,
@@ -67,6 +111,9 @@ function fakeFile(movie: Movie, calls: string[]): ISOFile {
     start() {
       calls.push("start");
       this.onSamples?.(1, undefined, []);
+    },
+    stop() {
+      calls.push("stop");
     },
     getTrackById() {
       return undefined;

@@ -9,7 +9,8 @@ import {
 export function AnalysisSetupPage() {
   const session = useAnalysisSession();
   const { state } = session;
-  const busy = state.phase === "analyzing";
+  const busy = state.phase === "analyzing" || state.phase === "canceling";
+  const canceled = state.phase === "canceled";
 
   return (
     <div id="screen-setup">
@@ -48,17 +49,60 @@ export function AnalysisSetupPage() {
             onOpponentCharacterChange={session.setOpponentCharacter}
             onSubmit={() => void session.analyze()}
           />
-          {(busy || state.error) && (
+          {(busy || canceled || state.error) && (
             <div className="card progress-card">
-              <h2>{state.error ? "解析エラー" : "解析中…"}</h2>
+              <h2>
+                {state.error
+                  ? "解析エラー"
+                  : canceled
+                    ? "解析を中止しました"
+                    : "解析中…"}
+              </h2>
               {busy && (
-                <progress max={100} value={state.progress}>
-                  {state.progress}%
-                </progress>
+                <>
+                  <div className="analysis-progress-track" aria-hidden="true">
+                    <span
+                      className="analysis-progress-value"
+                      style={{ width: `${state.progress}%` }}
+                    />
+                  </div>
+                  <progress
+                    className="visually-hidden"
+                    max={100}
+                    value={state.progress}
+                    aria-label="動画解析の進捗"
+                    aria-describedby="analysis-progress-detail"
+                  >
+                    {state.progress}%
+                  </progress>
+                </>
               )}
-              <div className={state.error ? "analysis-error" : "status"}>
-                {state.error || state.status}
+              <div
+                id={busy ? "analysis-progress-detail" : undefined}
+                className={state.error ? "analysis-error" : "status"}
+              >
+                <span>{state.error || state.status}</span>
+                {busy && (
+                  <span
+                    className="analysis-progress-percent"
+                    aria-hidden="true"
+                  >
+                    {formatProgress(state.progress)}%
+                  </span>
+                )}
               </div>
+              {busy && (
+                <button
+                  type="button"
+                  className="analysis-cancel-btn"
+                  disabled={state.phase === "canceling"}
+                  onClick={session.cancel}
+                >
+                  {state.phase === "canceling"
+                    ? "中止しています…"
+                    : "解析を中止"}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -68,4 +112,8 @@ export function AnalysisSetupPage() {
       </div>
     </div>
   );
+}
+
+function formatProgress(progress: number): string {
+  return progress.toFixed(1).replace(/\.0$/, "");
 }

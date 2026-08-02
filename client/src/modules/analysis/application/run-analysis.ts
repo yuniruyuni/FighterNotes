@@ -15,6 +15,7 @@ export async function runAnalysis(
   request: AnalysisRequest,
   onProgress: AnalysisProgress,
   services: AnalysisServices,
+  signal: AbortSignal,
 ): Promise<CompletedAnalysis> {
   const context = createAnalysisContext(
     request.side,
@@ -26,7 +27,13 @@ export async function runAnalysis(
     request.side,
     onProgress,
     context,
+    signal,
   );
+  if (signal.aborted) {
+    throw signal.reason instanceof Error
+      ? signal.reason
+      : new Error("動画解析を中止しました");
+  }
   const result = { ...rawResult, videoArrayBuffer: null };
   services.debugSink.capture(result);
   return {

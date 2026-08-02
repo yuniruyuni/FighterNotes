@@ -2,7 +2,12 @@ import type { AnalysisContext, AnalysisSide } from "./context.js";
 import type { AdviceReport } from "./report.js";
 import type { AnalysisResult } from "./result.js";
 
-export type AnalysisPhase = "setup" | "analyzing" | "ready";
+export type AnalysisPhase =
+  | "setup"
+  | "analyzing"
+  | "canceling"
+  | "canceled"
+  | "ready";
 
 export interface AnalysisSessionState {
   file: File | null;
@@ -32,6 +37,8 @@ export type AnalysisSessionAction =
   | { type: "opponentCharacter"; character: string }
   | { type: "start" }
   | { type: "progress"; progress: number; status: string }
+  | { type: "cancel" }
+  | { type: "canceled" }
   | {
       type: "complete";
       result: AnalysisResult;
@@ -61,6 +68,7 @@ export const AnalysisSession = {
   canStart(state: AnalysisSessionState): boolean {
     return Boolean(
       state.phase !== "analyzing" &&
+        state.phase !== "canceling" &&
         state.file &&
         state.side &&
         state.ownCharacter &&
@@ -93,12 +101,39 @@ export const AnalysisSession = {
           context: null,
         };
       case "progress":
+        if (state.phase !== "analyzing") return state;
         return {
           ...state,
-          progress: Math.round(action.progress * 100),
+          progress: Math.max(
+            state.progress,
+            Math.round(Math.max(0, Math.min(1, action.progress)) * 1000) / 10,
+          ),
           status: action.status,
         };
+      case "cancel":
+        if (state.phase !== "analyzing") return state;
+        return {
+          ...state,
+          phase: "canceling",
+          status: "解析を中止しています…",
+          error: "",
+        };
+      case "canceled":
+        if (state.phase !== "canceling" && state.phase !== "analyzing") {
+          return state;
+        }
+        return {
+          ...state,
+          phase: "canceled",
+          progress: 0,
+          status: "解析を中止しました。設定を確認して再試行できます。",
+          error: "",
+          result: null,
+          report: null,
+          context: null,
+        };
       case "complete":
+        if (state.phase !== "analyzing") return state;
         return {
           ...state,
           phase: "ready",

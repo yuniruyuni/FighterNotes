@@ -126,6 +126,48 @@ describe("analysis session reducer", () => {
     ).toMatchObject({ phase: "setup", status: "", error: "failed" });
   });
 
+  test("中止中と中止済みを通常エラーと分け、遅延した進捗と完了を無視する", () => {
+    const started = AnalysisSession.reduce(AnalysisSession.initial(), {
+      type: "start",
+    });
+    const canceling = AnalysisSession.reduce(started, { type: "cancel" });
+
+    expect(canceling).toMatchObject({
+      phase: "canceling",
+      status: "解析を中止しています…",
+      error: "",
+    });
+    expect(AnalysisSession.reduce(canceling, { type: "cancel" })).toBe(
+      canceling,
+    );
+    expect(
+      AnalysisSession.reduce(canceling, {
+        type: "progress",
+        progress: 0.9,
+        status: "遅延した進捗",
+      }),
+    ).toBe(canceling);
+
+    const report = {} as AdviceReport;
+    const result = { report } as AnalysisResult;
+    expect(
+      AnalysisSession.reduce(canceling, {
+        type: "complete",
+        result,
+        report,
+        context: { ownSide: "p1", p1: {}, p2: {} },
+      }),
+    ).toBe(canceling);
+
+    const canceled = AnalysisSession.reduce(canceling, { type: "canceled" });
+    expect(canceled).toMatchObject({
+      phase: "canceled",
+      progress: 0,
+      status: "解析を中止しました。設定を確認して再試行できます。",
+      error: "",
+    });
+  });
+
   test("動画とキャラクターを保ち、サイドの再確認を要求してリセットする", () => {
     const file = new File(["video"], "replay.mp4", { type: "video/mp4" });
     const configured = {
@@ -147,7 +189,7 @@ describe("analysis session reducer", () => {
     });
   });
 
-  test("進捗を百分率に変換する", () => {
+  test("進捗を小数百分率へ変換し、遅延通知でも後退させない", () => {
     const started = AnalysisSession.reduce(AnalysisSession.initial(), {
       type: "start",
     });
@@ -158,7 +200,14 @@ describe("analysis session reducer", () => {
     });
 
     expect(progressed.phase).toBe("analyzing");
-    expect(progressed.progress).toBe(43);
+    expect(progressed.progress).toBe(42.6);
     expect(progressed.status).toBe("HUDを解析中");
+    expect(
+      AnalysisSession.reduce(progressed, {
+        type: "progress",
+        progress: 0.4,
+        status: "遅れて届いた進捗",
+      }).progress,
+    ).toBe(42.6);
   });
 });

@@ -14,6 +14,7 @@ describe("runAnalysis", () => {
       engine: { readiness: () => ({ available: true }), analyze },
       debugSink: { capture },
     };
+    const signal = new AbortController().signal;
 
     const completed = await runAnalysis(
       {
@@ -24,6 +25,7 @@ describe("runAnalysis", () => {
       },
       onProgress,
       services,
+      signal,
     );
 
     const context = {
@@ -31,7 +33,13 @@ describe("runAnalysis", () => {
       p1: { character: "KEN" },
       p2: { character: "JURI" },
     };
-    expect(analyze).toHaveBeenCalledWith(file, "p2", onProgress, context);
+    expect(analyze).toHaveBeenCalledWith(
+      file,
+      "p2",
+      onProgress,
+      context,
+      signal,
+    );
     expect(completed).toMatchObject({
       file,
       report: rawResult.report,
