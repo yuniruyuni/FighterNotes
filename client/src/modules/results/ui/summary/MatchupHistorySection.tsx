@@ -1,8 +1,10 @@
+import { useEffect, useRef, useState } from "react";
 import type {
   AdviceReport,
   AnalysisContext,
 } from "~/modules/analysis/contracts.js";
 import { formatCharacterId } from "~/modules/analysis/contracts.js";
+import type { AnalysisHistoryRecord } from "../../domain/history.js";
 import { defensiveResponseBias } from "../../domain/history.js";
 import { formatTacticRateWithCount } from "./tactic-stat-format.js";
 import { useMatchupHistory } from "./use-matchup-history.js";
@@ -23,12 +25,263 @@ export function MatchupHistorySection({
   return (
     <section className="summary-section" data-wm="History">
       <h2>キャラクター別の対戦履歴</h2>
-      <MatchupHistoryContent history={history} />
+      <HistoryStorageControls
+        history={history}
+        rulesetVersion={report.ruleset_version}
+      />
+      <MatchupHistorySummary history={history} />
     </section>
   );
 }
 
-function MatchupHistoryContent({
+function HistoryStorageControls({
+  history,
+  rulesetVersion,
+}: {
+  history: ReturnType<typeof useMatchupHistory>;
+  rulesetVersion: number;
+}) {
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  const deleteTriggers = useRef(new Map<string, HTMLButtonElement>());
+  const deleteConfirmation = useRef<HTMLButtonElement>(null);
+  const clearTrigger = useRef<HTMLButtonElement>(null);
+  const clearConfirmation = useRef<HTMLButtonElement>(null);
+  const managementSummary = useRef<HTMLElement>(null);
+  const currentRulesetCount = history.records.filter(
+    (record) => record.rulesetVersion === rulesetVersion,
+  ).length;
+  const controlsDisabled = history.phase === "loading" || history.busy !== null;
+
+  useEffect(() => {
+    if (pendingDeleteId) deleteConfirmation.current?.focus();
+  }, [pendingDeleteId]);
+
+  useEffect(() => {
+    if (confirmingClear) clearConfirmation.current?.focus();
+  }, [confirmingClear]);
+
+  const confirmDelete = async (id: string) => {
+    if (await history.deleteRecord(id)) {
+      managementSummary.current?.focus();
+      setPendingDeleteId(null);
+    }
+  };
+  const confirmClear = async () => {
+    if (await history.clearHistory()) {
+      managementSummary.current?.focus();
+      setConfirmingClear(false);
+    }
+  };
+
+  return (
+    <div className="history-storage-panel">
+      <div className="history-storage-heading">
+        <div>
+          <strong>このブラウザの解析履歴</strong>
+          <p>
+            対戦傾向の集計だけを最大200件保存します。動画とファイル名は保存しません。
+          </p>
+        </div>
+        <label className="history-saving-toggle">
+          <input
+            checked={history.saving.enabled}
+            disabled={controlsDisabled || !history.saving.persistent}
+            onChange={(event) => {
+              void history.setSavingEnabled(event.currentTarget.checked);
+            }}
+            type="checkbox"
+          />
+          今後の解析履歴を保存する
+        </label>
+      </div>
+
+      {history.phase !== "loading" && !history.saving.persistent && (
+        <p className="history-storage-warning" role="status">
+          保存設定を利用できないため、新しい解析履歴は保存しません。
+        </p>
+      )}
+      <p className="history-storage-disclosure">
+        初期設定はONです。OFFにしても既存の履歴は残ります。解析履歴の削除は、共有URLや削除コードには影響しません。
+      </p>
+      {history.notice && (
+        <p
+          className="history-storage-notice"
+          data-tone={history.notice.kind}
+          role={history.notice.kind === "error" ? "alert" : "status"}
+        >
+          {history.notice.message}
+        </p>
+      )}
+
+      <details className="history-management">
+        <summary ref={managementSummary}>
+          保存済み履歴を管理（全判定版 {history.records.length}件）
+        </summary>
+        <p>
+          現在の判定版は{currentRulesetCount}件、旧判定版は
+          {history.records.length - currentRulesetCount}件です。
+        </p>
+        {history.records.length === 0 ? (
+          <p className="muted-note">削除できる解析履歴はありません。</p>
+        ) : (
+          <ul className="history-record-list">
+            {history.records.map((record, index) => (
+              <li key={record.id}>
+                <HistoryRecordDescription record={record} />
+                <span className="history-record-actions">
+                  <button
+                    aria-controls={`history-delete-confirmation-${record.id}`}
+                    aria-expanded={pendingDeleteId === record.id}
+                    aria-label={`${historyRecordAccessibleLabel(
+                      record,
+                      index,
+                    )}を削除`}
+                    disabled={history.busy !== null}
+                    onClick={() => {
+                      setConfirmingClear(false);
+                      setPendingDeleteId(record.id);
+                    }}
+                    ref={(element) => {
+                      if (element)
+                        deleteTriggers.current.set(record.id, element);
+                      else deleteTriggers.current.delete(record.id);
+                    }}
+                    type="button"
+                  >
+                    削除
+                  </button>
+                  {pendingDeleteId === record.id && (
+                    <span className="history-confirmation">
+                      <span id={`history-delete-confirmation-${record.id}`}>
+                        この1件を削除しますか？
+                      </span>
+                      <button
+                        aria-describedby={`history-delete-confirmation-${record.id}`}
+                        disabled={history.busy !== null}
+                        onClick={() => void confirmDelete(record.id)}
+                        ref={deleteConfirmation}
+                        type="button"
+                      >
+                        削除する
+                      </button>
+                      <button
+                        aria-describedby={`history-delete-confirmation-${record.id}`}
+                        disabled={history.busy !== null}
+                        onClick={() => {
+                          deleteTriggers.current.get(record.id)?.focus();
+                          setPendingDeleteId(null);
+                        }}
+                        type="button"
+                      >
+                        キャンセル
+                      </button>
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="history-clear-controls">
+          <button
+            aria-controls="history-clear-confirmation"
+            aria-expanded={confirmingClear}
+            className="history-danger-button"
+            disabled={history.records.length === 0 || history.busy !== null}
+            onClick={() => {
+              setPendingDeleteId(null);
+              setConfirmingClear(true);
+            }}
+            ref={clearTrigger}
+            type="button"
+          >
+            解析履歴をすべて削除
+          </button>
+          {confirmingClear && (
+            <div
+              className="history-clear-confirmation"
+              id="history-clear-confirmation"
+            >
+              <strong id="history-clear-confirmation-message">
+                旧判定版を含む全{history.records.length}件を削除しますか？
+              </strong>
+              <span>この操作は取り消せません。共有情報は削除されません。</span>
+              <div>
+                <button
+                  aria-describedby="history-clear-confirmation-message"
+                  className="history-danger-button"
+                  disabled={history.busy !== null}
+                  onClick={() => void confirmClear()}
+                  ref={clearConfirmation}
+                  type="button"
+                >
+                  すべて削除する
+                </button>
+                <button
+                  aria-describedby="history-clear-confirmation-message"
+                  disabled={history.busy !== null}
+                  onClick={() => {
+                    clearTrigger.current?.focus();
+                    setConfirmingClear(false);
+                  }}
+                  type="button"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function HistoryRecordDescription({
+  record,
+}: {
+  record: AnalysisHistoryRecord;
+}) {
+  return (
+    <span className="history-record-description">
+      <strong>{historyRecordLabel(record)}</strong>
+      <span>
+        {formatHistoryDate(record.createdAt)}・判定版 {record.rulesetVersion}・
+        {record.rounds}R
+      </span>
+    </span>
+  );
+}
+
+function historyRecordLabel(record: AnalysisHistoryRecord): string {
+  return `${formatCharacterId(record.ownCharacter)} vs ${formatCharacterId(
+    record.opponentCharacter,
+  )}`;
+}
+
+function historyRecordAccessibleLabel(
+  record: AnalysisHistoryRecord,
+  index: number,
+): string {
+  return `${historyRecordLabel(record)}、${formatHistoryDate(
+    record.createdAt,
+  )}、判定版 ${record.rulesetVersion}、${record.rounds}ラウンド、一覧${
+    index + 1
+  }件目`;
+}
+
+function formatHistoryDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "保存日時不明";
+  return new Intl.DateTimeFormat("ja-JP", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function MatchupHistorySummary({
   history,
 }: {
   history: ReturnType<typeof useMatchupHistory>;
@@ -36,11 +289,11 @@ function MatchupHistoryContent({
   if (history.phase === "loading") {
     return <p className="muted-note">履歴を集計中...</p>;
   }
-  if (history.phase === "error") {
-    return <p className="muted-note">対戦履歴を読み込めませんでした。</p>;
-  }
+  if (history.phase === "error") return null;
   if (history.summaries.length === 0) {
-    return <p className="muted-note">対戦履歴はまだありません。</p>;
+    return (
+      <p className="muted-note">現在の判定版の対戦履歴はまだありません。</p>
+    );
   }
   return (
     <div className="table-scroll">

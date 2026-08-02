@@ -188,12 +188,16 @@ quota event と結果本体の insert を同じ transaction で行う。
 | 元動画 | 利用者の File と browser memory | tab を閉じるまで |
 | decoded frame / RGBA | main thread、Worker、WASM memory | 解析中 |
 | 詳細レポート、特徴量、タイムライン | browser memory | tab を閉じるまで |
-| 対戦集計履歴 | IndexedDB `fighter-notes/analysis-history` | 最大 200 件 |
+| 対戦集計履歴 | IndexedDB `fighter-notes/analysis-history` | 最大 200 件、または利用者が個別・全件削除するまで |
+| 対戦履歴の保存設定 | localStorage | 利用者が変更するか site data を削除するまで |
 | 共有 ID と削除コード | localStorage | 共有期限まで、または削除まで |
 | 公開用集計 | PostgreSQL | 既定 30 日、または手動削除まで |
 
 動画、場面画像、証拠フレーム、ファイル名、詳細レポートは PostgreSQL へ保存しない。
 共有境界の詳細は [sharing.md](./sharing.md) を参照する。
+
+解析履歴の IndexedDB と、共有管理情報の localStorage は独立した lifecycle を持つ。
+結果画面から解析履歴を削除しても、共有 URL と削除コードは保持する。
 
 ## Build と配信
 

@@ -82,6 +82,8 @@ database `fighter-notes` の `analysis-history` store に最大200件の対戦�
 
 動画ファイル名、動画本体、詳細レポートは保存しない。旧形式の record ID に残っている
 動画ファイル名は、database version 2 への更新時に不透明な ID へ置き換える。
+結果画面では今後の自動保存を停止・再開でき、旧 ruleset を含む保存件数の確認、個別削除、
+全件削除ができる。解析履歴の削除は次項の共有管理情報を削除しない。
 
 ### localStorage
 
@@ -93,6 +95,11 @@ key prefix `fighter-notes:managed-share:v1:` に次だけを保存する。
 - `自キャラ vs 相手キャラ` の label
 
 期限切れ、不正形式、破損 record は一覧読込時に削除する。共有を削除した場合も該当 record を消す。
+
+対戦履歴の保存 ON/OFF は独立した key
+`fighter-notes:analysis-history:saving-enabled:v1` に保存する。初期値は ON とし、storage を
+利用できない場合または値が壊れている場合は OFF として扱う。共有管理情報と保存設定の key を
+分けることで、解析履歴だけの削除が共有 URL・削除コードへ波及しないようにする。
 
 ## Server storage
 

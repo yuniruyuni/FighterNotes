@@ -188,7 +188,7 @@ describe("React frontend routes", () => {
     expect(
       screen.getByText(/原則として作成から30日間保存し/),
     ).toBeInTheDocument();
-    expect(screen.getByText(/文書バージョン: 1.0/)).toBeInTheDocument();
+    expect(screen.getByText(/文書バージョン: 1.1/)).toBeInTheDocument();
     expect(
       screen.getByText(/解析だけを行う場合、解析結果はサーバーへ送信されず/),
     ).toBeInTheDocument();
@@ -197,6 +197,14 @@ describe("React frontend routes", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(/動画本体や動画ファイル名は履歴に保存されません/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/解析履歴の保存は初期状態で有効です/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /解析履歴を削除しても、公開URLや削除コードは削除されません/,
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -225,8 +233,8 @@ describe("React frontend routes", () => {
       /PostgreSQL|IndexedDB|localStorage|Argon2id|cf-connecting-ip/,
     );
     expect(screen.getByText("制定日: 2026年7月25日")).toBeInTheDocument();
-    expect(screen.getByText(/最終更新:/)).toHaveTextContent("2026年7月25日");
-    expect(document.body).not.toHaveTextContent("最終改定日");
+    expect(screen.getByText("改定日: 2026年8月3日")).toBeInTheDocument();
+    expect(screen.getByText(/最終更新:/)).toHaveTextContent("2026年8月3日");
     expect(document.body).not.toHaveTextContent(
       "削除コードそのものは、サーバーに保存しません",
     );
