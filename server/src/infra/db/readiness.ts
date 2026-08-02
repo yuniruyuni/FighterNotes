@@ -178,13 +178,16 @@ export async function inspectDatabaseReadiness(
         ON attribute.attrelid = default_value.adrelid
         AND attribute.attnum = default_value.adnum
       WHERE namespace.nspname = 'public'
+    ), allowed_ruleset_constraints(definition) AS (
+      VALUES
+        ('CHECK (ruleset_version = ANY (ARRAY[3, 4, 5, 6, 7, 8]))'),
+        ('CHECK (ruleset_version = ANY (ARRAY[3, 4, 5, 6, 7, 8, 9]))')
     ), required_constraints(
       table_name, constraint_name, constraint_type, definition
     ) AS (
       VALUES
         ('published_analyses', 'published_analyses_pkey', 'p', 'PRIMARY KEY (id)'),
         ('published_analyses', 'published_analyses_schema_version_check', 'c', ${expectedSchemaConstraint}),
-        ('published_analyses', 'published_analyses_ruleset_version_check', 'c', 'CHECK (ruleset_version = ANY (ARRAY[3, 4, 5, 6, 7, 8]))'),
         ('published_analyses', 'published_analyses_presentation_revision_check', 'c', 'CHECK (presentation_revision = 1)'),
         ('published_analyses', 'published_analyses_logical_size_bytes_check', 'c', 'CHECK (logical_size_bytes >= 1 AND logical_size_bytes <= 8192)'),
         ('published_analyses', 'published_analyses_check1', 'c', 'CHECK (expires_at > created_at)'),
@@ -271,6 +274,14 @@ export async function inspectDatabaseReadiness(
         SELECT * FROM required_constraints
         EXCEPT
         SELECT * FROM present_constraints
+      )
+      AND EXISTS (
+        SELECT 1
+        FROM present_constraints
+        INNER JOIN allowed_ruleset_constraints USING (definition)
+        WHERE table_name = 'published_analyses'
+          AND constraint_name = 'published_analyses_ruleset_version_check'
+          AND constraint_type = 'c'
       )
       AND NOT EXISTS (
         SELECT * FROM required_indexes
