@@ -24,7 +24,7 @@ export async function decodeSpatialWindows(options: {
   readonly resetWindow: () => Promise<void>;
   readonly sendFrame: (
     frameIndex: number,
-    rgbaBuf: ArrayBuffer,
+    createRgbaBuffer: () => ArrayBuffer,
     hints: SpatialFrameHints,
     signal: AbortSignal,
   ) => Promise<void>;
@@ -70,32 +70,27 @@ export async function decodeSpatialWindows(options: {
         outstandingHighWatermark: SPATIAL_DECODER_OUTSTANDING_WATERMARKS.high,
         outstandingLowWatermark: SPATIAL_DECODER_OUTSTANDING_WATERMARKS.low,
       },
+      shouldProcessFrame: (frame) => targets.has(frame.timestamp),
       async onFrame(frame, processingSignal) {
-        try {
-          throwIfAborted(processingSignal);
-          const frameIndex = targets.get(frame.timestamp);
-          if (frameIndex === undefined) return;
-          context.drawImage(frame, 0, 0, SPATIAL_WIDTH, SPATIAL_HEIGHT);
-          const rgbaBuf = context.getImageData(
-            0,
-            0,
-            SPATIAL_WIDTH,
-            SPATIAL_HEIGHT,
-          ).data.buffer;
-          await options.sendFrame(
-            frameIndex,
-            rgbaBuf,
-            spatialHintsAt(window, frameIndex),
-            processingSignal,
-          );
-          processedFrames += 1;
-          options.onProgress(
-            0.9 + (0.09 * processedFrames) / Math.max(1, totalFrames),
-            `位置関係 ${processedFrames} / ${totalFrames}`,
-          );
-        } finally {
-          frame.close();
-        }
+        throwIfAborted(processingSignal);
+        const frameIndex = targets.get(frame.timestamp);
+        if (frameIndex === undefined) return;
+        await options.sendFrame(
+          frameIndex,
+          () => {
+            throwIfAborted(processingSignal);
+            context.drawImage(frame, 0, 0, SPATIAL_WIDTH, SPATIAL_HEIGHT);
+            return context.getImageData(0, 0, SPATIAL_WIDTH, SPATIAL_HEIGHT)
+              .data.buffer;
+          },
+          spatialHintsAt(window, frameIndex),
+          processingSignal,
+        );
+        processedFrames += 1;
+        options.onProgress(
+          0.9 + (0.09 * processedFrames) / Math.max(1, totalFrames),
+          `位置関係 ${processedFrames} / ${totalFrames}`,
+        );
       },
     });
     peakDecoderQueueSize = Math.max(

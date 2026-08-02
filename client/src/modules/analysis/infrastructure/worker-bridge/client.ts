@@ -128,13 +128,16 @@ export class AnalyzerWorkerSession {
 
   async sendSpatialFrame(
     frameIndex: number,
-    rgbaBuf: ArrayBuffer,
+    createRgbaBuffer: () => ArrayBuffer,
     hints: SpatialFrameHints,
     signal?: AbortSignal,
   ): Promise<void> {
     this.#throwIfTerminated();
     await this.#spatialGate.acquire(signal);
     try {
+      this.#throwIfTerminated();
+      throwIfAborted(signal);
+      const rgbaBuf = createRgbaBuffer();
       this.#throwIfTerminated();
       throwIfAborted(signal);
       postAnalyzerWorkerMessage(

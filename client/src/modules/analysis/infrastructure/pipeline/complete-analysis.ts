@@ -21,7 +21,7 @@ export interface AnalysisCompletionSession {
   resetSpatialWindow(): Promise<void>;
   sendSpatialFrame(
     frameIndex: number,
-    rgbaBuf: ArrayBuffer,
+    createRgbaBuffer: () => ArrayBuffer,
     hints: SpatialFrameHints,
     signal?: AbortSignal,
   ): Promise<void>;
@@ -74,8 +74,13 @@ export async function completeAnalysis(
       videoArrayBuffer,
       codecConfig,
       resetWindow: () => waitForAbort(session.resetSpatialWindow(), signal),
-      sendFrame: (frameIndex, rgbaBuf, hints, processingSignal) =>
-        session.sendSpatialFrame(frameIndex, rgbaBuf, hints, processingSignal),
+      sendFrame: (frameIndex, createRgbaBuffer, hints, processingSignal) =>
+        session.sendSpatialFrame(
+          frameIndex,
+          createRgbaBuffer,
+          hints,
+          processingSignal,
+        ),
       drain: () => waitForAbort(session.drainSpatialFrames(), signal),
       onProgress,
       signal,

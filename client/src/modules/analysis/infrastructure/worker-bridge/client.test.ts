@@ -13,6 +13,8 @@ const analysisContext: AnalysisContext = {
   p2: {},
 };
 
+const rgbaBuffer = () => new ArrayBuffer(1);
+
 class FakeWorker {
   onerror: ((event: ErrorEvent) => unknown) | null = null;
   onmessage: ((event: MessageEvent<AnalyzerWorkerResponse>) => unknown) | null =
@@ -56,7 +58,7 @@ describe("AnalyzerWorkerSession", () => {
     const frameDrain = workerSession.drainFrames();
     const firstPass = workerSession.firstPass();
     const spatialReset = workerSession.resetSpatialWindow();
-    const spatialSend = workerSession.sendSpatialFrame(0, new ArrayBuffer(1), {
+    const spatialSend = workerSession.sendSpatialFrame(0, rgbaBuffer, {
       p1Teleport: false,
       p2Teleport: false,
       p1Airborne: false,
@@ -119,7 +121,7 @@ describe("AnalyzerWorkerSession", () => {
     const frameDrain = workerSession.drainFrames();
     const firstPass = workerSession.firstPass();
     const spatialReset = workerSession.resetSpatialWindow();
-    const spatialSend = workerSession.sendSpatialFrame(0, new ArrayBuffer(1), {
+    const spatialSend = workerSession.sendSpatialFrame(0, rgbaBuffer, {
       p1Teleport: false,
       p2Teleport: false,
       p1Airborne: false,
@@ -152,7 +154,7 @@ describe("AnalyzerWorkerSession", () => {
     });
     const frameCount = 1_001;
     const sends = Array.from({ length: frameCount }, (_, frameIndex) =>
-      workerSession.sendSpatialFrame(frameIndex, new ArrayBuffer(1), {
+      workerSession.sendSpatialFrame(frameIndex, rgbaBuffer, {
         p1Teleport: false,
         p2Teleport: false,
         p1Airborne: false,
@@ -193,6 +195,55 @@ describe("AnalyzerWorkerSession", () => {
     });
   });
 
+  test("does not allocate another RGBA buffer until pending work reaches the low watermark", async () => {
+    const worker = new FakeWorker();
+    const workerSession = new AnalyzerWorkerSession(worker.asWorker(), {
+      onFrameResult: () => {},
+      onError: () => {},
+    });
+    let bufferBuilds = 0;
+    const buildBuffer = () => {
+      bufferBuilds += 1;
+      return new ArrayBuffer(1);
+    };
+    const high = SPATIAL_WORKER_PENDING_WATERMARKS.high;
+    const low = SPATIAL_WORKER_PENDING_WATERMARKS.low;
+    const initial = Array.from({ length: high }, (_, frameIndex) =>
+      workerSession.sendSpatialFrame(frameIndex, buildBuffer, {
+        p1Teleport: false,
+        p2Teleport: false,
+        p1Airborne: false,
+        p2Airborne: false,
+      }),
+    );
+    await Promise.all(initial);
+    const queued = workerSession.sendSpatialFrame(high, buildBuffer, {
+      p1Teleport: false,
+      p2Teleport: false,
+      p1Airborne: false,
+      p2Airborne: false,
+    });
+    const drained = workerSession.drainSpatialFrames();
+
+    expect(bufferBuilds).toBe(high);
+    expect(spatialMessages(worker)).toHaveLength(high);
+    for (let pending = high - 1; pending > low; pending -= 1) {
+      worker.receive({ type: "spatialFrameResult" });
+      await Promise.resolve();
+      expect(bufferBuilds).toBe(high);
+    }
+
+    worker.receive({ type: "spatialFrameResult" });
+    await waitUntil(() => spatialMessages(worker).length === high + 1);
+    expect(bufferBuilds).toBe(high + 1);
+
+    for (let pending = low + 1; pending > 0; pending -= 1) {
+      worker.receive({ type: "spatialFrameResult" });
+    }
+    await queued;
+    await drained;
+  });
+
   test("an aborted spatial admission is removed without posting its buffer", async () => {
     const worker = new FakeWorker();
     const workerSession = new AnalyzerWorkerSession(worker.asWorker(), {
@@ -202,7 +253,7 @@ describe("AnalyzerWorkerSession", () => {
     const initial = Array.from(
       { length: SPATIAL_WORKER_PENDING_WATERMARKS.high },
       (_, frameIndex) =>
-        workerSession.sendSpatialFrame(frameIndex, new ArrayBuffer(1), {
+        workerSession.sendSpatialFrame(frameIndex, rgbaBuffer, {
           p1Teleport: false,
           p2Teleport: false,
           p1Airborne: false,
@@ -212,9 +263,13 @@ describe("AnalyzerWorkerSession", () => {
     await Promise.all(initial);
     const controller = new AbortController();
     const reason = new Error("cancel queued spatial send");
+    let queuedBufferBuilt = false;
     const queued = workerSession.sendSpatialFrame(
       initial.length,
-      new ArrayBuffer(1),
+      () => {
+        queuedBufferBuilt = true;
+        return new ArrayBuffer(1);
+      },
       {
         p1Teleport: false,
         p2Teleport: false,
@@ -227,8 +282,44 @@ describe("AnalyzerWorkerSession", () => {
     controller.abort(reason);
 
     await expect(queued).rejects.toBe(reason);
+    expect(queuedBufferBuilt).toBeFalse();
     expect(spatialMessages(worker)).toHaveLength(initial.length);
     workerSession.terminate(reason);
+  });
+
+  test("releases a reserved admission when RGBA creation fails", async () => {
+    const worker = new FakeWorker();
+    const workerSession = new AnalyzerWorkerSession(worker.asWorker(), {
+      onFrameResult: () => {},
+      onError: () => {},
+    });
+    const reason = new Error("getImageData failed");
+
+    await expect(
+      workerSession.sendSpatialFrame(
+        0,
+        () => {
+          throw reason;
+        },
+        {
+          p1Teleport: false,
+          p2Teleport: false,
+          p1Airborne: false,
+          p2Airborne: false,
+        },
+      ),
+    ).rejects.toBe(reason);
+    await expect(workerSession.drainSpatialFrames()).resolves.toBeUndefined();
+    expect(spatialMessages(worker)).toHaveLength(0);
+
+    await workerSession.sendSpatialFrame(1, rgbaBuffer, {
+      p1Teleport: false,
+      p2Teleport: false,
+      p1Airborne: false,
+      p2Airborne: false,
+    });
+    worker.receive({ type: "spatialFrameResult" });
+    await expect(workerSession.drainSpatialFrames()).resolves.toBeUndefined();
   });
 
   test("Worker errors reject queued spatial admission and drain waiters", async () => {
@@ -241,7 +332,7 @@ describe("AnalyzerWorkerSession", () => {
     const initial = Array.from(
       { length: SPATIAL_WORKER_PENDING_WATERMARKS.high },
       (_, frameIndex) =>
-        workerSession.sendSpatialFrame(frameIndex, new ArrayBuffer(1), {
+        workerSession.sendSpatialFrame(frameIndex, rgbaBuffer, {
           p1Teleport: false,
           p2Teleport: false,
           p1Airborne: false,
@@ -249,16 +340,12 @@ describe("AnalyzerWorkerSession", () => {
         }),
     );
     await Promise.all(initial);
-    const queued = workerSession.sendSpatialFrame(
-      initial.length,
-      new ArrayBuffer(1),
-      {
-        p1Teleport: false,
-        p2Teleport: false,
-        p1Airborne: false,
-        p2Airborne: false,
-      },
-    );
+    const queued = workerSession.sendSpatialFrame(initial.length, rgbaBuffer, {
+      p1Teleport: false,
+      p2Teleport: false,
+      p1Airborne: false,
+      p2Airborne: false,
+    });
     const drain = workerSession.drainSpatialFrames();
 
     worker.receive({ type: "error", message: "spatial worker failed" });
