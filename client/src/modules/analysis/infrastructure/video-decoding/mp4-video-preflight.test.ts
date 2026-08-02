@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ISOFile, Movie, MP4BoxBuffer, Sample } from "mp4box";
+import { validateInspectedVideo } from "../../domain/video-preflight.js";
 import {
   inspectMovie,
   inspectMp4VideoFile,
@@ -193,6 +194,29 @@ describe("MP4 video metadata parser", () => {
           0,
         ).container,
       ).toBe("other");
+    }
+  });
+
+  test("CMAF/DASH major brandをfragmented MP4の理由で拒否する", () => {
+    const source = new File(["video"], "replay.mp4", { type: "video/mp4" });
+    for (const majorBrand of ["cmfc", "cmfs", "cmfl", "cmff", "dash"]) {
+      const inspected = inspectMovie(
+        isoFile([0, 1001, 2002, 3003]),
+        {
+          ...movie(),
+          brands: [majorBrand],
+          isFragmented: true,
+        } as Movie,
+        4096,
+      );
+      expect(inspected).toMatchObject({
+        container: "mp4",
+        fragmented: true,
+      });
+      expect(validateInspectedVideo(source, inspected)).toMatchObject({
+        status: "invalid",
+        code: "fragmented_mp4",
+      });
     }
   });
 

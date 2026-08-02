@@ -37,6 +37,11 @@ const MP4_MAJOR_BRANDS = new Set([
   "avc1",
   "m4v",
   "msnv",
+  "cmfc",
+  "cmfs",
+  "cmfl",
+  "cmff",
+  "dash",
 ]);
 
 export class Mp4InspectionError extends Error {
