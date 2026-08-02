@@ -1,6 +1,6 @@
 # 動画解析パイプライン
 
-最終確認: 2026-07-30
+最終確認: 2026-08-03
 
 ## 解析の位置づけ
 
@@ -23,9 +23,16 @@
 - crop、拡大、黒帯、字幕、配信 overlay などを加えない
 - 主な検証環境は Steam 版 Windows を OBS で録画した動画
 
-decoded frame は 1920x1080 の解析座標へ描画するが、イベントの時間定数と
-ゲームフレーム換算は 60fps を前提にする。可変 frame rate や frame drop のある動画では、
-プレイヤーの seek 時刻は実 timestamp を使えても、判定精度は保証しない。
+ファイル選択時に MP4 metadata を段階的に読み、表示・coded 寸法がともに 1920x1080、
+59〜61fps、固定 frame rate、回転なしであることを解析開始前に検証する。固定 frame rate は
+presentation timestamp の差分で判定し、timebase の整数丸めによる1 tick差だけを許容する。
+fragmented MP4 は `moov` だけで全区間の固定 frame rate を証明できないため、現在は受け付けない。
+track matrix は標準的な 0/90/180/270 度だけを解釈し、回転、反転、scale、skew がある入力は拒否する。
+
+metadata 条件の通過後に、動画固有 codec の `VideoDecoder.isConfigSupported` と、実際の
+`VideoFrame` から `createImageBitmap` できることを確認する。Worker、OffscreenCanvas 2D、
+WebCodecs などの実行環境条件も揃うまで解析 Worker と WASM は起動しない。失敗時は container、
+寸法、frame rate、VFR、回転、codec、browser 機能を区別して録画または実行環境の直し方を表示する。
 
 自分の side、自キャラクター、相手キャラクターは解析前に利用者が指定する。
 現在の client は HUD OCR によるキャラクター自動判定を行わない。
@@ -46,8 +53,11 @@ decoded frame は 1920x1080 の解析座標へ描画するが、イベントの�
 
 ### Demux と decode
 
-`client/src/modules/analysis/infrastructure/video-decoding/mp4-video-source.ts` が元ファイルを
-ArrayBuffer として読み、MP4Box で video sample を取り出す。解析全体の調停は
+事前検証は MP4Box の progressive parser が要求する file offset だけを 1MiB 単位で読み、
+大きな `mdat` を保持せず `moov` と sample table を確認する。検証済み track metadata と
+`File` identity は解析開始時へ引き渡し、同じファイルであることを再確認してから再利用する。
+その後 `client/src/modules/analysis/infrastructure/video-decoding/mp4-video-source.ts` が元ファイルを
+ArrayBuffer として一度読み、MP4Box で video sample を取り出す。解析全体の調停は
 `client/src/modules/analysis/infrastructure/pipeline/webcodecs-analysis-pipeline.ts` が担当する。
 WebCodecs の `VideoDecoder` は encoded sample を順に decode し、各 `VideoFrame` から HUD、入力、
 フレームメーターの strip を切り出す。

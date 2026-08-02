@@ -675,12 +675,28 @@ async function analyzeCase(
       ),
     );
     await poll(
-      async () =>
-        cdp.evaluate<boolean>(
-          "document.querySelector('.analyze-btn')?.disabled === false",
-        ),
-      10_000,
-      `${fixture.id}: analyze button did not become enabled`,
+      async () => {
+        const status = await cdp.evaluate<{
+          preflight?: string;
+          message?: string;
+          enabled: boolean;
+        }>(`(() => {
+          const preflight = document.querySelector('[data-video-preflight-status]');
+          return {
+            preflight: preflight?.getAttribute('data-video-preflight-status') || undefined,
+            message: preflight?.textContent || undefined,
+            enabled: document.querySelector('.analyze-btn')?.disabled === false,
+          };
+        })()`);
+        if (status.preflight === "invalid") {
+          throw new Error(
+            `${fixture.id}: video preflight failed: ${status.message ?? "unknown reason"}`,
+          );
+        }
+        return status.preflight === "valid" && status.enabled;
+      },
+      30_000,
+      `${fixture.id}: validated video did not become analyzable`,
     );
     const started = await cdp.evaluate<boolean>(`
       (() => {

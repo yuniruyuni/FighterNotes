@@ -59,3 +59,13 @@ export {
   type RustTimelineEntry,
   type RustTimelineSegment,
 } from "./domain/timeline.js";
+export type {
+  InspectedVideo,
+  InspectedVideoTrack,
+  ValidatedVideoInput,
+  VideoPreflightFailure,
+  VideoPreflightFailureCode,
+  VideoPreflightResult,
+  VideoPreflightState,
+  VideoRotation,
+} from "./domain/video-preflight.js";

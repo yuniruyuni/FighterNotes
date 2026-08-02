@@ -2,6 +2,44 @@ import { describe, expect, test } from "bun:test";
 import { AnalysisSession } from "./analysis-session.js";
 import type { AdviceReport } from "./report.js";
 import type { AnalysisResult } from "./result.js";
+import type { ValidatedVideoInput } from "./video-preflight.js";
+
+function validatedVideo(file: File): ValidatedVideoInput {
+  return {
+    file,
+    identity: {
+      name: file.name,
+      size: file.size,
+      lastModified: file.lastModified,
+      type: file.type,
+    },
+    metadataBytesRead: 1024,
+    track: {
+      trackId: 1,
+      codec: "avc1.640028",
+      codedWidth: 1920,
+      codedHeight: 1080,
+      displayWidth: 1920,
+      displayHeight: 1080,
+      rotation: 0,
+      framesPerSecond: 60,
+      constantFrameRate: true,
+      totalSamples: 600,
+      timescale: 60_000,
+      duration: 600_000,
+      decoderConfig: {
+        codec: "avc1.640028",
+        codedWidth: 1920,
+        codedHeight: 1080,
+      },
+      codecConfig: {
+        codec: "avc1.640028",
+        width: 1920,
+        height: 1080,
+      },
+    },
+  };
+}
 
 describe("analysis session reducer", () => {
   test("初期状態を毎回独立して生成する", () => {
@@ -10,6 +48,7 @@ describe("analysis session reducer", () => {
 
     expect(first).toEqual({
       file: null,
+      videoPreflight: { status: "idle" },
       side: "",
       ownCharacter: "",
       opponentCharacter: "",
@@ -25,9 +64,14 @@ describe("analysis session reducer", () => {
   });
 
   test("ファイルと両キャラクターが揃い、解析中でなければ開始できる", () => {
+    const file = new File(["video"], "replay.mp4");
     const ready = {
       ...AnalysisSession.initial(),
-      file: new File(["video"], "replay.mp4"),
+      file,
+      videoPreflight: {
+        status: "valid" as const,
+        video: validatedVideo(file),
+      },
       side: "p1" as const,
       ownCharacter: "JURI",
       opponentCharacter: "KEN",
@@ -35,6 +79,12 @@ describe("analysis session reducer", () => {
 
     expect(AnalysisSession.canStart(ready)).toBe(true);
     expect(AnalysisSession.canStart({ ...ready, file: null })).toBe(false);
+    expect(
+      AnalysisSession.canStart({
+        ...ready,
+        videoPreflight: { status: "checking" },
+      }),
+    ).toBe(false);
     expect(AnalysisSession.canStart({ ...ready, side: "" })).toBe(false);
     expect(AnalysisSession.canStart({ ...ready, ownCharacter: "" })).toBe(
       false,
@@ -57,6 +107,7 @@ describe("analysis session reducer", () => {
     const withFile = AnalysisSession.reduce(initial, { type: "file", file });
     expect(withFile.error).toBe("");
     expect(withFile.side).toBe("");
+    expect(withFile.videoPreflight).toEqual({ status: "checking" });
     const withSide = AnalysisSession.reduce(withFile, {
       type: "side",
       side: "p2",
@@ -78,6 +129,49 @@ describe("analysis session reducer", () => {
       opponentCharacter: "KEN",
       error: "",
     });
+  });
+
+  test("選択中の動画だけにpreflight結果を適用する", () => {
+    const file = new File(["video"], "replay.mp4");
+    const selected = AnalysisSession.reduce(AnalysisSession.initial(), {
+      type: "file",
+      file,
+    });
+    const valid = AnalysisSession.reduce(selected, {
+      type: "videoPreflightValid",
+      video: validatedVideo(file),
+    });
+    expect(valid.videoPreflight.status).toBe("valid");
+
+    const other = new File(["other"], "other.mp4");
+    expect(
+      AnalysisSession.reduce(selected, {
+        type: "videoPreflightValid",
+        video: validatedVideo(other),
+      }),
+    ).toBe(selected);
+
+    const failure = {
+      status: "invalid" as const,
+      code: "variable_frame_rate" as const,
+      message: "VFRです",
+    };
+    expect(
+      AnalysisSession.reduce(selected, {
+        type: "videoPreflightInvalid",
+        failure,
+      }).videoPreflight,
+    ).toBe(failure);
+    expect(
+      AnalysisSession.reduce(AnalysisSession.initial(), {
+        type: "videoPreflightInvalid",
+        failure,
+      }),
+    ).toEqual(AnalysisSession.initial());
+    expect(
+      AnalysisSession.reduce(selected, { type: "file", file: null })
+        .videoPreflight,
+    ).toEqual({ status: "idle" });
   });
 
   test("開始・完了・失敗で解析状態を遷移する", () => {
@@ -173,6 +267,10 @@ describe("analysis session reducer", () => {
     const configured = {
       ...AnalysisSession.initial(),
       file,
+      videoPreflight: {
+        status: "valid" as const,
+        video: validatedVideo(file),
+      },
       side: "p2" as const,
       ownCharacter: "JURI",
       opponentCharacter: "KEN",
@@ -183,6 +281,7 @@ describe("analysis session reducer", () => {
     expect(AnalysisSession.reduce(configured, { type: "reset" })).toEqual({
       ...AnalysisSession.initial(),
       file,
+      videoPreflight: configured.videoPreflight,
       side: "",
       ownCharacter: "JURI",
       opponentCharacter: "KEN",

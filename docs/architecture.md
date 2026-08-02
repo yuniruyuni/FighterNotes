@@ -120,9 +120,16 @@ WebCodecs の `VideoDecoder` へ encoded sample を供給する。各 decoded fr
 ImageData が無制限に滞留しないよう backpressure を掛ける。
 
 動画解析は Secure Context と WebCodecs `VideoDecoder` を必須とする。HTTPS ではない
-LAN 内 IP や `VideoDecoder` 非対応ブラウザからの実行は開始前に拒否する。demux 後には
-`VideoDecoder.isConfigSupported` で動画固有の codec 設定も検証し、非対応動画を decode
-開始前に明示的なエラーとして扱う。
+LAN 内 IP、Worker、OffscreenCanvas 2D、`VideoFrame` の bitmap 切り出し、`VideoDecoder` の
+いずれかを使えないブラウザからの実行は開始前に拒否する。
+
+ファイル選択時は `video-decoding/mp4-video-preflight.ts` が MP4Box の要求 offset に沿って
+metadata 範囲だけを段階的に読み、`mdat` 全体を読み込まず container、track 寸法、track matrix、
+sample の presentation timestamp を検査する。1920x1080、59〜61fps CFR、回転・変形なしの
+非 fragmented MP4 だけを受け付け、続けて動画固有 codec と実際の `VideoFrame` bitmap 切り出しを
+probe する。選び直しは前の検証を abort し、遅れて完了した結果を現在の選択へ適用しない。
+検証済み metadata は exact `File` identity と一緒に pipeline へ渡し、通常 demux で再利用する。
+検証に通るまでは解析 Worker を作成せず、したがって WASM も初期化しない。
 
 ### Rust/WASM 境界
 

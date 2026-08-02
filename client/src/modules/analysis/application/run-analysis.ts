@@ -2,10 +2,12 @@ import type { CompletedAnalysis } from "../domain/analysis-session.js";
 import type { AnalysisSide } from "../domain/context.js";
 import { createAnalysisContext } from "../domain/context.js";
 import type { AnalysisProgress } from "../domain/result.js";
+import type { ValidatedVideoInput } from "../domain/video-preflight.js";
 import type { AnalysisServices } from "./ports.js";
 
 export interface AnalysisRequest {
   file: File;
+  validatedVideo: ValidatedVideoInput;
   side: AnalysisSide;
   ownCharacter: string;
   opponentCharacter: string;
@@ -24,6 +26,7 @@ export async function runAnalysis(
   );
   const rawResult = await services.engine.analyze(
     request.file,
+    request.validatedVideo,
     request.side,
     onProgress,
     context,

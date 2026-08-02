@@ -22,6 +22,7 @@ import {
 } from "../domain/analysis-session.js";
 import type { AnalysisSide } from "../domain/context.js";
 import type { AnalysisRuntimeReadiness } from "../domain/runtime.js";
+import { videoPreflightFailure } from "../domain/video-preflight.js";
 import {
   AnalysisProgressReporter,
   analysisProgressStage,
@@ -45,6 +46,12 @@ interface ActiveAnalysisRun {
   readonly progress: AnalysisProgressReporter;
 }
 
+interface ActivePreflightRun {
+  readonly id: number;
+  readonly file: File;
+  readonly controller: AbortController;
+}
+
 const AnalysisSessionContext = createContext<AnalysisSessionValue | null>(null);
 
 export function AnalysisSessionProvider({
@@ -61,7 +68,9 @@ export function AnalysisSessionProvider({
     AnalysisSession.initial,
   );
   const activeRun = useRef<ActiveAnalysisRun | null>(null);
+  const activePreflight = useRef<ActivePreflightRun | null>(null);
   const nextRunId = useRef(1);
+  const nextPreflightId = useRef(1);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -78,12 +87,75 @@ export function AnalysisSessionProvider({
       const run = activeRun.current;
       run?.progress.dispose();
       run?.controller.abort(new AnalysisCanceledError());
+      activePreflight.current?.controller.abort(
+        new Error("動画の事前確認を中止しました"),
+      );
     };
   }, []);
 
   const setFile = useCallback(
-    (file: File | null) => dispatch({ type: "file", file }),
-    [],
+    (file: File | null) => {
+      activePreflight.current?.controller.abort(
+        new Error("別の動画が選択されました"),
+      );
+      activePreflight.current = null;
+      dispatch({ type: "file", file });
+      if (!file) return;
+      if (!runtime.available) {
+        dispatch({
+          type: "videoPreflightInvalid",
+          failure: videoPreflightFailure("frame_extraction", runtime.reason),
+        });
+        return;
+      }
+
+      const preflight: ActivePreflightRun = {
+        id: nextPreflightId.current++,
+        file,
+        controller: new AbortController(),
+      };
+      activePreflight.current = preflight;
+      void services.engine
+        .preflight(file, preflight.controller.signal)
+        .then((result) => {
+          if (
+            !mounted.current ||
+            preflight.controller.signal.aborted ||
+            activePreflight.current?.id !== preflight.id ||
+            activePreflight.current.file !== file
+          ) {
+            return;
+          }
+          if (result.status === "valid") {
+            dispatch({ type: "videoPreflightValid", video: result.video });
+          } else {
+            dispatch({ type: "videoPreflightInvalid", failure: result });
+          }
+        })
+        .catch((error: unknown) => {
+          if (
+            !mounted.current ||
+            preflight.controller.signal.aborted ||
+            activePreflight.current?.id !== preflight.id
+          ) {
+            return;
+          }
+          const detail = error instanceof Error ? error.message : String(error);
+          dispatch({
+            type: "videoPreflightInvalid",
+            failure: videoPreflightFailure(
+              "invalid_mp4",
+              `動画の事前確認に失敗しました。動画を選択し直してください。（詳細: ${detail}）`,
+            ),
+          });
+        })
+        .finally(() => {
+          if (activePreflight.current?.id === preflight.id) {
+            activePreflight.current = null;
+          }
+        });
+    },
+    [runtime, services],
   );
   const setSide = useCallback(
     (side: AnalysisSide) => dispatch({ type: "side", side }),
@@ -109,12 +181,18 @@ export function AnalysisSessionProvider({
 
   const analyze = useCallback(async (): Promise<CompletedAnalysis | null> => {
     if (activeRun.current) return null;
-    const { file, side, ownCharacter, opponentCharacter } = state;
+    const { file, side, ownCharacter, opponentCharacter, videoPreflight } =
+      state;
     if (!runtime.available) {
       dispatch({ type: "fail", error: runtime.reason });
       return null;
     }
-    if (!AnalysisSession.canStart(state) || !file || !side) {
+    if (
+      !AnalysisSession.canStart(state) ||
+      !file ||
+      !side ||
+      videoPreflight.status !== "valid"
+    ) {
       return null;
     }
 
@@ -133,6 +211,7 @@ export function AnalysisSessionProvider({
       const completed = await runAnalysis(
         {
           file,
+          validatedVideo: videoPreflight.video,
           side,
           ownCharacter,
           opponentCharacter,
@@ -222,6 +301,12 @@ export function AnalysisSessionProvider({
 
 function analysisStatusAnnouncement(state: AnalysisSessionState): string {
   if (state.error) return "";
+  if (state.phase === "setup" && state.videoPreflight.status === "checking") {
+    return "動画の形式と録画仕様を確認中です。";
+  }
+  if (state.phase === "setup" && state.videoPreflight.status === "valid") {
+    return "動画の形式と録画仕様を確認しました。";
+  }
   if (state.phase === "ready") return "動画解析が完了しました。";
   if (state.phase === "canceling") return "動画解析を中止しています。";
   if (state.phase === "canceled") return "動画解析を中止しました。";

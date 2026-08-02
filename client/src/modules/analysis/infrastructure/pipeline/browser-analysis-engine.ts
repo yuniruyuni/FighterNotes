@@ -8,6 +8,12 @@ import {
   type AnalysisRuntimeCapabilities,
   type AnalysisRuntimeReadiness,
 } from "../../domain/runtime.js";
+import {
+  matchesValidatedVideoFile,
+  type ValidatedVideoInput,
+  type VideoPreflightResult,
+} from "../../domain/video-preflight.js";
+import { preflightBrowserVideo } from "../video-decoding/browser-video-preflight.js";
 import { LinkedAbortController } from "./linked-abort-controller.js";
 import {
   AnalysisProgressWatchdog,
@@ -23,8 +29,24 @@ export function analysisRuntimeReadiness(): AnalysisRuntimeReadiness {
   return AnalysisRuntime.evaluate(browserRuntimeCapabilities());
 }
 
+export async function preflightVideo(
+  file: File,
+  signal: AbortSignal,
+): Promise<VideoPreflightResult> {
+  const runtime = AnalysisRuntime.evaluate(browserRuntimeCapabilities());
+  if (!runtime.available) {
+    return {
+      status: "invalid",
+      code: "frame_extraction",
+      message: runtime.reason,
+    };
+  }
+  return preflightBrowserVideo(file, signal);
+}
+
 export async function analyzeVideo(
   file: File,
+  validatedVideo: ValidatedVideoInput,
   ownSide: string,
   onProgress: AnalysisProgress,
   ownCharOrContext: string | AnalysisContextInput = "",
@@ -33,6 +55,11 @@ export async function analyzeVideo(
   const capabilities = browserRuntimeCapabilities();
   const runtime = AnalysisRuntime.evaluate(capabilities);
   if (!runtime.available) throw new Error(runtime.reason);
+  if (!matchesValidatedVideoFile(file, validatedVideo)) {
+    throw new Error(
+      "選択中の動画と事前確認済みの動画が一致しません。動画を選択し直してください。",
+    );
+  }
 
   console.info("[analysis] runtime", {
     origin: capabilities.origin,
@@ -62,6 +89,7 @@ export async function analyzeVideo(
   try {
     return await analyzeWithWebCodecs(
       file,
+      validatedVideo,
       ownSide,
       reportProgress,
       analysisContext,
@@ -78,9 +106,23 @@ function browserRuntimeCapabilities(): AnalysisRuntimeCapabilities {
     // Test DOMs and older engines may omit the flag; VideoDecoder is checked
     // independently below.
     secureContext: globalThis.isSecureContext !== false,
+    hasWorker: typeof Worker === "function",
+    hasOffscreenCanvas2d: supportsOffscreenCanvas2d(),
+    hasVideoFrameBitmap:
+      typeof VideoFrame === "function" &&
+      typeof createImageBitmap === "function",
     hasVideoDecoder:
       typeof VideoDecoder !== "undefined" &&
       typeof VideoDecoder.isConfigSupported === "function",
     origin: globalThis.location?.origin ?? "unknown",
   };
+}
+
+function supportsOffscreenCanvas2d(): boolean {
+  if (typeof OffscreenCanvas !== "function") return false;
+  try {
+    return Boolean(new OffscreenCanvas(1, 1).getContext("2d"));
+  } catch {
+    return false;
+  }
 }

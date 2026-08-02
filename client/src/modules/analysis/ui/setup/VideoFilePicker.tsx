@@ -1,15 +1,18 @@
 import { LockKeyhole } from "lucide-react";
 import { type DragEvent, useRef, useState } from "react";
 import { useObjectUrl } from "../../../../shared/browser/use-object-url.js";
+import type { VideoPreflightState } from "../../domain/video-preflight.js";
 
 interface VideoFilePickerProps {
   file: File | null;
+  preflight: VideoPreflightState;
   disabled: boolean;
   onChange(file: File | null): void;
 }
 
 export function VideoFilePicker({
   file,
+  preflight,
   disabled,
   onChange,
 }: VideoFilePickerProps) {
@@ -48,10 +51,11 @@ export function VideoFilePicker({
         className="video-file-input"
         type="file"
         id="file-input"
-        accept="video/*"
+        accept=".mp4,video/mp4"
         disabled={disabled}
         onChange={(event) => onChange(event.currentTarget.files?.[0] ?? null)}
       />
+      <VideoPreflightStatus preflight={preflight} />
       <p className="privacy-note">
         <LockKeyhole size={16} aria-hidden="true" />
         <span>
@@ -70,5 +74,44 @@ export function VideoFilePicker({
         />
       )}
     </div>
+  );
+}
+
+function VideoPreflightStatus({
+  preflight,
+}: {
+  preflight: VideoPreflightState;
+}) {
+  if (preflight.status === "idle") return null;
+  if (preflight.status === "checking") {
+    return (
+      <p
+        className="video-preflight-status"
+        data-video-preflight-status="checking"
+      >
+        動画の形式・解像度・フレームレートを確認中…
+      </p>
+    );
+  }
+  if (preflight.status === "invalid") {
+    return (
+      <p
+        className="analysis-warning video-preflight-status"
+        role="alert"
+        data-video-preflight-status="invalid"
+      >
+        {preflight.message}
+      </p>
+    );
+  }
+  const { track } = preflight.video;
+  return (
+    <p
+      className="video-preflight-status video-preflight-status--valid"
+      data-video-preflight-status="valid"
+    >
+      確認済み: MP4 / {track.displayWidth}×{track.displayHeight} /{` `}
+      {track.framesPerSecond.toFixed(2)}fps CFR
+    </p>
   );
 }

@@ -69,14 +69,14 @@ describe("React frontend routes", () => {
     expect(screen.getByLabelText(/相手のキャラクター/)).toBeRequired();
   });
 
-  test("動画と両キャラクターを指定すると解析を開始できる", () => {
+  test("非MP4はファイル選択直後に理由を表示して解析を開始しない", async () => {
     renderAt("/");
     const fileInput = document.querySelector<HTMLInputElement>("#file-input");
     expect(fileInput).not.toBeNull();
 
     fireEvent.change(fileInput!, {
       target: {
-        files: [new File(["video"], "replay.mp4", { type: "video/mp4" })],
+        files: [new File(["video"], "replay.webm", { type: "video/webm" })],
       },
     });
     fireEvent.change(document.querySelector("#side-select")!, {
@@ -89,11 +89,12 @@ describe("React frontend routes", () => {
       target: { value: "KEN" },
     });
     expect(document.querySelector(".selected-file-name")).toHaveTextContent(
-      "replay.mp4",
+      "replay.webm",
     );
+    expect(await screen.findByRole("alert")).toHaveTextContent(/MP4形式の動画/);
     expect(
       document.querySelector<HTMLButtonElement>(".analyze-btn")?.disabled,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   test("信頼されないHTTP接続では解析を無効化して理由を表示する", () => {
