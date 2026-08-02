@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:18
+        image: postgres:18.4@sha256:3a82e1f56c8f0f5616a11103ac3d47e632c3938698946a7ad26da0df1334744a
         env:
           POSTGRES_USER: planuser
           POSTGRES_PASSWORD: planpass
@@ -25,7 +25,7 @@ jobs:
         ports: ["5432:5432"]
         options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
 
@@ -38,7 +38,7 @@ jobs:
         run: |
           docker run --rm --network host \
             --env PGPASSWORD \
-            postgres:18 \
+            postgres:18.4@sha256:3a82e1f56c8f0f5616a11103ac3d47e632c3938698946a7ad26da0df1334744a \
             psql \
             --host localhost \
             --username planuser \

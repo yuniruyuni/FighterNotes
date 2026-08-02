@@ -47,6 +47,10 @@ GitHubのbuilder secretはrepository / organization scope、deployer secretは`p
 分離する。reusable build workflowへ全secretを継承せず、builder identityではCloud Run service / Jobの
 参照・更新を拒否し、deployer identityではArtifact Registry / GHCRへのpushを拒否する。
 
+third-party Actionとcontainerはreview済みcommit / manifest digestへ固定する。更新時はversion commentと
+digestを同じPRで変更し、Renovateの差分をupstream releaseと照合する。緊急時も`latest`やmajor tagへ
+一時的に戻さず、対象digestを明示する。
+
 ## Log 方針
 
 server log に次を追加しない。
@@ -164,5 +168,6 @@ quota event prune の順序を確認してから行う。
 - sharing disable、期限切れ、誤った削除コード、quota 超過が fail closed になること
 - DB backup の復元 test と、旧 image / 新 schema の rollback 互換性
 - secret version、不要な role binding、古い image、失敗した Job execution の棚卸し
+- RenovateがActions、pgschema、PostgreSQL service、Cloud Run sidecarの更新PRを作成できること
 
 supply chain と CI の未実装項目は [DEPLOY.md](./DEPLOY.md) の残余リスクを参照する。

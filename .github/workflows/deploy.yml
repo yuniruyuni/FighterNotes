@@ -86,7 +86,7 @@ jobs:
       APP_IMAGE_REF: ${{ needs.build-app.outputs.artifact_image_ref }}
       MIGRATION_IMAGE_REF: ${{ needs.build-migration.outputs.artifact_image_ref }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           ref: ${{ needs.release-gate.outputs.source_sha }}
           fetch-depth: 1
@@ -106,14 +106,14 @@ jobs:
 
       - name: Authenticate to Google Cloud
         if: steps.current-main.outputs.should_release == 'true'
-        uses: google-github-actions/auth@v3
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
           workload_identity_provider: ${{ secrets.GCP_DEPLOYER_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
 
       - name: Setup gcloud
         if: steps.current-main.outputs.should_release == 'true'
-        uses: google-github-actions/setup-gcloud@v3
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
 
       - name: Run migration
         id: migration
@@ -160,12 +160,14 @@ jobs:
           SERVICE_OUTCOME: ${{ steps.service.outcome }}
           SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
         run: |
+          SIDECAR_IMAGE=$(awk '$1 == "image:" && $2 ~ /^cloudflare\/cloudflared:/ { print $2; exit }' cloudrun.yaml)
           {
             echo "## Production release"
             echo
             echo "- Source: \`$SOURCE_SHA\`"
             echo "- Application: \`$APP_IMAGE_REF\`"
             echo "- Migration: \`$MIGRATION_IMAGE_REF\`"
+            echo "- DB sidecar: \`${SIDECAR_IMAGE:-unknown}\`"
             echo "- Current-main gate: \`${SHOULD_RELEASE:-unknown}\`"
             echo "- Migration stage: \`${MIGRATION_OUTCOME:-not-run}\`"
             echo "- Cleanup stage: \`${CLEANUP_OUTCOME:-not-run}\`"

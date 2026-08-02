@@ -64,6 +64,10 @@ PostgreSQL integration test と release 後の共有経路で別に確認する�
 schema変更時の `Schema Plan / plan` を必須にする。GitHubのlive branch ruleはrepository外の状態なので、
 設定変更後と四半期棚卸し時に実在を確認する。
 
+`scripts/release-workflows.test.ts` は全workflowのthird-party Actionが40桁commit SHAとversion commentを
+持つこと、service / release containerがdigest固定されていること、schema planとreleaseの安全条件を
+検査する。`CI / test` がこのcontract testを直接実行する。
+
 ## Schema 変更
 
 schema 関連 path の pull request では `schema-plan.yml` が次を行う。
@@ -101,6 +105,21 @@ build jobは並行できるが、migration、cleanup、service更新、smoke tes
 lock待機中に古くなったSHAはmigration前に見送り、現在の`main`を後から古いrevisionで上書きしない。
 Jobとserviceの置換はGitHub `production` environmentのdeployer identityで行う。job summaryには対象SHA、
 両image digest、migration / cleanup / service / smokeの各結果を残す。
+
+## Immutable dependency の更新
+
+GitHub Actionsは40桁commit SHAで固定し、review時に追跡できるrelease versionを同じ行のcommentへ残す。
+GitHub ActionsのPostgreSQL service、`Dockerfile.migration`の`pgschema`、Cloud Runの`cloudflared`は
+`version@sha256:digest`で固定する。application / migration imageもbuild後のArtifact Registry digestで
+配置するため、同じrepository commitの再実行でmutable tagをproductionへ持ち込まない。
+
+`renovate.json`はActions、Dockerfile、workflow service imageに加え、custom managerで3つのCloud Run
+manifestの`cloudflared`を更新対象にする。Renovate GitHub Appまたは同等runnerがrepositoryで有効であることは
+live設定で確認する。更新PRではversionとdigestの両方、upstream release note、schema plan、CI、Cloud Run
+sidecar startup、cleanup smokeを確認する。緊急security updateでもtagだけへ戻さず、検証したdigestを直接更新する。
+
+rollbackはrelease summaryとCloud Run revisionに記録されたapplication / sidecar digestを使う。
+古いmutable tagからdigestを再解決してはならない。
 
 ## Release 後確認
 
@@ -153,8 +172,6 @@ forward fix または検証済み backup restore を選ぶ。破壊的 DDL を�
 
 ## Repository から確認できる残余リスク
 
-- GitHub Action は commit SHA ではなく major tag を参照している。
-- `pgschema` は version tag、`cloudflared` sidecar は `latest` を参照している。
 - CI の dependency 検査は `bun audit` が中心で、Rust audit、secret scan、container scan はない。
 - SBOM、provenance、署名、attestation の生成・検証はない。
 - browser E2E と visual regression は release gate にない。
