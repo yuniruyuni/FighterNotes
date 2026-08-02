@@ -1,6 +1,6 @@
 # セキュリティ運用
 
-最終確認: 2026-07-18
+最終確認: 2026-08-03
 
 ## 適用範囲
 
@@ -43,6 +43,14 @@ GitHub Actions の運用判断を扱う。browser 内の動画解析そのもの
 application role `fighter_app` の権限は `schema/` の明示的な `GRANT` に限定する。
 role の login policy と password は外部 DB infrastructure が所有する。
 
+GitHubのbuilder secretはrepository / organization scope、deployer secretは`production` environment scopeに
+分離する。reusable build workflowへ全secretを継承せず、builder identityではCloud Run service / Jobの
+参照・更新を拒否し、deployer identityではArtifact Registry / GHCRへのpushを拒否する。
+
+third-party Actionとcontainerはreview済みcommit / manifest digestへ固定する。更新時はversion commentと
+digestを同じPRで変更し、Renovateの差分をupstream releaseと照合する。緊急時も`latest`やmajor tagへ
+一時的に戻さず、対象digestを明示する。
+
 ## Log 方針
 
 server log に次を追加しない。
@@ -70,7 +78,7 @@ live alert の有無と通知先を定期的に棚卸しする。
 | Capacity | active row 数、relation size、DB connection、Cloud Run instance 数 |
 | Identity | IAM policy 変更、Secret Manager access、Workload Identity の失敗 |
 | DB tunnel | Cloudflare Access deny、token 認証失敗、sidecar startup probe 失敗 |
-| Delivery | production environment 実行者、image tag / digest、migration と deploy の結果 |
+| Delivery | 対象CI run / SHA、production environment実行者、image digest、migration / cleanup / deployの結果 |
 
 `/health` は DB を query しない。HTTP 200 だけで共有機能が正常とは判断せず、closed schema の
 test data で read / create / delete を確認する。実利用者の共有 ID や削除コードを probe に使わない。
@@ -152,11 +160,14 @@ quota event prune の順序を確認してから行う。
 少なくとも四半期ごと、または IAM / schema / network 変更後に次を確認する。
 
 - builder が deploy できず、deployer が image push や secret 読取をできないこと
+- builder jobからproduction environmentのdeployer secretを参照できないこと
+- 対象SHAのCI失敗時にreleaseが起動せず、開始済みmigrationが後続pushでcancelされないこと
 - runtime / cleanup が DDL できず、migration だけが schema apply できること
 - 各 Cloudflare token が別 workload から利用できないこと
 - Scheduler identity が cleanup Job 以外を起動できないこと
 - sharing disable、期限切れ、誤った削除コード、quota 超過が fail closed になること
 - DB backup の復元 test と、旧 image / 新 schema の rollback 互換性
 - secret version、不要な role binding、古い image、失敗した Job execution の棚卸し
+- RenovateがActions、pgschema、PostgreSQL service、Cloud Run sidecarの更新PRを作成できること
 
 supply chain と CI の未実装項目は [DEPLOY.md](./DEPLOY.md) の残余リスクを参照する。

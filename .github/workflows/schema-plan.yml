@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:18
+        image: postgres:18.4@sha256:3a82e1f56c8f0f5616a11103ac3d47e632c3938698946a7ad26da0df1334744a
         env:
           POSTGRES_USER: planuser
           POSTGRES_PASSWORD: planpass
@@ -25,7 +25,7 @@ jobs:
         ports: ["5432:5432"]
         options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
 
@@ -38,7 +38,7 @@ jobs:
         run: |
           docker run --rm --network host \
             --env PGPASSWORD \
-            postgres:18 \
+            postgres:18.4@sha256:3a82e1f56c8f0f5616a11103ac3d47e632c3938698946a7ad26da0df1334744a \
             psql \
             --host localhost \
             --username planuser \
@@ -70,6 +70,7 @@ jobs:
         env:
           WORKSPACE: ${{ github.workspace }}
         run: |
+          set +e
           docker run --rm --network host \
             --entrypoint pgschema \
             --workdir /work \
@@ -80,7 +81,10 @@ jobs:
             --host localhost --port 5432 \
             --user planuser --password planpass --db plandb \
             --schema public --no-color \
-            > plan_output.txt 2>&1 || true
+            > plan_output.txt 2>&1
+          PLAN_EXIT_CODE=$?
+          set -e
+          printf '%s\n' "$PLAN_EXIT_CODE" > plan_exit_code.txt
 
       - name: Comment plan on PR
         if: always()
@@ -113,3 +117,30 @@ jobs:
           else
             gh pr comment "$PR_NUMBER" --body "$BODY"
           fi
+
+      - name: Enforce successful schema plan
+        if: always()
+        run: |
+          if [ ! -f plan_output.txt ]; then
+            echo "pgschema plan did not produce plan_output.txt" >&2
+            exit 1
+          fi
+          if [ ! -f plan_exit_code.txt ]; then
+            echo "pgschema plan did not record an exit code" >&2
+            exit 1
+          fi
+
+          PLAN_EXIT_CODE=$(cat plan_exit_code.txt)
+          case "$PLAN_EXIT_CODE" in
+            0)
+              echo "pgschema plan completed successfully."
+              ;;
+            *[!0-9]*|'')
+              echo "pgschema plan recorded an invalid exit code: $PLAN_EXIT_CODE" >&2
+              exit 1
+              ;;
+            *)
+              echo "pgschema plan failed with exit code $PLAN_EXIT_CODE" >&2
+              exit 1
+              ;;
+          esac

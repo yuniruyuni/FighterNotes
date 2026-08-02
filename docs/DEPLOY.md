@@ -1,6 +1,6 @@
 # デプロイ
 
-最終確認: 2026-07-18
+最終確認: 2026-08-03
 
 ## 対象と正本
 
@@ -31,17 +31,20 @@ Web service は internal ingress、最大 2 instance、container concurrency 80�
 
 ## GitHub 設定
 
-repository または production environment に次の secret が必要である。値は文書や log に残さない。
+値は文書や log に残さず、consumer ごとに次の scope へ分ける。
 
-- `GCP_PROJECT_ID`
-- `GCP_BUILDER_WORKLOAD_IDENTITY_PROVIDER`
-- `GCP_BUILDER_SERVICE_ACCOUNT`
-- `GCP_DEPLOYER_WORKLOAD_IDENTITY_PROVIDER`
-- `GCP_DEPLOYER_SERVICE_ACCOUNT`
+| Secret | Scope |
+| --- | --- |
+| `GCP_PROJECT_ID` | repository または organization |
+| `GCP_BUILDER_WORKLOAD_IDENTITY_PROVIDER` | repository または organization |
+| `GCP_BUILDER_SERVICE_ACCOUNT` | repository または organization |
+| `GCP_DEPLOYER_WORKLOAD_IDENTITY_PROVIDER` | `production` environment のみ |
+| `GCP_DEPLOYER_SERVICE_ACCOUNT` | `production` environment のみ |
 
-builder と deployer は別の Workload Identity / service account を使う。builder は image push、
-deployer は Cloud Run service / Job の置換と Job 実行に必要な最小権限だけを持たせる。
-実際の IAM binding は外部 infrastructure repository と GCP live policy で確認する。
+reusable build workflow は `workflow_call.secrets` で builder 用3項目だけを受け取り、caller も個別に渡す。
+`secrets: inherit` は使わない。deployer secret は `production` environment の直列 release job だけから
+参照する。builder は image push、deployer は Cloud Run service / Job の置換と Job 実行に必要な最小権限
+だけを持たせる。実際の IAM binding は外部 infrastructure repository と GCP live policy で確認する。
 
 ## CI gate
 
@@ -56,6 +59,15 @@ deployer は Cloud Run service / Job の置換と Job 実行に必要な最小�
 `/health` は process の HTTP 応答だけを確認し、DB query は行わない。DB を含む read / create / delete は
 PostgreSQL integration test と release 後の共有経路で別に確認する。
 
+`deploy.yml` は `main` pushを直接契機にせず、同じSHAに対する `CI` workflowの `push` runが成功した
+`workflow_run` だけを受け付ける。branch protectionでは `CI / test`、`CI / security`、`CI / docker` と、
+schema変更時の `Schema Plan / plan` を必須にする。GitHubのlive branch ruleはrepository外の状態なので、
+設定変更後と四半期棚卸し時に実在を確認する。
+
+`scripts/release-workflows.test.ts` は全workflowのthird-party Actionが40桁commit SHAとversion commentを
+持つこと、service / release containerがdigest固定されていること、schema planとreleaseの安全条件を
+検査する。`CI / test` がこのcontract testを直接実行する。
+
 ## Schema 変更
 
 schema 関連 path の pull request では `schema-plan.yml` が次を行う。
@@ -66,7 +78,9 @@ schema 関連 path の pull request では `schema-plan.yml` が次を行う。
 4. plan を pull request comment へ反映する。
 
 `DROP`、`GRANT`、`REVOKE`、privilege 変更を含む plan は特に確認する。`pgschema plan` の comment は
-review 補助であり、データ移行、lock 時間、rollback 可能性の判断を代替しない。
+成功・失敗のどちらでも更新するが、plan command が失敗した check は comment 投稿後に必ず失敗する。
+branch protection では `Schema Plan / plan` を必須 check にする。comment は review 補助であり、
+データ移行、lock 時間、rollback 可能性の判断を代替しない。
 
 migration は application より先に production DB へ適用される。したがって schema 変更は、少なくとも
 直前の application image と新しい image の両方から利用できる後方互換な段階に分ける。
@@ -74,18 +88,38 @@ migration は application より先に production DB へ適用される。した
 
 ## 自動デプロイ
 
-`main` への push で `deploy.yml` が動く。image tag は
-`<git-sha>-<run-id>-<run-attempt>` で、再実行を含め一意になる。
+`main` pushの `CI` workflowが成功すると `deploy.yml` が動く。release対象はCI runの40桁SHAへ固定し、
+image tagは `<git-sha>-<deploy-run-id>-<run-attempt>` で再実行を含め一意にする。配置時にはpush応答から
+得たArtifact Registry digestへ置き換え、tagの再利用には依存しない。
 
 1. application image と migration image を build する。
 2. 両 image を Artifact Registry と archive 用 GHCR へ push する。
-3. migration Job manifest を対象 tag で置換し、Job を同期実行する。
-4. cleanup Job manifest を同じ application tag で置換する。
-5. Web service manifest を同じ application tag で置換する。
-6. `https://fighter.yuniruyuni.net/health` を smoke test する。
+3. production release lockを取得し、対象SHAが現在の`main`であることを再確認する。
+4. migration Job manifest をmigration image digestで置換し、Jobを同期実行する。
+5. cleanup Job manifest をapplication image digestで置換する。
+6. Web service manifest を同じapplication image digestで置換する。
+7. `https://fighter.yuniruyuni.net/health` をsmoke testする。
 
-Job と service の置換は GitHub `production` environment の deployer identity で行う。
-release 中は migration の完了前に Web service を更新しない。
+build jobは並行できるが、migration、cleanup、service更新、smoke testは1つの
+`fighter-production-release` concurrency groupで直列実行し、後続pushから開始済みreleaseをcancelしない。
+lock待機中に古くなったSHAはmigration前に見送り、現在の`main`を後から古いrevisionで上書きしない。
+Jobとserviceの置換はGitHub `production` environmentのdeployer identityで行う。job summaryには対象SHA、
+両image digest、migration / cleanup / service / smokeの各結果を残す。
+
+## Immutable dependency の更新
+
+GitHub Actionsは40桁commit SHAで固定し、review時に追跡できるrelease versionを同じ行のcommentへ残す。
+GitHub ActionsのPostgreSQL service、`Dockerfile.migration`の`pgschema`、Cloud Runの`cloudflared`は
+`version@sha256:digest`で固定する。application / migration imageもbuild後のArtifact Registry digestで
+配置するため、同じrepository commitの再実行でmutable tagをproductionへ持ち込まない。
+
+`renovate.json`はActions、Dockerfile、workflow service imageに加え、custom managerで3つのCloud Run
+manifestの`cloudflared`を更新対象にする。Renovate GitHub Appまたは同等runnerがrepositoryで有効であることは
+live設定で確認する。更新PRではversionとdigestの両方、upstream release note、schema plan、CI、Cloud Run
+sidecar startup、cleanup smokeを確認する。緊急security updateでもtagだけへ戻さず、検証したdigestを直接更新する。
+
+rollbackはrelease summaryとCloud Run revisionに記録されたapplication / sidecar digestを使う。
+古いmutable tagからdigestを再解決してはならない。
 
 ## Release 後確認
 
@@ -120,7 +154,7 @@ quota event の prune へ進まない。原因と backlog を確認してから�
 
 ## Rollback
 
-1. 直前に正常だった application image の一意 tag または digest を特定する。
+1. 直前に正常だった application image の digest をrelease summaryまたはCloud Run revisionから特定する。
 2. その image を指定して `fighter` service を更新する。
 3. `/health` だけでなく共有 read / create / delete と browser 解析を確認する。
 4. cleanup Job も不具合のある application image を参照している場合は、正常 image へ戻す。
@@ -138,9 +172,6 @@ forward fix または検証済み backup restore を選ぶ。破壊的 DDL を�
 
 ## Repository から確認できる残余リスク
 
-- GitHub Action は commit SHA ではなく major tag を参照している。
-- `pgschema` は version tag、`cloudflared` sidecar は `latest` を参照している。
-- deploy manifest は image digest ではなく一意 tag を使用する。
 - CI の dependency 検査は `bun audit` が中心で、Rust audit、secret scan、container scan はない。
 - SBOM、provenance、署名、attestation の生成・検証はない。
 - browser E2E と visual regression は release gate にない。
