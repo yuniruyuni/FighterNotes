@@ -4,8 +4,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Hono } from "hono";
 import { RuntimeConfig } from "../config";
+import type { Database } from "../infra/db";
 import type { ILogger } from "../infra/logger/types";
+import { createPublishedAnalysisSecurity } from "../infra/security/published-analysis";
+import {
+  type DeletePasswordHash,
+  parseDeletePassword,
+} from "../models/published-analysis";
 import type { Context } from "../usecases/context";
+import type {
+  RuntimeServices,
+  SharingRateLimitBucket,
+} from "../usecases/services";
+import { SecurityCapacityError } from "../usecases/services";
 import { createApp } from "./index";
 
 let app: Hono;
@@ -26,14 +37,57 @@ const logger: ILogger = {
 const INDEX_HTML =
   "<!DOCTYPE html><html><body>fighter-notes test</body></html>";
 
+function testServices(): RuntimeServices {
+  const counts = new Map<string, number>();
+  return {
+    publishedAnalysisSecurity: {
+      generateShareId() {
+        throw new Error("unexpected share id generation");
+      },
+      async hashDeletePassword() {
+        throw new Error("unexpected password hash");
+      },
+      async verifyDeletePassword() {
+        throw new Error("unexpected password verification");
+      },
+    },
+    sharingRateLimit: {
+      async consume(
+        bucket: SharingRateLimitBucket,
+        clientKey: string,
+        limit: number,
+      ) {
+        const key = `${bucket}:${clientKey}`;
+        const count = (counts.get(key) ?? 0) + 1;
+        counts.set(key, count);
+        return {
+          allowed: count <= limit,
+          retryAfterSeconds: count <= limit ? 0 : 60,
+        };
+      },
+      async prune() {
+        return { deleted: 0, hasMore: false };
+      },
+    },
+  };
+}
+
 beforeAll(async () => {
   staticDir = mkdtempSync(join(tmpdir(), "fighter-static-"));
   writeFileSync(join(staticDir, "index.html"), INDEX_HTML);
   writeFileSync(join(staticDir, "app.js"), "console.log('ok');");
   writeFileSync(join(staticDir, "analyzer.wasm"), "wasm-test");
   // このsuiteはDBへ進む正常なmutationを呼ばないため、Contextはstubで十分。
-  const config = RuntimeConfig.fromEnvironment({ STATIC_DIR: staticDir });
-  app = createApp({ logger, config } as unknown as Context);
+  const config = RuntimeConfig.fromEnvironment({
+    STATIC_DIR: staticDir,
+    K_SERVICE: "fighter-test",
+    TRUST_CLOUDFLARE_CONNECTING_IP: "true",
+  });
+  app = createApp({
+    logger,
+    config,
+    services: testServices(),
+  } as unknown as Context);
 });
 
 afterAll(() => {
@@ -44,7 +98,52 @@ describe("/health", () => {
   test("200 で status ok を返す", async () => {
     const res = await app.request("/health");
     expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
     expect(await res.json()).toEqual({ status: "ok" });
+  });
+});
+
+describe("/ready", () => {
+  function appWithReadiness(result: boolean | Error): Hono {
+    let queryCount = 0;
+    const transaction = {
+      async queryGet() {
+        queryCount += 1;
+        if (queryCount === 1) return { statement_timeout: "750ms" };
+        return { compatible: result };
+      },
+    } as unknown as Database;
+    const db = {
+      async readTransaction<T>(fn: (tx: Database) => Promise<T>) {
+        if (result instanceof Error) throw result;
+        return fn(transaction);
+      },
+    } as Database;
+    const config = RuntimeConfig.fromEnvironment({ STATIC_DIR: staticDir });
+    return createApp({ logger, config, db } as unknown as Context);
+  }
+
+  test("DBとschemaが互換なら固定responseで200を返す", async () => {
+    const res = await appWithReadiness(true).request("/ready");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(await res.json()).toEqual({ status: "ready" });
+  });
+
+  test("DB異常は詳細を開示せず503にし、livenessは維持する", async () => {
+    const failure = appWithReadiness(
+      new Error("password authentication failed: secret-value"),
+    );
+    const ready = await failure.request("/ready");
+    expect(ready.status).toBe(503);
+    expect(ready.headers.get("cache-control")).toBe("no-store");
+    const body = await ready.text();
+    expect(JSON.parse(body)).toEqual({ status: "unavailable" });
+    expect(body).not.toContain("secret-value");
+
+    const health = await failure.request("/health");
+    expect(health.status).toBe(200);
+    expect(await health.json()).toEqual({ status: "ok" });
   });
 });
 
@@ -133,6 +232,160 @@ describe("共有結果ページ", () => {
       expect(res.headers.get("cache-control")).toBe("no-store");
       expect(res.headers.get("x-content-type-options")).toBe("nosniff");
     }
+  });
+});
+
+describe("共有rate-limit store過負荷の隔離", () => {
+  test("共有requestをfail closedにしても静的配信とhealthを維持する", async () => {
+    const services = testServices();
+    services.sharingRateLimit.consume = async () => {
+      throw new Error("private database overload detail");
+    };
+    const overloadedWarnings: unknown[][] = [];
+    const overloadedLogger: ILogger = {
+      ...logger,
+      warn(message, ...args) {
+        overloadedWarnings.push([message, ...args]);
+      },
+      child() {
+        return this;
+      },
+    };
+    const overloaded = createApp({
+      logger: overloadedLogger,
+      config: RuntimeConfig.fromEnvironment({
+        STATIC_DIR: staticDir,
+        K_SERVICE: "fighter-test",
+        TRUST_CLOUDFLARE_CONNECTING_IP: "true",
+      }),
+      services,
+    } as unknown as Context);
+
+    const responses = await Promise.all(
+      Array.from({ length: 25 }, (_, index) =>
+        Promise.all([
+          overloaded.request("/health"),
+          overloaded.request("/app.js"),
+          overloaded.request("/s/AAAAAAAAAAAAAAAAAAAAAA", {
+            headers: { "CF-Connecting-IP": `203.0.113.${index + 1}` },
+          }),
+          overloaded.request("/api/trpc/publishedAnalysis.create", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "CF-Connecting-IP": `203.0.113.${index + 1}`,
+            },
+            body: "{}",
+          }),
+        ]),
+      ),
+    );
+
+    for (const [health, staticAsset, publicRead, create] of responses) {
+      expect(health.status).toBe(200);
+      expect(staticAsset.status).toBe(200);
+      expect(publicRead.status).toBe(503);
+      expect(publicRead.headers.get("cache-control")).toBe("no-store");
+      expect(create.status).toBe(503);
+    }
+    expect(JSON.stringify(overloadedWarnings)).not.toContain(
+      "private database overload detail",
+    );
+    expect(
+      overloadedWarnings.every(
+        ([message, fields]) =>
+          message === "Published analysis rate limit unavailable" &&
+          (fields as { bucket?: string }).bucket !== undefined,
+      ),
+    ).toBe(true);
+  });
+
+  test("緊急停止はrate-limit storeに依存せずcreateとpublic readを拒否する", async () => {
+    const services = testServices();
+    services.sharingRateLimit.consume = async () => {
+      throw new Error("rate limit store must not be called");
+    };
+    const disabled = createApp({
+      logger,
+      config: RuntimeConfig.fromEnvironment({
+        STATIC_DIR: staticDir,
+        SHARE_RESULTS_ENABLED: "false",
+      }),
+      services,
+    } as unknown as Context);
+
+    const publicRead = await disabled.request("/s/AAAAAAAAAAAAAAAAAAAAAA");
+    expect(publicRead.status).toBe(404);
+    const create = await disabled.request(
+      "/api/trpc/publishedAnalysis.create",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      },
+    );
+    // input validation is intentionally earlier than the router's disabled 404,
+    // but a rate-limit-store 503 must not mask emergency shutdown.
+    expect(create.status).toBe(400);
+  });
+});
+
+describe("Argon2実負荷の隔離", () => {
+  test("同時上限の実Argon2中もhealthと静的assetを配信しoverflowはfail closed", async () => {
+    const password = parseDeletePassword("fighter-notes-delete-key");
+    if (!password) throw new Error("invalid password fixture");
+    let started = 0;
+    let completed = 0;
+    let signalStarted: (() => void) | undefined;
+    const bothStarted = new Promise<void>((resolve) => {
+      signalStarted = resolve;
+    });
+    const security = createPublishedAnalysisSecurity({
+      concurrency: 2,
+      queueLimit: 0,
+      waitMillis: 1_000,
+      hashPassword: async (value) => {
+        const operation = Bun.password.hash(value, {
+          algorithm: "argon2id",
+          memoryCost: 7_168,
+          timeCost: 5,
+        });
+        started += 1;
+        if (started === 2) signalStarted?.();
+        const hash = await operation;
+        completed += 1;
+        return hash as DeletePasswordHash;
+      },
+    });
+    const services = testServices();
+    services.publishedAnalysisSecurity = security;
+    const underLoad = createApp({
+      logger,
+      config: RuntimeConfig.fromEnvironment({ STATIC_DIR: staticDir }),
+      services,
+    } as unknown as Context);
+
+    const active = [
+      security.hashDeletePassword(password),
+      security.hashDeletePassword(password),
+    ];
+    await bothStarted;
+    expect(started).toBe(2);
+    expect(completed).toBe(0);
+    await expect(security.hashDeletePassword(password)).rejects.toBeInstanceOf(
+      SecurityCapacityError,
+    );
+
+    const [health, staticAsset] = await Promise.all([
+      underLoad.request("/health"),
+      underLoad.request("/app.js"),
+    ]);
+    expect(health.status).toBe(200);
+    expect(health.headers.get("cache-control")).toBe("no-store");
+    expect(staticAsset.status).toBe(200);
+    const hashes = await Promise.all(active);
+    expect(hashes.every((hash) => hash.startsWith("$argon2id$"))).toBe(true);
+    expect(completed).toBe(2);
   });
 });
 

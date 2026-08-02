@@ -4,18 +4,22 @@ import { fail } from "./models/common/fail";
 import type { Result } from "./models/common/result";
 import type { Context } from "./usecases/context";
 import {
-  cleanupPublishedAnalysisBatchUsecase,
+  cleanupExpiredPublishedAnalysisBatchUsecase,
+  cleanupRetainedPublishedAnalysisBatchUsecase,
   prunePublishedAnalysisCreateEventsUsecase,
+  pruneSharingRateLimitsBatchUsecase,
 } from "./usecases/published-analysis";
 
 const BATCH_ARGUMENT_PREFIX = "--batch=";
 const DAY_MILLISECONDS = 24 * 60 * 60 * 1_000;
 const QUOTA_EVENT_RETENTION_DAYS = 2;
+const RATE_LIMIT_RETENTION_MILLISECONDS = 2 * 60 * 1_000;
 
 export type BatchCommand = "cleanup";
 
 export interface CleanupPublishedAnalysesResult {
   readonly expired: number;
+  readonly rateLimits: number;
   readonly quotaEvents: number;
   readonly batches: number;
 }
@@ -52,6 +56,7 @@ export async function runBatchCommand(
       }
       ctx.logger.info(
         `Fighter cleanup completed: expired=${result.value.expired}; ` +
+          `rate_limits=${result.value.rateLimits}; ` +
           `quota_events=${result.value.quotaEvents}; batches=${result.value.batches}`,
       );
       return true;
@@ -66,30 +71,102 @@ export async function runPublishedAnalysisCleanup(
   const retentionCutoff = new Date(
     ctx.now.getTime() - settings.retentionDays * DAY_MILLISECONDS,
   );
-  let expired = 0;
+  const expired = await cleanupParentRows(ctx, settings, retentionCutoff);
+  if (!expired.ok) return expired;
+  const rateLimits = await pruneRateLimits(ctx, settings);
+  if (!rateLimits.ok) return rateLimits;
+  const quotaEvents = await prunePublishedAnalysisCreateEventsUsecase(
+    quotaEventCutoff(ctx.now),
+  ).run(ctx);
+  if (!quotaEvents.ok) return quotaEvents;
 
-  for (let batches = 1; batches <= settings.maxBatches; batches++) {
-    const batch = await cleanupPublishedAnalysisBatchUsecase({
-      limit: settings.batchSize,
-      retentionCutoff,
-    }).run(ctx);
-    if (!batch.ok) return batch;
+  return {
+    ok: true,
+    value: {
+      expired: expired.value.deleted,
+      rateLimits: rateLimits.value,
+      quotaEvents: quotaEvents.value,
+      batches: expired.value.batches,
+    },
+  };
+}
 
-    expired += batch.value.deleted;
-    if (!batch.value.hasMore) {
-      const quotaEvents = await prunePublishedAnalysisCreateEventsUsecase(
-        quotaEventCutoff(ctx.now),
-      ).run(ctx);
-      if (!quotaEvents.ok) return quotaEvents;
+interface ParentCleanupResult {
+  readonly deleted: number;
+  readonly batches: number;
+}
 
-      return {
-        ok: true,
-        value: { expired, quotaEvents: quotaEvents.value, batches },
-      };
+async function cleanupParentRows(
+  ctx: Context,
+  settings: CleanupSettings,
+  retentionCutoff: Date,
+): Promise<Result<ParentCleanupResult, Fail>> {
+  const phases = [
+    (limit: number) =>
+      cleanupExpiredPublishedAnalysisBatchUsecase({
+        at: ctx.now,
+        limit,
+      }).run(ctx),
+    (limit: number) =>
+      cleanupRetainedPublishedAnalysisBatchUsecase({
+        retentionCutoff,
+        limit,
+      }).run(ctx),
+  ];
+  let deleted = 0;
+  let batches = 0;
+
+  for (const runBatch of phases) {
+    for (;;) {
+      if (batches >= settings.maxBatches) {
+        return parentCleanupLimitFailure(ctx, settings);
+      }
+      batches += 1;
+      const batch = await runBatch(settings.batchSize);
+      if (!batch.ok) return batch;
+      deleted += batch.value.deleted;
+      if (!batch.value.hasMore) break;
     }
   }
+  return { ok: true, value: { deleted, batches } };
+}
 
+function parentCleanupLimitFailure(
+  ctx: Context,
+  settings: CleanupSettings,
+): Result<never, Fail> {
   ctx.logger.warn("Cleanup stopped at the configured batch safety limit", {
+    batchSize: settings.batchSize,
+    maxBatches: settings.maxBatches,
+  });
+  return {
+    ok: false,
+    error: fail(
+      "RESOURCE_LIMIT",
+      "Cleanup stopped at the configured batch safety limit",
+    ),
+  };
+}
+
+async function pruneRateLimits(
+  ctx: Context,
+  settings: CleanupSettings,
+): Promise<Result<number, Fail>> {
+  const before = new Date(
+    ctx.now.getTime() - RATE_LIMIT_RETENTION_MILLISECONDS,
+  );
+  let deleted = 0;
+  for (let batch = 1; batch <= settings.maxBatches; batch += 1) {
+    const result = await pruneSharingRateLimitsBatchUsecase({
+      before,
+      limit: settings.batchSize,
+    }).run(ctx);
+    if (!result.ok) return result;
+    deleted += result.value.deleted;
+    if (!result.value.hasMore) return { ok: true, value: deleted };
+  }
+  ctx.logger.warn("Cleanup stopped at the configured batch safety limit", {
+    resource: "rate_limits",
     batchSize: settings.batchSize,
     maxBatches: settings.maxBatches,
   });

@@ -1,14 +1,16 @@
-import type { Page } from "../../models/common";
-import {
-  PublishedAnalysisCreateEvent,
-  PublishedAnalysisLifecycle,
-} from "../../models/published-analysis";
+import { PublishedAnalysisCreateEvent } from "../../models/published-analysis";
 import type { Usecase } from "../runner";
 import { usecase } from "../runner";
+import type { RateLimitPruneResult } from "../services";
 
-export interface CleanupPublishedAnalysisBatchInput {
+export interface CleanupExpiredPublishedAnalysisBatchInput {
+  readonly at: Date;
   readonly limit: number;
+}
+
+export interface CleanupRetainedPublishedAnalysisBatchInput {
   readonly retentionCutoff: Date;
+  readonly limit: number;
 }
 
 export interface CleanupPublishedAnalysisBatchResult {
@@ -16,35 +18,68 @@ export interface CleanupPublishedAnalysisBatchResult {
   readonly hasMore: boolean;
 }
 
-export function cleanupPublishedAnalysisBatchUsecase(
-  input: CleanupPublishedAnalysisBatchInput,
+export interface PruneSharingRateLimitsBatchInput {
+  readonly before: Date;
+  readonly limit: number;
+}
+
+export function cleanupExpiredPublishedAnalysisBatchUsecase(
+  input: CleanupExpiredPublishedAnalysisBatchInput,
 ): Usecase<CleanupPublishedAnalysisBatchResult> {
   return usecase<
-    CleanupPublishedAnalysisBatchInput,
-    Page<PublishedAnalysisLifecycle>,
-    Page<PublishedAnalysisLifecycle>,
+    CleanupExpiredPublishedAnalysisBatchInput,
+    CleanupExpiredPublishedAnalysisBatchInput,
+    CleanupExpiredPublishedAnalysisBatchInput,
     CleanupPublishedAnalysisBatchResult,
     CleanupPublishedAnalysisBatchResult,
     CleanupPublishedAnalysisBatchResult,
     CleanupPublishedAnalysisBatchResult
   >({
     pre: () => input,
-    read: (ctx, value) =>
-      ctx.repos.publishedAnalysisLifecycle.list(
-        PublishedAnalysisLifecycle.ExpiredAt(ctx.now).or(
-          PublishedAnalysisLifecycle.CreatedAtOrBefore(value.retentionCutoff),
-        ),
-        {
-          limit: value.limit,
-          sort: PublishedAnalysisLifecycle.defaultSort,
-        },
+    write: (ctx, value) =>
+      ctx.repos.publishedAnalysisLifecycle.deleteExpiredBatch(
+        value.at,
+        value.limit,
       ),
-    write: async (ctx, page) => {
-      const deleted = await ctx.repos.publishedAnalysisLifecycle.delete(
-        PublishedAnalysisLifecycle.ByIds(...page.items.map((item) => item.id)),
-      );
-      return { deleted, hasMore: page.hasMore };
-    },
+  });
+}
+
+export function cleanupRetainedPublishedAnalysisBatchUsecase(
+  input: CleanupRetainedPublishedAnalysisBatchInput,
+): Usecase<CleanupPublishedAnalysisBatchResult> {
+  return usecase<
+    CleanupRetainedPublishedAnalysisBatchInput,
+    CleanupRetainedPublishedAnalysisBatchInput,
+    CleanupRetainedPublishedAnalysisBatchInput,
+    CleanupPublishedAnalysisBatchResult,
+    CleanupPublishedAnalysisBatchResult,
+    CleanupPublishedAnalysisBatchResult,
+    CleanupPublishedAnalysisBatchResult
+  >({
+    pre: () => input,
+    write: (ctx, value) =>
+      ctx.repos.publishedAnalysisLifecycle.deleteCreatedAtOrBeforeBatch(
+        value.retentionCutoff,
+        value.limit,
+      ),
+  });
+}
+
+export function pruneSharingRateLimitsBatchUsecase(
+  input: PruneSharingRateLimitsBatchInput,
+): Usecase<RateLimitPruneResult> {
+  return usecase<
+    PruneSharingRateLimitsBatchInput,
+    PruneSharingRateLimitsBatchInput,
+    RateLimitPruneResult,
+    RateLimitPruneResult,
+    RateLimitPruneResult,
+    RateLimitPruneResult,
+    RateLimitPruneResult
+  >({
+    pre: () => input,
+    process: (ctx, value) =>
+      ctx.services.sharingRateLimit.prune(value.before, value.limit),
   });
 }
 

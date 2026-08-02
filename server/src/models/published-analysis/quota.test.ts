@@ -13,7 +13,7 @@ const limits = {
 
 describe("evaluatePublishedAnalysisCreateQuota", () => {
   test("storage reservationとtransaction lockを安定した値で共有する", () => {
-    expect(MAX_ANALYSIS_STORAGE_RESERVATION_BYTES).toBe(262_144);
+    expect(MAX_ANALYSIS_STORAGE_RESERVATION_BYTES).toBe(8_192);
     expect(PUBLISHED_ANALYSIS_CREATE_LOCK).toEqual({
       namespace: 1_179_537_442,
       id: 1,

@@ -107,10 +107,11 @@ PostgreSQL は次の table を持つ。
 
 | table | 内容 |
 | --- | --- |
-| `published_analyses` | ID、version、character、round、削除 hash、作成・期限 |
+| `published_analyses` | ID、version、character、round、削除 hash、logical size、作成・期限 |
 | `published_analysis_findings` | finding の順序、種別、assessment、件数、severity |
 | `published_analysis_tactics` | 戦術統計 |
 | `published_analysis_create_events` | UTC 日次 create quota 用の成功 event |
+| `published_analysis_rate_limits` | bucket別の共有固定窓counter（client keyはdigestのみ） |
 
 finding と tactics は parent 削除時に cascade delete する。create event は結果本体と独立させ、
 同じ日に共有を削除しても日次 create 件数が減らないようにする。
@@ -135,8 +136,12 @@ cleanup batch は次のどちらかを満たす parent row を削除する。
 - `expires_at` を過ぎた
 - `created_at + SHARE_RETENTION_DAYS` を過ぎた
 
-1 batch の既定値は500件、最大1000 batch で停止する。全 parent cleanup が完了した場合だけ、
-2 UTC 日より古い create quota event を削除する。repository は cleanup Job を定義するが、
+1 batch の既定値は500件、最大1000 batch で停止する。期限判定は
+`(expires_at, created_at, id)`、retention判定は`(created_at, expires_at, id)`の専用indexと
+別々のbounded CTEを使う。各CTEは`FOR UPDATE SKIP LOCKED`とDELETEを1 statementで完結させ、
+並行Jobが同じrowを処理しない。row lockに必要なUPDATE権限は、値がCHECKで固定された
+`schema_version`列だけに限定する。全 parent cleanup が完了した場合だけ、終了後2分を過ぎた
+rate-limit counterと2 UTC 日より古いcreate quota eventを削除する。repository はcleanup Jobを定義するが、
 定期実行の Scheduler は外部管理である。頻度と live 状態は deployment 時に別途確認する。
 
 ## HTTP と cache
@@ -151,17 +156,26 @@ cleanup batch は次のどちらかを満たす parent row を削除する。
 | public GET | client key ごとの固定窓 rate limit |
 | public HTML `200` | 有効期限を超えない最大15秒 cache |
 | error response | `no-store` |
+| `/health`、`/ready` | 成否とも`no-store` |
 
-application rate limiter は process 内の固定窓で、instance 間では共有しない。
-これとは別に create transaction は PostgreSQL advisory lock の内側で hard quota を確認する。
+application rate limiter は PostgreSQL の原子的 upsert を使う固定窓で、Cloud Run instance と
+cold start をまたいで共有する。create、delete、public read は別 bucket とし、client key は
+SHA-256 digest だけを保存する。counter store が利用できない場合は共有 request だけを `503` で
+fail closed にし、静的配信と `/health` は継続する。
+
+create は hard quota の事前確認後に Argon2id を実行し、書込み transaction の advisory lock 内で
+quota を再確認する。hash / verify は process ごとに合計同時実行数と待機 queue を制限する。
 
 | Hard quota | 既定値 |
 | --- | ---: |
 | UTC 日次作成成功数 | 1,000 |
 | active parent row | 50,000 |
-| 関係 table の使用量 | 1 GiB |
+| 保存payloadのlogical使用量 | 1 GiB |
 
-quota 到達時は fail closed とし、cleanup lag や濫用の原因を確認せず上限だけを緩めない。
+logical使用量は新規rowではclosed payloadのserialized byte数、移行前rowでは安全側の8 KiBとして
+parentに保存する。物理relation file sizeとは分離しているため、通常のDELETE直後に減少し、
+`VACUUM FULL`なしでcreateを再開できる。quota到達時はfail closedとし、cleanup lagや濫用の原因を
+確認せず上限だけを緩めない。物理DB容量は別signalとして監視する。
 
 ## 設定
 
@@ -170,11 +184,16 @@ quota 到達時は fail closed とし、cleanup lag や濫用の原因を確認�
 | `SHARE_RESULTS_ENABLED` | `true` | `false` で create と公開 read を停止 |
 | `PUBLIC_BASE_URL` | `https://fighter.yuniruyuni.net` | 共有 URL と許可 origin |
 | `SHARE_RETENTION_DAYS` | `30` | 公開期限と cleanup cutoff |
-| `SHARE_CREATE_RATE_LIMIT_PER_MINUTE` | `10` | create / delete の process-local limit |
-| `SHARE_GET_RATE_LIMIT_PER_MINUTE` | `120` | `/s/:id` の process-local limit |
+| `SHARE_CREATE_RATE_LIMIT_PER_MINUTE` | `10` | create の共有DB固定窓 limit |
+| `SHARE_DELETE_RATE_LIMIT_PER_MINUTE` | `10` | delete の共有DB固定窓 limit |
+| `SHARE_GET_RATE_LIMIT_PER_MINUTE` | `120` | `/s/:id` の共有DB固定窓 limit |
+| `TRUST_CLOUDFLARE_CONNECTING_IP` | `false` | internal Cloud Run ingress + HTTPS originでだけCloudflare client IPを信頼 |
+| `SHARE_ARGON2_CONCURRENCY` | `2` | hash / verify 合計同時実行数 |
+| `SHARE_ARGON2_QUEUE_LIMIT` | `8` | Argon2待機 request 上限 |
+| `SHARE_ARGON2_WAIT_MS` | `250` | Argon2待機時間上限 |
 | `SHARE_DAILY_CREATE_LIMIT` | `1000` | DB hard quota |
 | `SHARE_ACTIVE_LIMIT` | `50000` | DB hard quota |
-| `SHARE_STORAGE_LIMIT_BYTES` | `1073741824` | DB hard quota |
+| `SHARE_STORAGE_LIMIT_BYTES` | `1073741824` | 保存payloadのlogical hard quota |
 | `CLEANUP_BATCH_SIZE` | `500` | cleanup 1 transaction の最大件数 |
 | `CLEANUP_MAX_BATCHES` | `1000` | 1 Job の安全上限 |
 

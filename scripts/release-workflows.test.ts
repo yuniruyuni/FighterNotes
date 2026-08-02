@@ -151,9 +151,27 @@ describe("release workflow safety contracts", () => {
     expect(deploy).not.toContain("secrets: inherit");
     expect(deploy).toContain("artifact_image_digest");
     expect(deploy).toContain("environment: production");
+    expect(deploy).toContain("https://fighter.yuniruyuni.net/health");
+    expect(deploy).toContain("https://fighter.yuniruyuni.net/ready");
+    expect(deploy).toContain("--connect-timeout 5 --max-time 15");
+    expect(deploy).toContain(
+      "--retry 5 --retry-delay 2 --retry-max-time 90 --retry-all-errors",
+    );
+    expect(deploy).toContain('curl "${SMOKE_CURL_OPTIONS[@]}"');
     expect(build).toContain("workflow_call:");
     expect(build).toContain("GCP_BUILDER_WORKLOAD_IDENTITY_PROVIDER:");
     expect(build).toContain("GCP_BUILDER_SERVICE_ACCOUNT:");
+  });
+
+  test("Cloudflare client IP is trusted only behind internal Cloud Run ingress", () => {
+    const service = read("cloudrun.yaml");
+    expect(service).toContain("run.googleapis.com/ingress: internal");
+    expect(service).toMatch(
+      /- name: PUBLIC_BASE_URL\n\s+value: https:\/\/fighter\.yuniruyuni\.net/,
+    );
+    expect(service).toMatch(
+      /- name: TRUST_CLOUDFLARE_CONNECTING_IP\n\s+value: "true"/,
+    );
   });
 
   test("image builds pass only non-secret digests into the release job", () => {

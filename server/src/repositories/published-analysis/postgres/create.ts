@@ -12,14 +12,14 @@ export async function create(
       id, schema_version, ruleset_version, presentation_revision,
       own_character, opponent_character,
       rounds_detected, rounds_won, rounds_lost, rounds_unresolved,
-      delete_password_hash, created_at, expires_at
+      delete_password_hash, logical_size_bytes, created_at, expires_at
     ) VALUES (
       ${analysis.id}, ${content.schemaVersion}, ${content.rulesetVersion},
       ${content.presentationRevision}, ${content.ownCharacter},
       ${content.opponentCharacter}, ${content.rounds.detected},
       ${content.rounds.won}, ${content.rounds.lost},
       ${content.rounds.unresolved}, ${analysis.deletePasswordHash},
-      ${analysis.createdAt}, ${analysis.expiresAt}
+      ${analysis.logicalSizeBytes}, ${analysis.createdAt}, ${analysis.expiresAt}
     )
   `);
 

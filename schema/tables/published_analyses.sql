@@ -39,11 +39,19 @@ CREATE TABLE IF NOT EXISTS published_analyses (
   -- created before password-based deletion compatible until their expiry.
   delete_password_hash TEXT
     CHECK (char_length(delete_password_hash) BETWEEN 64 AND 512),
+  -- Logical quota accounting shrinks immediately on DELETE. Existing rows are
+  -- conservatively backfilled at the closed-schema maximum.
+  logical_size_bytes INTEGER NOT NULL DEFAULT 8192
+    CHECK (logical_size_bytes BETWEEN 1 AND 8192),
   created_at TIMESTAMPTZ NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
   CHECK (rounds_won + rounds_lost + rounds_unresolved = rounds_detected),
   CHECK (expires_at > created_at)
 );
+-- CREATE TABLE IF NOT EXISTS does not add columns to an existing deployment.
+ALTER TABLE published_analyses
+  ADD COLUMN IF NOT EXISTS logical_size_bytes INTEGER NOT NULL DEFAULT 8192
+  CHECK (logical_size_bytes BETWEEN 1 AND 8192);
 -- 既存環境のCREATE TABLE制約も現在のrulesetへ更新する。
 ALTER TABLE published_analyses
   DROP CONSTRAINT IF EXISTS published_analyses_ruleset_version_check;
@@ -52,7 +60,15 @@ ALTER TABLE published_analyses
   CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8));
 CREATE INDEX IF NOT EXISTS published_analyses_expires_at_idx
   ON published_analyses (expires_at);
+CREATE INDEX IF NOT EXISTS published_analyses_cleanup_idx
+  ON published_analyses (expires_at, created_at, id);
+CREATE INDEX IF NOT EXISTS published_analyses_created_at_cleanup_idx
+  ON published_analyses (created_at, expires_at, id);
 GRANT SELECT, INSERT, DELETE ON published_analyses TO fighter_app;
+-- SELECT FOR UPDATE requires some UPDATE privilege. schema_version is fixed
+-- by its CHECK constraint, so granting only this column lets cleanup lock rows
+-- without allowing application data to be meaningfully changed.
+GRANT UPDATE (schema_version) ON published_analyses TO fighter_app;
 
 CREATE TABLE IF NOT EXISTS published_analysis_findings (
   analysis_id TEXT NOT NULL
@@ -157,3 +173,26 @@ CREATE INDEX IF NOT EXISTS published_analysis_create_events_created_at_idx
 -- The scheduled cleanup job intentionally reuses the runtime DB role. DELETE
 -- is needed to prune old quota events; ownership and DDL remain migration-only.
 GRANT SELECT, INSERT, DELETE ON published_analysis_create_events TO fighter_app;
+
+-- One row per client/bucket keeps fixed-window counters durable across Cloud
+-- Run instances and revision changes without retaining a plaintext IP address.
+CREATE TABLE IF NOT EXISTS published_analysis_rate_limits (
+  bucket TEXT NOT NULL
+    CHECK (bucket IN ('create', 'delete', 'public_read')),
+  client_key_hash TEXT NOT NULL
+    CHECK (client_key_hash ~ '^[0-9a-f]{64}$'),
+  window_started_at TIMESTAMPTZ NOT NULL,
+  request_count INTEGER NOT NULL
+    CHECK (request_count BETWEEN 1 AND 100001),
+  PRIMARY KEY (bucket, client_key_hash)
+);
+CREATE INDEX IF NOT EXISTS published_analysis_rate_limits_window_idx
+  ON published_analysis_rate_limits (window_started_at);
+CREATE INDEX IF NOT EXISTS published_analysis_rate_limits_cleanup_idx
+  ON published_analysis_rate_limits (
+    window_started_at, bucket, client_key_hash
+  );
+-- UPDATE is limited to the shared counters. DELETE supports bounded stale-row
+-- pruning by the cleanup Job; ownership and DDL stay migration-only.
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON published_analysis_rate_limits TO fighter_app;

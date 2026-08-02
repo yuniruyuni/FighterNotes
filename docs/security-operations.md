@@ -72,16 +72,18 @@ live alert の有無と通知先を定期的に棚卸しする。
 | Signal | 確認内容 |
 | --- | --- |
 | Service availability | `/health` の失敗、5xx、revision 起動失敗、latency |
-| DB path | 共有 read / create / delete の失敗、connection / statement / lock timeout |
-| Abuse control | mutation / GET の 429 増加、daily / active / storage quota 到達理由 |
+| DB path | `/ready`、共有 read / create / delete、connection / statement / lock timeout |
+| Abuse control | bucket別429/503、Argon2 capacity、daily / active / storage quota 到達理由 |
 | Cleanup | Scheduler 最終成功時刻、Job exit、削除件数、batch 安全上限、backlog |
-| Capacity | active row 数、relation size、DB connection、Cloud Run instance 数 |
+| Capacity | logical bytes、active row数、物理relation size、DB connection、Cloud Run instance数 |
 | Identity | IAM policy 変更、Secret Manager access、Workload Identity の失敗 |
 | DB tunnel | Cloudflare Access deny、token 認証失敗、sidecar startup probe 失敗 |
 | Delivery | 対象CI run / SHA、production environment実行者、image digest、migration / cleanup / deployの結果 |
 
-`/health` は DB を query しない。HTTP 200 だけで共有機能が正常とは判断せず、closed schema の
-test data で read / create / delete を確認する。実利用者の共有 ID や削除コードを probe に使わない。
+`/health` は DB を query しない。`/ready`はruntime app roleのread-only queryで利用列、default、
+constraint、PK/FK、cleanup index、必要grantのcatalog contractを確認する。どちらも`no-store`で、失敗時も
+DB host、credential、schema差分をresponseへ出さない。`/ready`成功後もclosed schemaのtest dataで
+read / create / deleteを確認し、実利用者の共有IDや削除コードをprobeに使わない。
 
 ## 共有の緊急停止
 
@@ -154,6 +156,25 @@ gcloud run jobs execute fighter-cleanup \
 手動実行を繰り返す前に、1回の Job が一部削除後に失敗したのか、接続前に失敗したのかを log で分ける。
 cleanup は短い batch と `ON DELETE CASCADE` を使うため再実行可能だが、安全上限の引き上げは DB load と
 quota event prune の順序を確認してから行う。
+
+### Quotaの予兆と回復
+
+外部監視では`SHARE_ACTIVE_LIMIT`と`SHARE_STORAGE_LIMIT_BYTES`に対し80%でwarning、90%でcritical、
+100%でcreate停止として扱う。少なくとも次のread-only query相当を収集し、logical quotaと物理容量を
+別signalにする。
+
+```sql
+SELECT
+  count(*) FILTER (WHERE expires_at > clock_timestamp()) AS active_rows,
+  coalesce(sum(logical_size_bytes), 0) AS logical_bytes,
+  count(*) FILTER (WHERE expires_at <= clock_timestamp()) AS expired_backlog
+FROM published_analyses;
+```
+
+閾値到達時はSchedulerの最終成功とJob logを確認し、cleanupを1回実行する。`logical_bytes`はDELETEの
+commit直後に減るため、その値と新規createを再確認する。物理relation fileが縮まらなくてもquota回復に
+`VACUUM FULL`は不要である。DB diskの警告が別途残る場合はautovacuum状況を確認し、必要ならonlineの
+`VACUUM (ANALYZE)`で再利用と統計更新を促す。blocking maintenanceはDB運用手順として別に計画する。
 
 ## 定期棚卸し
 

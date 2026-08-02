@@ -11,6 +11,7 @@ import {
 } from "../../models/published-analysis";
 import type { Usecase } from "../runner";
 import { usecase } from "../runner";
+import { SecurityCapacityError } from "../services";
 
 interface DeleteRequest {
   id: ShareId;
@@ -57,12 +58,21 @@ export function deletePublishedAnalysisUsecase(
       };
     },
     process: async (ctx, request) => {
-      if (
-        !(await ctx.services.publishedAnalysisSecurity.verifyDeletePassword(
-          request.deletePassword,
-          request.deletePasswordHash,
-        ))
-      ) {
+      let verified: boolean;
+      try {
+        verified =
+          await ctx.services.publishedAnalysisSecurity.verifyDeletePassword(
+            request.deletePassword,
+            request.deletePasswordHash,
+          );
+      } catch (error) {
+        if (!(error instanceof SecurityCapacityError)) throw error;
+        ctx.logger.warn("Published analysis security capacity reached", {
+          operation: "verify",
+        });
+        return fail("RESOURCE_LIMIT", "Published analysis service is busy");
+      }
+      if (!verified) {
         return fail("NOT_FOUND", "Published analysis not found");
       }
       return request.id;

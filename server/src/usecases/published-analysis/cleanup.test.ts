@@ -4,10 +4,6 @@ import { RuntimeConfig } from "../../config";
 import type { Database } from "../../infra/db";
 import type { ILogger } from "../../infra/logger/types";
 import { createRuntimeServices } from "../../infra/security";
-import type {
-  PublishedAnalysisLifecycle,
-  ShareId,
-} from "../../models/published-analysis";
 import { createRawRepos } from "../../repositories";
 import {
   bindAllRepos,
@@ -19,34 +15,44 @@ describe("published analysis cleanup batch command", () => {
   test("期限切れrowを短いbatchで削除して古いquota eventをpruneする", async () => {
     const database = new TransactionCountingDatabase();
     const ctx = createTestContext(database);
-    const pages = [
-      page([lifecycle("a", 0), lifecycle("b", 1)], true),
-      page([lifecycle("c", 2), lifecycle("d", 3)], true),
-      page([lifecycle("e", 4)], false),
+    const expiredBatches = [
+      { deleted: 2, hasMore: true },
+      { deleted: 2, hasMore: true },
+      { deleted: 1, hasMore: false },
     ];
-    const listSpecs: unknown[] = [];
-    const deleteSpecs: unknown[] = [];
+    const retainedBatches = [{ deleted: 2, hasMore: false }];
+    const expiredAt: Date[] = [];
+    const retentionCutoffs: Date[] = [];
+    const deleteLimits: number[] = [];
+    const rateLimitBatches = [
+      { deleted: 2, hasMore: true },
+      { deleted: 1, hasMore: false },
+    ];
     let quotaSpec: unknown;
 
-    ctx.rawRepos.publishedAnalysisLifecycle.list = async (
+    ctx.rawRepos.publishedAnalysisLifecycle.deleteExpiredBatch = async (
       _ctx,
-      spec,
-      cursor,
+      at,
+      limit,
     ) => {
-      listSpecs.push(spec);
-      expect(cursor).toEqual({
-        limit: 2,
-        sort: { keys: ["expiresAt", "id"], order: "asc" },
-      });
-      return pages.shift() ?? page([], false);
+      expiredAt.push(at);
+      deleteLimits.push(limit);
+      return expiredBatches.shift() ?? { deleted: 0, hasMore: false };
     };
-    ctx.rawRepos.publishedAnalysisLifecycle.delete = async (_ctx, spec) => {
-      deleteSpecs.push(spec);
-      return spec.type === "ByIds" ? spec.ids.length : 0;
-    };
+    ctx.rawRepos.publishedAnalysisLifecycle.deleteCreatedAtOrBeforeBatch =
+      async (_ctx, cutoff, limit) => {
+        retentionCutoffs.push(cutoff);
+        deleteLimits.push(limit);
+        return retainedBatches.shift() ?? { deleted: 0, hasMore: false };
+      };
     ctx.rawRepos.publishedAnalysisCreateEvent.delete = async (_ctx, spec) => {
       quotaSpec = spec;
       return 3;
+    };
+    ctx.services.sharingRateLimit.prune = async (before, limit) => {
+      expect(before).toEqual(new Date("2026-07-15T12:32:56.000Z"));
+      expect(limit).toBe(2);
+      return rateLimitBatches.shift() ?? { deleted: 0, hasMore: false };
     };
 
     const result = await runPublishedAnalysisCleanup(ctx, {
@@ -57,39 +63,70 @@ describe("published analysis cleanup batch command", () => {
 
     expect(result).toEqual({
       ok: true,
-      value: { expired: 5, quotaEvents: 3, batches: 3 },
+      value: { expired: 7, rateLimits: 3, quotaEvents: 3, batches: 4 },
     });
-    expect(listSpecs).toHaveLength(3);
-    expect(listSpecs[0]).toMatchObject({
-      type: "or",
-      children: [
-        { type: "ExpiredAt", at: new Date("2026-07-15T12:34:56.000Z") },
-        {
-          type: "CreatedAtOrBefore",
-          cutoff: new Date("2026-06-15T12:34:56.000Z"),
-        },
-      ],
-    });
-    expect(deleteSpecs).toHaveLength(3);
-    expect(deleteSpecs[0]).toMatchObject({
-      type: "ByIds",
-      ids: [shareId("a"), shareId("b")],
-    });
+    expect(expiredAt).toEqual([
+      new Date("2026-07-15T12:34:56.000Z"),
+      new Date("2026-07-15T12:34:56.000Z"),
+      new Date("2026-07-15T12:34:56.000Z"),
+    ]);
+    expect(retentionCutoffs).toEqual([new Date("2026-06-15T12:34:56.000Z")]);
+    expect(deleteLimits).toEqual([2, 2, 2, 2]);
     expect(quotaSpec).toMatchObject({
       type: "CreatedBefore",
       cutoff: new Date("2026-07-13T00:00:00.000Z"),
     });
-    expect(database.transactions).toBe(4);
+    expect(database.transactions).toBe(5);
   });
 
   test("batch安全上限に達したら失敗しquota eventには進まない", async () => {
     const database = new TransactionCountingDatabase();
     const ctx = createTestContext(database);
     let quotaCleanupCalled = false;
+    let rateLimitCleanupCalled = false;
 
-    ctx.rawRepos.publishedAnalysisLifecycle.list = async () =>
-      page([lifecycle("a", 0), lifecycle("b", 1)], true);
-    ctx.rawRepos.publishedAnalysisLifecycle.delete = async () => 2;
+    ctx.rawRepos.publishedAnalysisLifecycle.deleteExpiredBatch = async () => ({
+      deleted: 2,
+      hasMore: true,
+    });
+    ctx.rawRepos.publishedAnalysisCreateEvent.delete = async () => {
+      quotaCleanupCalled = true;
+      return 0;
+    };
+    ctx.services.sharingRateLimit.prune = async () => {
+      rateLimitCleanupCalled = true;
+      return { deleted: 0, hasMore: false };
+    };
+
+    const result = await runPublishedAnalysisCleanup(ctx, {
+      batchSize: 2,
+      maxBatches: 2,
+      retentionDays: 30,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "RESOURCE_LIMIT" },
+    });
+    expect(quotaCleanupCalled).toBe(false);
+    expect(rateLimitCleanupCalled).toBe(false);
+    expect(database.transactions).toBe(2);
+  });
+
+  test("rate-limit pruneの安全上限でも失敗しquota eventへ進まない", async () => {
+    const database = new TransactionCountingDatabase();
+    const ctx = createTestContext(database);
+    let quotaCleanupCalled = false;
+    ctx.rawRepos.publishedAnalysisLifecycle.deleteExpiredBatch = async () => ({
+      deleted: 0,
+      hasMore: false,
+    });
+    ctx.rawRepos.publishedAnalysisLifecycle.deleteCreatedAtOrBeforeBatch =
+      async () => ({ deleted: 0, hasMore: false });
+    ctx.services.sharingRateLimit.prune = async () => ({
+      deleted: 2,
+      hasMore: true,
+    });
     ctx.rawRepos.publishedAnalysisCreateEvent.delete = async () => {
       quotaCleanupCalled = true;
       return 0;
@@ -106,13 +143,12 @@ describe("published analysis cleanup batch command", () => {
       error: { code: "RESOURCE_LIMIT" },
     });
     expect(quotaCleanupCalled).toBe(false);
-    expect(database.transactions).toBe(2);
   });
 
   test("DB失敗をusecaseのINTERNAL failureとして返す", async () => {
     const database = new TransactionCountingDatabase();
     const ctx = createTestContext(database);
-    ctx.rawRepos.publishedAnalysisLifecycle.list = async () => {
+    ctx.rawRepos.publishedAnalysisLifecycle.deleteExpiredBatch = async () => {
       throw new Error("database unavailable");
     };
 
@@ -177,21 +213,4 @@ function createTestContext(database: Database): Context {
     config: RuntimeConfig.fromEnvironment({}),
     services: createRuntimeServices(),
   };
-}
-
-function page(items: PublishedAnalysisLifecycle[], hasMore: boolean) {
-  return { items, hasMore };
-}
-
-function lifecycle(seed: string, day: number): PublishedAnalysisLifecycle {
-  return {
-    id: shareId(seed),
-    deletePasswordHash: null,
-    createdAt: new Date(Date.UTC(2026, 0, day + 1)),
-    expiresAt: new Date(Date.UTC(2026, 1, day + 1)),
-  };
-}
-
-function shareId(seed: string): ShareId {
-  return seed.repeat(22).slice(0, 22) as ShareId;
 }

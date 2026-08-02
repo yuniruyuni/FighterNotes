@@ -19,10 +19,9 @@ export type ShareQuotaDecision =
       readonly reason: "daily" | "active" | "storage";
     };
 
-// A logical payload is capped at 8 KiB, but one transaction can extend several
-// heap and index relations by an 8 KiB page each. Reserve conservative physical
-// headroom so the committed relation size cannot cross the configured hard cap.
-export const MAX_ANALYSIS_STORAGE_RESERVATION_BYTES = 256 * 1024;
+// Quota accounting stores the exact serialized logical size for new rows and
+// conservatively accounts legacy rows at this closed-schema maximum.
+export const MAX_ANALYSIS_STORAGE_RESERVATION_BYTES = 8 * 1024;
 
 export const PUBLISHED_ANALYSIS_CREATE_LOCK: TransactionLock = Object.freeze({
   namespace: 1_179_537_442,

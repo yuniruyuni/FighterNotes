@@ -5,6 +5,11 @@ import { PgDatabase } from "./pg-client";
 
 export type { Database } from "./database";
 export { PgDatabase } from "./pg-client";
+export {
+  createDatabaseReadiness,
+  type DatabaseReadiness,
+  inspectDatabaseReadiness,
+} from "./readiness";
 export { type SQLFragment, sql } from "./sql";
 
 interface DatabaseOptions {
@@ -17,9 +22,6 @@ export function initDatabase(
   options: DatabaseOptions = {},
 ): PgDatabase {
   const log = logger.child("Database");
-  log.info(
-    `Connecting to PostgreSQL at ${settings.host}:${settings.port}/${settings.database}...`,
-  );
   const database = new PgDatabase({
     host: settings.host,
     port: settings.port,
@@ -36,7 +38,7 @@ export function initDatabase(
     query_timeout: settings.statementTimeoutMillis + 1_000,
     application_name: options.applicationName ?? "fighter-runtime",
   });
-  log.info("Database ready");
+  log.info("Database connection pool initialized");
   return database;
 }
 

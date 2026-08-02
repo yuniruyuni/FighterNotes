@@ -61,7 +61,7 @@ bun run server/src/index.ts
 ```
 
 server は起動時に遅延接続の DB pool を作る。静的配信と `/health` だけなら DB なしでも起動できるが、
-共有 read / create / delete と cleanup の確認には schema 適用済み DB が必要である。
+共有 read / create / delete、`/ready`とcleanup の確認には schema 適用済み DB が必要である。
 
 ## watch mode
 

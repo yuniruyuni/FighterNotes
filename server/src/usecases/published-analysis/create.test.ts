@@ -13,7 +13,7 @@ import {
   createFullCtx,
 } from "../../repositories/common/capability";
 import type { Context } from "../context";
-import type { RuntimeServices } from "../services";
+import { type RuntimeServices, SecurityCapacityError } from "../services";
 import { createPublishedAnalysisUsecase } from "./create";
 
 describe("createPublishedAnalysisUsecase", () => {
@@ -23,7 +23,8 @@ describe("createPublishedAnalysisUsecase", () => {
 
     ctx.services.publishedAnalysisSecurity.hashDeletePassword = async () => {
       calls.push("hash");
-      expect(ctx.db.transactions).toBe(0);
+      expect(ctx.db.readTransactions).toBe(1);
+      expect(ctx.db.writeTransactions).toBe(0);
       return DELETE_PASSWORD_HASH;
     };
 
@@ -78,6 +79,9 @@ describe("createPublishedAnalysisUsecase", () => {
 
     expect(result.ok).toBe(true);
     expect(calls).toEqual([
+      "daily-count",
+      "active-count",
+      "storage-get",
       "hash",
       "lock",
       "daily-count",
@@ -86,12 +90,19 @@ describe("createPublishedAnalysisUsecase", () => {
       "event-create",
       "analysis-create",
     ]);
-    expect(ctx.db.transactions).toBe(1);
+    expect(ctx.db.readTransactions).toBe(1);
+    expect(ctx.db.writeTransactions).toBe(1);
   });
 
   test("quota拒否時はeventとaggregateを作らない", async () => {
     const ctx = createTestContext();
     let created = false;
+    let hashed = false;
+
+    ctx.services.publishedAnalysisSecurity.hashDeletePassword = async () => {
+      hashed = true;
+      return DELETE_PASSWORD_HASH;
+    };
 
     ctx.rawRepos.transactionLock.acquire = async () => {};
     ctx.rawRepos.publishedAnalysisCreateEvent.count = async () => 1;
@@ -120,11 +131,46 @@ describe("createPublishedAnalysisUsecase", () => {
       error: { code: "RESOURCE_LIMIT" },
     });
     expect(created).toBe(false);
+    expect(hashed).toBe(false);
+    expect(ctx.db.readTransactions).toBe(1);
+    expect(ctx.db.writeTransactions).toBe(0);
+  });
+
+  test("Argon2 capacity超過は低cardinalityで拒否しwrite transactionへ進まない", async () => {
+    const ctx = createTestContext();
+    ctx.services.publishedAnalysisSecurity.hashDeletePassword = async () => {
+      throw new SecurityCapacityError();
+    };
+    ctx.rawRepos.publishedAnalysisCreateEvent.count = async () => 0;
+    ctx.rawRepos.publishedAnalysisLifecycle.count = async () => 0;
+    ctx.rawRepos.publishedAnalysisStorageUsage.get = async () => ({ bytes: 0 });
+
+    const result = await createPublishedAnalysisUsecase(
+      candidate(),
+      "fighter-notes-delete-key",
+      30,
+      {
+        dailyCreates: 10,
+        activeRows: 100,
+        storageBytes: 10_000_000,
+      },
+    ).run(ctx);
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "RESOURCE_LIMIT" },
+    });
+    expect(ctx.db.readTransactions).toBe(1);
+    expect(ctx.db.writeTransactions).toBe(0);
+    expect(ctx.logs).toEqual([
+      ["Published analysis security capacity reached", { operation: "hash" }],
+    ]);
   });
 });
 
 class TransactionCountingDatabase implements Database {
-  transactions = 0;
+  readTransactions = 0;
+  writeTransactions = 0;
 
   queryGet(): Promise<never> {
     throw new Error("Unexpected queryGet");
@@ -139,34 +185,41 @@ class TransactionCountingDatabase implements Database {
   }
 
   async transaction<T>(fn: (tx: Database) => Promise<T>): Promise<T> {
-    this.transactions++;
+    this.writeTransactions += 1;
     return fn(this);
   }
 
-  readTransaction<T>(): Promise<T> {
-    throw new Error("Unexpected readTransaction");
+  async readTransaction<T>(fn: (tx: Database) => Promise<T>): Promise<T> {
+    this.readTransactions += 1;
+    return fn(this);
   }
 
   async close(): Promise<void> {}
 }
 
-const logger: ILogger = {
-  debug() {},
-  info() {},
-  warn() {},
-  error() {},
-  child() {
-    return this;
-  },
-};
-
-function createTestContext(): Context & { db: TransactionCountingDatabase } {
+function createTestContext(): Context & {
+  db: TransactionCountingDatabase;
+  logs: unknown[][];
+} {
   const db = new TransactionCountingDatabase();
+  const logs: unknown[][] = [];
+  const logger: ILogger = {
+    debug() {},
+    info() {},
+    warn(message, ...args) {
+      logs.push([message, ...args]);
+    },
+    error() {},
+    child() {
+      return this;
+    },
+  };
   const rawRepos = createRawRepos();
   return {
     now: new Date("2026-07-15T12:34:56.000Z"),
     logger,
     db,
+    logs,
     rawRepos,
     repos: bindAllRepos(rawRepos, createFullCtx(db)),
     config: RuntimeConfig.fromEnvironment({}),
@@ -183,6 +236,10 @@ function testServices(): RuntimeServices {
       generateShareId: () => SHARE_ID,
       hashDeletePassword: async () => DELETE_PASSWORD_HASH,
       verifyDeletePassword: async () => true,
+    },
+    sharingRateLimit: {
+      consume: async () => ({ allowed: true, retryAfterSeconds: 0 }),
+      prune: async () => ({ deleted: 0, hasMore: false }),
     },
   };
 }
