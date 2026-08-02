@@ -74,6 +74,9 @@ jobs:
       - name: Run tests
         run: bun run check:test
 
+      - name: Run root script tests
+        run: bun run check:scripts
+
   security:
     runs-on: ubuntu-latest
 

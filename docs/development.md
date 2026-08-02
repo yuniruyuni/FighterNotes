@@ -89,13 +89,12 @@ release 前の基本順序は次のとおり。
 bun run check
 bun scripts/validate-frame-data.ts
 bun run build
-bun test scripts/
 bun audit
 ```
 
 `bun run check` はWASM bindingを生成した後、Rustのformat、全警告をエラー扱いするclippy、
-全crate test、WASM公開API契約、clientとserverのtype check、Biome、unit testを実行する。
-root の `scripts/` にある test は workspace の `check:test` 対象外なので別に実行する。
+全crate test、WASM公開API契約、clientとserverのtype check、Biome、workspaceとroot `scripts/` の
+unit testを実行する。`check:scripts`は`*.test.ts`だけを選ぶため、実動画を必要とするrunner本体は起動しない。
 frame data validator はnetworkへ接続せず、公開dataのschema、意味制約、件数、checksumを検証する。
 
 ### 使用コンポーネントのライセンスinventory
@@ -238,6 +237,8 @@ frame切り出し、Worker copy、meter WASM、HUD WASMの中央値を閾値判�
 baseline側も1回以上のwarm-upと3回以上の計測で生成されていなければ比較を拒否する。
 動画内容のSHA-256、side・character設定、annotation・期待値の正規化hash、runner version、
 計測回数もbaseline contractへ保存する。動画・設定・期待値を削除または変更した比較は失敗する。
+manifestとbaselineのcase集合も完全一致を要求し、caseの追加・削除・重複を比較前に拒否する。
+summaryのcapture hash・semantic hashはcase artifactから再計算し、古いrunとの混在や差し替えを拒否する。
 baseline比較を行うcaseには、1件以上の`semanticEvents`と`detectorGates`が必要になる。
 
 ```bash

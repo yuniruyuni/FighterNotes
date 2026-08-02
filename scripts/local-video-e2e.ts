@@ -11,6 +11,19 @@ import {
   sep,
 } from "node:path";
 import {
+  type BaselineCaseArtifact,
+  CAPTURE_HASH_FIELDS,
+  type CaptureHashField,
+  canonicalJson,
+  compareArtifactIdentity,
+  compareFixtureIdSets,
+  computeArtifactIdentity,
+  type FixtureSettings,
+  parseBaselineArtifact,
+  REQUIRED_PERFORMANCE_STAGES,
+  RUNNER_VERSION,
+} from "./local-video-e2e-baseline";
+import {
   compareDetectorMetrics,
   comparePerformance,
   type DetectorId,
@@ -29,15 +42,6 @@ import {
 const DEFAULT_MANIFEST = "video/local-video-e2e.json";
 const DEFAULT_OUTPUT = "output/local-video-e2e/current";
 const DEFAULT_TIMEOUT_SECONDS = 600;
-const RUNNER_VERSION = 2;
-const REQUIRED_PERFORMANCE_STAGES = [
-  "firstPass",
-  "spatialPass",
-  "frameExtraction",
-  "workerCopy",
-  "meterWasm",
-  "hudWasm",
-] as const;
 const DETECTOR_IDS: readonly DetectorId[] = [
   "round",
   "fight",
@@ -47,17 +51,6 @@ const DETECTOR_IDS: readonly DetectorId[] = [
   "attackInfoAttribution",
   "adviceEvidence",
 ];
-const CAPTURE_HASH_FIELDS = [
-  "report",
-  "timeline",
-  "features",
-  "trackedInputs",
-  "fightMarkers",
-  "attackInfo",
-  "regressionEvents",
-  "spatialWindows",
-  "spatialObservations",
-] as const;
 
 interface CliOptions {
   readonly manifestPath: string;
@@ -113,14 +106,8 @@ interface CaseSummary {
   };
   readonly assertionsPassed: boolean;
   readonly assertionFailures: readonly string[];
-  readonly hashes: Readonly<Record<string, string>>;
+  readonly hashes: Readonly<Record<CaptureHashField, string>>;
   readonly semanticHash: string;
-}
-
-interface FixtureSettings {
-  readonly side: "p1" | "p2";
-  readonly ownCharacter: string;
-  readonly opponentCharacter: string;
 }
 
 interface RunSummary {
@@ -182,6 +169,19 @@ if (
   throw new Error(
     `baseline measurement contract is ${baseline.summary.warmupRuns} warm-up + ${baseline.summary.measuredRuns} measured run(s), current run requested ${warmupRuns} + ${measuredRuns}`,
   );
+}
+if (baseline) {
+  const fixtureIdentityFailures = compareFixtureIdSets(
+    manifest.cases.map((fixture) => fixture.id),
+    baseline.summary.cases.map((fixture) => fixture.id),
+  );
+  if (fixtureIdentityFailures.length > 0) {
+    throw new Error(
+      `baseline fixture identity mismatch:\n${fixtureIdentityFailures
+        .map((failure) => `- ${failure}`)
+        .join("\n")}`,
+    );
+  }
 }
 for (const fixture of manifest.cases) {
   if (!isAbsolute(fixture.videoPath) || !existsSync(fixture.videoPath)) {
@@ -326,18 +326,7 @@ try {
         : []),
     ];
     failed ||= assertionFailures.length > 0;
-    const hashes = {
-      report: sha256(captured.report),
-      timeline: sha256(captured.timeline),
-      features: sha256(captured.features),
-      trackedInputs: sha256(captured.trackedInputs ?? ""),
-      fightMarkers: sha256(captured.fightMarkers ?? ""),
-      attackInfo: sha256(captured.attackInfo ?? ""),
-      regressionEvents: sha256(captured.regressionEvents),
-      spatialWindows: sha256(captured.spatialWindows ?? ""),
-      spatialObservations: sha256(captured.spatialObservations ?? ""),
-    };
-    const snapshotText = JSON.stringify(semanticSnapshot(artifacts));
+    const identity = computeArtifactIdentity(artifacts);
     summaries.push({
       id: fixture.id,
       videoName: basename(fixture.videoPath),
@@ -350,8 +339,8 @@ try {
       syntheticCoverage: regression.syntheticCoverage,
       assertionsPassed: assertionFailures.length === 0,
       assertionFailures,
-      hashes,
-      semanticHash: sha256(snapshotText),
+      hashes: identity.hashes,
+      semanticHash: identity.semanticHash,
     });
     console.log(
       `[local-e2e] ${fixture.id}: median ${(
@@ -969,22 +958,6 @@ async function sha256File(path: string): Promise<string> {
   return hasher.digest("hex");
 }
 
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalJson).join(",")}]`;
-  }
-  if (isRecord(value)) {
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
-      .join(",")}}`;
-  }
-  const serialized = JSON.stringify(value);
-  if (serialized === undefined)
-    throw new Error("cannot canonicalize undefined");
-  return serialized;
-}
-
 function hasAccuracyContract(fixture: LocalVideoCase): boolean {
   return (
     (fixture.expect?.semanticEvents?.length ?? 0) > 0 &&
@@ -1154,13 +1127,14 @@ function parseCaseSummary(
   }
   if (!isRecord(value.hashes))
     throw new Error(`${label}.hashes must be an object`);
-  assertExactKeys(value.hashes, CAPTURE_HASH_FIELDS, `${label}.hashes`);
+  const rawHashes = value.hashes;
+  assertExactKeys(rawHashes, CAPTURE_HASH_FIELDS, `${label}.hashes`);
   const hashes = Object.fromEntries(
-    Object.entries(value.hashes).map(([key, hash]) => [
-      key,
-      requiredSha256(hash, `${label}.hashes.${key}`),
+    CAPTURE_HASH_FIELDS.map((field) => [
+      field,
+      requiredSha256(rawHashes[field], `${label}.hashes.${field}`),
     ]),
-  );
+  ) as Record<CaptureHashField, string>;
   const syntheticCoverage = parseSyntheticCoverage(
     value.syntheticCoverage,
     `${label}.syntheticCoverage`,
@@ -1523,25 +1497,57 @@ async function compareWithBaseline(
   const baselineArtifact: unknown = JSON.parse(
     await readFile(artifactPath, "utf8"),
   );
-  if (!baselineArtifact || typeof baselineArtifact !== "object") {
-    failures.push(`${fixture.id}: baseline artifact must be an object`);
+  let parsedArtifact: BaselineCaseArtifact;
+  try {
+    parsedArtifact = parseBaselineArtifact(
+      baselineArtifact,
+      relative(baseline.directory, artifactPath),
+      baseline.summary.measuredRuns,
+    );
+  } catch (error) {
+    failures.push(
+      `${fixture.id}: baseline artifact is invalid: ${error instanceof Error ? error.message : String(error)}`,
+    );
     return failures;
   }
-  const baselineContract = (baselineArtifact as Record<string, unknown>)
-    .fixtureContract;
+  const baselineContract = parsedArtifact.fixtureContract;
   if (
-    !isRecord(baselineContract) ||
+    parsedArtifact.caseId !== previous.id ||
+    parsedArtifact.videoName !== previous.videoName ||
+    parsedArtifact.analysisMs !== previous.analysisMs ||
+    canonicalJson(parsedArtifact.performance) !==
+      canonicalJson(previous.performance) ||
+    baselineContract.fixtureFingerprint !== previous.fixtureFingerprint ||
+    baselineContract.expectationHash !== previous.expectationHash ||
+    canonicalJson(baselineContract.settings) !==
+      canonicalJson(previous.settings)
+  ) {
+    failures.push(
+      `${fixture.id}: baseline artifact does not match its summary contract`,
+    );
+    return failures;
+  }
+  if (
     baselineContract.fixtureFingerprint !== fixtureFingerprint ||
     baselineContract.expectationHash !== expectationHash ||
-    JSON.stringify(baselineContract.settings) !== JSON.stringify(settings)
+    canonicalJson(baselineContract.settings) !== canonicalJson(settings)
   ) {
     failures.push(
       `${fixture.id}: baseline artifact fixture contract is invalid`,
     );
     return failures;
   }
+  const identityFailures = compareArtifactIdentity(parsedArtifact, previous);
+  if (identityFailures.length > 0) {
+    failures.push(
+      ...identityFailures.map(
+        (failure) => `${fixture.id}: baseline artifact ${failure}`,
+      ),
+    );
+    return failures;
+  }
   const semanticDifferences = diffSemanticValues(
-    semanticSnapshot(baselineArtifact as Record<string, unknown>),
+    semanticSnapshot(parsedArtifact),
     semanticSnapshot(currentArtifact),
   );
   if (semanticDifferences.length > 0) {
