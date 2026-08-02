@@ -83,8 +83,10 @@ jobs:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
       SERVICE_NAME: fighter
       SOURCE_SHA: ${{ needs.release-gate.outputs.source_sha }}
-      APP_IMAGE_REF: ${{ needs.build-app.outputs.artifact_image_ref }}
-      MIGRATION_IMAGE_REF: ${{ needs.build-migration.outputs.artifact_image_ref }}
+      APP_IMAGE_NAME: fighter
+      APP_IMAGE_DIGEST: ${{ needs.build-app.outputs.artifact_image_digest }}
+      MIGRATION_IMAGE_NAME: fighter-migration
+      MIGRATION_IMAGE_DIGEST: ${{ needs.build-migration.outputs.artifact_image_digest }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -103,6 +105,42 @@ jobs:
             echo "should_release=false" >> "$GITHUB_OUTPUT"
             echo "Skipping superseded revision $SOURCE_SHA; current main is $CURRENT_MAIN_SHA."
           fi
+
+      - name: Validate and compose immutable image references
+        if: steps.current-main.outputs.should_release == 'true'
+        run: |
+          validate_digest() {
+            local label="$1"
+            local digest="$2"
+            if ! printf '%s' "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+              echo "$label must be a sha256 image digest" >&2
+              exit 1
+            fi
+          }
+          validate_component() {
+            local label="$1"
+            local value="$2"
+            if ! printf '%s' "$value" | grep -Eq '^[a-z0-9][a-z0-9._-]*$'; then
+              echo "$label contains unsupported registry path characters" >&2
+              exit 1
+            fi
+          }
+
+          validate_digest "Application image digest" "$APP_IMAGE_DIGEST"
+          validate_digest "Migration image digest" "$MIGRATION_IMAGE_DIGEST"
+          validate_component "GCP region" "$GCP_REGION"
+          validate_component "GCP project ID" "$GCP_PROJECT_ID"
+          validate_component "Application image name" "$APP_IMAGE_NAME"
+          validate_component "Migration image name" "$MIGRATION_IMAGE_NAME"
+
+          IMAGE_REPOSITORY="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/fighter"
+          {
+            printf 'APP_IMAGE_REF=%s/%s@%s\n' \
+              "$IMAGE_REPOSITORY" "$APP_IMAGE_NAME" "$APP_IMAGE_DIGEST"
+            printf 'MIGRATION_IMAGE_REF=%s/%s@%s\n' \
+              "$IMAGE_REPOSITORY" "$MIGRATION_IMAGE_NAME" "$MIGRATION_IMAGE_DIGEST"
+          } >> "$GITHUB_ENV"
+          echo "Validated immutable application and migration image digests."
 
       - name: Authenticate to Google Cloud
         if: steps.current-main.outputs.should_release == 'true'
@@ -165,8 +203,8 @@ jobs:
             echo "## Production release"
             echo
             echo "- Source: \`$SOURCE_SHA\`"
-            echo "- Application: \`$APP_IMAGE_REF\`"
-            echo "- Migration: \`$MIGRATION_IMAGE_REF\`"
+            echo "- Application digest: \`$APP_IMAGE_DIGEST\`"
+            echo "- Migration digest: \`$MIGRATION_IMAGE_DIGEST\`"
             echo "- DB sidecar: \`${SIDECAR_IMAGE:-unknown}\`"
             echo "- Current-main gate: \`${SHOULD_RELEASE:-unknown}\`"
             echo "- Migration stage: \`${MIGRATION_OUTCOME:-not-run}\`"

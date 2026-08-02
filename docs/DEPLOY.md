@@ -61,7 +61,7 @@ PostgreSQL integration test と release 後の共有経路で別に確認する�
 
 `deploy.yml` は `main` pushを直接契機にせず、同じSHAに対する `CI` workflowの `push` runが成功した
 `workflow_run` だけを受け付ける。branch protectionでは `CI / test`、`CI / security`、`CI / docker` と、
-schema変更時の `Schema Plan / plan` を必須にする。GitHubのlive branch ruleはrepository外の状態なので、
+全pull requestで `Schema Plan / plan` を必須にする。GitHubのlive branch ruleはrepository外の状態なので、
 設定変更後と四半期棚卸し時に実在を確認する。
 
 `scripts/release-workflows.test.ts` は全workflowのthird-party Actionが40桁commit SHAとversion commentを
@@ -70,17 +70,22 @@ schema変更時の `Schema Plan / plan` を必須にする。GitHubのlive branc
 
 ## Schema 変更
 
-schema 関連 path の pull request では `schema-plan.yml` が次を行う。
+`schema-plan.yml` は全pull requestで同じ `Schema Plan / plan` jobを作成し、PRのbase SHAとhead SHAの
+差分から `schema/**`、`.pgschemaignore`、`Dockerfile.migration`、`bin/migrate.sh` の変更有無を判定する。
+対象pathがなければ成功no-opとし、PostgreSQLやmigration toolchainは起動しない。対象pathがある場合だけ
+次を行う。
 
 1. PostgreSQL 18 に `fighter_app` role を用意する。
-2. `origin/main` の schema を baseline として適用する。
+2. pull requestのbase SHAにあるschemaをbaselineとして適用する。
 3. pull request の `schema/main.sql` に対する `pgschema plan` を生成する。
-4. plan を pull request comment へ反映する。
+4. planと注意表示をjob summaryへ残し、可能ならpull request commentも更新する。
+5. 保存したplan commandの終了コードを検査し、非0、出力未生成、終了コード未記録を失敗にする。
 
-`DROP`、`GRANT`、`REVOKE`、privilege 変更を含む plan は特に確認する。`pgschema plan` の comment は
-成功・失敗のどちらでも更新するが、plan command が失敗した check は comment 投稿後に必ず失敗する。
-branch protection では `Schema Plan / plan` を必須 check にする。comment は review 補助であり、
-データ移行、lock 時間、rollback 可能性の判断を代替しない。
+`DROP`、`GRANT`、`REVOKE`、privilege 変更を含む plan は特に確認する。public forkなどで
+`GITHUB_TOKEN`がread-onlyの場合、comment投稿失敗はwarningとして扱い、planはjob summaryで確認する。
+commentはbest-effortのreview補助であり、その成否でplan/enforce結果を上書きしない。plan commandや
+enforceが失敗したcheckは、commentの成否にかかわらず必ず失敗する。branch protectionでは全PRに対して
+`Schema Plan / plan`を必須checkにする。これはデータ移行、lock時間、rollback可能性の判断を代替しない。
 
 migration は application より先に production DB へ適用される。したがって schema 変更は、少なくとも
 直前の application image と新しい image の両方から利用できる後方互換な段階に分ける。
