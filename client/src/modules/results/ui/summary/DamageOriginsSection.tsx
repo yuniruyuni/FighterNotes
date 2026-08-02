@@ -7,6 +7,10 @@ import type {
 import { summarizeDamageOrigins } from "../../domain/damage-origin.js";
 import { frameToSeconds } from "../../domain/frame-time.js";
 import type { SceneSelection } from "../../domain/scene-selection.js";
+import {
+  attackEvidenceSceneRange,
+  attackEvidenceStatus,
+} from "./attack-evidence-format.js";
 import { DamageOriginDetails } from "./DamageOriginDetails.js";
 import { formatHpRatio, formatPercent } from "./damage-origin-format.js";
 
@@ -40,11 +44,14 @@ export function DamageOriginsSection({
     () => summarizeDamageOrigins(breakdown?.events ?? [], selectedRound),
     [breakdown, selectedRound],
   );
-  const mismatchEvents = (breakdown?.events ?? []).filter(
-    (event) =>
+  const mismatchEvents = (breakdown?.events ?? []).filter((event) => {
+    const evidence = event.attack_evidence;
+    return (
       (selectedRound === "all" || event.round_no === selectedRound) &&
-      event.attack_evidence?.hp_consistency === "mismatch",
-  );
+      evidence !== undefined &&
+      attackEvidenceStatus(evidence) === "mismatch"
+    );
+  });
 
   if (!breakdown) return null;
 
@@ -109,8 +116,9 @@ export function DamageOriginsSection({
               <div>
                 {mismatchEvents.map((event) => {
                   const label = `HP表示不一致・R${event.round_no}・${formatHpRatio(event.hp_drop)}`;
+                  const sceneRange = attackEvidenceSceneRange(event);
                   const time = frameToSeconds(
-                    event.scene_frame,
+                    sceneRange.frame,
                     frameTimestamps,
                   ).toFixed(1);
                   return (
@@ -120,8 +128,7 @@ export function DamageOriginsSection({
                       aria-label={`${label}。${time}秒を動画で確認`}
                       onClick={() =>
                         onSceneChange({
-                          frame: event.scene_frame,
-                          endFrame: event.end_frame,
+                          ...sceneRange,
                           card: null,
                           label,
                         })

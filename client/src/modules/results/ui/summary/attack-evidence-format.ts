@@ -1,4 +1,7 @@
-import type { DamageAttackEvidence } from "~/modules/analysis/contracts.js";
+import type {
+  AttributedDamageEvent,
+  DamageAttackEvidence,
+} from "~/modules/analysis/contracts.js";
 import { confidenceLabel } from "./damage-origin-format.js";
 
 export type AttackEvidenceDisplayStatus =
@@ -50,13 +53,30 @@ export function formatAttackEvidenceAria(
   const status = attackEvidenceStatus(evidence);
   return [
     `ゲーム内表示 累積ダメージ ${formatInteger(evidence.combo_damage)}`,
-    `${formatInteger(evidence.sequence_count)} hit`,
+    `${formatInteger(evidence.sequence_count)}連係合計`,
     `最終補正 ${formatInteger(evidence.final_scaling_percent)}%`,
     `始動 ${attackAttributeLabel(evidence.starter_attribute)}`,
     `最終 ${attackAttributeLabel(evidence.final_attribute)}`,
     attackEvidenceStatusLabel(status),
     `認識確度 ${confidenceLabel(evidence.confidence)}`,
   ].join("、");
+}
+
+export function attackEvidenceSceneRange(event: AttributedDamageEvent): {
+  readonly frame: number;
+  readonly endFrame: number;
+} {
+  const evidence = event.attack_evidence;
+  return {
+    frame: Math.min(
+      event.scene_frame,
+      evidence?.sequence_start_frame ?? event.scene_frame,
+    ),
+    endFrame: Math.max(
+      event.end_frame,
+      evidence?.sequence_end_frame ?? event.end_frame,
+    ),
+  };
 }
 
 export function formatInteger(value: number): string {

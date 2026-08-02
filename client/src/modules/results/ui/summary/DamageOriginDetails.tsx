@@ -4,6 +4,7 @@ import { frameToSeconds } from "../../domain/frame-time.js";
 import type { SceneSelection } from "../../domain/scene-selection.js";
 import {
   attackAttributeLabel,
+  attackEvidenceSceneRange,
   attackEvidenceStatus,
   attackEvidenceStatusLabel,
   formatAttackEvidenceAria,
@@ -52,6 +53,7 @@ export function DamageOriginDetails({
               );
               const label = `${row.label}・R${event.round_no}・${formatHpRatio(event.hp_drop)}`;
               const evidence = event.attack_evidence;
+              const sceneRange = attackEvidenceSceneRange(event);
               const evidenceAria = evidence
                 ? `。${formatAttackEvidenceAria(evidence)}`
                 : "";
@@ -70,8 +72,7 @@ export function DamageOriginDetails({
                     title={ariaLabel}
                     onClick={() =>
                       onSceneChange({
-                        frame: event.scene_frame,
-                        endFrame: event.end_frame,
+                        ...sceneRange,
                         card: null,
                         label,
                       })
@@ -82,7 +83,7 @@ export function DamageOriginDetails({
                     <span>{formatHpRatio(event.hp_drop)}</span>
                     <span>
                       {frameToSeconds(
-                        event.scene_frame,
+                        sceneRange.frame,
                         frameTimestamps,
                       ).toFixed(1)}
                       s
@@ -136,8 +137,8 @@ function AttackEvidenceDetails({
           <dd>{formatSignedInteger(difference)}</dd>
         </div>
         <div>
-          <dt>コンボ</dt>
-          <dd>{formatInteger(evidence.sequence_count)} hit</dd>
+          <dt>帰属した攻撃連係</dt>
+          <dd>{formatInteger(evidence.sequence_count)}件</dd>
         </div>
         <div>
           <dt>最終補正</dt>

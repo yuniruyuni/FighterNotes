@@ -44,6 +44,7 @@ export interface DamageAttackEvidence {
   sequence_start_frame: number;
   sequence_end_frame: number;
   combo_damage: number;
+  /** 帰属した中央表示の攻撃連係数。実際のヒット数ではない。 */
   sequence_count: number;
   final_scaling_percent: number;
   starter_attribute?: "upper" | "middle" | "lower" | "throw";
