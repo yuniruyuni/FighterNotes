@@ -67,8 +67,8 @@ describe("SharePanel", () => {
               report={syntheticAdviceReport({
                 ruleset_version: 9,
                 tactic_stats: syntheticTacticStats({
-                  super_art_stats_available: true,
-                  opponent_super_art_stats_available: false,
+                  super_art_stats_complete: true,
+                  opponent_super_art_stats_complete: false,
                   sa1_used: 1,
                   sa2_used: 0,
                   sa3_used: 0,
@@ -82,6 +82,10 @@ describe("SharePanel", () => {
                   super_punish_uses: 0,
                   super_reversal_uses: 0,
                   super_neutral_uses: 0,
+                  opponent_sa1_used: 0,
+                  opponent_sa2_used: 0,
+                  opponent_sa3_used: 0,
+                  opponent_ca_used: 0,
                 }),
               })}
             />
@@ -102,6 +106,7 @@ describe("SharePanel", () => {
     expect(
       screen.getByText(/両者のSA\/CAレベル別使用回数と結果/),
     ).toBeInTheDocument();
+    expect(screen.getByText(/検出できた件数だけを下限/)).toBeInTheDocument();
     expect(
       screen.getByText(/正確なダメージ値と最終ゲージ量/),
     ).toBeInTheDocument();
@@ -117,7 +122,7 @@ describe("SharePanel", () => {
         ownCharacter: "JURI",
         opponentCharacter: "KEN",
         superArts: {
-          own: expect.objectContaining({ availability: "available" }),
+          own: expect.objectContaining({ availability: "complete" }),
           opponent: { availability: "unavailable" },
         },
       }),

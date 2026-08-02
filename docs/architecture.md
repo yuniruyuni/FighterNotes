@@ -210,10 +210,11 @@ DELETEを完結させる。storage quotaはparentに記録したlogical sizeの�
 | 公開用集計 | PostgreSQL | 既定 30 日、または手動削除まで |
 
 動画、場面画像、証拠フレーム、ファイル名、詳細レポート、SA/CAの正確なdamage値と最終gauge量は
-PostgreSQLへ保存しない。ruleset v9は両者のlevel別使用数と結果、自分側の利用文脈だけを保存し、
-全ラウンドのゲージ観測被覆を満たさない側を0回と区別するavailabilityも保持する。
-単発の信頼フレームやSAイベントは全使用回数の完全性を証明しないため、availabilityを
-強制的にavailableへ変えない。
+PostgreSQLへ保存しない。ruleset v9は両者のlevel別使用数と結果、自分側の利用文脈だけを保存する。
+全ラウンドのゲージ観測被覆を満たす側は`complete`、満たさなくてもイベントを検出できた側は
+下限値だけを示す`partial`、検出材料も無い側はcountを持たない`unavailable`として区別する。
+単発の信頼フレームやSAイベントは全使用回数の完全性を証明しないため、完全性を
+強制的に`complete`へ変えない。
 共有境界の詳細は [sharing.md](./sharing.md) を参照する。
 
 解析履歴の IndexedDB と、共有管理情報の localStorage は独立した lifecycle を持つ。

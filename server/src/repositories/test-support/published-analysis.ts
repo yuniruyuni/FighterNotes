@@ -90,7 +90,7 @@ export function v9Candidate(maximum = false): PublishedAnalysisCandidate {
     rulesetVersion: 9,
     superArts: {
       own: {
-        availability: "available",
+        availability: "complete",
         levels: { sa1: count, sa2: count, sa3: count, ca: count },
         outcomes: {
           hit: count,
@@ -107,7 +107,7 @@ export function v9Candidate(maximum = false): PublishedAnalysisCandidate {
         },
       },
       opponent: {
-        availability: "available",
+        availability: "complete",
         levels: { sa1: count, sa2: count, sa3: count, ca: count },
         outcomes: {
           hit: count,

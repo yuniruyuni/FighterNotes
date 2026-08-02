@@ -248,10 +248,10 @@ export interface TacticStats {
   burnout_forced: number;
   burnout_mixed: number;
   burnout_unknown: number;
-  /** ruleset v8 以前の保存済みレポートでは省略。false は使用0回ではなく集計不能。 */
-  super_art_stats_available?: boolean;
-  /** ruleset v8 以前の保存済みレポートでは省略。false は使用0回ではなく集計不能。 */
-  opponent_super_art_stats_available?: boolean;
+  /** ruleset v8以前では省略。trueは全件集計、falseは検出件数に応じpartialまたはunavailable。 */
+  super_art_stats_complete?: boolean;
+  /** ruleset v8以前では省略。trueは全件集計、falseは検出件数に応じpartialまたはunavailable。 */
+  opponent_super_art_stats_complete?: boolean;
   /** ruleset v6 以前の保存済みレポートでは省略。 */
   sa1_used?: number;
   sa2_used?: number;

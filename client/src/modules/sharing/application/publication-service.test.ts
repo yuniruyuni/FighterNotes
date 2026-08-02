@@ -110,8 +110,16 @@ describe("publication service", () => {
     const current = syntheticAdviceReport({
       ruleset_version: 9,
       tactic_stats: syntheticTacticStats({
-        super_art_stats_available: false,
-        opponent_super_art_stats_available: false,
+        super_art_stats_complete: false,
+        opponent_super_art_stats_complete: false,
+        sa1_used: 0,
+        sa2_used: 0,
+        sa3_used: 0,
+        ca_used: 0,
+        opponent_sa1_used: 0,
+        opponent_sa2_used: 0,
+        opponent_sa3_used: 0,
+        opponent_ca_used: 0,
       }),
     });
 

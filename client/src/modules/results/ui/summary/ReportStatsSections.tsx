@@ -218,15 +218,15 @@ export function TacticStatsSection({
     "opponent_drive",
     coverage?.opponent_drive_reliable_frames,
   );
-  const ownSuperAvailable =
-    (stats.super_art_stats_available ?? true) &&
+  const ownSuperComplete =
+    (stats.super_art_stats_complete ?? true) &&
     superCoverageIsSufficient(
       coverage,
       "own_super",
       coverage?.own_super_reliable_frames,
     );
-  const opponentSuperAvailable =
-    (stats.opponent_super_art_stats_available ?? true) &&
+  const opponentSuperComplete =
+    (stats.opponent_super_art_stats_complete ?? true) &&
     superCoverageIsSufficient(
       coverage,
       "opponent_super",
@@ -390,11 +390,11 @@ export function TacticStatsSection({
     const hasDetectorCoverage = (coverage?.detector_match_frames ?? 0) > 0;
     const hasExplicitAvailability = coverage?.availability !== undefined;
     const ownSuperEndAvailable =
-      ownSuperAvailable &&
+      ownSuperComplete &&
       (coverage?.own_super_end_reliable === true ||
         (!hasExplicitAvailability && !hasDetectorCoverage));
     const opponentSuperEndAvailable =
-      opponentSuperAvailable &&
+      opponentSuperComplete &&
       (coverage?.opponent_super_end_reliable === true ||
         (!hasExplicitAvailability && !hasDetectorCoverage));
     const superOutcomeAvailable =
@@ -410,13 +410,13 @@ export function TacticStatsSection({
       : `SA1 ${stats.opponent_sa1_used ?? 0} / SA2 ${stats.opponent_sa2_used ?? 0} / SA3 ${stats.opponent_sa3_used ?? 0} / CA ${stats.opponent_ca_used ?? 0}・接触、確反、またはHPバーの認識率不足のため結果内訳は確認不能`;
     items.push(
       coverageAwareItem(
-        ownSuperAvailable,
+        ownSuperComplete,
         [`${superUsed} 回`, "自分のSA / CA", ownSuperOutcomeDetail],
         superUsed,
         "自分のSAゲージ認識率が不足しているため、全使用回数は確認不能です。",
       ),
       coverageAwareItem(
-        ownSuperAvailable &&
+        ownSuperComplete &&
           meterAvailable &&
           contactsAvailable &&
           punishesAvailable,
@@ -435,7 +435,7 @@ export function TacticStatsSection({
         !attackInfoAvailable)
         ? ([
             coverageAwareItem(
-              ownSuperAvailable && opponentHpAvailable && attackInfoAvailable,
+              ownSuperComplete && opponentHpAvailable && attackInfoAvailable,
               [
                 `${stats.super_reported_marginal_damage ?? 0} ダメージ`,
                 "SA投入後の表示ダメージ",
@@ -447,7 +447,7 @@ export function TacticStatsSection({
           ] satisfies StatItem[])
         : []),
       coverageAwareItem(
-        opponentSuperAvailable,
+        opponentSuperComplete,
         [
           `${opponentSuperUsed} 回`,
           "相手のSA / CA",

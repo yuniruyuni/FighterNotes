@@ -252,7 +252,7 @@ describe("published analysis presentation", () => {
   test("ruleset v9は両者のSA/CA集計を表示し、集計不能を0回と表示しない", () => {
     const value = analysis(9, [], {
       own: {
-        availability: "available",
+        availability: "complete",
         levels: { sa1: 1, sa2: 2, sa3: 0, ca: 1 },
         outcomes: {
           hit: 2,
@@ -281,6 +281,85 @@ describe("published analysis presentation", () => {
     expect(rendered).toContain("0回とは扱いません");
     expect(rendered).not.toContain("2500");
     expect(rendered).not.toContain("最終ゲージ 0");
+  });
+
+  test("partialなSA/CA集計は全行を確認済み下限として表示する", () => {
+    const value = analysis(9, [], {
+      own: {
+        availability: "partial",
+        levels: { sa1: 1, sa2: 0, sa3: 0, ca: 0 },
+        outcomes: {
+          hit: 1,
+          block: 0,
+          noImmediateContact: 0,
+          punished: 0,
+          ko: 0,
+        },
+        contexts: { combo: 1, punish: 0, reversal: 0, neutral: 0 },
+      },
+      opponent: {
+        availability: "partial",
+        levels: { sa1: 0, sa2: 0, sa3: 1, ca: 0 },
+        outcomes: {
+          hit: 0,
+          block: 1,
+          noImmediateContact: 0,
+          punished: 0,
+          ko: 0,
+        },
+      },
+    });
+    const view = PublishedAnalysisPageView.from(value, {
+      canonical: new URL(`https://fighter.example/s/${value.id}`),
+      home: new URL("https://fighter.example/"),
+      image: new URL("https://fighter.example/images/ogp.jpg"),
+    });
+
+    expect(view.superArts).toHaveLength(5);
+    for (const row of view.superArts ?? []) {
+      expect(row.label).toContain("（下限）");
+      expect(`${row.value} ${row.detail}`).toMatch(/以上|確認できた範囲|下限/);
+      expect(row.value).not.toMatch(/^\d+回$/);
+      expect(row.value).not.toMatch(/^ヒット \d+回$/);
+      expect(row.value).not.toMatch(/^コンボ \d+回$/);
+    }
+    expect(view.superArts?.[0]).toMatchObject({
+      value: "1回以上",
+      detail: expect.stringContaining("各値は下限"),
+    });
+    expect(view.superArts?.[3]).toMatchObject({
+      value: "1回以上",
+      detail: expect.stringContaining("確認できた範囲"),
+    });
+  });
+
+  test("completeなSA/CA集計だけは0回を確定表示できる", () => {
+    const value = analysis(9, [], {
+      own: {
+        availability: "complete",
+        levels: { sa1: 0, sa2: 0, sa3: 0, ca: 0 },
+        outcomes: {
+          hit: 0,
+          block: 0,
+          noImmediateContact: 0,
+          punished: 0,
+          ko: 0,
+        },
+        contexts: { combo: 0, punish: 0, reversal: 0, neutral: 0 },
+      },
+      opponent: { availability: "unavailable" },
+    });
+    const view = PublishedAnalysisPageView.from(value, {
+      canonical: new URL(`https://fighter.example/s/${value.id}`),
+      home: new URL("https://fighter.example/"),
+      image: new URL("https://fighter.example/images/ogp.jpg"),
+    });
+
+    expect(view.superArts?.[0]).toMatchObject({
+      value: "0回",
+      label: "自分のSA / CA使用",
+    });
+    expect(view.superArts?.[0]?.detail).not.toContain("下限");
   });
 
   test("表示モデルがURL・日付・戦術指標をHTMLから独立して組み立てる", () => {

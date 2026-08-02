@@ -268,7 +268,8 @@ ruleset が異なる判定結果を同じ率へ混ぜない。管理欄の保存
 - 入力履歴は画面に表示された row 0 を時系列補修した値で、内部 input log ではない。
 - 0件は「失敗しなかった」ではなく、「確認できる機会がなかった」場合を含む。
 - SA/CA は使用、hit / block、即時接触なし、反撃、KO、使用文脈を観測事実として集計する。
-  ruleset v9では両者別に観測可否も出力し、観測不能を使用0回として扱わない。
+  ruleset v9では両者別に`complete`・`partial`・`unavailable`を出力する。`complete`だけが0回を確定でき、
+  `partial`は検出済み件数を下限として扱い、`unavailable`は件数を持たない。
   未使用ゲージだけから「使うべきだった」、残りHPだけから「倒し切れた」とは判定しない。
 - 攻撃面は punish、low conversion、与 damage、burnout 収支など一部だけで、neutral の技選択、
   combo 完走率、起き攻めの質を網羅的には評価していない。

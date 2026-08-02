@@ -64,10 +64,13 @@ function candidate() {
   };
 }
 
-function superArts(count: number) {
+function superArts(
+  count: number,
+  availability: "complete" | "partial" = "complete",
+) {
   return {
     own: {
-      availability: "available" as const,
+      availability,
       levels: { sa1: count, sa2: count, sa3: count, ca: count },
       outcomes: {
         hit: count,
@@ -84,7 +87,7 @@ function superArts(count: number) {
       },
     },
     opponent: {
-      availability: "available" as const,
+      availability,
       levels: { sa1: count, sa2: count, sa3: count, ca: count },
       outcomes: {
         hit: count,
@@ -199,6 +202,20 @@ describe("PublishedAnalysis model", () => {
     if (!result.ok) return;
     expect(result.value.superArts).toEqual(superArts(2));
     expect(Object.isFrozen(result.value.superArts?.own)).toBe(true);
+
+    const partial = createPublishedAnalysisContent({
+      ...candidate(),
+      rulesetVersion: 9,
+      findings: candidate().findings.map((finding) => ({
+        ...finding,
+        assessment: "diagnosis" as const,
+      })),
+      superArts: superArts(1, "partial"),
+    });
+    expect(partial.ok).toBe(true);
+    if (partial.ok) {
+      expect(partial.value.superArts?.own.availability).toBe("partial");
+    }
   });
 
   test("全キャラクターと全findingを閉じたIDとして受理する", () => {

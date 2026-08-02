@@ -85,29 +85,69 @@ const unavailableSuperArtStatsSchema = z.strictObject({
   availability: z.literal("unavailable"),
 });
 
-const ownSuperArtStatsSchema = z.discriminatedUnion("availability", [
-  unavailableSuperArtStatsSchema,
-  z.strictObject({
-    availability: z.literal("available"),
-    levels: superArtLevelsSchema,
-    outcomes: superArtOutcomesSchema,
-    contexts: z.strictObject({
-      combo: countSchema,
-      punish: countSchema,
-      reversal: countSchema,
-      neutral: countSchema,
-    }),
+const ownObservedSuperArtStatsShape = {
+  levels: superArtLevelsSchema,
+  outcomes: superArtOutcomesSchema,
+  contexts: z.strictObject({
+    combo: countSchema,
+    punish: countSchema,
+    reversal: countSchema,
+    neutral: countSchema,
   }),
-]);
+};
 
-const opponentSuperArtStatsSchema = z.discriminatedUnion("availability", [
-  unavailableSuperArtStatsSchema,
-  z.strictObject({
-    availability: z.literal("available"),
-    levels: superArtLevelsSchema,
-    outcomes: superArtOutcomesSchema,
-  }),
-]);
+const ownSuperArtStatsSchema = z
+  .discriminatedUnion("availability", [
+    unavailableSuperArtStatsSchema,
+    z.strictObject({
+      availability: z.literal("complete"),
+      ...ownObservedSuperArtStatsShape,
+    }),
+    z.strictObject({
+      availability: z.literal("partial"),
+      ...ownObservedSuperArtStatsShape,
+    }),
+  ])
+  .superRefine(requireObservedPartial);
+
+const opponentObservedSuperArtStatsShape = {
+  levels: superArtLevelsSchema,
+  outcomes: superArtOutcomesSchema,
+};
+
+const opponentSuperArtStatsSchema = z
+  .discriminatedUnion("availability", [
+    unavailableSuperArtStatsSchema,
+    z.strictObject({
+      availability: z.literal("complete"),
+      ...opponentObservedSuperArtStatsShape,
+    }),
+    z.strictObject({
+      availability: z.literal("partial"),
+      ...opponentObservedSuperArtStatsShape,
+    }),
+  ])
+  .superRefine(requireObservedPartial);
+
+function requireObservedPartial(
+  value: {
+    availability: "complete" | "partial" | "unavailable";
+    levels?: { sa1: number; sa2: number; sa3: number; ca: number };
+  },
+  ctx: z.RefinementCtx,
+): void {
+  if (
+    value.availability === "partial" &&
+    value.levels !== undefined &&
+    value.levels.sa1 + value.levels.sa2 + value.levels.sa3 + value.levels.ca < 1
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["levels"],
+      message: "partial super art aggregates require an observed use",
+    });
+  }
+}
 
 const superArtStatsSchema = z.strictObject({
   own: ownSuperArtStatsSchema,

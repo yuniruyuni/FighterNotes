@@ -37,6 +37,8 @@ export async function get(
       s.analysis_id AS super_art_analysis_id,
       own_sa.analysis_id AS own_super_art_analysis_id,
       opponent_sa.analysis_id AS opponent_super_art_analysis_id,
+      own_sa.complete AS own_super_art_complete,
+      opponent_sa.complete AS opponent_super_art_complete,
       own_sa.sa1 AS own_sa1, own_sa.sa2 AS own_sa2,
       own_sa.sa3 AS own_sa3, own_sa.ca AS own_ca,
       own_sa.hit AS own_hit, own_sa.block AS own_block,

@@ -65,6 +65,44 @@ describe("hydratePublishedAnalysis", () => {
     );
   });
 
+  test("ruleset v9のcomplete=false side行をpartialとして復元する", () => {
+    const input = v9Candidate();
+    const observed = input.superArts;
+    if (!observed || observed.own.availability === "unavailable") {
+      throw new Error("fixture is invalid");
+    }
+    input.superArts = {
+      own: { ...observed.own, availability: "partial" },
+      opponent: { availability: "unavailable" },
+    };
+    const content = validContent(input);
+    const { row, findings } = storageRows(content);
+
+    expect(row.own_super_art_complete).toBe(false);
+    expect(hydratePublishedAnalysis(row, findings)?.content.superArts).toEqual(
+      content.superArts,
+    );
+  });
+
+  test("complete=falseなのに検出済み使用が0件のdrift rowをfail closedする", () => {
+    const content = validContent(v9Candidate());
+    const { row, findings } = storageRows(content);
+
+    expect(
+      hydratePublishedAnalysis(
+        {
+          ...row,
+          own_super_art_complete: false,
+          own_sa1: 0,
+          own_sa2: 0,
+          own_sa3: 0,
+          own_ca: 0,
+        },
+        findings,
+      ),
+    ).toBeNull();
+  });
+
   test("ruleset v8 rowにSA/CA markerが混入した場合はfail closedする", () => {
     const legacy = candidate();
     legacy.rulesetVersion = 8;
@@ -144,6 +182,9 @@ function storageRows(content: PublishedAnalysisContent): {
   const { tactics } = content;
   const own = content.superArts?.own;
   const opponent = content.superArts?.opponent;
+  const ownObserved = own !== undefined && own.availability !== "unavailable";
+  const opponentObserved =
+    opponent !== undefined && opponent.availability !== "unavailable";
   return {
     row: {
       id: persisted.id as ShareId,
@@ -189,54 +230,42 @@ function storageRows(content: PublishedAnalysisContent): {
       burnout_unknown: tactics.burnout.unknown,
       super_art_analysis_id:
         content.superArts === undefined ? null : (persisted.id as ShareId),
-      own_super_art_analysis_id:
-        own?.availability === "available" ? (persisted.id as ShareId) : null,
-      opponent_super_art_analysis_id:
-        opponent?.availability === "available"
-          ? (persisted.id as ShareId)
-          : null,
-      own_sa1: own?.availability === "available" ? own.levels.sa1 : null,
-      own_sa2: own?.availability === "available" ? own.levels.sa2 : null,
-      own_sa3: own?.availability === "available" ? own.levels.sa3 : null,
-      own_ca: own?.availability === "available" ? own.levels.ca : null,
-      own_hit: own?.availability === "available" ? own.outcomes.hit : null,
-      own_block: own?.availability === "available" ? own.outcomes.block : null,
-      own_no_immediate_contact:
-        own?.availability === "available"
-          ? own.outcomes.noImmediateContact
-          : null,
-      own_punished:
-        own?.availability === "available" ? own.outcomes.punished : null,
-      own_ko: own?.availability === "available" ? own.outcomes.ko : null,
-      own_combo: own?.availability === "available" ? own.contexts.combo : null,
-      own_punish:
-        own?.availability === "available" ? own.contexts.punish : null,
-      own_reversal:
-        own?.availability === "available" ? own.contexts.reversal : null,
-      own_neutral:
-        own?.availability === "available" ? own.contexts.neutral : null,
-      opponent_sa1:
-        opponent?.availability === "available" ? opponent.levels.sa1 : null,
-      opponent_sa2:
-        opponent?.availability === "available" ? opponent.levels.sa2 : null,
-      opponent_sa3:
-        opponent?.availability === "available" ? opponent.levels.sa3 : null,
-      opponent_ca:
-        opponent?.availability === "available" ? opponent.levels.ca : null,
-      opponent_hit:
-        opponent?.availability === "available" ? opponent.outcomes.hit : null,
-      opponent_block:
-        opponent?.availability === "available" ? opponent.outcomes.block : null,
-      opponent_no_immediate_contact:
-        opponent?.availability === "available"
-          ? opponent.outcomes.noImmediateContact
-          : null,
-      opponent_punished:
-        opponent?.availability === "available"
-          ? opponent.outcomes.punished
-          : null,
-      opponent_ko:
-        opponent?.availability === "available" ? opponent.outcomes.ko : null,
+      own_super_art_analysis_id: ownObserved ? (persisted.id as ShareId) : null,
+      opponent_super_art_analysis_id: opponentObserved
+        ? (persisted.id as ShareId)
+        : null,
+      own_super_art_complete: ownObserved
+        ? own.availability === "complete"
+        : null,
+      opponent_super_art_complete: opponentObserved
+        ? opponent.availability === "complete"
+        : null,
+      own_sa1: ownObserved ? own.levels.sa1 : null,
+      own_sa2: ownObserved ? own.levels.sa2 : null,
+      own_sa3: ownObserved ? own.levels.sa3 : null,
+      own_ca: ownObserved ? own.levels.ca : null,
+      own_hit: ownObserved ? own.outcomes.hit : null,
+      own_block: ownObserved ? own.outcomes.block : null,
+      own_no_immediate_contact: ownObserved
+        ? own.outcomes.noImmediateContact
+        : null,
+      own_punished: ownObserved ? own.outcomes.punished : null,
+      own_ko: ownObserved ? own.outcomes.ko : null,
+      own_combo: ownObserved ? own.contexts.combo : null,
+      own_punish: ownObserved ? own.contexts.punish : null,
+      own_reversal: ownObserved ? own.contexts.reversal : null,
+      own_neutral: ownObserved ? own.contexts.neutral : null,
+      opponent_sa1: opponentObserved ? opponent.levels.sa1 : null,
+      opponent_sa2: opponentObserved ? opponent.levels.sa2 : null,
+      opponent_sa3: opponentObserved ? opponent.levels.sa3 : null,
+      opponent_ca: opponentObserved ? opponent.levels.ca : null,
+      opponent_hit: opponentObserved ? opponent.outcomes.hit : null,
+      opponent_block: opponentObserved ? opponent.outcomes.block : null,
+      opponent_no_immediate_contact: opponentObserved
+        ? opponent.outcomes.noImmediateContact
+        : null,
+      opponent_punished: opponentObserved ? opponent.outcomes.punished : null,
+      opponent_ko: opponentObserved ? opponent.outcomes.ko : null,
     },
     findings: content.findings.map((finding) => ({
       kind: finding.kind,

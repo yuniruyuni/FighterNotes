@@ -335,8 +335,8 @@ describe("TacticStatsSection SA/CA availability", () => {
     render(
       <TacticStatsSection
         stats={syntheticTacticStats({
-          super_art_stats_available: false,
-          opponent_super_art_stats_available: false,
+          super_art_stats_complete: false,
+          opponent_super_art_stats_complete: false,
           sa1_used: 0,
           opponent_sa1_used: 0,
         })}
@@ -356,6 +356,34 @@ describe("TacticStatsSection SA/CA availability", () => {
     expect(screen.queryByText(/SA1 0 \/ SA2/)).not.toBeInTheDocument();
     expect(
       screen.getByText(/自分 確認不能 \/ 相手 確認不能/),
+    ).toBeInTheDocument();
+  });
+
+  test("不完全集計でも検出済みのSA/CAは下限として表示する", () => {
+    render(
+      <TacticStatsSection
+        stats={syntheticTacticStats({
+          super_art_stats_complete: false,
+          opponent_super_art_stats_complete: false,
+          sa1_used: 0,
+          sa2_used: 1,
+          sa3_used: 0,
+          ca_used: 0,
+          opponent_sa1_used: 0,
+          opponent_sa2_used: 0,
+          opponent_sa3_used: 0,
+          opponent_ca_used: 0,
+        })}
+      />,
+    );
+
+    const item = screen.getByText("自分のSA / CA").closest(".stat-item");
+    expect(item).not.toBeNull();
+    expect(
+      within(item as HTMLElement).getByText("少なくとも 1 件"),
+    ).toBeInTheDocument();
+    expect(
+      within(item as HTMLElement).getByText(/確認できた範囲: 1 回/),
     ).toBeInTheDocument();
   });
 });

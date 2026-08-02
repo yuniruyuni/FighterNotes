@@ -245,9 +245,9 @@ integration("Postgres repositories + published analysis flow", () => {
   test("SA/CA side集計のNOT NULL driftをreadiness異常にする", async () => {
     await expectSchemaDrift(
       `ALTER TABLE published_analysis_own_super_arts
-        ALTER COLUMN sa1 DROP NOT NULL`,
+        ALTER COLUMN complete DROP NOT NULL`,
       `ALTER TABLE published_analysis_own_super_arts
-        ALTER COLUMN sa1 SET NOT NULL`,
+        ALTER COLUMN complete SET NOT NULL`,
     );
     await expectSchemaDrift(
       `ALTER TABLE published_analysis_opponent_super_arts
@@ -993,11 +993,11 @@ integration("Postgres repositories + published analysis flow", () => {
     await expect(
       db.queryRun(sql`
         INSERT INTO published_analysis_own_super_arts (
-          analysis_id, sa1, sa2, sa3, ca,
+          analysis_id, complete, sa1, sa2, sa3, ca,
           hit, block, no_immediate_contact, punished, ko,
           combo, punish, reversal, neutral
         ) VALUES (
-          ${created.analysis.id}, 65536, 0, 0, 0,
+          ${created.analysis.id}, false, 65536, 0, 0, 0,
           0, 0, 0, 0, 0, 0, 0, 0, 0
         )
       `),

@@ -199,8 +199,8 @@ describe("share projection", () => {
     const value = report();
     value.ruleset_version = 9;
     Object.assign(value.tactic_stats, {
-      super_art_stats_available: true,
-      opponent_super_art_stats_available: true,
+      super_art_stats_complete: true,
+      opponent_super_art_stats_complete: true,
       sa1_used: 1,
       sa2_used: 2,
       sa3_used: 3,
@@ -239,7 +239,7 @@ describe("share projection", () => {
     const candidate = PublishedAnalysisCandidate.from(context, value);
     expect(candidate.superArts).toEqual({
       own: {
-        availability: "available",
+        availability: "complete",
         levels: { sa1: 1, sa2: 2, sa3: 3, ca: 4 },
         outcomes: {
           hit: 5,
@@ -251,7 +251,7 @@ describe("share projection", () => {
         contexts: { combo: 10, punish: 11, reversal: 12, neutral: 13 },
       },
       opponent: {
-        availability: "available",
+        availability: "complete",
         levels: { sa1: 14, sa2: 15, sa3: 16, ca: 17 },
         outcomes: {
           hit: 18,
@@ -281,14 +281,96 @@ describe("share projection", () => {
     }
   });
 
-  test("SA/CA集計不能を使用0回に変換せず、v9のavailability欠落を拒否する", () => {
+  test("不完全なSA/CA集計を検出済み下限として射影する", () => {
     const value = report();
     value.ruleset_version = 9;
     Object.assign(value.tactic_stats, {
-      super_art_stats_available: false,
-      opponent_super_art_stats_available: false,
-      sa1_used: 99,
-      opponent_sa1_used: 99,
+      super_art_stats_complete: false,
+      opponent_super_art_stats_complete: false,
+      sa1_used: 1,
+      sa2_used: 0,
+      sa3_used: 0,
+      ca_used: 0,
+      super_hits: 1,
+      super_blocked: 0,
+      super_no_immediate_contact: 0,
+      super_punished: 0,
+      super_kos: 0,
+      super_combo_uses: 1,
+      super_punish_uses: 0,
+      super_reversal_uses: 0,
+      super_neutral_uses: 0,
+      opponent_sa1_used: 0,
+      opponent_sa2_used: 0,
+      opponent_sa3_used: 1,
+      opponent_ca_used: 0,
+      opponent_super_hits: 0,
+      opponent_super_blocked: 1,
+      opponent_super_no_immediate_contact: 0,
+      opponent_super_punished: 0,
+      opponent_super_kos: 0,
+    });
+    const context: AnalysisContext = {
+      ownSide: "p1",
+      p1: { character: "LUKE" },
+      p2: { character: "CHUN_LI" },
+    };
+
+    expect(PublishedAnalysisCandidate.from(context, value).superArts).toEqual({
+      own: {
+        availability: "partial",
+        levels: { sa1: 1, sa2: 0, sa3: 0, ca: 0 },
+        outcomes: {
+          hit: 1,
+          block: 0,
+          noImmediateContact: 0,
+          punished: 0,
+          ko: 0,
+        },
+        contexts: { combo: 1, punish: 0, reversal: 0, neutral: 0 },
+      },
+      opponent: {
+        availability: "partial",
+        levels: { sa1: 0, sa2: 0, sa3: 1, ca: 0 },
+        outcomes: {
+          hit: 0,
+          block: 1,
+          noImmediateContact: 0,
+          punished: 0,
+          ko: 0,
+        },
+      },
+    });
+  });
+
+  test("不完全で検出0件ならcountを含めず、availability欠落を拒否する", () => {
+    const value = report();
+    value.ruleset_version = 9;
+    Object.assign(value.tactic_stats, {
+      super_art_stats_complete: false,
+      opponent_super_art_stats_complete: false,
+      sa1_used: 0,
+      sa2_used: 0,
+      sa3_used: 0,
+      ca_used: 0,
+      super_hits: 0,
+      super_blocked: 0,
+      super_no_immediate_contact: 0,
+      super_punished: 0,
+      super_kos: 0,
+      super_combo_uses: 0,
+      super_punish_uses: 0,
+      super_reversal_uses: 0,
+      super_neutral_uses: 0,
+      opponent_sa1_used: 0,
+      opponent_sa2_used: 0,
+      opponent_sa3_used: 0,
+      opponent_ca_used: 0,
+      opponent_super_hits: 0,
+      opponent_super_blocked: 0,
+      opponent_super_no_immediate_contact: 0,
+      opponent_super_punished: 0,
+      opponent_super_kos: 0,
     });
     const context: AnalysisContext = {
       ownSide: "p1",
@@ -301,7 +383,19 @@ describe("share projection", () => {
       opponent: { availability: "unavailable" },
     });
 
-    value.tactic_stats.super_art_stats_available = undefined;
+    value.tactic_stats.super_art_stats_complete = true;
+    value.tactic_stats.opponent_super_art_stats_complete = true;
+    const complete = PublishedAnalysisCandidate.from(context, value).superArts;
+    expect(complete?.own).toMatchObject({
+      availability: "complete",
+      levels: { sa1: 0, sa2: 0, sa3: 0, ca: 0 },
+    });
+    expect(complete?.opponent).toMatchObject({
+      availability: "complete",
+      levels: { sa1: 0, sa2: 0, sa3: 0, ca: 0 },
+    });
+
+    value.tactic_stats.super_art_stats_complete = undefined;
     expect(() => PublishedAnalysisCandidate.from(context, value)).toThrow(
       "superArts.own.availability が不正です。",
     );
@@ -404,8 +498,16 @@ describe("share projection", () => {
     const current = report();
     current.ruleset_version = 9;
     Object.assign(current.tactic_stats, {
-      super_art_stats_available: false,
-      opponent_super_art_stats_available: false,
+      super_art_stats_complete: false,
+      opponent_super_art_stats_complete: false,
+      sa1_used: 0,
+      sa2_used: 0,
+      sa3_used: 0,
+      ca_used: 0,
+      opponent_sa1_used: 0,
+      opponent_sa2_used: 0,
+      opponent_sa3_used: 0,
+      opponent_ca_used: 0,
     });
     expect(
       PublishedAnalysisCandidate.from(context, current).rulesetVersion,

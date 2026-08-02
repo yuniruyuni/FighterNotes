@@ -12,21 +12,26 @@ export function presentPublishedSuperArts(
     views.push(unavailable("自分のSA / CA"));
   } else {
     const { levels, outcomes, contexts } = aggregate.own;
+    const partial = aggregate.own.availability === "partial";
     views.push(
       {
-        value: `${totalLevels(levels)}回`,
-        label: "自分のSA / CA使用",
-        detail: levelDetail(levels),
+        value: `${totalLevels(levels)}回${partial ? "以上" : ""}`,
+        label: `自分のSA / CA使用${partial ? "（下限）" : ""}`,
+        detail: partial
+          ? `確認できた範囲（各値は下限）: ${levelDetail(levels)}`
+          : levelDetail(levels),
       },
       {
-        value: `ヒット ${outcomes.hit}回`,
-        label: "自分のSA / CA結果",
-        detail: outcomeDetail(outcomes),
+        value: partial ? "確認できた範囲" : `ヒット ${outcomes.hit}回`,
+        label: `自分のSA / CA結果${partial ? "（下限）" : ""}`,
+        detail: partial
+          ? `各値は下限: ヒット ${outcomes.hit}・${outcomeDetail(outcomes)}`
+          : outcomeDetail(outcomes),
       },
       {
-        value: `コンボ ${contexts.combo}回`,
-        label: "自分のSA / CA利用文脈",
-        detail: `確定反撃 ${contexts.punish}・切り返し ${contexts.reversal}・ニュートラル ${contexts.neutral}`,
+        value: partial ? "確認できた範囲" : `コンボ ${contexts.combo}回`,
+        label: `自分のSA / CA利用文脈${partial ? "（下限）" : ""}`,
+        detail: contextDetail(contexts, partial),
       },
     );
   }
@@ -35,16 +40,21 @@ export function presentPublishedSuperArts(
     views.push(unavailable("相手のSA / CA"));
   } else {
     const { levels, outcomes } = aggregate.opponent;
+    const partial = aggregate.opponent.availability === "partial";
     views.push(
       {
-        value: `${totalLevels(levels)}回`,
-        label: "相手のSA / CA使用",
-        detail: levelDetail(levels),
+        value: `${totalLevels(levels)}回${partial ? "以上" : ""}`,
+        label: `相手のSA / CA使用${partial ? "（下限）" : ""}`,
+        detail: partial
+          ? `確認できた範囲（各値は下限）: ${levelDetail(levels)}`
+          : levelDetail(levels),
       },
       {
-        value: `ヒット ${outcomes.hit}回`,
-        label: "相手のSA / CA結果",
-        detail: outcomeDetail(outcomes),
+        value: partial ? "確認できた範囲" : `ヒット ${outcomes.hit}回`,
+        label: `相手のSA / CA結果${partial ? "（下限）" : ""}`,
+        detail: partial
+          ? `各値は下限: ヒット ${outcomes.hit}・${outcomeDetail(outcomes)}`
+          : outcomeDetail(outcomes),
       },
     );
   }
@@ -85,4 +95,19 @@ function outcomeDetail(outcomes: {
   ko: number;
 }): string {
   return `ガード ${outcomes.block}・即時接触なし ${outcomes.noImmediateContact}・反撃を受けた ${outcomes.punished}・KO ${outcomes.ko}`;
+}
+
+function contextDetail(
+  contexts: {
+    combo: number;
+    punish: number;
+    reversal: number;
+    neutral: number;
+  },
+  partial: boolean,
+): string {
+  const values = `コンボ ${contexts.combo}・確定反撃 ${contexts.punish}・切り返し ${contexts.reversal}・ニュートラル ${contexts.neutral}`;
+  return partial
+    ? `各値は下限: ${values}`
+    : `確定反撃 ${contexts.punish}・切り返し ${contexts.reversal}・ニュートラル ${contexts.neutral}`;
 }

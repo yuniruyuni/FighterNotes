@@ -100,7 +100,7 @@ export interface PublishedSuperArtOutcomes {
 export type PublishedOwnSuperArtStats =
   | { availability: "unavailable" }
   | {
-      availability: "available";
+      availability: "complete" | "partial";
       levels: PublishedSuperArtLevels;
       outcomes: PublishedSuperArtOutcomes;
       contexts: {
@@ -114,7 +114,7 @@ export type PublishedOwnSuperArtStats =
 export type PublishedOpponentSuperArtStats =
   | { availability: "unavailable" }
   | {
-      availability: "available";
+      availability: "complete" | "partial";
       levels: PublishedSuperArtLevels;
       outcomes: PublishedSuperArtOutcomes;
     };

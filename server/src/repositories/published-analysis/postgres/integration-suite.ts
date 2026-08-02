@@ -55,13 +55,15 @@ export function registerPublishedAnalysisRepositoryIntegrationTests(
       expect(restored?.content.superArts).toEqual(persisted.content.superArts);
     });
 
-    test("ruleset v9の集計不能側をmarker有・side行なしで復元する", async () => {
+    test("ruleset v9のpartialをcomplete=false side行から復元する", async () => {
       const input = v9Candidate();
+      const observed = input.superArts;
+      if (!observed || observed.own.availability === "unavailable") {
+        throw new Error("fixture is invalid");
+      }
       input.superArts = {
-        own: { availability: "unavailable" },
-        opponent: input.superArts?.opponent ?? {
-          availability: "unavailable",
-        },
+        own: { ...observed.own, availability: "partial" },
+        opponent: { availability: "unavailable" },
       };
       const content = createPublishedAnalysisContent(input);
       if (!content.ok) throw new Error("fixture is invalid");

@@ -83,14 +83,15 @@ export async function create(
       INSERT INTO published_analysis_super_arts (analysis_id)
       VALUES (${analysis.id})
     `);
-    if (own.availability === "available") {
+    if (own.availability !== "unavailable") {
       await db.queryRun(sql`
         INSERT INTO published_analysis_own_super_arts (
-          analysis_id, sa1, sa2, sa3, ca,
+          analysis_id, complete, sa1, sa2, sa3, ca,
           hit, block, no_immediate_contact, punished, ko,
           combo, punish, reversal, neutral
         ) VALUES (
-          ${analysis.id}, ${own.levels.sa1}, ${own.levels.sa2},
+          ${analysis.id}, ${own.availability === "complete"},
+          ${own.levels.sa1}, ${own.levels.sa2},
           ${own.levels.sa3}, ${own.levels.ca}, ${own.outcomes.hit},
           ${own.outcomes.block}, ${own.outcomes.noImmediateContact},
           ${own.outcomes.punished}, ${own.outcomes.ko},
@@ -99,13 +100,14 @@ export async function create(
         )
       `);
     }
-    if (opponent.availability === "available") {
+    if (opponent.availability !== "unavailable") {
       await db.queryRun(sql`
         INSERT INTO published_analysis_opponent_super_arts (
-          analysis_id, sa1, sa2, sa3, ca,
+          analysis_id, complete, sa1, sa2, sa3, ca,
           hit, block, no_immediate_contact, punished, ko
         ) VALUES (
-          ${analysis.id}, ${opponent.levels.sa1}, ${opponent.levels.sa2},
+          ${analysis.id}, ${opponent.availability === "complete"},
+          ${opponent.levels.sa1}, ${opponent.levels.sa2},
           ${opponent.levels.sa3}, ${opponent.levels.ca},
           ${opponent.outcomes.hit}, ${opponent.outcomes.block},
           ${opponent.outcomes.noImmediateContact},

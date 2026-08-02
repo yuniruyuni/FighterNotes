@@ -20,8 +20,8 @@ pub(crate) fn build_tactic_stats(
         crate::match_events::round_of(&events.rounds, frame) == Some(round_no)
     };
     let mut stats = TacticStats {
-        super_art_stats_available: has_complete_super_coverage(features, &events.rounds, own),
-        opponent_super_art_stats_available: has_complete_super_coverage(
+        super_art_stats_complete: has_complete_super_coverage(features, &events.rounds, own),
+        opponent_super_art_stats_complete: has_complete_super_coverage(
             features,
             &events.rounds,
             opponent,

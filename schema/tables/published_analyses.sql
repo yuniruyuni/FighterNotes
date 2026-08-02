@@ -162,7 +162,7 @@ CREATE TABLE IF NOT EXISTS published_analysis_tactics (
 GRANT SELECT, INSERT ON published_analysis_tactics TO fighter_app;
 
 -- ruleset v9 から公開する privacy-safe な SA/CA 集計。旧 ruleset の行は
--- marker を持たず、v9では marker が集計契約の存在を表す。集計可能な側だけ
+-- marker を持たず、v9では marker が集計契約の存在を表す。complete / partialな側だけ
 -- NOT NULL count の子行を持つため、unavailable と使用0回を構造で区別する。
 CREATE TABLE IF NOT EXISTS published_analysis_super_arts (
   analysis_id TEXT PRIMARY KEY
@@ -173,6 +173,7 @@ GRANT SELECT, INSERT ON published_analysis_super_arts TO fighter_app;
 CREATE TABLE IF NOT EXISTS published_analysis_own_super_arts (
   analysis_id TEXT PRIMARY KEY
     REFERENCES published_analysis_super_arts (analysis_id) ON DELETE CASCADE,
+  complete BOOLEAN NOT NULL,
   sa1 INTEGER NOT NULL CHECK (sa1 BETWEEN 0 AND 65535),
   sa2 INTEGER NOT NULL CHECK (sa2 BETWEEN 0 AND 65535),
   sa3 INTEGER NOT NULL CHECK (sa3 BETWEEN 0 AND 65535),
@@ -192,6 +193,7 @@ GRANT SELECT, INSERT ON published_analysis_own_super_arts TO fighter_app;
 CREATE TABLE IF NOT EXISTS published_analysis_opponent_super_arts (
   analysis_id TEXT PRIMARY KEY
     REFERENCES published_analysis_super_arts (analysis_id) ON DELETE CASCADE,
+  complete BOOLEAN NOT NULL,
   sa1 INTEGER NOT NULL CHECK (sa1 BETWEEN 0 AND 65535),
   sa2 INTEGER NOT NULL CHECK (sa2 BETWEEN 0 AND 65535),
   sa3 INTEGER NOT NULL CHECK (sa3 BETWEEN 0 AND 65535),

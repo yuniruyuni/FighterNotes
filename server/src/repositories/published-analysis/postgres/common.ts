@@ -60,6 +60,8 @@ export interface AnalysisRow extends QueryResultRow {
   super_art_analysis_id: string | null;
   own_super_art_analysis_id: string | null;
   opponent_super_art_analysis_id: string | null;
+  own_super_art_complete: boolean | null;
+  opponent_super_art_complete: boolean | null;
   own_sa1: number | null;
   own_sa2: number | null;
   own_sa3: number | null;
@@ -194,7 +196,12 @@ function hydrateSuperArts(row: AnalysisRow): unknown | undefined {
     own:
       row.own_super_art_analysis_id !== null
         ? {
-            availability: "available",
+            availability:
+              row.own_super_art_complete === true
+                ? "complete"
+                : row.own_super_art_complete === false
+                  ? "partial"
+                  : null,
             levels: {
               sa1: row.own_sa1,
               sa2: row.own_sa2,
@@ -219,7 +226,12 @@ function hydrateSuperArts(row: AnalysisRow): unknown | undefined {
     opponent:
       row.opponent_super_art_analysis_id !== null
         ? {
-            availability: "available",
+            availability:
+              row.opponent_super_art_complete === true
+                ? "complete"
+                : row.opponent_super_art_complete === false
+                  ? "partial"
+                  : null,
             levels: {
               sa1: row.opponent_sa1,
               sa2: row.opponent_sa2,

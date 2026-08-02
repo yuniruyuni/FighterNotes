@@ -22,14 +22,16 @@ export function projectPublishedSuperArts(
 }
 
 function projectOwn(stats: TacticStats): PublishedOwnSuperArtStats {
-  const available = explicitAvailability(
-    stats.super_art_stats_available,
+  const complete = explicitCompleteness(
+    stats.super_art_stats_complete,
     "superArts.own.availability",
   );
-  if (!available) return { availability: "unavailable" };
+  const projectedLevels = levels(stats, "", "own");
+  const availability = observedAvailability(complete, projectedLevels);
+  if (availability === "unavailable") return { availability };
   return {
-    availability: "available",
-    levels: levels(stats, "", "own"),
+    availability,
+    levels: projectedLevels,
     outcomes: outcomes(stats, "", "own"),
     contexts: {
       combo: count(stats.super_combo_uses, "superArts.own.contexts.combo"),
@@ -47,14 +49,16 @@ function projectOwn(stats: TacticStats): PublishedOwnSuperArtStats {
 }
 
 function projectOpponent(stats: TacticStats): PublishedOpponentSuperArtStats {
-  const available = explicitAvailability(
-    stats.opponent_super_art_stats_available,
+  const complete = explicitCompleteness(
+    stats.opponent_super_art_stats_complete,
     "superArts.opponent.availability",
   );
-  if (!available) return { availability: "unavailable" };
+  const projectedLevels = levels(stats, "opponent_", "opponent");
+  const availability = observedAvailability(complete, projectedLevels);
+  if (availability === "unavailable") return { availability };
   return {
-    availability: "available",
-    levels: levels(stats, "opponent_", "opponent"),
+    availability,
+    levels: projectedLevels,
     outcomes: outcomes(stats, "opponent_", "opponent"),
   };
 }
@@ -98,9 +102,19 @@ function outcomes(
   };
 }
 
-function explicitAvailability(value: unknown, field: string): boolean {
+function explicitCompleteness(value: unknown, field: string): boolean {
   if (typeof value === "boolean") return value;
   throw new ShareProjectionError(`${field} が不正です。`);
+}
+
+function observedAvailability(
+  complete: boolean,
+  levels: PublishedSuperArtLevels,
+): "complete" | "partial" | "unavailable" {
+  if (complete) return "complete";
+  return levels.sa1 + levels.sa2 + levels.sa3 + levels.ca > 0
+    ? "partial"
+    : "unavailable";
 }
 
 function count(value: unknown, field: string): number {
