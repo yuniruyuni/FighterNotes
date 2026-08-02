@@ -73,6 +73,7 @@ fn analyzer_keeps_buffer_and_json_contracts() {
             "practice_items",
             "summary",
             "cards",
+            "suppressed_cards",
             "round_summaries",
             "input_stats",
             "tactic_stats",
