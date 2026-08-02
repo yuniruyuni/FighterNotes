@@ -45,6 +45,7 @@ describe("analysis history saving preference", () => {
       enabled: false,
       persistent: true,
     });
+    expect(corrupted.value).toBe("disabled");
     expect(loadAnalysisHistorySavingPreference(null)).toEqual({
       enabled: false,
       persistent: false,
@@ -65,5 +66,19 @@ describe("analysis history saving preference", () => {
     expect(() =>
       saveAnalysisHistorySavingPreference(false, unavailable),
     ).toThrow("解析履歴の保存設定をこのブラウザに保存できません。");
+  });
+
+  test("読込可能でも書込不能なstorageでは初期値を有効にしない", () => {
+    const readOnly: AnalysisHistoryPreferenceStorage = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error("read only");
+      },
+    };
+
+    expect(loadAnalysisHistorySavingPreference(readOnly)).toEqual({
+      enabled: false,
+      persistent: false,
+    });
   });
 });

@@ -126,7 +126,9 @@ describe("MatchupHistorySection privacy controls", () => {
       screen.getByText(/現在の判定版は1件、旧判定版は1件/),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "JURI vs KENを削除" }));
+    await user.click(
+      screen.getByRole("button", { name: /JURI vs KEN.*判定版 6.*を削除/ }),
+    );
     expect(screen.getByText("この1件を削除しますか？")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "削除する" }));
     expect(await screen.findByRole("status")).toHaveTextContent(
@@ -159,12 +161,53 @@ describe("MatchupHistorySection privacy controls", () => {
     await user.click(
       await screen.findByText("保存済み履歴を管理（全判定版 1件）"),
     );
-    await user.click(screen.getByRole("button", { name: "JURI vs KENを削除" }));
+    await user.click(
+      screen.getByRole("button", { name: /JURI vs KEN.*判定版 6.*を削除/ }),
+    );
     await user.click(screen.getByRole("button", { name: "削除する" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "解析履歴を削除できませんでした",
     );
     expect(repository.records).toHaveLength(1);
+  });
+
+  test("破壊操作の確認へfocusを移し、キャンセル後は起点へ戻す", async () => {
+    const user = userEvent.setup();
+    const repository = new MemoryHistoryRepository([
+      historyRecord("v2:first", 6),
+      historyRecord("v2:second", 6),
+    ]);
+    renderHistory(repository);
+
+    await user.click(
+      await screen.findByText("保存済み履歴を管理（全判定版 2件）"),
+    );
+    const deleteButtons = screen.getAllByRole("button", {
+      name: /JURI vs KEN.*判定版 6.*を削除/,
+    });
+    expect(
+      new Set(deleteButtons.map((button) => button.getAttribute("aria-label")))
+        .size,
+    ).toBe(2);
+
+    deleteButtons[0]?.focus();
+    await user.keyboard("{Enter}");
+    const cancelDelete = screen.getByRole("button", { name: "キャンセル" });
+    expect(screen.getByRole("button", { name: "削除する" })).toHaveFocus();
+    await user.click(cancelDelete);
+    expect(deleteButtons[0]).toHaveFocus();
+
+    const clearButton = screen.getByRole("button", {
+      name: "解析履歴をすべて削除",
+    });
+    clearButton.focus();
+    await user.keyboard("{Enter}");
+    const clearCancel = screen.getByRole("button", { name: "キャンセル" });
+    expect(
+      screen.getByRole("button", { name: "すべて削除する" }),
+    ).toHaveFocus();
+    await user.click(clearCancel);
+    expect(clearButton).toHaveFocus();
   });
 });

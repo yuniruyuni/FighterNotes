@@ -18,13 +18,15 @@ export function loadAnalysisHistorySavingPreference(
   if (!storage) return { enabled: false, persistent: false };
   try {
     const value = storage.getItem(STORAGE_KEY);
-    if (value === null || value === ENABLED_VALUE) {
-      return { enabled: true, persistent: true };
-    }
-    if (value === DISABLED_VALUE) {
-      return { enabled: false, persistent: true };
-    }
-    return { enabled: false, persistent: true };
+    const normalized =
+      value === null || value === ENABLED_VALUE
+        ? ENABLED_VALUE
+        : DISABLED_VALUE;
+    // Reading can succeed even when browser policy or quota makes storage
+    // read-only. Persist the canonical value before treating the preference as
+    // usable so an enabled default never bypasses the fail-closed guarantee.
+    storage.setItem(STORAGE_KEY, normalized);
+    return { enabled: normalized === ENABLED_VALUE, persistent: true };
   } catch {
     return { enabled: false, persistent: false };
   }
