@@ -30,6 +30,7 @@ export function AnalysisSetupPage() {
         <div className="setup-main">
           <VideoFilePicker
             file={state.file}
+            preflight={state.videoPreflight}
             disabled={busy}
             onChange={session.setFile}
           />

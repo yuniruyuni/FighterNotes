@@ -7,6 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import type { AnalysisServices } from "~/modules/analysis/application/ports.js";
+import type { ValidatedVideoInput } from "~/modules/analysis/contracts.js";
 import { AnalysisCanceledError } from "~/modules/analysis/domain/analysis-cancellation.js";
 import { AnalysisSessionProvider } from "~/modules/analysis/index.js";
 import { syntheticAnalysisResult } from "~/test-support/analysis.js";
@@ -16,6 +17,7 @@ describe("AnalysisSetupPage", () => {
   test("共有サービスなしで動画解析だけを完了できる", async () => {
     const analyzeImplementation: AnalysisServices["engine"]["analyze"] = async (
       _file,
+      _validatedVideo,
       _side,
       onProgress,
       context,
@@ -31,6 +33,10 @@ describe("AnalysisSetupPage", () => {
     const services: AnalysisServices = {
       engine: {
         readiness: () => ({ available: true }),
+        preflight: async (file) => ({
+          status: "valid",
+          video: validatedVideo(file),
+        }),
         analyze,
       },
       debugSink: { capture },
@@ -61,6 +67,7 @@ describe("AnalysisSetupPage", () => {
     fireEvent.change(document.querySelector("#opponent-char-select")!, {
       target: { value: "KEN" },
     });
+    await screen.findByText(/確認済み: MP4/);
     fireEvent.click(analyzeButton);
 
     await waitFor(() => expect(analyze).toHaveBeenCalledTimes(1));
@@ -75,6 +82,7 @@ describe("AnalysisSetupPage", () => {
     let completeAnalysis!: () => void;
     const analyzeImplementation: AnalysisServices["engine"]["analyze"] = (
       _file,
+      _validatedVideo,
       _side,
       onProgress,
       context,
@@ -89,7 +97,7 @@ describe("AnalysisSetupPage", () => {
         };
       });
     renderSetup(analysisServices(analyzeImplementation));
-    configureAnalysis();
+    await configureAnalysis();
     fireEvent.click(screen.getByRole("button", { name: "解析する" }));
     const progress = await screen.findByRole("progressbar", {
       name: "動画解析の進捗",
@@ -126,6 +134,7 @@ describe("AnalysisSetupPage", () => {
   test("小数の可視進捗と名前付きprogressbar、工程live statusを表示する", async () => {
     const analyzeImplementation: AnalysisServices["engine"]["analyze"] = (
       _file,
+      _validatedVideo,
       _side,
       onProgress,
       _context,
@@ -139,7 +148,7 @@ describe("AnalysisSetupPage", () => {
       });
     };
     const rendered = renderSetup(analysisServices(analyzeImplementation));
-    configureAnalysis();
+    await configureAnalysis();
 
     fireEvent.click(screen.getByRole("button", { name: "解析する" }));
 
@@ -161,6 +170,7 @@ describe("AnalysisSetupPage", () => {
     let cancellationReason: unknown;
     const analyzeImplementation: AnalysisServices["engine"]["analyze"] = (
       _file,
+      _validatedVideo,
       _side,
       _onProgress,
       _context,
@@ -179,7 +189,7 @@ describe("AnalysisSetupPage", () => {
       });
     const services = analysisServices(analyzeImplementation);
     renderSetup(services);
-    configureAnalysis();
+    await configureAnalysis();
 
     fireEvent.click(screen.getByRole("button", { name: "解析する" }));
     const cancel = await screen.findByRole("button", { name: "解析を中止" });
@@ -211,7 +221,7 @@ describe("AnalysisSetupPage", () => {
       throw new Error("decoder failure");
     });
     renderSetup(services);
-    configureAnalysis();
+    await configureAnalysis();
 
     fireEvent.click(screen.getByRole("button", { name: "解析する" }));
 
@@ -231,7 +241,7 @@ describe("AnalysisSetupPage", () => {
     const services = analysisServices(analyzeImplementation);
     const capture = services.debugSink.capture;
     renderSetup(services);
-    configureAnalysis();
+    await configureAnalysis();
 
     fireEvent.click(screen.getByRole("button", { name: "解析する" }));
     fireEvent.click(await screen.findByRole("button", { name: "解析を中止" }));
@@ -245,6 +255,7 @@ describe("AnalysisSetupPage", () => {
     let signal: AbortSignal | undefined;
     const analyzeImplementation: AnalysisServices["engine"]["analyze"] = (
       _file,
+      _validatedVideo,
       _side,
       _onProgress,
       _context,
@@ -260,7 +271,7 @@ describe("AnalysisSetupPage", () => {
       });
     };
     const rendered = renderSetup(analysisServices(analyzeImplementation));
-    configureAnalysis();
+    await configureAnalysis();
     fireEvent.click(screen.getByRole("button", { name: "解析する" }));
     await screen.findByRole("button", { name: "解析を中止" });
 
@@ -275,7 +286,14 @@ function analysisServices(
   analyze: AnalysisServices["engine"]["analyze"],
 ): AnalysisServices {
   return {
-    engine: { readiness: () => ({ available: true }), analyze },
+    engine: {
+      readiness: () => ({ available: true }),
+      preflight: async (file) => ({
+        status: "valid",
+        video: validatedVideo(file),
+      }),
+      analyze,
+    },
     debugSink: { capture: mock(() => undefined) },
   };
 }
@@ -288,7 +306,7 @@ function renderSetup(services: AnalysisServices): ReturnType<typeof render> {
   );
 }
 
-function configureAnalysis(): void {
+async function configureAnalysis(): Promise<void> {
   const fileInput = document.querySelector<HTMLInputElement>("#file-input");
   if (!fileInput) throw new Error("file input not rendered");
   fireEvent.change(fileInput, {
@@ -305,4 +323,42 @@ function configureAnalysis(): void {
   fireEvent.change(document.querySelector("#opponent-char-select")!, {
     target: { value: "KEN" },
   });
+  await screen.findByText(/確認済み: MP4/);
+}
+
+function validatedVideo(file: File): ValidatedVideoInput {
+  return {
+    file,
+    identity: {
+      name: file.name,
+      size: file.size,
+      lastModified: file.lastModified,
+      type: file.type,
+    },
+    metadataBytesRead: 1024,
+    track: {
+      trackId: 1,
+      codec: "avc1.640028",
+      codedWidth: 1920,
+      codedHeight: 1080,
+      displayWidth: 1920,
+      displayHeight: 1080,
+      rotation: 0,
+      framesPerSecond: 60,
+      constantFrameRate: true,
+      totalSamples: 600,
+      timescale: 60_000,
+      duration: 600_000,
+      decoderConfig: {
+        codec: "avc1.640028",
+        codedWidth: 1920,
+        codedHeight: 1080,
+      },
+      codecConfig: {
+        codec: "avc1.640028",
+        width: 1920,
+        height: 1080,
+      },
+    },
+  };
 }

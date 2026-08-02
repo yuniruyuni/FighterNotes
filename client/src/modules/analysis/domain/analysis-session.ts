@@ -1,6 +1,11 @@
 import type { AnalysisContext, AnalysisSide } from "./context.js";
 import type { AdviceReport } from "./report.js";
 import type { AnalysisResult } from "./result.js";
+import type {
+  ValidatedVideoInput,
+  VideoPreflightFailure,
+  VideoPreflightState,
+} from "./video-preflight.js";
 
 export type AnalysisPhase =
   | "setup"
@@ -11,6 +16,7 @@ export type AnalysisPhase =
 
 export interface AnalysisSessionState {
   file: File | null;
+  videoPreflight: VideoPreflightState;
   side: AnalysisSide | "";
   ownCharacter: string;
   opponentCharacter: string;
@@ -32,6 +38,8 @@ export interface CompletedAnalysis {
 
 export type AnalysisSessionAction =
   | { type: "file"; file: File | null }
+  | { type: "videoPreflightValid"; video: ValidatedVideoInput }
+  | { type: "videoPreflightInvalid"; failure: VideoPreflightFailure }
   | { type: "side"; side: AnalysisSide }
   | { type: "ownCharacter"; character: string }
   | { type: "opponentCharacter"; character: string }
@@ -52,6 +60,7 @@ export const AnalysisSession = {
   initial(): AnalysisSessionState {
     return {
       file: null,
+      videoPreflight: { status: "idle" },
       side: "",
       ownCharacter: "",
       opponentCharacter: "",
@@ -70,6 +79,7 @@ export const AnalysisSession = {
       state.phase !== "analyzing" &&
         state.phase !== "canceling" &&
         state.file &&
+        state.videoPreflight.status === "valid" &&
         state.side &&
         state.ownCharacter &&
         state.opponentCharacter,
@@ -82,7 +92,26 @@ export const AnalysisSession = {
   ): AnalysisSessionState {
     switch (action.type) {
       case "file":
-        return { ...state, file: action.file, side: "", error: "" };
+        return {
+          ...state,
+          file: action.file,
+          videoPreflight: action.file
+            ? { status: "checking" }
+            : { status: "idle" },
+          side: "",
+          error: "",
+        };
+      case "videoPreflightValid":
+        if (state.phase !== "setup" || state.file !== action.video.file) {
+          return state;
+        }
+        return {
+          ...state,
+          videoPreflight: { status: "valid", video: action.video },
+        };
+      case "videoPreflightInvalid":
+        if (state.phase !== "setup" || !state.file) return state;
+        return { ...state, videoPreflight: action.failure };
       case "side":
         return { ...state, side: action.side };
       case "ownCharacter":
@@ -155,6 +184,7 @@ export const AnalysisSession = {
         return {
           ...AnalysisSession.initial(),
           file: state.file,
+          videoPreflight: state.videoPreflight,
           ownCharacter: state.ownCharacter,
           opponentCharacter: state.opponentCharacter,
         };

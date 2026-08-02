@@ -5,6 +5,7 @@ import type {
   FrameSample as FrameSampleData,
   VideoCodecConfig,
 } from "../../domain/result.js";
+import type { ValidatedVideoInput } from "../../domain/video-preflight.js";
 import { FrameStripExtractor } from "../frame-extraction/strip-extractor.js";
 import { createAnalysisVideoDecoder } from "../video-decoding/analysis-video-decoder.js";
 import {
@@ -37,6 +38,7 @@ import { WorkerFrameBridge } from "./worker-frame-bridge.js";
  */
 export async function analyzeWithWebCodecs(
   file: File,
+  validatedVideo: ValidatedVideoInput,
   ownSide: string,
   onProgress: AnalysisProgress,
   analysisContext: AnalysisContext,
@@ -209,18 +211,22 @@ export async function analyzeWithWebCodecs(
       });
     }
 
-    videoSource = new Mp4VideoSource(arrayBuffer, {
-      onTrack: configureDecoder,
-      onSamples(samples) {
-        for (const sample of samples) {
-          sampleByTs.add(sample.metadata.timestampUs, sampleData.length);
-          sampleData.push(sample.metadata);
-          decodePump.enqueue(sample.chunk);
-        }
-        pumpDecoder();
+    videoSource = new Mp4VideoSource(
+      arrayBuffer,
+      {
+        onTrack: configureDecoder,
+        onSamples(samples) {
+          for (const sample of samples) {
+            sampleByTs.add(sample.metadata.timestampUs, sampleData.length);
+            sampleData.push(sample.metadata);
+            decodePump.enqueue(sample.chunk);
+          }
+          pumpDecoder();
+        },
+        onError: fail,
       },
-      onError: fail,
-    });
+      validatedVideo.track,
+    );
 
     resultWorkerSession.initialize(ownSide, analysisContext);
     meterWorkerSession.initialize(ownSide, analysisContext);

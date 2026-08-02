@@ -245,6 +245,9 @@ summaryの`syntheticCoverage.pendingIds`へ残る。
 
 各caseのreport、timeline、HP、入力、semantic event、空間解析結果、detector metrics、所要時間は
 `output/local-video-e2e/current/`へ出力される。期待値違反があればcommandは失敗する。
+runner はファイル選択後に画面の `data-video-preflight-status` が `valid` になるまで待ち、
+`invalid` になった場合は表示された理由を含めて解析開始前に失敗する。これにより実 browser の
+MP4 metadata、codec、`VideoFrame` bitmap probe を通ったこともローカルE2Eで回帰確認できる。
 通常の精度確認は1回で実行できる。`performance.measuredRuns`と`warmupRuns`、または
 `--runs`と`--warmup-runs`で統計計測回数を指定できる。
 出力は同じ親directoryの一時directoryで全caseとsummaryを完成させてから置換するため、解析中断や

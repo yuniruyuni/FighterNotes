@@ -156,6 +156,20 @@
 .video-file-input {
   display: none;
 }
+.video-preflight-status {
+  margin-top: 0.75rem;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: #27220f;
+}
+.card--feature .video-preflight-status.analysis-warning {
+  color: #681d12;
+  border-left-color: #681d12;
+}
+.video-preflight-status--valid {
+  font-weight: 700;
+  color: #143f28;
+}
 
 /* 公式ライクな白ボタン: 白地 + 黒のコンデンス体 + 角落とし */
 .file-label {

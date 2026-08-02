@@ -3,11 +3,13 @@ import { browserAnalysisDebugSink } from "./infrastructure/diagnostics/browser-a
 import {
   analysisRuntimeReadiness,
   analyzeVideo,
+  preflightVideo,
 } from "./infrastructure/pipeline/browser-analysis-engine.js";
 
 export const browserAnalysisServices: AnalysisServices = {
   engine: {
     readiness: analysisRuntimeReadiness,
+    preflight: preflightVideo,
     analyze: analyzeVideo,
   },
   debugSink: browserAnalysisDebugSink,

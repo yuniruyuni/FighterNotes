@@ -8,6 +8,7 @@ import {
   type Sample,
 } from "mp4box";
 import type { FrameSample, VideoCodecConfig } from "../../domain/result.js";
+import type { InspectedVideoTrack } from "../../domain/video-preflight.js";
 import { mp4TimestampUs } from "./sample-timestamp-index.js";
 
 export interface Mp4VideoTrack {
@@ -31,6 +32,7 @@ export class Mp4VideoSource {
   readonly #arrayBuffer: ArrayBuffer;
   readonly #callbacks: Mp4VideoSourceCallbacks;
   readonly #file: ISOFile;
+  readonly #validatedTrack: InspectedVideoTrack | undefined;
   readonly #pendingSamples: Mp4VideoSample[][] = [];
   #trackReady = false;
   #stopped = false;
@@ -38,10 +40,12 @@ export class Mp4VideoSource {
   constructor(
     arrayBuffer: ArrayBuffer,
     callbacks: Mp4VideoSourceCallbacks,
+    validatedTrack?: InspectedVideoTrack,
     file: ISOFile = createFile(),
   ) {
     this.#arrayBuffer = arrayBuffer;
     this.#callbacks = callbacks;
+    this.#validatedTrack = validatedTrack;
     this.#file = file;
   }
 
@@ -80,22 +84,34 @@ export class Mp4VideoSource {
     const track = info.videoTracks[0];
     if (!track?.video) throw new Error("動画トラックが見つかりません");
 
-    const description = extractCodecDescription(this.#file, track.id);
-    const trackInitialization = this.#callbacks.onTrack({
-      totalSamples: track.nb_samples,
-      decoderConfig: {
-        codec: track.codec,
-        codedWidth: track.video.width,
-        codedHeight: track.video.height,
-        description,
-      },
-      codecConfig: {
-        codec: track.codec,
-        width: track.video.width,
-        height: track.video.height,
-        description,
-      },
-    });
+    const validated = this.#validatedTrack;
+    if (validated) assertTrackMatchesPreflight(track, validated);
+    const description = validated
+      ? validated.codecConfig.description
+      : extractCodecDescription(this.#file, track.id);
+    const trackInitialization = this.#callbacks.onTrack(
+      validated
+        ? {
+            totalSamples: validated.totalSamples,
+            decoderConfig: validated.decoderConfig,
+            codecConfig: validated.codecConfig,
+          }
+        : {
+            totalSamples: track.nb_samples,
+            decoderConfig: {
+              codec: track.codec,
+              codedWidth: track.video.width,
+              codedHeight: track.video.height,
+              description,
+            },
+            codecConfig: {
+              codec: track.codec,
+              width: track.video.width,
+              height: track.video.height,
+              description,
+            },
+          },
+    );
     this.#file.setExtractionOptions(track.id, undefined, { nbSamples: 200 });
     this.#file.start();
     await trackInitialization;
@@ -113,6 +129,25 @@ export class Mp4VideoSource {
     } else {
       this.#pendingSamples.push(samples);
     }
+  }
+}
+
+function assertTrackMatchesPreflight(
+  track: Movie["videoTracks"][number],
+  validated: InspectedVideoTrack,
+): void {
+  if (
+    track.id !== validated.trackId ||
+    track.codec !== validated.codec ||
+    track.video?.width !== validated.codedWidth ||
+    track.video?.height !== validated.codedHeight ||
+    track.nb_samples !== validated.totalSamples ||
+    track.timescale !== validated.timescale ||
+    track.duration !== validated.duration
+  ) {
+    throw new Error(
+      "MP4の映像トラックが事前確認時と一致しません。動画を選択し直してください。",
+    );
   }
 }
 
