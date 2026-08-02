@@ -272,6 +272,12 @@ baseline指定時はreport、timeline、HP、入力、FIGHT、中央攻撃情報
 意図した精度変更はdiffと実動画を確認した後にだけ、current directoryを新しいbaselineとして昇格する。
 これによりhash変更だけを黙って受け入れない。
 
+中央攻撃情報の結果UIを確認するときは、case artifactの
+`report.damage_breakdown.events[].attack_evidence`と同じ被弾場面を結果画面で開く。累積damage、hit数、
+最終補正、始動・最終属性、標準HP 10,000換算との差が一致すること、`consistent` / `mismatch` /
+`unverified` / 不完全表示が別の状態として読めることを確認する。`mismatch`があるfixtureでは警告内の
+場面buttonから該当する動画区間へ移動できることも確認する。動画やartifactは引き続きcommitしない。
+
 自動起動できないbrowserを使う場合は、専用profileとremote debugging portで起動し
 `--cdp http://127.0.0.1:9222`を渡す。browserが別OSから動画を読む場合だけ、manifestの
 `browserVideoPath`へそのOSから見えるpathを追加する。通常の`videoPath`はrunner自身が

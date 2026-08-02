@@ -581,8 +581,14 @@
 .damage-origin-scenes {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   gap: 0.3rem;
   margin: 0.45rem 0 0 1.1rem;
+}
+.damage-scene {
+  display: grid;
+  gap: 0.25rem;
+  min-width: min(100%, 16rem);
 }
 .damage-scene-button {
   min-height: 30px;
@@ -607,6 +613,104 @@
 .damage-scene-button svg {
   flex: 0 0 auto;
   color: var(--sa);
+}
+.attack-evidence-details {
+  max-width: 24rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text-dim);
+  font-size: 0.68rem;
+}
+.attack-evidence-details summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.45rem;
+  color: var(--text);
+  cursor: pointer;
+}
+.attack-evidence-details summary::before {
+  content: "▸";
+  color: var(--text-dim);
+  transition: transform 120ms ease;
+}
+.attack-evidence-details[open] summary::before {
+  transform: rotate(90deg);
+}
+.attack-evidence-status {
+  padding: 0.08rem 0.28rem;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  font-weight: 700;
+}
+.attack-evidence-status[data-status="consistent"] {
+  color: var(--drive);
+}
+.attack-evidence-status[data-status="mismatch"] {
+  color: var(--punish);
+}
+.attack-evidence-status[data-status="unverified"] {
+  color: var(--sa);
+}
+.attack-evidence-status[data-status="incomplete"] {
+  color: var(--od-gold);
+}
+.attack-evidence-details dl {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0.45rem;
+  border-top: 1px solid var(--line);
+}
+:where(.attack-evidence-details dl div) {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.attack-evidence-details dt {
+  color: var(--text-dim);
+}
+.attack-evidence-details dd {
+  margin: 0;
+  color: var(--text-hi);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.attack-evidence-details p {
+  margin: 0;
+  padding: 0 0.45rem 0.45rem;
+  line-height: 1.45;
+}
+.attack-evidence-warning {
+  margin: 0.75rem 0;
+  padding: 0.65rem 0.75rem;
+  border-left: 3px solid var(--punish);
+  background: rgba(255, 61, 122, 0.08);
+}
+.attack-evidence-warning p {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+:where(.attack-evidence-warning div) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+.attack-evidence-warning button {
+  min-height: 30px;
+  padding: 0.25rem 0.45rem;
+  border: 1px solid var(--punish);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-hi);
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
 }
 :where(
   .damage-origin-chart span,
