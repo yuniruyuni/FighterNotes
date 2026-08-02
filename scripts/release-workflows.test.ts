@@ -126,11 +126,50 @@ describe("release workflow safety contracts", () => {
     expect(deploy).toContain("group: fighter-production-release");
     expect(deploy).toContain("cancel-in-progress: false");
     expect(deploy).not.toContain("secrets: inherit");
-    expect(deploy).toContain("artifact_image_ref");
+    expect(deploy).toContain("artifact_image_digest");
     expect(deploy).toContain("environment: production");
     expect(build).toContain("workflow_call:");
     expect(build).toContain("GCP_BUILDER_WORKLOAD_IDENTITY_PROVIDER:");
     expect(build).toContain("GCP_BUILDER_SERVICE_ACCOUNT:");
-    expect(build).toContain(`image_ref=\${IMAGE_REPOSITORY}@\${DIGEST}`);
+  });
+
+  test("image builds pass only non-secret digests into the release job", () => {
+    const deploy = read(".github/workflows/deploy.yml");
+    const build = read(".github/workflows/build-image.yml");
+
+    expect(build).toContain("Non-secret digest returned by Artifact Registry");
+    expect(build).toContain(
+      `artifact_image_digest: \${{ steps.push-artifact.outputs.digest }}`,
+    );
+    expect(build).toContain('echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"');
+    expect(build).toContain("Artifact Registry digest:");
+    expect(build).not.toContain("artifact_image_ref");
+    expect(build).not.toContain("ARTIFACT_IMAGE_REF");
+    expect(build).not.toContain("outputs.image_ref");
+    expect(build).not.toMatch(/image_ref=.*GITHUB_OUTPUT/);
+
+    expect(deploy).toContain(
+      `APP_IMAGE_DIGEST: \${{ needs.build-app.outputs.artifact_image_digest }}`,
+    );
+    expect(deploy).toContain(
+      `MIGRATION_IMAGE_DIGEST: \${{ needs.build-migration.outputs.artifact_image_digest }}`,
+    );
+    expect(deploy).not.toContain("outputs.artifact_image_ref");
+    expect(deploy).not.toMatch(/APP_IMAGE_REF:\s*\$\{\{/);
+    expect(deploy).not.toMatch(/MIGRATION_IMAGE_REF:\s*\$\{\{/);
+    expect(deploy).toContain("Validate and compose immutable image references");
+    expect(deploy).toContain("^sha256:[0-9a-f]{64}$");
+    expect(deploy).toContain(
+      `IMAGE_REPOSITORY="\${GCP_REGION}-docker.pkg.dev/\${GCP_PROJECT_ID}/fighter"`,
+    );
+    expect(deploy).toContain("printf 'APP_IMAGE_REF=%s/%s@%s\\n'");
+    expect(deploy).toContain("printf 'MIGRATION_IMAGE_REF=%s/%s@%s\\n'");
+    expect(deploy).toContain('>> "$GITHUB_ENV"');
+    expect(deploy).toContain("Application digest:");
+    expect(deploy).toContain("Migration digest:");
+    expect(deploy).not.toContain('echo "- Application: \\`$APP_IMAGE_REF\\`"');
+    expect(deploy).not.toContain(
+      'echo "- Migration: \\`$MIGRATION_IMAGE_REF\\`"',
+    );
   });
 });

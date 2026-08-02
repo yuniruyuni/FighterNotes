@@ -27,11 +27,8 @@ on:
       GCP_BUILDER_SERVICE_ACCOUNT:
         required: true
     outputs:
-      artifact_image_ref:
-        description: Artifact Registry image pinned to the pushed digest
-        value: ${{ jobs.build.outputs.artifact_image_ref }}
       artifact_image_digest:
-        description: Digest returned by Artifact Registry
+        description: Non-secret digest returned by Artifact Registry
         value: ${{ jobs.build.outputs.artifact_image_digest }}
 
 permissions:
@@ -43,7 +40,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     outputs:
-      artifact_image_ref: ${{ steps.push-artifact.outputs.image_ref }}
       artifact_image_digest: ${{ steps.push-artifact.outputs.digest }}
     env:
       GCP_REGION: us-west1
@@ -117,7 +113,6 @@ jobs:
             exit 1
           fi
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
-          echo "image_ref=${IMAGE_REPOSITORY}@${DIGEST}" >> "$GITHUB_OUTPUT"
 
       - name: Push to GHCR (archive)
         run: |
@@ -127,12 +122,12 @@ jobs:
 
       - name: Record immutable image
         env:
-          ARTIFACT_IMAGE_REF: ${{ steps.push-artifact.outputs.image_ref }}
+          ARTIFACT_IMAGE_DIGEST: ${{ steps.push-artifact.outputs.digest }}
         run: |
           {
             echo "### ${IMAGE_NAME} image"
             echo
             echo "- Source: \`$SOURCE_SHA\`"
-            echo "- Artifact Registry: \`$ARTIFACT_IMAGE_REF\`"
+            echo "- Artifact Registry digest: \`$ARTIFACT_IMAGE_DIGEST\`"
             echo "- GHCR archive tag: \`ghcr.io/${REPO_OWNER}/${IMAGE_NAME}:${TAG}\`"
           } >> "$GITHUB_STEP_SUMMARY"
