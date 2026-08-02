@@ -3,6 +3,7 @@ import type {
   AdviceCard,
   AdviceReport,
   EvidenceClip,
+  EvidenceRequirement,
 } from "~/modules/analysis/contracts.js";
 import { frameToSeconds } from "../../domain/frame-time.js";
 import type { SceneSelection } from "../../domain/scene-selection.js";
@@ -19,10 +20,11 @@ export function AdviceSection({
   onSceneChange,
 }: AdviceSectionProps) {
   const cards = report.cards ?? [];
+  const suppressed = report.suppressed_cards ?? [];
   return (
     <section className="summary-section" data-wm="Weak Points">
       <h2>指摘事項</h2>
-      {cards.length === 0 ? (
+      {cards.length === 0 && suppressed.length === 0 ? (
         <p className="muted-note">顕著な改善ポイントは検出されませんでした。</p>
       ) : (
         cards.map((card) => (
@@ -34,8 +36,44 @@ export function AdviceSection({
           />
         ))
       )}
+      {suppressed.length > 0 && (
+        <div className="muted-note" role="note">
+          <p>
+            証拠の認識率不足により、{suppressed.length}
+            件の指摘候補を確認不能として非表示にしています。改善点がないという意味ではありません。
+          </p>
+          <ul>
+            {suppressed.map((card) => (
+              <li key={card.id}>
+                {card.title}:{" "}
+                {card.missing_requirements.map(requirementLabel).join("・")}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
+}
+
+function requirementLabel(requirement: EvidenceRequirement): string {
+  const labels: Record<EvidenceRequirement, string> = {
+    own_hp: "自分のHPバー",
+    opponent_hp: "相手のHPバー",
+    own_drive: "自分のDriveゲージ",
+    opponent_drive: "相手のDriveゲージ",
+    own_super: "自分のSAゲージ",
+    opponent_super: "相手のSAゲージ",
+    own_input: "自分の入力履歴",
+    opponent_input: "相手の入力履歴",
+    frame_meter: "フレームメーター",
+    contacts: "接触解析",
+    punishes: "確反解析",
+    spatial: "空間解析",
+    own_attack_info: "自分の攻撃表示",
+    opponent_attack_info: "相手の攻撃表示",
+  };
+  return labels[requirement];
 }
 
 function AdviceResultCard({

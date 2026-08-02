@@ -199,6 +199,20 @@ fn missing_frame_meter_suppresses_dependent_card_and_explains_why() {
         .cards
         .iter()
         .all(|card| card.id != "press_while_minus"));
+    let suppressed = report
+        .suppressed_cards
+        .iter()
+        .find(|card| card.id == "press_while_minus")
+        .expect("candidate suppression is retained");
+    assert_eq!(
+        suppressed.missing_requirements,
+        vec![EvidenceRequirement::FrameMeter]
+    );
+    assert!(report.summary.contains("証拠不足で確認不能"));
+    assert!(report.summary.contains("改善点なしとは判定していません"));
+    assert!(!report
+        .summary
+        .contains("顕著な改善ポイントは検出されません"));
     assert!(report
         .analysis_warnings
         .iter()
@@ -224,6 +238,9 @@ fn low_hp_coverage_suppresses_even_generic_big_hit_card() {
     let report = build_report(&features, &events, "p1", None);
 
     assert!(report.cards.iter().all(|card| card.id != "big_hits"));
+    assert!(report.suppressed_cards.iter().any(|card| {
+        card.id == "big_hits" && card.missing_requirements == vec![EvidenceRequirement::OwnHp]
+    }));
     assert!(report
         .analysis_warnings
         .iter()

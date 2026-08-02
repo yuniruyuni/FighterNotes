@@ -19,6 +19,9 @@ pub struct AdviceReport {
     pub summary: String,
     /// 指摘カード（原因診断 → 事実確認 → 統計、同種は確度・severity 順）
     pub cards: Vec<AdviceCard>,
+    /// 候補はあったが、必要証拠のcoverage不足で抑制したカード。
+    #[serde(default)]
+    pub suppressed_cards: Vec<SuppressedAdviceCard>,
     pub round_summaries: Vec<RoundSummary>,
     /// 入力読み取りが無いパイプラインでは None
     pub input_stats: Option<InputStats>,

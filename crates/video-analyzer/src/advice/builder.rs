@@ -44,7 +44,7 @@ pub fn build_report_with_context(
     .then(|| build_input_stats(features, events, own, own_index))
     .flatten();
     let tactic_stats = build_tactic_stats(features, events, own, opp);
-    let cards = build_advice_cards(
+    let (cards, suppressed_cards) = build_advice_cards(
         features,
         events,
         own,
@@ -57,8 +57,12 @@ pub fn build_report_with_context(
     let mut damage_breakdown =
         damage_origins::build_damage_breakdown(features, events, own, context.opponent_character());
     damage_origins::apply_advice_contexts(&mut damage_breakdown, &cards);
-    let (weaknesses, practice_items, summary) =
-        build_compatibility_summary(&cards, rounds_detected, damage_taken_events.len());
+    let (weaknesses, practice_items, summary) = build_compatibility_summary(
+        &cards,
+        &suppressed_cards,
+        rounds_detected,
+        damage_taken_events.len(),
+    );
 
     AdviceReport {
         ruleset_version: RULESET_VERSION,
@@ -71,6 +75,7 @@ pub fn build_report_with_context(
         practice_items,
         summary,
         cards,
+        suppressed_cards,
         round_summaries,
         input_stats,
         tactic_stats,

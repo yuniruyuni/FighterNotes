@@ -51,3 +51,30 @@ pub struct AdviceCard {
     pub practice: String,
     pub evidence: Vec<EvidenceClip>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EvidenceRequirement {
+    OwnHp,
+    OpponentHp,
+    OwnDrive,
+    OpponentDrive,
+    OwnSuper,
+    OpponentSuper,
+    OwnInput,
+    OpponentInput,
+    FrameMeter,
+    Contacts,
+    Punishes,
+    Spatial,
+    OwnAttackInfo,
+    OpponentAttackInfo,
+}
+
+/// 候補自体は検出したが、必要証拠のcoverage不足で公開カードから除外した記録。
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SuppressedAdviceCard {
+    pub id: String,
+    pub title: String,
+    pub missing_requirements: Vec<EvidenceRequirement>,
+}

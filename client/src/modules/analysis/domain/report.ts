@@ -101,6 +101,28 @@ export interface AdviceCard {
   evidence: EvidenceClip[];
 }
 
+export type EvidenceRequirement =
+  | "own_hp"
+  | "opponent_hp"
+  | "own_drive"
+  | "opponent_drive"
+  | "own_super"
+  | "opponent_super"
+  | "own_input"
+  | "opponent_input"
+  | "frame_meter"
+  | "contacts"
+  | "punishes"
+  | "spatial"
+  | "own_attack_info"
+  | "opponent_attack_info";
+
+export interface SuppressedAdviceCard {
+  id: string;
+  title: string;
+  missing_requirements: EvidenceRequirement[];
+}
+
 export interface RoundSummary {
   round_no: number;
   start_frame: number;
@@ -272,6 +294,8 @@ export interface AdviceReport {
   practice_items: string[];
   summary: string;
   cards: AdviceCard[];
+  /** ruleset v8以前の保存済みレポートでは省略。 */
+  suppressed_cards?: SuppressedAdviceCard[];
   round_summaries: RoundSummary[];
   input_stats: InputStats | null;
   tactic_stats: TacticStats;

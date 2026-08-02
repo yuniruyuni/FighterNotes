@@ -70,6 +70,7 @@ pub(crate) fn build_round_summaries(
 
 pub(crate) fn build_compatibility_summary(
     cards: &[AdviceCard],
+    suppressed_cards: &[SuppressedAdviceCard],
     rounds_detected: u32,
     damage_count: usize,
 ) -> (Vec<Weakness>, Vec<String>, String) {
@@ -90,6 +91,10 @@ pub(crate) fn build_compatibility_summary(
             "{rounds_detected}ラウンド検出、被弾 {damage_count} 件。優先改善: {}",
             priority.title
         ),
+        None if cards.is_empty() && !suppressed_cards.is_empty() => format!(
+            "{rounds_detected}ラウンド検出、被弾 {damage_count} 件。{}件の指摘候補は証拠不足で確認不能です。改善点なしとは判定していません。",
+            suppressed_cards.len()
+        ),
         None if cards.is_empty() => format!(
             "{rounds_detected}ラウンド検出、被弾 {damage_count} 件。顕著な改善ポイントは検出されませんでした。"
         ),
@@ -97,6 +102,14 @@ pub(crate) fn build_compatibility_summary(
             "{rounds_detected}ラウンド検出、被弾 {damage_count} 件。原因を断定できる改善指摘はなく、要確認: {}",
             cards[0].title
         ),
+    };
+    let summary = if !cards.is_empty() && !suppressed_cards.is_empty() {
+        format!(
+            "{summary} なお、{}件の候補は証拠不足で確認不能です。",
+            suppressed_cards.len()
+        )
+    } else {
+        summary
     };
     (weaknesses, practice_items, summary)
 }

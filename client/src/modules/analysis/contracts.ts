@@ -28,9 +28,11 @@ export type {
   DamageTakenEvent,
   EvidenceAvailability,
   EvidenceClip,
+  EvidenceRequirement,
   InputStats,
   RoundSummary,
   StrikeKind,
+  SuppressedAdviceCard,
   TacticStats,
 } from "./domain/report.js";
 export type {
