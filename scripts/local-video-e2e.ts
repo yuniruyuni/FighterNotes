@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import {
   basename,
@@ -38,6 +38,11 @@ import {
   summarizeTimings,
   type TimingSummary,
 } from "./local-video-e2e-lib";
+import {
+  assertBaselineAnalyzedFileBinding,
+  beginOutputTransaction,
+  prepareOutputDirectories,
+} from "./local-video-e2e-output";
 
 const DEFAULT_MANIFEST = "video/local-video-e2e.json";
 const DEFAULT_OUTPUT = "output/local-video-e2e/current";
@@ -156,11 +161,11 @@ if (options.baselineDir && measuredRuns < 3) {
 if (options.baselineDir && warmupRuns < 1) {
   throw new Error("baseline comparison requires at least 1 warm-up run");
 }
-const baseline = await loadBaseline(
-  options.baselineDir,
-  projectRoot,
+const baselineDirectory = await prepareOutputDirectories(
   outputDir,
+  options.baselineDir ? resolve(projectRoot, options.baselineDir) : undefined,
 );
+const baseline = await loadBaseline(baselineDirectory, projectRoot);
 if (
   baseline &&
   (baseline.summary.measuredRuns !== measuredRuns ||
@@ -189,6 +194,9 @@ for (const fixture of manifest.cases) {
       `${fixture.id}: videoPath must be an existing absolute local path`,
     );
   }
+  if (baseline) {
+    assertBaselineAnalyzedFileBinding(fixture.id, fixture.browserVideoPath);
+  }
   if (baseline && !hasAccuracyContract(fixture)) {
     throw new Error(
       `${fixture.id}: baseline comparison requires semanticEvents and at least one detectorGate`,
@@ -196,184 +204,197 @@ for (const fixture of manifest.cases) {
   }
 }
 
-await mkdir(outputDir, { recursive: true });
-const staticServer = startStaticServer(staticRoot);
-const browser = await openBrowser(options);
+const outputTransaction = await beginOutputTransaction(outputDir);
 const summaries: CaseSummary[] = [];
 let failed = false;
 
 try {
-  const appUrl = `http://127.0.0.1:${staticServer.port}/`;
-  for (const fixture of manifest.cases) {
-    const fixtureFingerprint = await sha256File(fixture.videoPath);
-    const settings: FixtureSettings = {
-      side: fixture.side,
-      ownCharacter: fixture.ownCharacter,
-      opponentCharacter: fixture.opponentCharacter,
-    };
-    const expectationHash = sha256(canonicalJson(fixture.expect ?? null));
-    console.log(
-      `[local-e2e] ${fixture.id}: ${warmupRuns} warm-up + ${measuredRuns} measured run(s)`,
-    );
-    for (let run = 0; run < warmupRuns; run += 1) {
-      console.log(
-        `[local-e2e] ${fixture.id}: warm-up ${run + 1}/${warmupRuns}`,
-      );
-      await analyzeCase(browser.cdpUrl, appUrl, fixture);
-    }
-    let captured: CapturedWorkerArtifacts | undefined;
-    let semanticDigest: string | undefined;
-    let semanticChangedBetweenRuns = false;
-    const timingRuns: Array<{
-      readonly analysisMs: number;
-      readonly stages: Readonly<Record<string, number>>;
-    }> = [];
-    for (let run = 0; run < measuredRuns; run += 1) {
-      console.log(
-        `[local-e2e] ${fixture.id}: measured ${run + 1}/${measuredRuns}`,
-      );
-      const measured = await analyzeCase(browser.cdpUrl, appUrl, fixture);
-      const digest = semanticCapturedDigest(measured);
-      if (semanticDigest === undefined) semanticDigest = digest;
-      else if (semanticDigest !== digest) semanticChangedBetweenRuns = true;
-      captured ??= measured;
-      timingRuns.push({
-        analysisMs: measured.analysisMs,
-        stages: requiredStageTimings(measured, fixture.id),
-      });
-    }
-    if (!captured)
-      throw new Error(`${fixture.id}: no measured run was captured`);
-    const report = parseArtifact(captured.report, "report", fixture.id);
-    const regressionEvents = parseArtifact(
-      captured.regressionEvents,
-      "regressionEvents",
-      fixture.id,
-    );
-    const performance = summarizeTimings(timingRuns);
-    const artifacts: Record<string, unknown> = {
-      schemaVersion: 2,
-      runnerVersion: RUNNER_VERSION,
-      caseId: fixture.id,
-      videoName: basename(fixture.videoPath),
-      fixtureContract: {
-        fixtureFingerprint,
-        settings,
-        expectationHash,
-      },
-      analysisMs: performance.medianMs,
-      performance,
-      report,
-      timeline: parseArtifact(captured.timeline, "timeline", fixture.id),
-      hpFeatures: parseArtifact(captured.features, "features", fixture.id),
-      trackedInputs: parseOptionalArtifact(
-        captured.trackedInputs,
-        "trackedInputs",
-        fixture.id,
-      ),
-      fightMarkers: parseOptionalArtifact(
-        captured.fightMarkers,
-        "fightMarkers",
-        fixture.id,
-      ),
-      attackInfo: parseOptionalArtifact(
-        captured.attackInfo,
-        "attackInfo",
-        fixture.id,
-      ),
-      regressionEvents,
-      spatialWindows: parseOptionalArtifact(
-        captured.spatialWindows,
-        "spatialWindows",
-        fixture.id,
-      ),
-      spatialObservations: parseOptionalArtifact(
-        captured.spatialObservations,
-        "spatialObservations",
-        fixture.id,
-      ),
-      perfLogs: captured.perfLogs ?? [],
-    };
-    const artifactText = JSON.stringify(artifacts, null, 2);
-    await Bun.write(join(outputDir, `${fixture.id}.json`), `${artifactText}\n`);
-
-    const regression = evaluateRegressionEvents(
-      {
-        report,
-        fightMarkers: artifacts.fightMarkers,
-        regressionEvents,
-      },
-      fixture.expect,
-    );
-    const assertionFailures = [
-      ...evaluateExpectations(report, fixture.expect),
-      ...regression.failures,
-      ...(semanticChangedBetweenRuns
-        ? [`${fixture.id}: semantic artifacts changed between measured runs`]
-        : []),
-      ...(baseline
-        ? await compareWithBaseline(
-            baseline,
-            fixture,
-            artifacts,
-            performance,
-            regression.metrics,
-            performancePolicy,
+  const staticServer = startStaticServer(staticRoot);
+  try {
+    const browser = await openBrowser(options);
+    try {
+      const appUrl = `http://127.0.0.1:${staticServer.port}/`;
+      for (const fixture of manifest.cases) {
+        const fixtureFingerprint = await sha256File(fixture.videoPath);
+        const settings: FixtureSettings = {
+          side: fixture.side,
+          ownCharacter: fixture.ownCharacter,
+          opponentCharacter: fixture.opponentCharacter,
+        };
+        const expectationHash = sha256(canonicalJson(fixture.expect ?? null));
+        console.log(
+          `[local-e2e] ${fixture.id}: ${warmupRuns} warm-up + ${measuredRuns} measured run(s)`,
+        );
+        for (let run = 0; run < warmupRuns; run += 1) {
+          console.log(
+            `[local-e2e] ${fixture.id}: warm-up ${run + 1}/${warmupRuns}`,
+          );
+          await analyzeCase(browser.cdpUrl, appUrl, fixture);
+        }
+        let captured: CapturedWorkerArtifacts | undefined;
+        let semanticDigest: string | undefined;
+        let semanticChangedBetweenRuns = false;
+        const timingRuns: Array<{
+          readonly analysisMs: number;
+          readonly stages: Readonly<Record<string, number>>;
+        }> = [];
+        for (let run = 0; run < measuredRuns; run += 1) {
+          console.log(
+            `[local-e2e] ${fixture.id}: measured ${run + 1}/${measuredRuns}`,
+          );
+          const measured = await analyzeCase(browser.cdpUrl, appUrl, fixture);
+          const digest = semanticCapturedDigest(measured);
+          if (semanticDigest === undefined) semanticDigest = digest;
+          else if (semanticDigest !== digest) semanticChangedBetweenRuns = true;
+          captured ??= measured;
+          timingRuns.push({
+            analysisMs: measured.analysisMs,
+            stages: requiredStageTimings(measured, fixture.id),
+          });
+        }
+        if (!captured)
+          throw new Error(`${fixture.id}: no measured run was captured`);
+        const report = parseArtifact(captured.report, "report", fixture.id);
+        const regressionEvents = parseArtifact(
+          captured.regressionEvents,
+          "regressionEvents",
+          fixture.id,
+        );
+        const performance = summarizeTimings(timingRuns);
+        const artifacts: Record<string, unknown> = {
+          schemaVersion: 2,
+          runnerVersion: RUNNER_VERSION,
+          caseId: fixture.id,
+          videoName: basename(fixture.videoPath),
+          fixtureContract: {
             fixtureFingerprint,
             settings,
             expectationHash,
-          )
-        : []),
-    ];
-    failed ||= assertionFailures.length > 0;
-    const identity = computeArtifactIdentity(artifacts);
-    summaries.push({
-      id: fixture.id,
-      videoName: basename(fixture.videoPath),
-      fixtureFingerprint,
-      settings,
-      expectationHash,
-      analysisMs: performance.medianMs,
-      performance,
-      detectorMetrics: regression.metrics,
-      syntheticCoverage: regression.syntheticCoverage,
-      assertionsPassed: assertionFailures.length === 0,
-      assertionFailures,
-      hashes: identity.hashes,
-      semanticHash: identity.semanticHash,
-    });
-    console.log(
-      `[local-e2e] ${fixture.id}: median ${(
-        performance.medianMs / 1_000
-      ).toFixed(2)}s, p90 ${(performance.p90Ms / 1_000).toFixed(2)}s, ${
-        assertionFailures.length === 0
-          ? "expectations passed"
-          : `${assertionFailures.length} expectation(s) failed`
-      }`,
-    );
-    for (const failure of assertionFailures) {
-      console.error(`  - ${failure}`);
-    }
-  }
-} finally {
-  staticServer.stop(true);
-  await browser.close();
-}
+          },
+          analysisMs: performance.medianMs,
+          performance,
+          report,
+          timeline: parseArtifact(captured.timeline, "timeline", fixture.id),
+          hpFeatures: parseArtifact(captured.features, "features", fixture.id),
+          trackedInputs: parseOptionalArtifact(
+            captured.trackedInputs,
+            "trackedInputs",
+            fixture.id,
+          ),
+          fightMarkers: parseOptionalArtifact(
+            captured.fightMarkers,
+            "fightMarkers",
+            fixture.id,
+          ),
+          attackInfo: parseOptionalArtifact(
+            captured.attackInfo,
+            "attackInfo",
+            fixture.id,
+          ),
+          regressionEvents,
+          spatialWindows: parseOptionalArtifact(
+            captured.spatialWindows,
+            "spatialWindows",
+            fixture.id,
+          ),
+          spatialObservations: parseOptionalArtifact(
+            captured.spatialObservations,
+            "spatialObservations",
+            fixture.id,
+          ),
+          perfLogs: captured.perfLogs ?? [],
+        };
+        const artifactText = JSON.stringify(artifacts, null, 2);
+        await Bun.write(
+          join(outputTransaction.directory, `${fixture.id}.json`),
+          `${artifactText}\n`,
+        );
 
-const summary: RunSummary = {
-  schemaVersion: 2,
-  runnerVersion: RUNNER_VERSION,
-  warmupRuns,
-  measuredRuns,
-  generatedAt: new Date().toISOString(),
-  cases: summaries,
-};
-await Bun.write(
-  join(outputDir, "summary.json"),
-  `${JSON.stringify(summary, null, 2)}\n`,
-);
-console.log(`[local-e2e] artifacts: ${relative(projectRoot, outputDir)}`);
-if (failed) process.exitCode = 1;
+        const regression = evaluateRegressionEvents(
+          {
+            report,
+            fightMarkers: artifacts.fightMarkers,
+            regressionEvents,
+          },
+          fixture.expect,
+        );
+        const assertionFailures = [
+          ...evaluateExpectations(report, fixture.expect),
+          ...regression.failures,
+          ...(semanticChangedBetweenRuns
+            ? [
+                `${fixture.id}: semantic artifacts changed between measured runs`,
+              ]
+            : []),
+          ...(baseline
+            ? await compareWithBaseline(
+                baseline,
+                fixture,
+                artifacts,
+                performance,
+                regression.metrics,
+                performancePolicy,
+                fixtureFingerprint,
+                settings,
+                expectationHash,
+              )
+            : []),
+        ];
+        failed ||= assertionFailures.length > 0;
+        const identity = computeArtifactIdentity(artifacts);
+        summaries.push({
+          id: fixture.id,
+          videoName: basename(fixture.videoPath),
+          fixtureFingerprint,
+          settings,
+          expectationHash,
+          analysisMs: performance.medianMs,
+          performance,
+          detectorMetrics: regression.metrics,
+          syntheticCoverage: regression.syntheticCoverage,
+          assertionsPassed: assertionFailures.length === 0,
+          assertionFailures,
+          hashes: identity.hashes,
+          semanticHash: identity.semanticHash,
+        });
+        console.log(
+          `[local-e2e] ${fixture.id}: median ${(
+            performance.medianMs / 1_000
+          ).toFixed(2)}s, p90 ${(performance.p90Ms / 1_000).toFixed(2)}s, ${
+            assertionFailures.length === 0
+              ? "expectations passed"
+              : `${assertionFailures.length} expectation(s) failed`
+          }`,
+        );
+        for (const failure of assertionFailures) {
+          console.error(`  - ${failure}`);
+        }
+      }
+    } finally {
+      await browser.close();
+    }
+  } finally {
+    staticServer.stop(true);
+  }
+
+  const summary: RunSummary = {
+    schemaVersion: 2,
+    runnerVersion: RUNNER_VERSION,
+    warmupRuns,
+    measuredRuns,
+    generatedAt: new Date().toISOString(),
+    cases: summaries,
+  };
+  await Bun.write(
+    join(outputTransaction.directory, "summary.json"),
+    `${JSON.stringify(summary, null, 2)}\n`,
+  );
+  await outputTransaction.publish();
+  console.log(`[local-e2e] artifacts: ${relative(projectRoot, outputDir)}`);
+  if (failed) process.exitCode = 1;
+} finally {
+  await outputTransaction.discard();
+}
 
 function parseArgs(args: readonly string[]): CliOptions {
   let manifestPath = DEFAULT_MANIFEST;
@@ -1414,15 +1435,10 @@ function requiredRatio(value: unknown, label: string): number {
 }
 
 async function loadBaseline(
-  baselineOption: string | undefined,
+  directory: string | undefined,
   root: string,
-  outputDirectory: string,
 ): Promise<BaselineData | undefined> {
-  if (!baselineOption) return undefined;
-  const directory = resolve(root, baselineOption);
-  if (directory === outputDirectory) {
-    throw new Error("--baseline and --output must be different directories");
-  }
+  if (!directory) return undefined;
   const summaryPath = join(directory, "summary.json");
   const parsed: unknown = JSON.parse(await readFile(summaryPath, "utf8"));
   return {

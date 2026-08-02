@@ -1,4 +1,14 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   compareArtifactIdentity,
   compareFixtureIdSets,
@@ -7,8 +17,28 @@ import {
   REQUIRED_PERFORMANCE_STAGES,
   RUNNER_VERSION,
 } from "./local-video-e2e-baseline";
+import {
+  assertBaselineAnalyzedFileBinding,
+  beginOutputTransaction,
+  prepareOutputDirectories,
+} from "./local-video-e2e-output";
 
 const SHA = "a".repeat(64);
+const temporaryDirectories: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryDirectories
+      .splice(0)
+      .map((directory) => rm(directory, { recursive: true, force: true })),
+  );
+});
+
+async function temporaryDirectory(): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "fighter-notes-e2e-test-"));
+  temporaryDirectories.push(directory);
+  return directory;
+}
 
 function performance() {
   return {
@@ -124,5 +154,81 @@ describe("local video E2E baseline identity", () => {
       "capture hash report does not match summary",
       "semantic hash does not match summary",
     ]);
+  });
+});
+
+describe("local video E2E output integrity", () => {
+  test("rejects an unverified browser-side path for baseline comparison", () => {
+    expect(() =>
+      assertBaselineAnalyzedFileBinding("fixture-a", "D:\\replays\\a.mp4"),
+    ).toThrow(
+      "fixture-a: baseline comparison cannot verify browserVideoPath content against videoPath",
+    );
+    expect(() =>
+      assertBaselineAnalyzedFileBinding("fixture-a", undefined),
+    ).not.toThrow();
+  });
+
+  test("rejects a symlink alias between baseline and output", async () => {
+    const root = await temporaryDirectory();
+    const baseline = join(root, "baseline");
+    const outputAlias = join(root, "current");
+    await mkdir(baseline);
+    await symlink(baseline, outputAlias, "dir");
+
+    await expect(
+      prepareOutputDirectories(outputAlias, baseline),
+    ).rejects.toThrow(
+      "--baseline and --output must be different physical directories",
+    );
+  });
+
+  test("rejects nested baseline and output directories", async () => {
+    const root = await temporaryDirectory();
+    const output = join(root, "current");
+    const nestedBaseline = join(output, "baseline");
+    await mkdir(nestedBaseline, { recursive: true });
+
+    await expect(
+      prepareOutputDirectories(output, nestedBaseline),
+    ).rejects.toThrow(
+      "--baseline and --output must not contain one another physically",
+    );
+  });
+
+  test("keeps the previous output until a complete staged run is published", async () => {
+    const root = await temporaryDirectory();
+    const output = join(root, "current");
+    await prepareOutputDirectories(output);
+    await writeFile(join(output, "summary.json"), "old summary");
+    await writeFile(join(output, "old-case.json"), "old case");
+
+    const incomplete = await beginOutputTransaction(output);
+    await writeFile(join(incomplete.directory, "new-case.json"), "new case");
+    await expect(incomplete.publish()).rejects.toThrow(
+      "staged E2E output is incomplete",
+    );
+    expect(await readFile(join(output, "summary.json"), "utf8")).toBe(
+      "old summary",
+    );
+    await incomplete.discard();
+
+    const complete = await beginOutputTransaction(output);
+    await writeFile(join(complete.directory, "new-case.json"), "new case");
+    await writeFile(join(complete.directory, "summary.json"), "new summary");
+    expect(await readFile(join(output, "summary.json"), "utf8")).toBe(
+      "old summary",
+    );
+    await complete.publish();
+
+    expect(await readFile(join(output, "summary.json"), "utf8")).toBe(
+      "new summary",
+    );
+    expect(await readFile(join(output, "new-case.json"), "utf8")).toBe(
+      "new case",
+    );
+    await expect(
+      readFile(join(output, "old-case.json"), "utf8"),
+    ).rejects.toThrow();
   });
 });

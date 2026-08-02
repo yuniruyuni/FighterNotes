@@ -230,6 +230,8 @@ summaryの`syntheticCoverage.pendingIds`へ残る。
 `output/local-video-e2e/current/`へ出力される。期待値違反があればcommandは失敗する。
 通常の精度確認は1回で実行できる。`performance.measuredRuns`と`warmupRuns`、または
 `--runs`と`--warmup-runs`で統計計測回数を指定できる。
+出力は同じ親directoryの一時directoryで全caseとsummaryを完成させてから置換するため、解析中断や
+artifact生成失敗で既存のcurrent directoryが部分的なrunに置き換わることはない。
 
 実行環境を固定した速度・精度比較では、変更前の出力directoryを残して`--baseline`で指定する。
 baseline比較はwarm-up後に最低3回を測り、総時間の中央値/p90とfirst pass、spatial pass、
@@ -240,6 +242,8 @@ baseline側も1回以上のwarm-upと3回以上の計測で生成されていな
 manifestとbaselineのcase集合も完全一致を要求し、caseの追加・削除・重複を比較前に拒否する。
 summaryのcapture hash・semantic hashはcase artifactから再計算し、古いrunとの混在や差し替えを拒否する。
 baseline比較を行うcaseには、1件以上の`semanticEvents`と`detectorGates`が必要になる。
+`--baseline`と`--output`はreal path上でも別かつ包含関係にないdirectoryでなければならず、symlinkを
+介して同じdirectoryを指定する比較も解析開始前に拒否する。
 
 ```bash
 mv output/local-video-e2e/current output/local-video-e2e/baseline
@@ -254,7 +258,8 @@ baseline指定時はreport、timeline、HP、入力、FIGHT、中央攻撃情報
 自動起動できないbrowserを使う場合は、専用profileとremote debugging portで起動し
 `--cdp http://127.0.0.1:9222`を渡す。browserが別OSから動画を読む場合だけ、manifestの
 `browserVideoPath`へそのOSから見えるpathを追加する。通常の`videoPath`はrunner自身が
-fixtureの存在確認に使う。
+fixtureの存在確認に使う。runner側で`browserVideoPath`の内容をSHA-256へ結び付けられないため、
+この指定は単発の調査だけに使用でき、baseline比較では安全のため拒否される。
 
 ## 公式 frame data
 
