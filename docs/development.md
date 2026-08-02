@@ -248,6 +248,8 @@ summaryの`syntheticCoverage.pendingIds`へ残る。
 runner はファイル選択後に画面の `data-video-preflight-status` が `valid` になるまで待ち、
 `invalid` になった場合は表示された理由を含めて解析開始前に失敗する。これにより実 browser の
 MP4 metadata、codec、`VideoFrame` bitmap probe を通ったこともローカルE2Eで回帰確認できる。
+空間解析については処理frame数、decoder queue / decoded frame / Worker pendingのwatermarkとpeakも
+case artifactへ保存する。runnerはpeakがhigh watermarkを超えたartifactを拒否する。
 通常の精度確認は1回で実行できる。`performance.measuredRuns`と`warmupRuns`、または
 `--runs`と`--warmup-runs`で統計計測回数を指定できる。
 出力は同じ親directoryの一時directoryで全caseとsummaryを完成させてから置換するため、解析中断や
@@ -256,6 +258,7 @@ artifact生成失敗で既存のcurrent directoryが部分的なrunに置き換�
 実行環境を固定した速度・精度比較では、変更前の出力directoryを残して`--baseline`で指定する。
 baseline比較はwarm-up後に最低3回を測り、総時間の中央値/p90とfirst pass、spatial pass、
 frame切り出し、Worker copy、meter WASM、HUD WASMの中央値を閾値判定する。閾値超過は非0終了になる。
+同一fixtureの空間処理frame数も一致を要求し、Worker peak pendingは比較ログへ出力する。
 baseline側も1回以上のwarm-upと3回以上の計測で生成されていなければ比較を拒否する。
 動画内容のSHA-256、side・character設定、annotation・期待値の正規化hash、runner version、
 計測回数もbaseline contractへ保存する。動画・設定・期待値を削除または変更した比較は失敗する。

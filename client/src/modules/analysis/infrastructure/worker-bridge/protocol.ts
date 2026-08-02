@@ -1,5 +1,6 @@
 import type { AnalysisContext } from "../../domain/context.js";
 import type { SpatialFrameHints } from "../../domain/result.js";
+import type { SpatialPerformanceStats } from "../spatial-analysis/backpressure.js";
 
 export type AnalyzerWorkerRole = "meter" | "result";
 
@@ -32,7 +33,10 @@ export type AnalyzerWorkerRequest =
       readonly rgbaBuf: ArrayBuffer;
       readonly hints: SpatialFrameHints;
     }
-  | { readonly type: "spatialFinish" };
+  | {
+      readonly type: "spatialFinish";
+      readonly spatialPerformance: SpatialPerformanceStats;
+    };
 
 export interface AnalyzerWorkerDone {
   readonly type: "done";
@@ -45,6 +49,7 @@ export interface AnalyzerWorkerDone {
   readonly regressionEvents: string;
   readonly debugHp?: unknown[];
   readonly spatialObservations?: string;
+  readonly spatialPerformance?: SpatialPerformanceStats;
 }
 
 export type AnalyzerWorkerResponse =

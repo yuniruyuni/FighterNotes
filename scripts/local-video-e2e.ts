@@ -20,8 +20,11 @@ import {
   computeArtifactIdentity,
   type FixtureSettings,
   parseBaselineArtifact,
+  parseSpatialPerformanceStats,
   REQUIRED_PERFORMANCE_STAGES,
   RUNNER_VERSION,
+  type SpatialPerformanceStats,
+  summarizeSpatialPerformanceStats,
 } from "./local-video-e2e-baseline";
 import {
   compareDetectorMetrics,
@@ -88,6 +91,7 @@ interface CapturedWorkerArtifacts {
   readonly regressionEvents: string;
   readonly spatialWindows?: string;
   readonly spatialObservations?: string;
+  readonly spatialPerformance?: SpatialPerformanceStats;
   readonly perfLogs?: string[];
   readonly stageTimings?: Readonly<Record<string, number>>;
   readonly analysisMs: number;
@@ -238,6 +242,7 @@ try {
           readonly analysisMs: number;
           readonly stages: Readonly<Record<string, number>>;
         }> = [];
+        const spatialPerformanceRuns: SpatialPerformanceStats[] = [];
         for (let run = 0; run < measuredRuns; run += 1) {
           console.log(
             `[local-e2e] ${fixture.id}: measured ${run + 1}/${measuredRuns}`,
@@ -251,6 +256,12 @@ try {
             analysisMs: measured.analysisMs,
             stages: requiredStageTimings(measured, fixture.id),
           });
+          spatialPerformanceRuns.push(
+            parseSpatialPerformanceStats(
+              measured.spatialPerformance,
+              `${fixture.id}.spatialPerformance[${run}]`,
+            ),
+          );
         }
         if (!captured)
           throw new Error(`${fixture.id}: no measured run was captured`);
@@ -261,6 +272,10 @@ try {
           fixture.id,
         );
         const performance = summarizeTimings(timingRuns);
+        const spatialPerformance = summarizeSpatialPerformanceStats(
+          spatialPerformanceRuns,
+          `${fixture.id}.spatialPerformance`,
+        );
         const artifacts: Record<string, unknown> = {
           schemaVersion: 2,
           runnerVersion: RUNNER_VERSION,
@@ -302,6 +317,7 @@ try {
             "spatialObservations",
             fixture.id,
           ),
+          spatialPerformance,
           perfLogs: captured.perfLogs ?? [],
         };
         const artifactText = JSON.stringify(artifacts, null, 2);
@@ -789,6 +805,7 @@ function captureBootstrap(): string {
                 regressionEvents: message.regressionEvents,
                 spatialWindows: state.spatialWindows,
                 spatialObservations: message.spatialObservations,
+                spatialPerformance: message.spatialPerformance,
                 perfLogs: state.perfLogs,
                 stageTimings: {
                   firstPass: state.firstPassAt - state.startedAt,
@@ -1543,6 +1560,10 @@ async function compareWithBaseline(
     return failures;
   }
   const baselineContract = parsedArtifact.fixtureContract;
+  const currentSpatialPerformance = parseSpatialPerformanceStats(
+    currentArtifact.spatialPerformance,
+    `${fixture.id}.spatialPerformance`,
+  );
   if (
     parsedArtifact.caseId !== previous.id ||
     parsedArtifact.videoName !== previous.videoName ||
@@ -1559,6 +1580,19 @@ async function compareWithBaseline(
     );
     return failures;
   }
+  if (
+    currentSpatialPerformance.frameCount !==
+    parsedArtifact.spatialPerformance.frameCount
+  ) {
+    failures.push(
+      `${fixture.id}: spatial frame count changed from ${parsedArtifact.spatialPerformance.frameCount} to ${currentSpatialPerformance.frameCount}`,
+    );
+  }
+  console.log(
+    `[local-e2e] ${fixture.id}: spatial ${currentSpatialPerformance.frameCount}f, ` +
+      `peak pending ${currentSpatialPerformance.peakWorkerPendingFrames}/${currentSpatialPerformance.workerPendingHighWatermark} ` +
+      `(baseline ${parsedArtifact.spatialPerformance.peakWorkerPendingFrames}/${parsedArtifact.spatialPerformance.workerPendingHighWatermark})`,
+  );
   if (
     baselineContract.fixtureFingerprint !== fixtureFingerprint ||
     baselineContract.expectationHash !== expectationHash ||

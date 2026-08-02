@@ -7,6 +7,10 @@ import type {
   SpatialFrameHints,
   VideoCodecConfig,
 } from "../../domain/result.js";
+import {
+  EMPTY_SPATIAL_DECODE_STATS,
+  type SpatialDecodeStats,
+} from "../spatial-analysis/backpressure.js";
 import { decodeSpatialWindows } from "../spatial-analysis/spatial-pass.js";
 import type { AnalyzerWorkerDone } from "../worker-bridge/protocol.js";
 import { throwIfAborted, waitForAbort } from "./abort.js";
@@ -19,9 +23,10 @@ export interface AnalysisCompletionSession {
     frameIndex: number,
     rgbaBuf: ArrayBuffer,
     hints: SpatialFrameHints,
-  ): void;
+    signal?: AbortSignal,
+  ): Promise<void>;
   drainSpatialFrames(): Promise<void>;
-  finishSpatialPass(): void;
+  finishSpatialPass(decodeStats: SpatialDecodeStats): void;
   result(): Promise<AnalyzerWorkerDone>;
 }
 
@@ -56,21 +61,21 @@ export async function completeAnalysis(
   const windows = await waitForAbort(session.firstPass(), signal);
   throwIfAborted(signal);
   const codecConfig = getCodecConfig();
+  let spatialDecodeStats = EMPTY_SPATIAL_DECODE_STATS;
   if (windows.length > 0) {
     if (!codecConfig) {
       throw new Error("空間候補窓を再デコードするcodec設定がありません");
     }
     onProgress(0.9, "位置関係を確認中…");
-    await decodeSpatialWindows({
+    spatialDecodeStats = await decodeSpatialWindows({
       windows,
       sampleData,
       frameToSampleIdx,
       videoArrayBuffer,
       codecConfig,
       resetWindow: () => waitForAbort(session.resetSpatialWindow(), signal),
-      sendFrame: (frameIndex, rgbaBuf, hints) => {
-        session.sendSpatialFrame(frameIndex, rgbaBuf, hints);
-      },
+      sendFrame: (frameIndex, rgbaBuf, hints, processingSignal) =>
+        session.sendSpatialFrame(frameIndex, rgbaBuf, hints, processingSignal),
       drain: () => waitForAbort(session.drainSpatialFrames(), signal),
       onProgress,
       signal,
@@ -78,7 +83,7 @@ export async function completeAnalysis(
   }
 
   throwIfAborted(signal);
-  session.finishSpatialPass();
+  session.finishSpatialPass(spatialDecodeStats);
   const message = await waitForAbort(session.result(), signal);
   throwIfAborted(signal);
   if (message.debugHp && message.debugHp.length > 0) {
