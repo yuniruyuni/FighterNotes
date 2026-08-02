@@ -44,17 +44,27 @@ export function RoundSection({ report, onSceneChange }: RoundSectionProps) {
                   <tr
                     className="clickable"
                     key={round.round_no}
-                    tabIndex={0}
-                    onClick={open}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") open();
+                    onClick={(event) => {
+                      if (
+                        event.target instanceof Element &&
+                        event.target.closest("button")
+                      ) {
+                        return;
+                      }
+                      open();
                     }}
                   >
-                    <td
-                      title={`検出信頼度: ${round.detection_confidence || "未記録"}`}
-                    >
-                      {round.round_no}
-                      {round.detection_confidence === "medium" ? " ⚠" : ""}
+                    <td>
+                      <button
+                        type="button"
+                        className="round-scene-button"
+                        aria-label={`ラウンド ${round.round_no} の開始場面を動画で開く`}
+                        title={`検出信頼度: ${round.detection_confidence || "未記録"}`}
+                        onClick={open}
+                      >
+                        {round.round_no}
+                        {round.detection_confidence === "medium" ? " ⚠" : ""}
+                      </button>
                     </td>
                     <td className={outcomeClass}>{outcome}</td>
                     <td>{Math.round(round.own_hp_end * 100)}%</td>

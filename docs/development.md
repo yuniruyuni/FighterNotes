@@ -1,6 +1,6 @@
 # 開発ガイド
 
-最終確認: 2026-07-23
+最終確認: 2026-08-03
 
 ## 前提
 
@@ -194,6 +194,23 @@ schema を適用した使い捨て DB を指定する。CI は専用 PostgreSQL 
 raw video、screenshot、解析途中の全frame dumpはrepositoryへ保存しない。画像認識は合成pixel、
 event / adviceの結合は`crates/video-analyzer/tests/pipeline_contract.rs`の合成HP・入力・meter timelineで
 検査する。回帰条件は再現に必要な最小入力としてtest code内に追加する。
+
+### 結果画面のkeyboard・screen reader確認
+
+結果画面のnavigationやscene遷移を変更した場合は、解析済みの結果を表示して次をbrowser上で確認する。
+
+1. `Tab`で「解析結果」navigation内のサマリー、各指摘、動画、認識デバッグへ順に移動できる。
+2. 各項目を`Enter`または`Space`で開くと、現在項目が通知され、サマリー見出し、動画の再生位置、
+   または認識デバッグの先頭操作へfocusが移る。
+3. サマリー内の証拠場面とラウンド開始buttonを`Enter`と`Space`で開ける。特に`Space`でpageが
+   scrollせず、遷移後は動画の再生位置へfocusが移る。
+4. 非表示のサマリー、動画、認識デバッグの操作要素が`Tab`順とbrowserのaccessibility treeに
+   残らない。pointerによるsidebar、証拠場面、ラウンド行の操作も引き続き動作する。
+
+screen readerでは、Chrome + NVDAまたはSafari + VoiceOverのいずれかで、「解析結果」という
+navigation名、現在項目、表示中の「解析結果サマリー」「動画」「認識デバッグ」というregion名を
+確認する。証拠場面を開いた直後に非表示のbuttonではなく動画sliderが読み上げられ、非表示regionへ
+virtual cursorで移動できないことも確認する。
 
 ### ローカル動画によるE2E回帰確認
 

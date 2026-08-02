@@ -7,11 +7,12 @@ import {
   Play,
   Repeat2,
 } from "lucide-react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactNode, Ref } from "react";
 import { secondsToFrame } from "../../domain/frame-time.js";
 import { PLAYBACK_RATES, type PlaybackRate } from "./playback-rate.js";
 
 interface VideoPlayerControlsProps {
+  focusRef?: Ref<HTMLInputElement>;
   currentTime: number;
   duration: number;
   frameTimestamps: readonly number[];
@@ -32,6 +33,7 @@ export function VideoPlayerControls(props: VideoPlayerControlsProps) {
     <div className="player-ui">
       <div className="progress-row">
         <input
+          ref={props.focusRef}
           id="player-progress"
           type="range"
           min={0}

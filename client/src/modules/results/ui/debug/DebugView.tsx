@@ -1,3 +1,4 @@
+import type { Ref } from "react";
 import type {
   AnalysisResult,
   AnalysisSide,
@@ -10,6 +11,7 @@ import { useDebugViewer } from "./use-debug-viewer.js";
 
 interface DebugViewProps {
   active: boolean;
+  focusRef?: Ref<HTMLButtonElement>;
   file: File;
   result: AnalysisResult;
   side: AnalysisSide;
@@ -26,7 +28,16 @@ export function DebugView(props: DebugViewProps) {
     error,
   } = useDebugViewer(props);
   return (
-    <div id="view-debug" style={{ display: props.active ? "flex" : "none" }}>
+    <section
+      id="view-debug"
+      aria-labelledby="debug-view-heading"
+      hidden={!props.active}
+      inert={!props.active}
+      style={{ display: props.active ? "flex" : "none" }}
+    >
+      <h2 id="debug-view-heading" className="visually-hidden">
+        認識デバッグ
+      </h2>
       <div className="debug-canvas-area">
         {(loading || error) && (
           <div className={error ? "debug-error" : "debug-loading"}>
@@ -37,7 +48,11 @@ export function DebugView(props: DebugViewProps) {
       </div>
       <div className="debug-ui">
         <div className="debug-controls">
-          <DebugStepButton action="jump-backward" onNavigate={navigate} />
+          <DebugStepButton
+            action="jump-backward"
+            buttonRef={props.focusRef}
+            onNavigate={navigate}
+          />
           <DebugStepButton action="skip-backward" onNavigate={navigate} />
           <DebugStepButton action="step-backward" onNavigate={navigate} />
           <DebugStepButton action="step-forward" onNavigate={navigate} />
@@ -118,15 +133,17 @@ export function DebugView(props: DebugViewProps) {
           </label>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
 function DebugStepButton({
   action,
+  buttonRef,
   onNavigate,
 }: {
   action: DebugFrameNavigationAction;
+  buttonRef?: Ref<HTMLButtonElement>;
   onNavigate(action: DebugFrameNavigationAction): void;
 }) {
   const delta = DebugFrameNavigation.delta(action);
@@ -137,6 +154,7 @@ function DebugStepButton({
   const text = backward ? `${arrow}${frames}f` : `${frames}f${arrow}`;
   return (
     <button
+      ref={buttonRef}
       type="button"
       className="pbtn"
       aria-label={label}
