@@ -1,12 +1,7 @@
 name: Schema Plan
 
 on:
-  pull_request:
-    paths:
-      - schema/**
-      - .pgschemaignore
-      - Dockerfile.migration
-      - bin/migrate.sh
+  pull_request: {}
 
 permissions:
   contents: read
@@ -15,24 +10,62 @@ permissions:
 jobs:
   plan:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:18.4@sha256:3a82e1f56c8f0f5616a11103ac3d47e632c3938698946a7ad26da0df1334744a
-        env:
-          POSTGRES_USER: planuser
-          POSTGRES_PASSWORD: planpass
-          POSTGRES_DB: plandb
-        ports: ["5432:5432"]
-        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
 
+      - name: Detect schema-impacting changes
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          schema_changed=false
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              schema/*|.pgschemaignore|Dockerfile.migration|bin/migrate.sh)
+                printf 'Schema-impacting path: %s\n' "$path"
+                schema_changed=true
+                break
+                ;;
+            esac
+          done < <(git diff --name-only --no-renames -z "$BASE_SHA" "$HEAD_SHA")
+          printf 'schema_changed=%s\n' "$schema_changed" >> "$GITHUB_OUTPUT"
+
+      - name: No schema changes
+        if: steps.changes.outputs.schema_changed != 'true'
+        run: echo "No schema-impacting changes; schema plan is a successful no-op."
+
       - name: Build migration toolchain
+        if: steps.changes.outputs.schema_changed == 'true'
         run: docker build -f Dockerfile.migration -t fighter-schema-plan .
 
+      - name: Start PostgreSQL
+        if: steps.changes.outputs.schema_changed == 'true'
+        run: |
+          docker run --detach --rm \
+            --name fighter-schema-plan-postgres \
+            --publish 5432:5432 \
+            --env POSTGRES_USER=planuser \
+            --env POSTGRES_PASSWORD=planpass \
+            --env POSTGRES_DB=plandb \
+            postgres:18.4@sha256:3a82e1f56c8f0f5616a11103ac3d47e632c3938698946a7ad26da0df1334744a
+
+          for attempt in {1..30}; do
+            if docker exec fighter-schema-plan-postgres \
+              pg_isready --username planuser --dbname plandb; then
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL (${attempt}/30)..."
+            sleep 2
+          done
+
+          docker logs fighter-schema-plan-postgres
+          exit 1
+
       - name: Prepare application role
+        if: steps.changes.outputs.schema_changed == 'true'
         env:
           PGPASSWORD: planpass
         run: |
@@ -46,11 +79,14 @@ jobs:
             --set ON_ERROR_STOP=1 \
             --command "CREATE ROLE fighter_app NOLOGIN"
 
-      - name: Apply main branch schema (current state)
+      - name: Apply base branch schema (current state)
+        if: steps.changes.outputs.schema_changed == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          if git show origin/main:schema/main.sql > /dev/null 2>&1; then
+          if git show "${BASE_SHA}:schema/main.sql" > /dev/null 2>&1; then
             mkdir -p /tmp/main_schema
-            git archive origin/main -- schema/ .pgschemaignore | tar -x -C /tmp/main_schema
+            git archive "$BASE_SHA" -- schema/ .pgschemaignore | tar -x -C /tmp/main_schema
             docker run --rm --network host \
               --entrypoint pgschema \
               --workdir /work \
@@ -61,12 +97,13 @@ jobs:
               --host localhost --port 5432 \
               --user planuser --password planpass --db plandb \
               --schema public --auto-approve --no-color --lock-timeout 30s
-            echo "Applied main branch schema as baseline."
+            echo "Applied PR base branch schema as baseline."
           else
-            echo "No schema/main.sql on main branch — planning against empty DB (initial migration)."
+            echo "No schema/main.sql on the PR base branch — planning against empty DB (initial migration)."
           fi
 
-      - name: Plan PR schema changes (diff from main)
+      - name: Plan PR schema changes (diff from base)
+        if: steps.changes.outputs.schema_changed == 'true'
         env:
           WORKSPACE: ${{ github.workspace }}
         run: |
@@ -87,7 +124,7 @@ jobs:
           printf '%s\n' "$PLAN_EXIT_CODE" > plan_exit_code.txt
 
       - name: Comment plan on PR
-        if: always()
+        if: always() && steps.changes.outputs.schema_changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -119,7 +156,7 @@ jobs:
           fi
 
       - name: Enforce successful schema plan
-        if: always()
+        if: always() && steps.changes.outputs.schema_changed == 'true'
         run: |
           if [ ! -f plan_output.txt ]; then
             echo "pgschema plan did not produce plan_output.txt" >&2
@@ -144,3 +181,7 @@ jobs:
               exit 1
               ;;
           esac
+
+      - name: Stop PostgreSQL
+        if: always() && steps.changes.outputs.schema_changed == 'true'
+        run: docker rm --force fighter-schema-plan-postgres 2> /dev/null || true
