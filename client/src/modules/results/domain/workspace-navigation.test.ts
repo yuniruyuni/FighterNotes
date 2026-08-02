@@ -6,7 +6,7 @@ const card = (evidence: AdviceCard["evidence"]): AdviceCard =>
   ({ id: "anti_air", title: "対空", evidence }) as AdviceCard;
 
 describe("WorkspaceNavigation", () => {
-  test("summaryを初期表示し、summaryとdebugへ切り替える", () => {
+  test("summaryを初期表示し、summary・video・debugへ切り替える", () => {
     const initial = WorkspaceNavigation.initial();
     expect(initial).toEqual({
       view: "summary",
@@ -23,6 +23,9 @@ describe("WorkspaceNavigation", () => {
     expect(
       WorkspaceNavigation.reduce(initial, { type: "debug" }),
     ).toMatchObject({ view: "debug", selected: "debug" });
+    expect(
+      WorkspaceNavigation.reduce(initial, { type: "video" }),
+    ).toMatchObject({ view: "video", selected: "video" });
   });
 
   test("openSceneを直接使って選択状態を保ったままsceneを開く", () => {
@@ -54,6 +57,20 @@ describe("WorkspaceNavigation", () => {
       view: "video",
       selected: "card-1",
       scene: { frame: 90, endFrame: 120, key: 1 },
+    });
+  });
+
+  test("sceneの表示元を明示して現在のnavigation項目を更新する", () => {
+    expect(
+      WorkspaceNavigation.reduce(WorkspaceNavigation.initial(), {
+        type: "scene",
+        selected: "video",
+        scene: { frame: 240, card: null, label: "ラウンド開始" },
+      }),
+    ).toMatchObject({
+      view: "video",
+      selected: "video",
+      scene: { frame: 240, label: "ラウンド開始" },
     });
   });
 

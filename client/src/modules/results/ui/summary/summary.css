@@ -414,6 +414,21 @@
 .round-table tr.clickable:hover {
   background: rgba(255, 255, 255, 0.05);
 }
+.round-scene-button {
+  border: 0;
+  background: transparent;
+  color: var(--sa);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+  cursor: pointer;
+}
+.round-scene-button:focus-visible,
+.workspace-focus-heading:focus {
+  outline: 2px solid var(--sa);
+  outline-offset: 3px;
+}
 
 /* 被ダメージ起点 */
 .damage-origin-heading {
@@ -750,12 +765,15 @@
     margin: 0 0.35rem 0 0;
     overflow: hidden;
   }
-  .sidebar-footer {
+  .sidebar-debug {
     padding: 0.25rem 0.5rem;
   }
-  .sidebar-footer .clip-item {
+  .sidebar-debug .clip-item {
     margin: 0;
     padding-block: 0.35rem;
+  }
+  .sidebar-footer {
+    display: none;
   }
   .app-footer--compact {
     display: none;

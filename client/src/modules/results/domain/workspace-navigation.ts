@@ -12,9 +12,14 @@ export interface WorkspaceNavigationState {
 
 export type WorkspaceNavigationAction =
   | { type: "summary" }
+  | { type: "video" }
   | { type: "debug" }
   | { type: "card"; card: AdviceCard; index: number }
-  | { type: "scene"; scene: Omit<SceneSelection, "key"> };
+  | {
+      type: "scene";
+      scene: Omit<SceneSelection, "key">;
+      selected?: string;
+    };
 
 function initialWorkspaceNavigation(): WorkspaceNavigationState {
   return {
@@ -35,8 +40,14 @@ function reduceWorkspaceNavigation(
   if (action.type === "debug") {
     return { ...state, view: "debug", selected: "debug" };
   }
+  if (action.type === "video") {
+    return { ...state, view: "video", selected: "video" };
+  }
   if (action.type === "scene") {
-    return openWorkspaceScene(state, action.scene);
+    return openWorkspaceScene(
+      action.selected ? { ...state, selected: action.selected } : state,
+      action.scene,
+    );
   }
 
   const evidence = action.card.evidence[0];

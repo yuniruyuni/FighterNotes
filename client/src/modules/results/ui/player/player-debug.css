@@ -157,6 +157,12 @@
 .pbtn:hover {
   background: rgba(255, 255, 255, 0.14);
 }
+.pbtn:focus-visible,
+#player-progress:focus-visible,
+.evidence-chip:focus-visible {
+  outline: 2px solid var(--sa);
+  outline-offset: 2px;
+}
 /* 再生 = 公式ライクなグラデーションCTAの小型版 */
 .pbtn.play {
   background: linear-gradient(

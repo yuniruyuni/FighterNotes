@@ -1,3 +1,4 @@
+import type { ReactNode, Ref } from "react";
 import type {
   AdviceReport,
   AnalysisContext,
@@ -16,6 +17,7 @@ import { SummaryOverview } from "./SummaryOverview.js";
 
 interface SummaryViewProps {
   active: boolean;
+  focusRef?: Ref<HTMLHeadingElement>;
   file: File;
   context: AnalysisContext;
   report: AdviceReport;
@@ -26,6 +28,7 @@ interface SummaryViewProps {
 
 export function SummaryView({
   active,
+  focusRef,
   file,
   context,
   report,
@@ -34,8 +37,19 @@ export function SummaryView({
   onSceneChange,
 }: SummaryViewProps) {
   return (
-    <div id="view-summary" style={{ display: active ? "block" : "none" }}>
-      <SummaryOverview context={context} report={report} sharing={sharing} />
+    <section
+      id="view-summary"
+      aria-labelledby="summary-view-heading"
+      hidden={!active}
+      inert={!active}
+      style={{ display: active ? "block" : "none" }}
+    >
+      <SummaryOverview
+        context={context}
+        report={report}
+        sharing={sharing}
+        headingRef={focusRef}
+      />
       <AdviceSection
         report={report}
         frameTimestamps={frameTimestamps}
@@ -52,8 +66,6 @@ export function SummaryView({
       <TacticStatsSection stats={report.tactic_stats} />
       <MatchupHistorySection file={file} context={context} report={report} />
       <PracticeSection items={report.practice_items} />
-    </div>
+    </section>
   );
 }
-
-import type { ReactNode } from "react";

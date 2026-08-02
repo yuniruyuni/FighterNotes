@@ -1,3 +1,4 @@
+import type { Ref } from "react";
 import type { SceneSelection } from "../../domain/scene-selection.js";
 import { CardAdvice } from "./CardAdvice.js";
 import { useVideoController } from "./use-video-controller.js";
@@ -5,6 +6,7 @@ import { VideoPlayerControls } from "./VideoPlayerControls.js";
 
 interface VideoViewProps {
   active: boolean;
+  focusRef?: Ref<HTMLInputElement>;
   file: File;
   frameTimestamps: readonly number[];
   scene: SceneSelection | null;
@@ -15,7 +17,16 @@ export function VideoView(props: VideoViewProps) {
   const controller = useVideoController(props);
   const { videoRef, source, state, controls, events } = controller;
   return (
-    <div id="view-video" style={{ display: props.active ? "flex" : "none" }}>
+    <section
+      id="view-video"
+      aria-labelledby="video-view-heading"
+      hidden={!props.active}
+      inert={!props.active}
+      style={{ display: props.active ? "flex" : "none" }}
+    >
+      <h2 id="video-view-heading" className="visually-hidden">
+        動画
+      </h2>
       <div className="video-area">
         <video
           id="player-video"
@@ -34,6 +45,7 @@ export function VideoView(props: VideoViewProps) {
       </div>
       <VideoPlayerControls
         {...state}
+        focusRef={props.focusRef}
         frameTimestamps={props.frameTimestamps}
         onSeek={controls.seek}
         onStepFrame={controls.stepFrame}
@@ -52,6 +64,6 @@ export function VideoView(props: VideoViewProps) {
           props.scene?.label
         )}
       </div>
-    </div>
+    </section>
   );
 }

@@ -67,6 +67,13 @@
   text-overflow: ellipsis;
 }
 
+.workspace-navigation {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
 /* クリップ一覧（ニュース項目の様式: 左罫 3.5px が状態を示す） */
 .clip-list {
   flex: 1;
@@ -125,11 +132,15 @@
   border-left-color: var(--sa);
 }
 
-/* サイドバーフッター（認識デバッグ + 共通リンク） */
-.sidebar-footer {
+/* サイドバー下部（認識デバッグ + 共通リンク） */
+.sidebar-debug {
   flex-shrink: 0;
   border-top: 1px solid var(--line);
   padding: 0.5rem;
+}
+.sidebar-footer {
+  flex-shrink: 0;
+  padding: 0 0.5rem 0.5rem;
 }
 .debug-item.selected {
   background: rgba(165, 90, 255, 0.14);
@@ -151,6 +162,11 @@
 }
 .debug-item.selected .ci-label {
   color: var(--purple);
+}
+
+.clip-item:focus-visible {
+  outline: 2px solid var(--sa);
+  outline-offset: 2px;
 }
 
 /* 右メインエリア */

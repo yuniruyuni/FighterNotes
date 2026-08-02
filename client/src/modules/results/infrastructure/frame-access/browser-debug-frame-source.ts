@@ -9,12 +9,16 @@ import { frameToSeconds } from "../../domain/frame-time.js";
 class BrowserDebugFrameSource implements DebugFrameSource {
   readonly fallbackSource = document.createElement("video");
   readonly #abort = new AbortController();
+  readonly #abortError = new DOMException(
+    "認識デバッグの動画読込を中断しました",
+    "AbortError",
+  );
+  #data: DebugFrameSourceData | null;
   #videoUrl: string | undefined;
+  #destroyed = false;
 
-  constructor(
-    private readonly data: DebugFrameSourceData,
-    onFallbackFrame: () => void,
-  ) {
+  constructor(data: DebugFrameSourceData, onFallbackFrame: () => void) {
+    this.#data = data;
     this.fallbackSource.muted = true;
     this.fallbackSource.addEventListener("seeked", onFallbackFrame, {
       signal: this.#abort.signal,
@@ -22,25 +26,47 @@ class BrowserDebugFrameSource implements DebugFrameSource {
   }
 
   get usesExactFrames(): boolean {
+    const data = this.#data;
     return Boolean(
-      this.data.sampleData &&
-        this.data.videoArrayBuffer &&
-        this.data.codecConfig,
+      data?.sampleData && data.videoArrayBuffer && data.codecConfig,
     );
   }
 
   async initialize(): Promise<void> {
-    this.#videoUrl = URL.createObjectURL(this.data.file);
+    const data = this.#requireData();
+    this.#videoUrl = URL.createObjectURL(data.file);
     this.fallbackSource.src = this.#videoUrl;
     await new Promise<void>((resolve, reject) => {
-      this.fallbackSource.onloadedmetadata = () => resolve();
-      this.fallbackSource.onerror = () => reject(this.fallbackSource.error);
+      let settled = false;
+      const cleanup = () => {
+        this.#abort.signal.removeEventListener("abort", onAbort);
+        this.fallbackSource.onloadedmetadata = null;
+        this.fallbackSource.onerror = null;
+      };
+      const settle = (callback: () => void) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        callback();
+      };
+      const onAbort = () => settle(() => reject(this.#abortError));
+      this.fallbackSource.onloadedmetadata = () => settle(resolve);
+      this.fallbackSource.onerror = () =>
+        settle(() =>
+          reject(
+            this.fallbackSource.error ??
+              new Error("デバッグ動画を読み込めませんでした"),
+          ),
+        );
+      this.#abort.signal.addEventListener("abort", onAbort, { once: true });
+      if (this.#abort.signal.aborted) onAbort();
     });
   }
 
   async decode(index: number): Promise<VideoFrame | null> {
+    const data = this.#requireData();
     const { sampleData, videoArrayBuffer, codecConfig, frameToSampleIndex } =
-      this.data;
+      data;
     if (!sampleData || !videoArrayBuffer || !codecConfig) return null;
     return decodeFrameAt({
       samples: sampleData,
@@ -48,20 +74,37 @@ class BrowserDebugFrameSource implements DebugFrameSource {
       codecConfig,
       frameToSampleIndex,
       frameIndex: index,
+      signal: this.#abort.signal,
     });
   }
 
   seekFallback(index: number): void {
+    const data = this.#data;
+    if (!data) return;
     this.fallbackSource.currentTime = frameToSeconds(
       index,
-      this.data.frameTimestamps,
+      data.frameTimestamps,
     );
   }
 
   destroy(): void {
-    this.#abort.abort();
-    if (this.#videoUrl) URL.revokeObjectURL(this.#videoUrl);
+    if (this.#destroyed) return;
+    this.#destroyed = true;
+    this.#abort.abort(this.#abortError);
+    if (this.#videoUrl) {
+      URL.revokeObjectURL(this.#videoUrl);
+      this.#videoUrl = undefined;
+    }
+    if (this.#data) this.#data.videoArrayBuffer = null;
+    this.#data = null;
+    this.fallbackSource.pause();
     this.fallbackSource.removeAttribute("src");
+    this.fallbackSource.load();
+  }
+
+  #requireData(): DebugFrameSourceData {
+    if (!this.#data) throw this.#abortError;
+    return this.#data;
   }
 }
 

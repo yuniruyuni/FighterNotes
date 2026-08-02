@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import {
   type AdviceReport,
   type AnalysisContext,
@@ -9,10 +9,12 @@ export function SummaryOverview({
   context,
   report,
   sharing,
+  headingRef,
 }: {
   context: AnalysisContext;
   report: AdviceReport;
   sharing?: ReactNode;
+  headingRef?: Ref<HTMLHeadingElement>;
 }) {
   const cards = report.cards ?? [];
   const diagnosisCount = cards.filter(
@@ -46,7 +48,14 @@ export function SummaryOverview({
 
   return (
     <section className="summary-section" data-wm="Summary">
-      <h2>解析結果サマリー</h2>
+      <h2
+        id="summary-view-heading"
+        className="workspace-focus-heading"
+        ref={headingRef}
+        tabIndex={-1}
+      >
+        解析結果サマリー
+      </h2>
       <div className="analysis-side-confirmation">
         <span>解析対象</span>
         <strong>

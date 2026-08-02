@@ -57,6 +57,7 @@ export async function decodeFrameAt(options: {
   readonly codecConfig: VideoCodecConfig;
   readonly frameToSampleIndex: readonly number[] | null;
   readonly frameIndex: number;
+  readonly signal?: AbortSignal;
 }): Promise<VideoFrame | null> {
   const plan = FrameDecodePlan.create(
     options.samples,
@@ -65,20 +66,25 @@ export async function decodeFrameAt(options: {
   );
   if (!plan) return null;
 
-  let result: VideoFrame | null = null;
-  await decodeSampleRange({
-    ...options,
-    firstSampleIndex: plan.firstSampleIndex,
-    lastSampleIndex: plan.lastSampleIndex,
-    onFrame(frame) {
-      if (!result && frame.timestamp === plan.targetTimestampUs) {
-        result = frame;
-      } else {
-        frame.close();
-      }
-    },
-  });
-  return result;
+  const result: { frame: VideoFrame | null } = { frame: null };
+  try {
+    await decodeSampleRange({
+      ...options,
+      firstSampleIndex: plan.firstSampleIndex,
+      lastSampleIndex: plan.lastSampleIndex,
+      onFrame(frame) {
+        if (!result.frame && frame.timestamp === plan.targetTimestampUs) {
+          result.frame = frame;
+        } else {
+          frame.close();
+        }
+      },
+    });
+  } catch (error) {
+    result.frame?.close();
+    throw error;
+  }
+  return result.frame;
 }
 
 function encodedChunk(
