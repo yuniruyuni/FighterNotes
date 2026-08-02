@@ -10,6 +10,7 @@ import type {
   RoundSummary,
   StrikeKind,
 } from "~/modules/analysis/contracts.js";
+import { syntheticAnalysisAvailability } from "~/test-support/analysis.js";
 import type { SceneSelection } from "../../domain/scene-selection.js";
 import { DamageOriginsSection } from "./DamageOriginsSection.js";
 
@@ -168,5 +169,31 @@ describe("DamageOriginsSection", () => {
     );
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  test("自分HPが利用不能なら既存の値を0件や0%として表示しない", () => {
+    render(
+      <DamageOriginsSection
+        breakdown={breakdown}
+        coverage={{
+          match_frames: 100,
+          analyzed_match_frames: 100,
+          input_segments: 1,
+          analyzed_input_segments: 1,
+          availability: syntheticAnalysisAvailability({
+            own_hp: "unavailable",
+          }),
+        }}
+        rounds={[round(1), round(2)]}
+        frameTimestamps={[]}
+        onSceneChange={() => undefined}
+      />,
+    );
+
+    expect(
+      screen.getByText(/被ダメージ量・件数・起点は確認不能/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("150%")).not.toBeInTheDocument();
+    expect(screen.queryByText("未分類（要確認）")).not.toBeInTheDocument();
   });
 });

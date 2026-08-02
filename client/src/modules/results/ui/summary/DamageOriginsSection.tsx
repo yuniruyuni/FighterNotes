@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type {
+  AnalysisCoverage,
   DamageBreakdown,
   RoundSummary,
 } from "~/modules/analysis/contracts.js";
@@ -10,6 +11,7 @@ import { formatHpRatio, formatPercent } from "./damage-origin-format.js";
 
 interface DamageOriginsSectionProps {
   breakdown: DamageBreakdown | undefined;
+  coverage?: AnalysisCoverage;
   rounds: readonly RoundSummary[];
   frameTimestamps: readonly number[];
   onSceneChange(scene: Omit<SceneSelection, "key">): void;
@@ -17,6 +19,7 @@ interface DamageOriginsSectionProps {
 
 export function DamageOriginsSection({
   breakdown,
+  coverage,
   rounds,
   frameTimestamps,
   onSceneChange,
@@ -38,6 +41,10 @@ export function DamageOriginsSection({
   );
 
   if (!breakdown) return null;
+
+  const hpAvailable =
+    coverage?.availability === undefined ||
+    coverage.availability.own_hp === "available";
 
   const scopeLabel =
     selectedRound === "all"
@@ -78,7 +85,11 @@ export function DamageOriginsSection({
         </fieldset>
       </div>
 
-      {summary.totalHpLost <= 0 ? (
+      {!hpAvailable ? (
+        <p className="muted-note">
+          自分のHPバーを十分に認識できなかったため、被ダメージ量・件数・起点は確認不能です。
+        </p>
+      ) : summary.totalHpLost <= 0 ? (
         <p className="muted-note">被ダメージは検出されませんでした。</p>
       ) : (
         <>

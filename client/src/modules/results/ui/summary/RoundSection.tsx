@@ -8,6 +8,14 @@ interface RoundSectionProps {
 
 export function RoundSection({ report, onSceneChange }: RoundSectionProps) {
   const rounds = report.round_summaries ?? [];
+  const availability = report.coverage?.availability;
+  const ownHpAvailable =
+    availability === undefined || availability.own_hp === "available";
+  const opponentHpAvailable =
+    availability === undefined || availability.opponent_hp === "available";
+  const ownDriveAvailable =
+    availability === undefined || availability.own_drive === "available";
+  const outcomeAvailable = ownHpAvailable && opponentHpAvailable;
   return (
     <section className="summary-section" data-wm="Rounds">
       <h2>ラウンド経過</h2>
@@ -31,9 +39,17 @@ export function RoundSection({ report, onSceneChange }: RoundSectionProps) {
             <tbody>
               {rounds.map((round) => {
                 const outcome =
-                  round.won === null ? "—" : round.won ? "WIN" : "LOSE";
+                  !outcomeAvailable || round.won === null
+                    ? "確認不能"
+                    : round.won
+                      ? "WIN"
+                      : "LOSE";
                 const outcomeClass =
-                  round.won === null ? "" : round.won ? "win" : "lose";
+                  !outcomeAvailable || round.won === null
+                    ? ""
+                    : round.won
+                      ? "win"
+                      : "lose";
                 const open = () =>
                   onSceneChange({
                     frame: round.start_frame,
@@ -67,15 +83,37 @@ export function RoundSection({ report, onSceneChange }: RoundSectionProps) {
                       </button>
                     </td>
                     <td className={outcomeClass}>{outcome}</td>
-                    <td>{Math.round(round.own_hp_end * 100)}%</td>
-                    <td>{Math.round(round.opp_hp_end * 100)}%</td>
-                    <td>{round.own_hits_taken}</td>
-                    <td>{Math.round(round.own_hp_lost * 100)}%</td>
-                    <td>{round.early_hit ? "⚠" : ""}</td>
                     <td>
-                      {round.own_burnouts > 0
-                        ? "🔥".repeat(round.own_burnouts)
-                        : ""}
+                      {ownHpAvailable
+                        ? `${Math.round(round.own_hp_end * 100)}%`
+                        : "確認不能"}
+                    </td>
+                    <td>
+                      {opponentHpAvailable
+                        ? `${Math.round(round.opp_hp_end * 100)}%`
+                        : "確認不能"}
+                    </td>
+                    <td>
+                      {ownHpAvailable ? round.own_hits_taken : "確認不能"}
+                    </td>
+                    <td>
+                      {ownHpAvailable
+                        ? `${Math.round(round.own_hp_lost * 100)}%`
+                        : "確認不能"}
+                    </td>
+                    <td>
+                      {ownHpAvailable
+                        ? round.early_hit
+                          ? "⚠"
+                          : ""
+                        : "確認不能"}
+                    </td>
+                    <td>
+                      {!ownDriveAvailable
+                        ? "確認不能"
+                        : round.own_burnouts > 0
+                          ? "🔥".repeat(round.own_burnouts)
+                          : ""}
                     </td>
                   </tr>
                 );

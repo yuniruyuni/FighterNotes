@@ -1,8 +1,32 @@
 import type {
   AdviceReport,
+  AnalysisAvailability,
   AnalysisResult,
   TacticStats,
 } from "~/modules/analysis/contracts.js";
+
+export function syntheticAnalysisAvailability(
+  overrides: Partial<AnalysisAvailability> = {},
+): AnalysisAvailability {
+  return {
+    own_hp: "available",
+    opponent_hp: "available",
+    own_drive: "available",
+    opponent_drive: "available",
+    own_super: "available",
+    opponent_super: "available",
+    own_input: "available",
+    opponent_input: "available",
+    own_meter: "available",
+    opponent_meter: "available",
+    contacts: "available",
+    punishes: "available",
+    spatial: "available",
+    own_attack_info: "available",
+    opponent_attack_info: "available",
+    ...overrides,
+  };
+}
 
 export function syntheticTacticStats(
   overrides: Partial<TacticStats> = {},

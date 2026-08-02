@@ -58,6 +58,7 @@ export function SummaryView({
       <RoundSection report={report} onSceneChange={onSceneChange} />
       <DamageOriginsSection
         breakdown={report.damage_breakdown}
+        coverage={report.coverage}
         rounds={report.round_summaries ?? []}
         frameTimestamps={frameTimestamps}
         onSceneChange={onSceneChange}
