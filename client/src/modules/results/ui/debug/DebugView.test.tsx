@@ -282,6 +282,13 @@ function debugServices(
     history: {
       save: async () => {},
       load: async () => [],
+      delete: async () => {},
+      clear: async () => {},
+      getSavingPreference: async () => ({
+        enabled: true,
+        persistent: true,
+      }),
+      setSavingEnabled: async () => {},
     },
   };
 }

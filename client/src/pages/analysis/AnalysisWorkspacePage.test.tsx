@@ -163,7 +163,17 @@ function resultsServices(): ResultsServices {
   return {
     debugFrameInspector: debugInspector(),
     debugFrameSourceFactory: { create: () => source },
-    history: { save: async () => {}, load: async () => [] },
+    history: {
+      save: async () => {},
+      load: async () => [],
+      delete: async () => {},
+      clear: async () => {},
+      getSavingPreference: async () => ({
+        enabled: true,
+        persistent: true,
+      }),
+      setSavingEnabled: async () => {},
+    },
   };
 }
 
