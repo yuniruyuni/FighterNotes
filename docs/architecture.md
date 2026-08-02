@@ -168,16 +168,17 @@ transaction で advisory lock を取得して quota を再確認する。quota e
 同じ transaction で行う。共有rate limitはclient keyのdigestとbucketをPostgreSQLの原子的
 upsertで更新し、instanceやcold startをまたいで共有する。
 
-期限切れcleanupは`(expires_at, created_at, id)`複合indexの順序で候補を取り、bounded CTE内で
-`FOR UPDATE SKIP LOCKED`とDELETEを完結させる。storage quotaはparentに記録したlogical sizeの合計で、
+期限切れcleanupは期限用`(expires_at, created_at, id)`とretention用
+`(created_at, expires_at, id)`を別々に走査し、各bounded CTE内で`FOR UPDATE SKIP LOCKED`と
+DELETEを完結させる。storage quotaはparentに記録したlogical sizeの合計で、
 物理relation file lengthではないためDELETEした容量を直後から再利用できる。
 
 ### HTTP surface
 
 | Method / path | 用途 |
 | --- | --- |
-| `GET /health` | DB非依存のprocess liveness |
-| `GET /ready` | runtime app role・DB tunnel・必要schema/grantのreadiness |
+| `GET /health` | DB非依存、`no-store`のprocess liveness |
+| `GET /ready` | runtime app role・DB tunnel・catalog contract・grantの`no-store` readiness |
 | `POST /api/trpc/publishedAnalysis.create` | 軽量な共有結果を作成 |
 | `POST /api/trpc/publishedAnalysis.delete` | 削除コードで共有を削除 |
 | `GET /s/:id` | PostgreSQL の共有結果から HTML を生成 |

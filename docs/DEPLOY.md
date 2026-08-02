@@ -61,7 +61,8 @@ reusable build workflow は `workflow_call.secrets` で builder 用3項目だけ
 
 `/health` は process の HTTP 応答だけを確認し、DB query は行わない。DB を含む read / create / delete は
 PostgreSQL integration testで確認する。production deployはさらに`/ready`でruntime app roleからの
-read-only query、必要schema versionとtable grantを短いtimeout内に確認する。
+read-only query、利用列の型/nullability、critical constraint/default、PK/FK/indexと最小grantを
+短いtimeout内に確認する。smoke testのcurl自体にも接続・全体timeoutと有限retryを設定する。
 
 `deploy.yml` は `main` pushを直接契機にせず、同じSHAに対する `CI` workflowの `push` runが成功した
 `workflow_run` だけを受け付ける。branch protectionでは `CI / test`、`CI / security`、`CI / docker` と、
@@ -162,9 +163,10 @@ gcloud run jobs execute fighter-cleanup \
 成功 log は `expired`、`rate_limits`、`quota_events`、`batches` を出力する。batch安全上限に達した場合は失敗終了し、
 quota event の prune へ進まない。原因と backlog を確認してから設定または実装を変更する。
 
-10,000件backlogのintegration testはcleanup planで`published_analyses_cleanup_idx`の利用を要求し、
-2 workerの全batch処理を30秒未満に制限する。production Jobのtimeoutは600秒だが、release後は実データの
-row幅、cascade対象、DB負荷を含む実行時間と`EXPLAIN (ANALYZE, BUFFERS)`を別途確認する。
+10,000件backlogのintegration testは期限用indexと2 workerの全batch処理を検証する。さらに、
+active 100,000件よりexpires_at順で後方にあるretention対象をcreated_at専用indexから取得する病的分布も
+30秒未満に制限する。production Jobのtimeoutは600秒だが、release後は実データのrow幅、cascade対象、
+DB負荷を含む実行時間と`EXPLAIN (ANALYZE, BUFFERS)`を別途確認する。
 
 ## Rollback
 

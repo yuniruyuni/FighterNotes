@@ -1,14 +1,16 @@
-import {
-  PublishedAnalysisCreateEvent,
-  PublishedAnalysisLifecycle,
-} from "../../models/published-analysis";
+import { PublishedAnalysisCreateEvent } from "../../models/published-analysis";
 import type { Usecase } from "../runner";
 import { usecase } from "../runner";
 import type { RateLimitPruneResult } from "../services";
 
-export interface CleanupPublishedAnalysisBatchInput {
+export interface CleanupExpiredPublishedAnalysisBatchInput {
+  readonly at: Date;
   readonly limit: number;
+}
+
+export interface CleanupRetainedPublishedAnalysisBatchInput {
   readonly retentionCutoff: Date;
+  readonly limit: number;
 }
 
 export interface CleanupPublishedAnalysisBatchResult {
@@ -21,13 +23,13 @@ export interface PruneSharingRateLimitsBatchInput {
   readonly limit: number;
 }
 
-export function cleanupPublishedAnalysisBatchUsecase(
-  input: CleanupPublishedAnalysisBatchInput,
+export function cleanupExpiredPublishedAnalysisBatchUsecase(
+  input: CleanupExpiredPublishedAnalysisBatchInput,
 ): Usecase<CleanupPublishedAnalysisBatchResult> {
   return usecase<
-    CleanupPublishedAnalysisBatchInput,
-    CleanupPublishedAnalysisBatchInput,
-    CleanupPublishedAnalysisBatchInput,
+    CleanupExpiredPublishedAnalysisBatchInput,
+    CleanupExpiredPublishedAnalysisBatchInput,
+    CleanupExpiredPublishedAnalysisBatchInput,
     CleanupPublishedAnalysisBatchResult,
     CleanupPublishedAnalysisBatchResult,
     CleanupPublishedAnalysisBatchResult,
@@ -35,10 +37,29 @@ export function cleanupPublishedAnalysisBatchUsecase(
   >({
     pre: () => input,
     write: (ctx, value) =>
-      ctx.repos.publishedAnalysisLifecycle.deleteBatch(
-        PublishedAnalysisLifecycle.ExpiredAt(ctx.now).or(
-          PublishedAnalysisLifecycle.CreatedAtOrBefore(value.retentionCutoff),
-        ),
+      ctx.repos.publishedAnalysisLifecycle.deleteExpiredBatch(
+        value.at,
+        value.limit,
+      ),
+  });
+}
+
+export function cleanupRetainedPublishedAnalysisBatchUsecase(
+  input: CleanupRetainedPublishedAnalysisBatchInput,
+): Usecase<CleanupPublishedAnalysisBatchResult> {
+  return usecase<
+    CleanupRetainedPublishedAnalysisBatchInput,
+    CleanupRetainedPublishedAnalysisBatchInput,
+    CleanupRetainedPublishedAnalysisBatchInput,
+    CleanupPublishedAnalysisBatchResult,
+    CleanupPublishedAnalysisBatchResult,
+    CleanupPublishedAnalysisBatchResult,
+    CleanupPublishedAnalysisBatchResult
+  >({
+    pre: () => input,
+    write: (ctx, value) =>
+      ctx.repos.publishedAnalysisLifecycle.deleteCreatedAtOrBeforeBatch(
+        value.retentionCutoff,
         value.limit,
       ),
   });

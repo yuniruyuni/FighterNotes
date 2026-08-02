@@ -153,6 +153,11 @@ describe("release workflow safety contracts", () => {
     expect(deploy).toContain("environment: production");
     expect(deploy).toContain("https://fighter.yuniruyuni.net/health");
     expect(deploy).toContain("https://fighter.yuniruyuni.net/ready");
+    expect(deploy).toContain("--connect-timeout 5 --max-time 15");
+    expect(deploy).toContain(
+      "--retry 5 --retry-delay 2 --retry-max-time 90 --retry-all-errors",
+    );
+    expect(deploy).toContain('curl "${SMOKE_CURL_OPTIONS[@]}"');
     expect(build).toContain("workflow_call:");
     expect(build).toContain("GCP_BUILDER_WORKLOAD_IDENTITY_PROVIDER:");
     expect(build).toContain("GCP_BUILDER_SERVICE_ACCOUNT:");

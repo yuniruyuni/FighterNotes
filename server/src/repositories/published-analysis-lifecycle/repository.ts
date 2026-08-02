@@ -18,9 +18,14 @@ export interface PublishedAnalysisLifecycleRepository {
     ctx: DbWriteCtx,
     spec: PublishedAnalysisLifecycle.Spec,
   ): Promise<number>;
-  deleteBatch(
+  deleteExpiredBatch(
     ctx: DbWriteCtx,
-    spec: PublishedAnalysisLifecycle.Spec,
+    at: Date,
+    limit: number,
+  ): Promise<LifecycleDeleteBatchResult>;
+  deleteCreatedAtOrBeforeBatch(
+    ctx: DbWriteCtx,
+    cutoff: Date,
     limit: number,
   ): Promise<LifecycleDeleteBatchResult>;
 }

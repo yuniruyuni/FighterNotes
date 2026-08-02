@@ -13,8 +13,12 @@ export function createApp(ctx: Context) {
 
   app.use(compress());
   app.use(securityHeaders());
-  app.get("/health", (c) => c.json({ status: "ok" }));
+  app.get("/health", (c) => {
+    c.header("Cache-Control", "no-store");
+    return c.json({ status: "ok" });
+  });
   app.get("/ready", async (c) => {
+    c.header("Cache-Control", "no-store");
     if (await readiness.check()) return c.json({ status: "ready" });
     return c.json({ status: "unavailable" }, 503);
   });

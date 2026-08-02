@@ -32,7 +32,10 @@ import { registerPublishedAnalysisRepositoryIntegrationTests } from "./published
 import { PublishedAnalysisCreateEventRepository } from "./published-analysis-create-event/postgres";
 import { registerPublishedAnalysisCreateEventRepositoryIntegrationTests } from "./published-analysis-create-event/postgres/integration-suite";
 import { PublishedAnalysisLifecycleRepository } from "./published-analysis-lifecycle/postgres";
-import { deleteBatchSQL } from "./published-analysis-lifecycle/postgres/delete-batch";
+import {
+  deleteCreatedAtOrBeforeBatchSQL,
+  deleteExpiredBatchSQL,
+} from "./published-analysis-lifecycle/postgres/delete-batch";
 import { registerPublishedAnalysisLifecycleRepositoryIntegrationTests } from "./published-analysis-lifecycle/postgres/integration-suite";
 import { registerPublishedAnalysisStorageUsageRepositoryIntegrationTests } from "./published-analysis-storage-usage/postgres/integration-suite";
 import {
@@ -85,6 +88,19 @@ integration("Postgres repositories + published analysis flow", () => {
     });
   }
 
+  async function expectSchemaDrift(
+    apply: string,
+    restore: string,
+  ): Promise<void> {
+    await db.queryRun(sql.raw(apply));
+    try {
+      expect(await appRoleReadiness()).toBe(false);
+    } finally {
+      await db.queryRun(sql.raw(restore));
+    }
+    expect(await appRoleReadiness()).toBe(true);
+  }
+
   test("app roleのread-only queryでschema versionと必要grantを確認する", async () => {
     expect(await appRoleReadiness()).toBe(true);
   });
@@ -116,6 +132,85 @@ integration("Postgres repositories + published analysis flow", () => {
           CHECK (schema_version = 1)`),
       );
     }
+  });
+
+  test("runtime列のtypeとnullability driftをreadiness異常にする", async () => {
+    await expectSchemaDrift(
+      `ALTER TABLE published_analysis_rate_limits
+        ALTER COLUMN request_count TYPE BIGINT`,
+      `ALTER TABLE published_analysis_rate_limits
+        ALTER COLUMN request_count TYPE INTEGER`,
+    );
+    await expectSchemaDrift(
+      `ALTER TABLE published_analysis_findings
+        ALTER COLUMN assessment SET NOT NULL`,
+      `ALTER TABLE published_analysis_findings
+        ALTER COLUMN assessment DROP NOT NULL`,
+    );
+  });
+
+  test("rate-limit conflict key欠落をreadiness異常にする", async () => {
+    await expectSchemaDrift(
+      `ALTER TABLE published_analysis_rate_limits
+        DROP CONSTRAINT published_analysis_rate_limits_pkey`,
+      `ALTER TABLE published_analysis_rate_limits
+        ADD CONSTRAINT published_analysis_rate_limits_pkey
+        PRIMARY KEY (bucket, client_key_hash)`,
+    );
+  });
+
+  test("logical quota default driftをreadiness異常にする", async () => {
+    await expectSchemaDrift(
+      `ALTER TABLE published_analyses
+        ALTER COLUMN logical_size_bytes SET DEFAULT 4096`,
+      `ALTER TABLE published_analyses
+        ALTER COLUMN logical_size_bytes SET DEFAULT 8192`,
+    );
+    await expectSchemaDrift(
+      `ALTER TABLE published_analyses
+        DROP CONSTRAINT published_analyses_logical_size_bytes_check;
+       ALTER TABLE published_analyses
+        ADD CONSTRAINT published_analyses_logical_size_bytes_check
+        CHECK (logical_size_bytes BETWEEN 1 AND 16384)`,
+      `ALTER TABLE published_analyses
+        DROP CONSTRAINT published_analyses_logical_size_bytes_check;
+       ALTER TABLE published_analyses
+        ADD CONSTRAINT published_analyses_logical_size_bytes_check
+        CHECK (logical_size_bytes BETWEEN 1 AND 8192)`,
+    );
+  });
+
+  test("child FKのCASCADE driftをreadiness異常にする", async () => {
+    await expectSchemaDrift(
+      `ALTER TABLE published_analysis_findings
+        DROP CONSTRAINT published_analysis_findings_analysis_id_fkey;
+       ALTER TABLE published_analysis_findings
+        ADD CONSTRAINT published_analysis_findings_analysis_id_fkey
+        FOREIGN KEY (analysis_id) REFERENCES published_analyses (id)`,
+      `ALTER TABLE published_analysis_findings
+        DROP CONSTRAINT published_analysis_findings_analysis_id_fkey;
+       ALTER TABLE published_analysis_findings
+        ADD CONSTRAINT published_analysis_findings_analysis_id_fkey
+        FOREIGN KEY (analysis_id) REFERENCES published_analyses (id)
+        ON DELETE CASCADE`,
+    );
+  });
+
+  test("cleanup index欠落をreadiness異常にする", async () => {
+    await expectSchemaDrift(
+      "DROP INDEX published_analyses_created_at_cleanup_idx",
+      `CREATE INDEX published_analyses_created_at_cleanup_idx
+        ON published_analyses (created_at, expires_at, id)`,
+    );
+  });
+
+  test("row lock用column UPDATE grant欠落をreadiness異常にする", async () => {
+    await expectSchemaDrift(
+      `REVOKE UPDATE (schema_version)
+        ON published_analyses FROM fighter_app`,
+      `GRANT UPDATE (schema_version)
+        ON published_analyses TO fighter_app`,
+    );
   });
 
   test("2 instanceとcold startで同じrate limit bucketをatomicに共有する", async () => {
@@ -358,9 +453,9 @@ integration("Postgres repositories + published analysis flow", () => {
     });
 
     expect(
-      await lifecycleRepository.deleteBatch(
+      await lifecycleRepository.deleteExpiredBatch(
         createDbWriteCtx(db),
-        PublishedAnalysisLifecycle.ExpiredAt(blockedContext.now),
+        blockedContext.now,
         1,
       ),
     ).toEqual({ deleted: 1, hasMore: false });
@@ -406,15 +501,9 @@ integration("Postgres repositories + published analysis flow", () => {
     `),
     );
     await db.queryRun(sql.raw("ANALYZE published_analyses"));
-    const eligible = PublishedAnalysisLifecycle.ExpiredAt(
-      new Date("2026-07-15T00:00:00.000Z"),
-    ).or(
-      PublishedAnalysisLifecycle.CreatedAtOrBefore(
-        new Date("2026-06-15T00:00:00.000Z"),
-      ),
-    );
+    const expiredAt = new Date("2026-07-15T00:00:00.000Z");
     const planRows = await db.queryAll<{ "QUERY PLAN": string }>(sql`
-      EXPLAIN (COSTS OFF) ${deleteBatchSQL(eligible, 500)}
+      EXPLAIN (COSTS OFF) ${deleteExpiredBatchSQL(expiredAt, 500)}
     `);
     const plan = planRows.map((row) => row["QUERY PLAN"]).join("\n");
     expect(plan).toContain("published_analyses_cleanup_idx");
@@ -423,9 +512,9 @@ integration("Postgres repositories + published analysis flow", () => {
     const worker = async () => {
       let deleted = 0;
       for (;;) {
-        const batch = await lifecycleRepository.deleteBatch(
+        const batch = await lifecycleRepository.deleteExpiredBatch(
           createDbWriteCtx(db),
-          eligible,
+          expiredAt,
           500,
         );
         deleted += batch.deleted;
@@ -450,11 +539,77 @@ integration("Postgres repositories + published analysis flow", () => {
     expect(findings?.count).toBe("0");
   });
 
+  test("active 100k行の後方にあるcreated_at超過rowを専用indexから削除する", async () => {
+    await db.queryRun(
+      sql.raw(`
+      INSERT INTO published_analyses (
+        id, schema_version, ruleset_version, presentation_revision,
+        own_character, opponent_character,
+        rounds_detected, rounds_won, rounds_lost, rounds_unresolved,
+        logical_size_bytes, created_at, expires_at
+      )
+      SELECT
+        'a' || lpad(to_hex(value), 21, '0'), 1, 3, 1, 'LUKE', 'CHUN_LI',
+        0, 0, 0, 0, 8192,
+        TIMESTAMPTZ '2026-07-01 00:00:00+00',
+        TIMESTAMPTZ '2026-08-01 00:00:00+00'
+      FROM generate_series(1, 100000) AS value;
+
+      INSERT INTO published_analyses (
+        id, schema_version, ruleset_version, presentation_revision,
+        own_character, opponent_character,
+        rounds_detected, rounds_won, rounds_lost, rounds_unresolved,
+        logical_size_bytes, created_at, expires_at
+      )
+      SELECT
+        'b' || lpad(to_hex(value), 21, '0'), 1, 3, 1, 'LUKE', 'CHUN_LI',
+        0, 0, 0, 0, 8192,
+        TIMESTAMPTZ '2026-01-01 00:00:00+00',
+        TIMESTAMPTZ '2030-01-01 00:00:00+00'
+      FROM generate_series(1, 1000) AS value
+    `),
+    );
+    await db.queryRun(sql.raw("ANALYZE published_analyses"));
+    const cutoff = new Date("2026-06-15T00:00:00.000Z");
+    const planRows = await db.queryAll<{ "QUERY PLAN": string }>(sql`
+      EXPLAIN (COSTS OFF)
+      ${deleteCreatedAtOrBeforeBatchSQL(cutoff, 500)}
+    `);
+    const plan = planRows.map((row) => row["QUERY PLAN"]).join("\n");
+    expect(plan).toContain("published_analyses_created_at_cleanup_idx");
+    expect(plan).not.toContain("published_analyses_cleanup_idx");
+
+    const startedAt = performance.now();
+    let deleted = 0;
+    for (;;) {
+      const batch = await lifecycleRepository.deleteCreatedAtOrBeforeBatch(
+        createDbWriteCtx(db),
+        cutoff,
+        500,
+      );
+      deleted += batch.deleted;
+      if (!batch.hasMore) break;
+    }
+    const elapsedMillis = performance.now() - startedAt;
+    expect(deleted).toBe(1_000);
+    expect(elapsedMillis).toBeLessThan(30_000);
+    const remaining = await db.queryGet<{ count: string }>(
+      sql.raw(`
+      SELECT count(*) AS count
+      FROM published_analyses
+      WHERE created_at > TIMESTAMPTZ '2026-06-15 00:00:00+00'
+    `),
+    );
+    expect(remaining?.count).toBe("100000");
+  });
+
   test("app roleはruntimeとcleanupに必要なDMLだけを持つ", async () => {
     const privileges = await db.queryGet<{
       app_parent_select: boolean;
       app_parent_insert: boolean;
       app_parent_update: boolean;
+      app_parent_schema_version_update: boolean;
+      app_parent_id_update: boolean;
       app_parent_delete: boolean;
       app_events_select: boolean;
       app_events_insert: boolean;
@@ -473,6 +628,18 @@ integration("Postgres repositories + published analysis flow", () => {
           AS app_parent_insert,
         has_table_privilege('fighter_app', 'published_analyses', 'UPDATE')
           AS app_parent_update,
+        has_column_privilege(
+          'fighter_app',
+          'published_analyses',
+          'schema_version',
+          'UPDATE'
+        ) AS app_parent_schema_version_update,
+        has_column_privilege(
+          'fighter_app',
+          'published_analyses',
+          'id',
+          'UPDATE'
+        ) AS app_parent_id_update,
         has_table_privilege('fighter_app', 'published_analyses', 'DELETE')
           AS app_parent_delete,
         has_table_privilege(
@@ -521,6 +688,8 @@ integration("Postgres repositories + published analysis flow", () => {
       app_parent_select: true,
       app_parent_insert: true,
       app_parent_update: false,
+      app_parent_schema_version_update: true,
+      app_parent_id_update: false,
       app_parent_delete: true,
       app_events_select: true,
       app_events_insert: true,
@@ -582,11 +751,22 @@ integration("Postgres repositories + published analysis flow", () => {
       );
       expect(page.items).toHaveLength(1);
       expect(
-        await repos.publishedAnalysisLifecycle.delete(
+        await repos.publishedAnalysisLifecycle.deleteExpiredBatch(
           ctx,
-          PublishedAnalysisLifecycle.ByIds(created.analysis.id),
+          created.analysis.expiresAt,
+          1,
         ),
-      ).toBe(1);
+      ).toEqual({ deleted: 1, hasMore: false });
+      for (const table of [
+        "published_analyses",
+        "published_analysis_findings",
+        "published_analysis_tactics",
+      ]) {
+        const remaining = await tx.queryGet<{ count: string }>(
+          sql.raw(`SELECT count(*) AS count FROM ${table}`),
+        );
+        expect(remaining?.count).toBe("0");
+      }
       expect(
         await repos.publishedAnalysisCreateEvent.delete(
           ctx,

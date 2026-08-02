@@ -62,7 +62,13 @@ CREATE INDEX IF NOT EXISTS published_analyses_expires_at_idx
   ON published_analyses (expires_at);
 CREATE INDEX IF NOT EXISTS published_analyses_cleanup_idx
   ON published_analyses (expires_at, created_at, id);
+CREATE INDEX IF NOT EXISTS published_analyses_created_at_cleanup_idx
+  ON published_analyses (created_at, expires_at, id);
 GRANT SELECT, INSERT, DELETE ON published_analyses TO fighter_app;
+-- SELECT FOR UPDATE requires some UPDATE privilege. schema_version is fixed
+-- by its CHECK constraint, so granting only this column lets cleanup lock rows
+-- without allowing application data to be meaningfully changed.
+GRANT UPDATE (schema_version) ON published_analyses TO fighter_app;
 
 CREATE TABLE IF NOT EXISTS published_analysis_findings (
   analysis_id TEXT NOT NULL

@@ -15,12 +15,14 @@ describe("published analysis cleanup batch command", () => {
   test("期限切れrowを短いbatchで削除して古いquota eventをpruneする", async () => {
     const database = new TransactionCountingDatabase();
     const ctx = createTestContext(database);
-    const batches = [
+    const expiredBatches = [
       { deleted: 2, hasMore: true },
       { deleted: 2, hasMore: true },
       { deleted: 1, hasMore: false },
     ];
-    const deleteSpecs: unknown[] = [];
+    const retainedBatches = [{ deleted: 2, hasMore: false }];
+    const expiredAt: Date[] = [];
+    const retentionCutoffs: Date[] = [];
     const deleteLimits: number[] = [];
     const rateLimitBatches = [
       { deleted: 2, hasMore: true },
@@ -28,15 +30,21 @@ describe("published analysis cleanup batch command", () => {
     ];
     let quotaSpec: unknown;
 
-    ctx.rawRepos.publishedAnalysisLifecycle.deleteBatch = async (
+    ctx.rawRepos.publishedAnalysisLifecycle.deleteExpiredBatch = async (
       _ctx,
-      spec,
+      at,
       limit,
     ) => {
-      deleteSpecs.push(spec);
+      expiredAt.push(at);
       deleteLimits.push(limit);
-      return batches.shift() ?? { deleted: 0, hasMore: false };
+      return expiredBatches.shift() ?? { deleted: 0, hasMore: false };
     };
+    ctx.rawRepos.publishedAnalysisLifecycle.deleteCreatedAtOrBeforeBatch =
+      async (_ctx, cutoff, limit) => {
+        retentionCutoffs.push(cutoff);
+        deleteLimits.push(limit);
+        return retainedBatches.shift() ?? { deleted: 0, hasMore: false };
+      };
     ctx.rawRepos.publishedAnalysisCreateEvent.delete = async (_ctx, spec) => {
       quotaSpec = spec;
       return 3;
@@ -55,25 +63,20 @@ describe("published analysis cleanup batch command", () => {
 
     expect(result).toEqual({
       ok: true,
-      value: { expired: 5, rateLimits: 3, quotaEvents: 3, batches: 3 },
+      value: { expired: 7, rateLimits: 3, quotaEvents: 3, batches: 4 },
     });
-    expect(deleteSpecs).toHaveLength(3);
-    expect(deleteSpecs[0]).toMatchObject({
-      type: "or",
-      children: [
-        { type: "ExpiredAt", at: new Date("2026-07-15T12:34:56.000Z") },
-        {
-          type: "CreatedAtOrBefore",
-          cutoff: new Date("2026-06-15T12:34:56.000Z"),
-        },
-      ],
-    });
-    expect(deleteLimits).toEqual([2, 2, 2]);
+    expect(expiredAt).toEqual([
+      new Date("2026-07-15T12:34:56.000Z"),
+      new Date("2026-07-15T12:34:56.000Z"),
+      new Date("2026-07-15T12:34:56.000Z"),
+    ]);
+    expect(retentionCutoffs).toEqual([new Date("2026-06-15T12:34:56.000Z")]);
+    expect(deleteLimits).toEqual([2, 2, 2, 2]);
     expect(quotaSpec).toMatchObject({
       type: "CreatedBefore",
       cutoff: new Date("2026-07-13T00:00:00.000Z"),
     });
-    expect(database.transactions).toBe(4);
+    expect(database.transactions).toBe(5);
   });
 
   test("batch安全上限に達したら失敗しquota eventには進まない", async () => {
@@ -82,7 +85,7 @@ describe("published analysis cleanup batch command", () => {
     let quotaCleanupCalled = false;
     let rateLimitCleanupCalled = false;
 
-    ctx.rawRepos.publishedAnalysisLifecycle.deleteBatch = async () => ({
+    ctx.rawRepos.publishedAnalysisLifecycle.deleteExpiredBatch = async () => ({
       deleted: 2,
       hasMore: true,
     });
@@ -114,10 +117,12 @@ describe("published analysis cleanup batch command", () => {
     const database = new TransactionCountingDatabase();
     const ctx = createTestContext(database);
     let quotaCleanupCalled = false;
-    ctx.rawRepos.publishedAnalysisLifecycle.deleteBatch = async () => ({
+    ctx.rawRepos.publishedAnalysisLifecycle.deleteExpiredBatch = async () => ({
       deleted: 0,
       hasMore: false,
     });
+    ctx.rawRepos.publishedAnalysisLifecycle.deleteCreatedAtOrBeforeBatch =
+      async () => ({ deleted: 0, hasMore: false });
     ctx.services.sharingRateLimit.prune = async () => ({
       deleted: 2,
       hasMore: true,
@@ -143,7 +148,7 @@ describe("published analysis cleanup batch command", () => {
   test("DB失敗をusecaseのINTERNAL failureとして返す", async () => {
     const database = new TransactionCountingDatabase();
     const ctx = createTestContext(database);
-    ctx.rawRepos.publishedAnalysisLifecycle.deleteBatch = async () => {
+    ctx.rawRepos.publishedAnalysisLifecycle.deleteExpiredBatch = async () => {
       throw new Error("database unavailable");
     };
 

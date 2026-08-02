@@ -78,9 +78,17 @@ describe("database readiness", () => {
       "published_analyses_schema_version_check",
     );
     expect(compatibilityQuery).toContain("logical_size_bytes");
+    expect(compatibilityQuery).toContain("format_type");
+    expect(compatibilityQuery).toContain("required_defaults");
+    expect(compatibilityQuery).toContain("required_constraints");
+    expect(compatibilityQuery).toContain("required_indexes");
+    expect(compatibilityQuery).toContain("indisvalid");
+    expect(compatibilityQuery).toContain("ON DELETE CASCADE");
     expect(compatibilityQuery).toContain("published_analysis_rate_limits");
+    expect(compatibilityQuery).toContain("published_analysis_rate_limits_pkey");
     expect(compatibilityQuery).toContain("'DELETE'");
     expect(compatibilityQuery).toContain("has_table_privilege");
+    expect(compatibilityQuery).toContain("has_column_privilege");
   });
 
   test("fails closed for missing schema or grants", async () => {

@@ -136,9 +136,11 @@ cleanup batch は次のどちらかを満たす parent row を削除する。
 - `expires_at` を過ぎた
 - `created_at + SHARE_RETENTION_DAYS` を過ぎた
 
-1 batch の既定値は500件、最大1000 batch で停止する。cleanup候補の選択と削除は
-`(expires_at, created_at, id)` indexに沿う1つのCTEで実行し、`FOR UPDATE SKIP LOCKED` により
-並行Jobが同じrowを処理しない。全 parent cleanup が完了した場合だけ、終了後2分を過ぎた
+1 batch の既定値は500件、最大1000 batch で停止する。期限判定は
+`(expires_at, created_at, id)`、retention判定は`(created_at, expires_at, id)`の専用indexと
+別々のbounded CTEを使う。各CTEは`FOR UPDATE SKIP LOCKED`とDELETEを1 statementで完結させ、
+並行Jobが同じrowを処理しない。row lockに必要なUPDATE権限は、値がCHECKで固定された
+`schema_version`列だけに限定する。全 parent cleanup が完了した場合だけ、終了後2分を過ぎた
 rate-limit counterと2 UTC 日より古いcreate quota eventを削除する。repository はcleanup Jobを定義するが、
 定期実行の Scheduler は外部管理である。頻度と live 状態は deployment 時に別途確認する。
 
@@ -154,6 +156,7 @@ rate-limit counterと2 UTC 日より古いcreate quota eventを削除する。re
 | public GET | client key ごとの固定窓 rate limit |
 | public HTML `200` | 有効期限を超えない最大15秒 cache |
 | error response | `no-store` |
+| `/health`、`/ready` | 成否とも`no-store` |
 
 application rate limiter は PostgreSQL の原子的 upsert を使う固定窓で、Cloud Run instance と
 cold start をまたいで共有する。create、delete、public read は別 bucket とし、client key は

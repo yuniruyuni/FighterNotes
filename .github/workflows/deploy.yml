@@ -188,8 +188,13 @@ jobs:
         id: smoke
         if: steps.current-main.outputs.should_release == 'true'
         run: |
-          curl --fail --silent --show-error https://fighter.yuniruyuni.net/health
-          curl --fail --silent --show-error https://fighter.yuniruyuni.net/ready
+          SMOKE_CURL_OPTIONS=(
+            --fail --silent --show-error
+            --connect-timeout 5 --max-time 15
+            --retry 5 --retry-delay 2 --retry-max-time 90 --retry-all-errors
+          )
+          curl "${SMOKE_CURL_OPTIONS[@]}" https://fighter.yuniruyuni.net/health
+          curl "${SMOKE_CURL_OPTIONS[@]}" https://fighter.yuniruyuni.net/ready
 
       - name: Record release outcome
         if: always()

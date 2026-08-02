@@ -4,7 +4,10 @@ import type { DbReadCtx, DbWriteCtx } from "../../common/capability";
 import type { PublishedAnalysisLifecycleRepository as IPublishedAnalysisLifecycleRepository } from "../repository";
 import { count } from "./count";
 import { del } from "./delete";
-import { deleteBatch } from "./delete-batch";
+import {
+  deleteCreatedAtOrBeforeBatch,
+  deleteExpiredBatch,
+} from "./delete-batch";
 import { list } from "./list";
 
 export class PublishedAnalysisLifecycleRepository
@@ -32,11 +35,11 @@ export class PublishedAnalysisLifecycleRepository
     return del(ctx.db, spec);
   }
 
-  deleteBatch(
-    ctx: DbWriteCtx,
-    spec: PublishedAnalysisLifecycle.Spec,
-    limit: number,
-  ) {
-    return deleteBatch(ctx.db, spec, limit);
+  deleteExpiredBatch(ctx: DbWriteCtx, at: Date, limit: number) {
+    return deleteExpiredBatch(ctx.db, at, limit);
+  }
+
+  deleteCreatedAtOrBeforeBatch(ctx: DbWriteCtx, cutoff: Date, limit: number) {
+    return deleteCreatedAtOrBeforeBatch(ctx.db, cutoff, limit);
   }
 }

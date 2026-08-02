@@ -6,11 +6,17 @@ import type { Hono } from "hono";
 import { RuntimeConfig } from "../config";
 import type { Database } from "../infra/db";
 import type { ILogger } from "../infra/logger/types";
+import { createPublishedAnalysisSecurity } from "../infra/security/published-analysis";
+import {
+  type DeletePasswordHash,
+  parseDeletePassword,
+} from "../models/published-analysis";
 import type { Context } from "../usecases/context";
 import type {
   RuntimeServices,
   SharingRateLimitBucket,
 } from "../usecases/services";
+import { SecurityCapacityError } from "../usecases/services";
 import { createApp } from "./index";
 
 let app: Hono;
@@ -92,6 +98,7 @@ describe("/health", () => {
   test("200 で status ok を返す", async () => {
     const res = await app.request("/health");
     expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
     expect(await res.json()).toEqual({ status: "ok" });
   });
 });
@@ -119,6 +126,7 @@ describe("/ready", () => {
   test("DBとschemaが互換なら固定responseで200を返す", async () => {
     const res = await appWithReadiness(true).request("/ready");
     expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
     expect(await res.json()).toEqual({ status: "ready" });
   });
 
@@ -128,6 +136,7 @@ describe("/ready", () => {
     );
     const ready = await failure.request("/ready");
     expect(ready.status).toBe(503);
+    expect(ready.headers.get("cache-control")).toBe("no-store");
     const body = await ready.text();
     expect(JSON.parse(body)).toEqual({ status: "unavailable" });
     expect(body).not.toContain("secret-value");
@@ -318,6 +327,65 @@ describe("共有rate-limit store過負荷の隔離", () => {
     // input validation is intentionally earlier than the router's disabled 404,
     // but a rate-limit-store 503 must not mask emergency shutdown.
     expect(create.status).toBe(400);
+  });
+});
+
+describe("Argon2実負荷の隔離", () => {
+  test("同時上限の実Argon2中もhealthと静的assetを配信しoverflowはfail closed", async () => {
+    const password = parseDeletePassword("fighter-notes-delete-key");
+    if (!password) throw new Error("invalid password fixture");
+    let started = 0;
+    let completed = 0;
+    let signalStarted: (() => void) | undefined;
+    const bothStarted = new Promise<void>((resolve) => {
+      signalStarted = resolve;
+    });
+    const security = createPublishedAnalysisSecurity({
+      concurrency: 2,
+      queueLimit: 0,
+      waitMillis: 1_000,
+      hashPassword: async (value) => {
+        const operation = Bun.password.hash(value, {
+          algorithm: "argon2id",
+          memoryCost: 7_168,
+          timeCost: 5,
+        });
+        started += 1;
+        if (started === 2) signalStarted?.();
+        const hash = await operation;
+        completed += 1;
+        return hash as DeletePasswordHash;
+      },
+    });
+    const services = testServices();
+    services.publishedAnalysisSecurity = security;
+    const underLoad = createApp({
+      logger,
+      config: RuntimeConfig.fromEnvironment({ STATIC_DIR: staticDir }),
+      services,
+    } as unknown as Context);
+
+    const active = [
+      security.hashDeletePassword(password),
+      security.hashDeletePassword(password),
+    ];
+    await bothStarted;
+    expect(started).toBe(2);
+    expect(completed).toBe(0);
+    await expect(security.hashDeletePassword(password)).rejects.toBeInstanceOf(
+      SecurityCapacityError,
+    );
+
+    const [health, staticAsset] = await Promise.all([
+      underLoad.request("/health"),
+      underLoad.request("/app.js"),
+    ]);
+    expect(health.status).toBe(200);
+    expect(health.headers.get("cache-control")).toBe("no-store");
+    expect(staticAsset.status).toBe(200);
+    const hashes = await Promise.all(active);
+    expect(hashes.every((hash) => hash.startsWith("$argon2id$"))).toBe(true);
+    expect(completed).toBe(2);
   });
 });
 

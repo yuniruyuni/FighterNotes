@@ -80,7 +80,8 @@ live alert の有無と通知先を定期的に棚卸しする。
 | DB tunnel | Cloudflare Access deny、token 認証失敗、sidecar startup probe 失敗 |
 | Delivery | 対象CI run / SHA、production environment実行者、image digest、migration / cleanup / deployの結果 |
 
-`/health` は DB を query しない。`/ready`はruntime app roleのread-only queryだけを実行し、失敗時も
+`/health` は DB を query しない。`/ready`はruntime app roleのread-only queryで利用列、default、
+constraint、PK/FK、cleanup index、必要grantのcatalog contractを確認する。どちらも`no-store`で、失敗時も
 DB host、credential、schema差分をresponseへ出さない。`/ready`成功後もclosed schemaのtest dataで
 read / create / deleteを確認し、実利用者の共有IDや削除コードをprobeに使わない。
 
