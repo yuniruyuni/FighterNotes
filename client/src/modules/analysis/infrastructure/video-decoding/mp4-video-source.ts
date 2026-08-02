@@ -33,6 +33,7 @@ export class Mp4VideoSource {
   readonly #file: ISOFile;
   readonly #pendingSamples: Mp4VideoSample[][] = [];
   #trackReady = false;
+  #stopped = false;
 
   constructor(
     arrayBuffer: ArrayBuffer,
@@ -46,9 +47,11 @@ export class Mp4VideoSource {
 
   start(): void {
     this.#file.onReady = (info) => {
+      if (this.#stopped) return;
       void this.#startVideoTrack(info).catch(this.#callbacks.onError);
     };
     this.#file.onSamples = (_id, _user, samples) => {
+      if (this.#stopped) return;
       try {
         this.#acceptSamples(samples.map(toVideoSample));
       } catch (error) {
@@ -56,6 +59,7 @@ export class Mp4VideoSource {
       }
     };
     this.#file.onError = (module, message) => {
+      if (this.#stopped) return;
       this.#callbacks.onError(new Error(`${module}: ${message}`));
     };
 
@@ -63,6 +67,13 @@ export class Mp4VideoSource {
     input.fileStart = 0;
     this.#file.appendBuffer(input);
     this.#file.flush();
+  }
+
+  stop(): void {
+    if (this.#stopped) return;
+    this.#stopped = true;
+    this.#pendingSamples.splice(0);
+    this.#file.stop();
   }
 
   async #startVideoTrack(info: Movie): Promise<void> {
@@ -88,6 +99,7 @@ export class Mp4VideoSource {
     this.#file.setExtractionOptions(track.id, undefined, { nbSamples: 200 });
     this.#file.start();
     await trackInitialization;
+    if (this.#stopped) return;
     this.#trackReady = true;
     for (const samples of this.#pendingSamples.splice(0)) {
       this.#callbacks.onSamples(samples);
@@ -95,6 +107,7 @@ export class Mp4VideoSource {
   }
 
   #acceptSamples(samples: Mp4VideoSample[]): void {
+    if (this.#stopped) return;
     if (this.#trackReady) {
       this.#callbacks.onSamples(samples);
     } else {

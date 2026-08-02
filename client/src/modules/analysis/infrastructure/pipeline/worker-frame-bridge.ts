@@ -83,7 +83,7 @@ export class WorkerFrameBridge {
 
   async send(frameIndex: number, pixels: StripPixels): Promise<void> {
     throwIfAborted(this.#options.signal);
-    const slot = await this.#bufferPool.acquire();
+    const slot = await this.#bufferPool.acquire(this.#options.signal);
     throwIfAborted(this.#options.signal);
     const buffers = this.#bufferPool.get(slot);
     copyStripPixels(pixels, buffers);

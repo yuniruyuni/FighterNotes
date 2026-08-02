@@ -9,7 +9,8 @@ import {
 export function AnalysisSetupPage() {
   const session = useAnalysisSession();
   const { state } = session;
-  const busy = state.phase === "analyzing";
+  const busy = state.phase === "analyzing" || state.phase === "canceling";
+  const canceled = state.phase === "canceled";
 
   return (
     <div id="screen-setup">
@@ -48,9 +49,15 @@ export function AnalysisSetupPage() {
             onOpponentCharacterChange={session.setOpponentCharacter}
             onSubmit={() => void session.analyze()}
           />
-          {(busy || state.error) && (
+          {(busy || canceled || state.error) && (
             <div className="card progress-card">
-              <h2>{state.error ? "解析エラー" : "解析中…"}</h2>
+              <h2>
+                {state.error
+                  ? "解析エラー"
+                  : canceled
+                    ? "解析を中止しました"
+                    : "解析中…"}
+              </h2>
               {busy && (
                 <progress max={100} value={state.progress}>
                   {state.progress}%
@@ -59,6 +66,18 @@ export function AnalysisSetupPage() {
               <div className={state.error ? "analysis-error" : "status"}>
                 {state.error || state.status}
               </div>
+              {busy && (
+                <button
+                  type="button"
+                  className="analysis-cancel-btn"
+                  disabled={state.phase === "canceling"}
+                  onClick={session.cancel}
+                >
+                  {state.phase === "canceling"
+                    ? "中止しています…"
+                    : "解析を中止"}
+                </button>
+              )}
             </div>
           )}
         </div>

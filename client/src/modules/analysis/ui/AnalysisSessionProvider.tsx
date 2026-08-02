@@ -3,11 +3,17 @@ import {
   type ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useReducer,
+  useRef,
 } from "react";
 import type { AnalysisServices } from "../application/ports.js";
 import { runAnalysis } from "../application/run-analysis.js";
+import {
+  AnalysisCanceledError,
+  isAnalysisCanceled,
+} from "../domain/analysis-cancellation.js";
 import {
   AnalysisSession,
   type AnalysisSessionState,
@@ -24,7 +30,13 @@ interface AnalysisSessionValue {
   setOwnCharacter(character: string): void;
   setOpponentCharacter(character: string): void;
   analyze(): Promise<CompletedAnalysis | null>;
+  cancel(): void;
   reset(): void;
+}
+
+interface ActiveAnalysisRun {
+  readonly id: number;
+  readonly controller: AbortController;
 }
 
 const AnalysisSessionContext = createContext<AnalysisSessionValue | null>(null);
@@ -42,6 +54,24 @@ export function AnalysisSessionProvider({
     undefined,
     AnalysisSession.initial,
   );
+  const activeRun = useRef<ActiveAnalysisRun | null>(null);
+  const nextRunId = useRef(1);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    const confirmNavigation = (event: BeforeUnloadEvent) => {
+      if (!activeRun.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", confirmNavigation);
+    return () => {
+      mounted.current = false;
+      window.removeEventListener("beforeunload", confirmNavigation);
+      activeRun.current?.controller.abort(new AnalysisCanceledError());
+    };
+  }, []);
 
   const setFile = useCallback(
     (file: File | null) => dispatch({ type: "file", file }),
@@ -61,7 +91,15 @@ export function AnalysisSessionProvider({
   );
   const reset = useCallback(() => dispatch({ type: "reset" }), []);
 
+  const cancel = useCallback(() => {
+    const run = activeRun.current;
+    if (!run || run.controller.signal.aborted) return;
+    dispatch({ type: "cancel" });
+    run.controller.abort(new AnalysisCanceledError());
+  }, []);
+
   const analyze = useCallback(async (): Promise<CompletedAnalysis | null> => {
+    if (activeRun.current) return null;
     const { file, side, ownCharacter, opponentCharacter } = state;
     if (!runtime.available) {
       dispatch({ type: "fail", error: runtime.reason });
@@ -71,6 +109,11 @@ export function AnalysisSessionProvider({
       return null;
     }
 
+    const run: ActiveAnalysisRun = {
+      id: nextRunId.current++,
+      controller: new AbortController(),
+    };
+    activeRun.current = run;
     dispatch({ type: "start" });
     try {
       const completed = await runAnalysis(
@@ -82,14 +125,32 @@ export function AnalysisSessionProvider({
         },
         (progress, status) => dispatch({ type: "progress", progress, status }),
         services,
+        run.controller.signal,
       );
+      if (
+        run.controller.signal.aborted ||
+        !mounted.current ||
+        activeRun.current?.id !== run.id
+      ) {
+        if (mounted.current && activeRun.current?.id === run.id) {
+          dispatch({ type: "canceled" });
+        }
+        return null;
+      }
       const { result, report, context } = completed;
       dispatch({ type: "complete", result, report, context });
       return completed;
     } catch (error) {
+      if (!mounted.current || activeRun.current?.id !== run.id) return null;
+      if (isAnalysisCanceled(error)) {
+        dispatch({ type: "canceled" });
+        return null;
+      }
       const message = error instanceof Error ? error.message : String(error);
       dispatch({ type: "fail", error: `エラー: ${message}` });
       return null;
+    } finally {
+      if (activeRun.current?.id === run.id) activeRun.current = null;
     }
   }, [runtime, services, state]);
 
@@ -102,6 +163,7 @@ export function AnalysisSessionProvider({
       setOwnCharacter,
       setOpponentCharacter,
       analyze,
+      cancel,
       reset,
     }),
     [
@@ -112,6 +174,7 @@ export function AnalysisSessionProvider({
       setOwnCharacter,
       setOpponentCharacter,
       analyze,
+      cancel,
       reset,
     ],
   );

@@ -64,9 +64,11 @@ export async function analyzeWithWebCodecs(
 
     let resultWorkerSession: AnalyzerWorkerSession;
     let meterWorkerSession: MeterWorkerSession;
+    let videoSource: Mp4VideoSource | undefined;
 
     const cleanup = () => {
       signal.removeEventListener("abort", onAbort);
+      videoSource?.stop();
       resultWorkerSession?.terminate();
       meterWorkerSession?.terminate();
       if (decoder && decoder.state !== "closed") decoder.close();
@@ -207,7 +209,7 @@ export async function analyzeWithWebCodecs(
       });
     }
 
-    const videoSource = new Mp4VideoSource(arrayBuffer, {
+    videoSource = new Mp4VideoSource(arrayBuffer, {
       onTrack: configureDecoder,
       onSamples(samples) {
         for (const sample of samples) {

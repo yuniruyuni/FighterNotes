@@ -63,4 +63,24 @@ describe("WorkerFrameBridge", () => {
       tHud: 3,
     });
   });
+
+  test("aborts a frame waiting for a transfer buffer", async () => {
+    const controller = new AbortController();
+    const bridge = new WorkerFrameBridge({
+      sendMeter: async () => {},
+      sendResult: async () => {},
+      totalSamples: () => 3,
+      drawTime: () => 0,
+      onProgress: () => {},
+      onFrameCompleted: () => {},
+      signal: controller.signal,
+    });
+
+    await bridge.send(0, pixels);
+    await bridge.send(1, pixels);
+    const waiting = bridge.send(2, pixels);
+    controller.abort(new Error("利用者が中止"));
+
+    await expect(waiting).rejects.toThrow("利用者が中止");
+  });
 });

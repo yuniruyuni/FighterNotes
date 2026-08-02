@@ -9,6 +9,7 @@ export interface AnalysisEngine {
     side: AnalysisSide,
     onProgress: AnalysisProgress,
     context: AnalysisContext,
+    signal: AbortSignal,
   ): Promise<AnalysisResult>;
 }
 
