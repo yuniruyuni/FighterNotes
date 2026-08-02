@@ -8,6 +8,7 @@ import {
   useReducer,
   useRef,
 } from "react";
+import { flushSync } from "react-dom";
 import type { AnalysisServices } from "../application/ports.js";
 import { runAnalysis } from "../application/run-analysis.js";
 import {
@@ -150,7 +151,7 @@ export function AnalysisSessionProvider({
         }
         return null;
       }
-      run.progress.finish();
+      flushSync(() => run.progress.finish());
       const { result, report, context } = completed;
       dispatch({ type: "complete", result, report, context });
       return completed;
@@ -232,6 +233,8 @@ function analysisStatusAnnouncement(state: AnalysisSessionState): string {
       return "位置関係を確認中です。";
     case "report":
       return "解析レポートを生成中です。";
+    case "complete":
+      return "動画解析が完了しました。";
     default:
       return state.status;
   }

@@ -90,6 +90,8 @@ describe("AnalysisProgressReporter", () => {
     );
 
     reporter.report(0.2, "フレーム 1 / 10");
+    reporter.report(0.4, "フレーム 4 / 10");
+    expect(scheduler.timer).not.toBeNull();
     reporter.finish();
     reporter.finish();
     reporter.dispose();
@@ -98,6 +100,27 @@ describe("AnalysisProgressReporter", () => {
 
     expect(notifications).toEqual([
       [0.2, "フレーム 1 / 10"],
+      [1, "解析完了"],
+    ]);
+    expect(scheduler.timer).toBeNull();
+  });
+
+  test("上流が100%を通知済みでも完了通知を一度だけ確定する", () => {
+    const scheduler = new FakeScheduler();
+    const notifications: Array<[number, string]> = [];
+    const reporter = new AnalysisProgressReporter(
+      (progress, status) => notifications.push([progress, status]),
+      scheduler,
+      100,
+    );
+
+    reporter.report(1, "レポート生成中…");
+    reporter.finish();
+    reporter.finish();
+    reporter.report(0.5, "遅れて届いた進捗");
+
+    expect(notifications).toEqual([
+      [1, "レポート生成中…"],
       [1, "解析完了"],
     ]);
   });

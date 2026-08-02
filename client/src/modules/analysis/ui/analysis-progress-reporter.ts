@@ -25,6 +25,7 @@ export class AnalysisProgressReporter {
   #lastNotificationAt = Number.NEGATIVE_INFINITY;
   #lastProgress = 0;
   #lastStage = "";
+  #finished = false;
   #disposed = false;
 
   constructor(
@@ -38,7 +39,7 @@ export class AnalysisProgressReporter {
   }
 
   readonly report: AnalysisProgress = (progress, status) => {
-    if (this.#disposed) return;
+    if (this.#disposed || this.#finished) return;
     const normalized = Math.max(
       this.#lastProgress,
       this.#pending?.progress ?? 0,
@@ -67,7 +68,8 @@ export class AnalysisProgressReporter {
   };
 
   finish(): void {
-    if (this.#disposed || this.#lastProgress >= 1) return;
+    if (this.#disposed || this.#finished) return;
+    this.#finished = true;
     this.#pending = {
       progress: 1,
       status: "解析完了",

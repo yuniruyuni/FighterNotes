@@ -1,5 +1,11 @@
 import { describe, expect, mock, test } from "bun:test";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import type { AnalysisServices } from "~/modules/analysis/application/ports.js";
 import { AnalysisCanceledError } from "~/modules/analysis/domain/analysis-cancellation.js";
 import { AnalysisSessionProvider } from "~/modules/analysis/index.js";
@@ -60,6 +66,58 @@ describe("AnalysisSetupPage", () => {
     await waitFor(() => expect(analyze).toHaveBeenCalledTimes(1));
     expect(capture).toHaveBeenCalledTimes(1);
     expect(analyzeButton.disabled).toBe(false);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "動画解析が完了しました。",
+    );
+  });
+
+  test("完了遷移の前に100%をprogress DOMへcommitする", async () => {
+    let completeAnalysis!: () => void;
+    const analyzeImplementation: AnalysisServices["engine"]["analyze"] = (
+      _file,
+      _side,
+      onProgress,
+      context,
+    ) =>
+      new Promise((resolve) => {
+        completeAnalysis = () => {
+          onProgress(1, "レポート生成中…");
+          resolve({
+            ...syntheticAnalysisResult(),
+            analysisContext: context,
+          });
+        };
+      });
+    renderSetup(analysisServices(analyzeImplementation));
+    configureAnalysis();
+    fireEvent.click(screen.getByRole("button", { name: "解析する" }));
+    const progress = await screen.findByRole("progressbar", {
+      name: "動画解析の進捗",
+    });
+    const committedValues: string[] = [];
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        if (record.type === "attributes") {
+          const value = (record.target as HTMLProgressElement).getAttribute(
+            "value",
+          );
+          if (value) committedValues.push(value);
+        }
+      }
+    });
+    observer.observe(progress, {
+      attributes: true,
+      attributeFilter: ["value"],
+    });
+
+    await act(async () => {
+      completeAnalysis();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(committedValues).toContain("100"));
+    observer.disconnect();
+    expect(progress.isConnected).toBe(false);
     expect(screen.getByRole("status")).toHaveTextContent(
       "動画解析が完了しました。",
     );
