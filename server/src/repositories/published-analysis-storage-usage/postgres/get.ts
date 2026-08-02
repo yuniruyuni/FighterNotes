@@ -19,12 +19,8 @@ export async function get(
     }
   });
   const row = await db.queryGet<StorageUsageRow>(sql`
-    SELECT (
-      pg_total_relation_size('published_analyses'::regclass) +
-      pg_total_relation_size('published_analysis_findings'::regclass) +
-      pg_total_relation_size('published_analysis_tactics'::regclass) +
-      pg_total_relation_size('published_analysis_create_events'::regclass)
-    )::bigint AS bytes
+    SELECT COALESCE(sum(logical_size_bytes), 0)::bigint AS bytes
+    FROM published_analyses
     WHERE ${where}
   `);
   return row ? { bytes: Number(row.bytes) } : null;

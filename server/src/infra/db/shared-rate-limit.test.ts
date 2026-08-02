@@ -32,4 +32,25 @@ describe("PostgresSharingRateLimit", () => {
       new PostgresSharingRateLimit(db).consume("public_read", "unknown", 120),
     ).rejects.toThrow("returned no row");
   });
+
+  test("prunes stale client digests in a locked bounded batch", async () => {
+    let captured: SQLFragment | undefined;
+    const db = {
+      async queryGet(fragment: SQLFragment) {
+        captured = fragment;
+        return { deleted: 500, has_more: true };
+      },
+    } as Database;
+    const before = new Date("2026-07-15T12:32:56.000Z");
+
+    expect(await new PostgresSharingRateLimit(db).prune(before, 500)).toEqual({
+      deleted: 500,
+      hasMore: true,
+    });
+    expect(captured?.query).toContain("FOR UPDATE SKIP LOCKED");
+    expect(captured?.query).toContain(
+      "DELETE FROM published_analysis_rate_limits",
+    );
+    expect(captured?.params).toEqual([before, 501, 500, 500]);
+  });
 });

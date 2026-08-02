@@ -75,7 +75,7 @@ live alert の有無と通知先を定期的に棚卸しする。
 | DB path | `/ready`、共有 read / create / delete、connection / statement / lock timeout |
 | Abuse control | bucket別429/503、Argon2 capacity、daily / active / storage quota 到達理由 |
 | Cleanup | Scheduler 最終成功時刻、Job exit、削除件数、batch 安全上限、backlog |
-| Capacity | active row 数、relation size、DB connection、Cloud Run instance 数 |
+| Capacity | logical bytes、active row数、物理relation size、DB connection、Cloud Run instance数 |
 | Identity | IAM policy 変更、Secret Manager access、Workload Identity の失敗 |
 | DB tunnel | Cloudflare Access deny、token 認証失敗、sidecar startup probe 失敗 |
 | Delivery | 対象CI run / SHA、production environment実行者、image digest、migration / cleanup / deployの結果 |
@@ -155,6 +155,25 @@ gcloud run jobs execute fighter-cleanup \
 手動実行を繰り返す前に、1回の Job が一部削除後に失敗したのか、接続前に失敗したのかを log で分ける。
 cleanup は短い batch と `ON DELETE CASCADE` を使うため再実行可能だが、安全上限の引き上げは DB load と
 quota event prune の順序を確認してから行う。
+
+### Quotaの予兆と回復
+
+外部監視では`SHARE_ACTIVE_LIMIT`と`SHARE_STORAGE_LIMIT_BYTES`に対し80%でwarning、90%でcritical、
+100%でcreate停止として扱う。少なくとも次のread-only query相当を収集し、logical quotaと物理容量を
+別signalにする。
+
+```sql
+SELECT
+  count(*) FILTER (WHERE expires_at > clock_timestamp()) AS active_rows,
+  coalesce(sum(logical_size_bytes), 0) AS logical_bytes,
+  count(*) FILTER (WHERE expires_at <= clock_timestamp()) AS expired_backlog
+FROM published_analyses;
+```
+
+閾値到達時はSchedulerの最終成功とJob logを確認し、cleanupを1回実行する。`logical_bytes`はDELETEの
+commit直後に減るため、その値と新規createを再確認する。物理relation fileが縮まらなくてもquota回復に
+`VACUUM FULL`は不要である。DB diskの警告が別途残る場合はautovacuum状況を確認し、必要ならonlineの
+`VACUUM (ANALYZE)`で再利用と統計更新を促す。blocking maintenanceはDB運用手順として別に計画する。
 
 ## 定期棚卸し
 

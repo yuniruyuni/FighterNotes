@@ -22,6 +22,9 @@ export function createRuntimeServices(db?: Database, config?: RuntimeConfig) {
           async consume(): Promise<never> {
             throw new Error("Shared rate limit requires a database");
           },
+          async prune(): Promise<never> {
+            throw new Error("Shared rate limit requires a database");
+          },
         },
   };
 }

@@ -159,8 +159,12 @@ gcloud run jobs execute fighter-cleanup \
   --wait
 ```
 
-成功 log は `expired`、`quota_events`、`batches` を出力する。batch 安全上限に達した場合は失敗終了し、
+成功 log は `expired`、`rate_limits`、`quota_events`、`batches` を出力する。batch安全上限に達した場合は失敗終了し、
 quota event の prune へ進まない。原因と backlog を確認してから設定または実装を変更する。
+
+10,000件backlogのintegration testはcleanup planで`published_analyses_cleanup_idx`の利用を要求し、
+2 workerの全batch処理を30秒未満に制限する。production Jobのtimeoutは600秒だが、release後は実データの
+row幅、cascade対象、DB負荷を含む実行時間と`EXPLAIN (ANALYZE, BUFFERS)`を別途確認する。
 
 ## Rollback
 

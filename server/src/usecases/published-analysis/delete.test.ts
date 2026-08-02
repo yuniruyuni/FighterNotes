@@ -214,6 +214,7 @@ function testServices(): RuntimeServices {
     },
     sharingRateLimit: {
       consume: async () => ({ allowed: true, retryAfterSeconds: 0 }),
+      prune: async () => ({ deleted: 0, hasMore: false }),
     },
   };
 }

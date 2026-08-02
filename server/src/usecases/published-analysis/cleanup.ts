@@ -1,10 +1,10 @@
-import type { Page } from "../../models/common";
 import {
   PublishedAnalysisCreateEvent,
   PublishedAnalysisLifecycle,
 } from "../../models/published-analysis";
 import type { Usecase } from "../runner";
 import { usecase } from "../runner";
+import type { RateLimitPruneResult } from "../services";
 
 export interface CleanupPublishedAnalysisBatchInput {
   readonly limit: number;
@@ -16,35 +16,49 @@ export interface CleanupPublishedAnalysisBatchResult {
   readonly hasMore: boolean;
 }
 
+export interface PruneSharingRateLimitsBatchInput {
+  readonly before: Date;
+  readonly limit: number;
+}
+
 export function cleanupPublishedAnalysisBatchUsecase(
   input: CleanupPublishedAnalysisBatchInput,
 ): Usecase<CleanupPublishedAnalysisBatchResult> {
   return usecase<
     CleanupPublishedAnalysisBatchInput,
-    Page<PublishedAnalysisLifecycle>,
-    Page<PublishedAnalysisLifecycle>,
+    CleanupPublishedAnalysisBatchInput,
+    CleanupPublishedAnalysisBatchInput,
     CleanupPublishedAnalysisBatchResult,
     CleanupPublishedAnalysisBatchResult,
     CleanupPublishedAnalysisBatchResult,
     CleanupPublishedAnalysisBatchResult
   >({
     pre: () => input,
-    read: (ctx, value) =>
-      ctx.repos.publishedAnalysisLifecycle.list(
+    write: (ctx, value) =>
+      ctx.repos.publishedAnalysisLifecycle.deleteBatch(
         PublishedAnalysisLifecycle.ExpiredAt(ctx.now).or(
           PublishedAnalysisLifecycle.CreatedAtOrBefore(value.retentionCutoff),
         ),
-        {
-          limit: value.limit,
-          sort: PublishedAnalysisLifecycle.defaultSort,
-        },
+        value.limit,
       ),
-    write: async (ctx, page) => {
-      const deleted = await ctx.repos.publishedAnalysisLifecycle.delete(
-        PublishedAnalysisLifecycle.ByIds(...page.items.map((item) => item.id)),
-      );
-      return { deleted, hasMore: page.hasMore };
-    },
+  });
+}
+
+export function pruneSharingRateLimitsBatchUsecase(
+  input: PruneSharingRateLimitsBatchInput,
+): Usecase<RateLimitPruneResult> {
+  return usecase<
+    PruneSharingRateLimitsBatchInput,
+    PruneSharingRateLimitsBatchInput,
+    RateLimitPruneResult,
+    RateLimitPruneResult,
+    RateLimitPruneResult,
+    RateLimitPruneResult,
+    RateLimitPruneResult
+  >({
+    pre: () => input,
+    process: (ctx, value) =>
+      ctx.services.sharingRateLimit.prune(value.before, value.limit),
   });
 }
 

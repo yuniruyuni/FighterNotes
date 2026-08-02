@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { QueryResultRow } from "pg";
 import type {
   RateLimitDecision,
+  RateLimitPruneResult,
   SharingRateLimit,
   SharingRateLimitBucket,
 } from "../../usecases/services";
@@ -11,6 +12,11 @@ import { sql } from "./sql";
 interface RateLimitRow extends QueryResultRow {
   allowed: boolean;
   retry_after_seconds: number | string;
+}
+
+interface RateLimitPruneRow extends QueryResultRow {
+  deleted: number;
+  has_more: boolean;
 }
 
 export class PostgresSharingRateLimit implements SharingRateLimit {
@@ -62,5 +68,37 @@ export class PostgresSharingRateLimit implements SharingRateLimit {
       allowed: row.allowed,
       retryAfterSeconds: Number(row.retry_after_seconds),
     };
+  }
+
+  async prune(before: Date, limit: number): Promise<RateLimitPruneResult> {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 10_000) {
+      throw new Error("Rate limit prune limit must be from 1 to 10000");
+    }
+    const row = await this.db.queryGet<RateLimitPruneRow>(sql`
+      WITH candidates AS MATERIALIZED (
+        SELECT bucket, client_key_hash, window_started_at
+        FROM published_analysis_rate_limits
+        WHERE window_started_at < ${before}
+        ORDER BY window_started_at ASC, bucket ASC, client_key_hash ASC
+        LIMIT ${limit + 1}
+        FOR UPDATE SKIP LOCKED
+      ), selected AS (
+        SELECT bucket, client_key_hash
+        FROM candidates
+        ORDER BY window_started_at ASC, bucket ASC, client_key_hash ASC
+        LIMIT ${limit}
+      ), deleted AS (
+        DELETE FROM published_analysis_rate_limits AS rate_limit
+        USING selected
+        WHERE rate_limit.bucket = selected.bucket
+          AND rate_limit.client_key_hash = selected.client_key_hash
+        RETURNING rate_limit.bucket
+      )
+      SELECT
+        (SELECT count(*)::integer FROM deleted) AS deleted,
+        (SELECT count(*) FROM candidates) > ${limit} AS has_more
+    `);
+    if (!row) throw new Error("Rate limit prune returned no row");
+    return { deleted: row.deleted, hasMore: row.has_more };
   }
 }

@@ -77,6 +77,9 @@ describe("database readiness", () => {
     expect(compatibilityQuery).toContain(
       "published_analyses_schema_version_check",
     );
+    expect(compatibilityQuery).toContain("logical_size_bytes");
+    expect(compatibilityQuery).toContain("published_analysis_rate_limits");
+    expect(compatibilityQuery).toContain("'DELETE'");
     expect(compatibilityQuery).toContain("has_table_privilege");
   });
 

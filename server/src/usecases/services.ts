@@ -27,12 +27,18 @@ export interface RateLimitDecision {
   readonly retryAfterSeconds: number;
 }
 
+export interface RateLimitPruneResult {
+  readonly deleted: number;
+  readonly hasMore: boolean;
+}
+
 export interface SharingRateLimit {
   consume(
     bucket: SharingRateLimitBucket,
     clientKey: string,
     limit: number,
   ): Promise<RateLimitDecision>;
+  prune(before: Date, limit: number): Promise<RateLimitPruneResult>;
 }
 
 export interface RuntimeServices {

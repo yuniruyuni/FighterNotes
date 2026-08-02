@@ -32,6 +32,7 @@ import { registerPublishedAnalysisRepositoryIntegrationTests } from "./published
 import { PublishedAnalysisCreateEventRepository } from "./published-analysis-create-event/postgres";
 import { registerPublishedAnalysisCreateEventRepositoryIntegrationTests } from "./published-analysis-create-event/postgres/integration-suite";
 import { PublishedAnalysisLifecycleRepository } from "./published-analysis-lifecycle/postgres";
+import { deleteBatchSQL } from "./published-analysis-lifecycle/postgres/delete-batch";
 import { registerPublishedAnalysisLifecycleRepositoryIntegrationTests } from "./published-analysis-lifecycle/postgres/integration-suite";
 import { registerPublishedAnalysisStorageUsageRepositoryIntegrationTests } from "./published-analysis-storage-usage/postgres/integration-suite";
 import {
@@ -152,6 +153,20 @@ integration("Postgres repositories + published analysis flow", () => {
     );
     expect(stored?.client_key_hash).toHaveLength(64);
     expect(stored?.client_key_hash).not.toContain("203.0.113.20");
+
+    await db.queryRun(
+      sql.raw(`UPDATE published_analysis_rate_limits
+      SET window_started_at = clock_timestamp() - INTERVAL '10 minutes'`),
+    );
+    const cutoff = new Date(Date.now() - 2 * 60 * 1_000);
+    expect(await firstInstance.prune(cutoff, 2)).toEqual({
+      deleted: 2,
+      hasMore: true,
+    });
+    expect(await secondInstance.prune(cutoff, 2)).toEqual({
+      deleted: 1,
+      hasMore: false,
+    });
   });
 
   registerPublishedAnalysisRepositoryIntegrationTests(() => db);
@@ -287,7 +302,7 @@ integration("Postgres repositories + published analysis flow", () => {
     expect(row?.count).toBe("1");
   });
 
-  test("relation容量のhard limitはinsert前に拒否する", async () => {
+  test("logical容量のhard limitはinsert前に拒否する", async () => {
     const context = createContext(db, new ConsoleLogger({ minLevel: "error" }));
     const result = await createPublishedAnalysisUsecase(
       candidate(),
@@ -307,6 +322,132 @@ integration("Postgres repositories + published analysis flow", () => {
       sql.raw("SELECT count(*) AS count FROM published_analyses"),
     );
     expect(row?.count).toBe("0");
+  });
+
+  test("expired row削除後はVACUUM FULLなしでlogical quotaから回復する", async () => {
+    const content = createPublishedAnalysisContent(candidate());
+    if (!content.ok) throw new Error("fixture is invalid");
+    const expired = createPersistablePublishedAnalysis({
+      id: FIXTURE_ID,
+      content: content.value,
+      deletePasswordHash: DELETE_PASSWORD_HASH,
+      now: new Date("2026-01-01T00:00:00.000Z"),
+      retentionDays: 1,
+    });
+    await repository.create(createDbWriteCtx(db), expired.analysis);
+    const limits = {
+      dailyCreates: 10,
+      activeRows: 10,
+      storageBytes: 8 * 1024,
+    };
+    const blockedContext = createContext(
+      db,
+      new ConsoleLogger({ minLevel: "error" }),
+      { now: new Date("2026-07-15T00:00:00.000Z") },
+    );
+    expect(
+      await createPublishedAnalysisUsecase(
+        candidate(),
+        DELETE_PASSWORD,
+        30,
+        limits,
+      ).run(blockedContext),
+    ).toMatchObject({
+      ok: false,
+      error: { code: "RESOURCE_LIMIT" },
+    });
+
+    expect(
+      await lifecycleRepository.deleteBatch(
+        createDbWriteCtx(db),
+        PublishedAnalysisLifecycle.ExpiredAt(blockedContext.now),
+        1,
+      ),
+    ).toEqual({ deleted: 1, hasMore: false });
+    const resumedContext = createContext(
+      db,
+      new ConsoleLogger({ minLevel: "error" }),
+      { now: blockedContext.now },
+    );
+    expect(
+      await createPublishedAnalysisUsecase(
+        candidate(),
+        DELETE_PASSWORD,
+        30,
+        limits,
+      ).run(resumedContext),
+    ).toMatchObject({ ok: true });
+  });
+
+  test("10k backlogは複合index planで並行batch cleanupできる", async () => {
+    await db.queryRun(
+      sql.raw(`
+      INSERT INTO published_analyses (
+        id, schema_version, ruleset_version, presentation_revision,
+        own_character, opponent_character,
+        rounds_detected, rounds_won, rounds_lost, rounds_unresolved,
+        logical_size_bytes, created_at, expires_at
+      )
+      SELECT
+        lpad(to_hex(value), 22, '0'), 1, 3, 1, 'LUKE', 'CHUN_LI',
+        0, 0, 0, 0, 8192,
+        TIMESTAMPTZ '2026-01-01 00:00:00+00',
+        TIMESTAMPTZ '2026-02-01 00:00:00+00'
+      FROM generate_series(1, 10000) AS value
+    `),
+    );
+    await db.queryRun(
+      sql.raw(`
+      INSERT INTO published_analysis_findings (
+        analysis_id, ordinal, kind, assessment, occurrences, severity_bp
+      )
+      SELECT id, 0, 'anti_air', 'observation', 1, 1
+      FROM published_analyses
+    `),
+    );
+    await db.queryRun(sql.raw("ANALYZE published_analyses"));
+    const eligible = PublishedAnalysisLifecycle.ExpiredAt(
+      new Date("2026-07-15T00:00:00.000Z"),
+    ).or(
+      PublishedAnalysisLifecycle.CreatedAtOrBefore(
+        new Date("2026-06-15T00:00:00.000Z"),
+      ),
+    );
+    const planRows = await db.queryAll<{ "QUERY PLAN": string }>(sql`
+      EXPLAIN (COSTS OFF) ${deleteBatchSQL(eligible, 500)}
+    `);
+    const plan = planRows.map((row) => row["QUERY PLAN"]).join("\n");
+    expect(plan).toContain("published_analyses_cleanup_idx");
+
+    const startedAt = performance.now();
+    const worker = async () => {
+      let deleted = 0;
+      for (;;) {
+        const batch = await lifecycleRepository.deleteBatch(
+          createDbWriteCtx(db),
+          eligible,
+          500,
+        );
+        deleted += batch.deleted;
+        if (!batch.hasMore) return deleted;
+      }
+    };
+    const deleted = await Promise.all([worker(), worker()]);
+    const elapsedMillis = performance.now() - startedAt;
+    expect(deleted[0] + deleted[1]).toBe(10_000);
+    expect(elapsedMillis).toBeLessThan(30_000);
+    expect(
+      await lifecycleRepository.count(
+        createDbReadCtx(db),
+        PublishedAnalysisLifecycle.ExpiredAt(
+          new Date("2026-07-15T00:00:00.000Z"),
+        ),
+      ),
+    ).toBe(0);
+    const findings = await db.queryGet<{ count: string }>(
+      sql.raw("SELECT count(*) AS count FROM published_analysis_findings"),
+    );
+    expect(findings?.count).toBe("0");
   });
 
   test("app roleはruntimeとcleanupに必要なDMLだけを持つ", async () => {
@@ -388,7 +529,7 @@ integration("Postgres repositories + published analysis flow", () => {
       app_limits_select: true,
       app_limits_insert: true,
       app_limits_update: true,
-      app_limits_delete: false,
+      app_limits_delete: true,
     });
   });
 

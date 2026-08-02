@@ -1,1 +1,4 @@
-export type { PublishedAnalysisLifecycleRepository } from "./repository";
+export type {
+  LifecycleDeleteBatchResult,
+  PublishedAnalysisLifecycleRepository,
+} from "./repository";

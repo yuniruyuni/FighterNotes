@@ -107,10 +107,11 @@ PostgreSQL は次の table を持つ。
 
 | table | 内容 |
 | --- | --- |
-| `published_analyses` | ID、version、character、round、削除 hash、作成・期限 |
+| `published_analyses` | ID、version、character、round、削除 hash、logical size、作成・期限 |
 | `published_analysis_findings` | finding の順序、種別、assessment、件数、severity |
 | `published_analysis_tactics` | 戦術統計 |
 | `published_analysis_create_events` | UTC 日次 create quota 用の成功 event |
+| `published_analysis_rate_limits` | bucket別の共有固定窓counter（client keyはdigestのみ） |
 
 finding と tactics は parent 削除時に cascade delete する。create event は結果本体と独立させ、
 同じ日に共有を削除しても日次 create 件数が減らないようにする。
@@ -135,8 +136,10 @@ cleanup batch は次のどちらかを満たす parent row を削除する。
 - `expires_at` を過ぎた
 - `created_at + SHARE_RETENTION_DAYS` を過ぎた
 
-1 batch の既定値は500件、最大1000 batch で停止する。全 parent cleanup が完了した場合だけ、
-2 UTC 日より古い create quota event を削除する。repository は cleanup Job を定義するが、
+1 batch の既定値は500件、最大1000 batch で停止する。cleanup候補の選択と削除は
+`(expires_at, created_at, id)` indexに沿う1つのCTEで実行し、`FOR UPDATE SKIP LOCKED` により
+並行Jobが同じrowを処理しない。全 parent cleanup が完了した場合だけ、終了後2分を過ぎた
+rate-limit counterと2 UTC 日より古いcreate quota eventを削除する。repository はcleanup Jobを定義するが、
 定期実行の Scheduler は外部管理である。頻度と live 状態は deployment 時に別途確認する。
 
 ## HTTP と cache
@@ -164,9 +167,12 @@ quota を再確認する。hash / verify は process ごとに合計同時実行
 | --- | ---: |
 | UTC 日次作成成功数 | 1,000 |
 | active parent row | 50,000 |
-| 関係 table の使用量 | 1 GiB |
+| 保存payloadのlogical使用量 | 1 GiB |
 
-quota 到達時は fail closed とし、cleanup lag や濫用の原因を確認せず上限だけを緩めない。
+logical使用量は新規rowではclosed payloadのserialized byte数、移行前rowでは安全側の8 KiBとして
+parentに保存する。物理relation file sizeとは分離しているため、通常のDELETE直後に減少し、
+`VACUUM FULL`なしでcreateを再開できる。quota到達時はfail closedとし、cleanup lagや濫用の原因を
+確認せず上限だけを緩めない。物理DB容量は別signalとして監視する。
 
 ## 設定
 
@@ -184,7 +190,7 @@ quota 到達時は fail closed とし、cleanup lag や濫用の原因を確認�
 | `SHARE_ARGON2_WAIT_MS` | `250` | Argon2待機時間上限 |
 | `SHARE_DAILY_CREATE_LIMIT` | `1000` | DB hard quota |
 | `SHARE_ACTIVE_LIMIT` | `50000` | DB hard quota |
-| `SHARE_STORAGE_LIMIT_BYTES` | `1073741824` | DB hard quota |
+| `SHARE_STORAGE_LIMIT_BYTES` | `1073741824` | 保存payloadのlogical hard quota |
 | `CLEANUP_BATCH_SIZE` | `500` | cleanup 1 transaction の最大件数 |
 | `CLEANUP_MAX_BATCHES` | `1000` | 1 Job の安全上限 |
 

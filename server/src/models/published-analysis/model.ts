@@ -71,6 +71,7 @@ export namespace PublishedAnalysis {
 
 export interface PersistablePublishedAnalysis extends PublishedAnalysis {
   readonly deletePasswordHash: DeletePasswordHash;
+  readonly logicalSizeBytes: number;
 }
 
 export interface CreatedPublishedAnalysis {
@@ -120,6 +121,18 @@ export function createPersistablePublishedAnalysis(options: {
   const createdAt = new Date(options.now);
   const expiresAt = new Date(createdAt);
   expiresAt.setUTCDate(expiresAt.getUTCDate() + options.retentionDays);
+  const logicalSizeBytes = new TextEncoder().encode(
+    JSON.stringify({
+      id: options.id,
+      content: options.content,
+      deletePasswordHash: options.deletePasswordHash,
+      createdAt: createdAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    }),
+  ).byteLength;
+  if (logicalSizeBytes > MAX_ANALYSIS_LOGICAL_SIZE_BYTES) {
+    throw new Error("Published analysis exceeds logical storage limit");
+  }
   return {
     analysis: {
       id: options.id,
@@ -127,9 +140,12 @@ export function createPersistablePublishedAnalysis(options: {
       deletePasswordHash: options.deletePasswordHash,
       createdAt,
       expiresAt,
+      logicalSizeBytes,
     },
   };
 }
+
+export const MAX_ANALYSIS_LOGICAL_SIZE_BYTES = 8 * 1024;
 
 export function parseShareId(value: string): ShareId | null {
   return SHARE_ID_PATTERN.test(value) ? (value as ShareId) : null;

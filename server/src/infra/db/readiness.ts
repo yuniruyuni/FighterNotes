@@ -99,6 +99,7 @@ export async function inspectDatabaseReadiness(
         ('published_analyses', 'rounds_lost'),
         ('published_analyses', 'rounds_unresolved'),
         ('published_analyses', 'delete_password_hash'),
+        ('published_analyses', 'logical_size_bytes'),
         ('published_analyses', 'created_at'),
         ('published_analyses', 'expires_at'),
         ('published_analysis_findings', 'analysis_id'),
@@ -195,6 +196,9 @@ export async function inspectDatabaseReadiness(
       )
       AND has_table_privilege(
         current_user, 'public.published_analysis_rate_limits', 'UPDATE'
+      )
+      AND has_table_privilege(
+        current_user, 'public.published_analysis_rate_limits', 'DELETE'
       )
     ) AS compatible
   `);

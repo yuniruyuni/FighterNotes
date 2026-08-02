@@ -146,7 +146,7 @@ Worker は JavaScript 側の buffer をその領域へコピーし、フレー�
 `server/src/index.ts` は起動時に遅延接続の PostgreSQL pool と application context を作る。
 
 - 引数なし: Hono application を `Bun.serve` で起動
-- `--batch=cleanup`: 期限切れ共有と古い quota event を削除して終了
+- `--batch=cleanup`: 期限切れ共有、古いrate-limit counter、古いquota eventを削除して終了
 
 実際の DB connection は最初の query で確立するため、静的配信と `/health` だけなら DB なしでも応答する。
 共有 read / create / delete と cleanup batch には、schema 適用済みの DB が必要である。
@@ -163,10 +163,14 @@ Worker は JavaScript 側の buffer をその領域へコピーし、フレー�
 | Infrastructure | `server/src/infra` | DB pool、parameterized SQL、logger |
 
 Repository は read / write capability と transaction context を明示的に受け取る。
-共有作成では Argon2id の前に日次件数・active row・relation size を事前確認し、hash 後の
+共有作成では Argon2id の前に日次件数・active row・logical payload bytesを事前確認し、hash 後の
 transaction で advisory lock を取得して quota を再確認する。quota event と結果本体の insert は
 同じ transaction で行う。共有rate limitはclient keyのdigestとbucketをPostgreSQLの原子的
 upsertで更新し、instanceやcold startをまたいで共有する。
+
+期限切れcleanupは`(expires_at, created_at, id)`複合indexの順序で候補を取り、bounded CTE内で
+`FOR UPDATE SKIP LOCKED`とDELETEを完結させる。storage quotaはparentに記録したlogical sizeの合計で、
+物理relation file lengthではないためDELETEした容量を直後から再利用できる。
 
 ### HTTP surface
 

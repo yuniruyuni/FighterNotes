@@ -59,6 +59,9 @@ function testServices(): RuntimeServices {
           retryAfterSeconds: count <= limit ? 0 : 60,
         };
       },
+      async prune() {
+        return { deleted: 0, hasMore: false };
+      },
     },
   };
 }

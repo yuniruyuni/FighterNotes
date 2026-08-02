@@ -313,6 +313,16 @@ describe("PublishedAnalysis model", () => {
     expect(serializedByteLength(result.value)).toBeLessThan(
       TARGET_PUBLISHED_ANALYSIS_BYTES,
     );
+    const id = parseShareId("Abcdefghijklmnopqrstu_");
+    if (!id) throw new Error("invalid fixture");
+    const persisted = createPersistablePublishedAnalysis({
+      id,
+      content: result.value,
+      deletePasswordHash: "x".repeat(512) as DeletePasswordHash,
+      now: new Date("2026-07-13T00:00:00.000Z"),
+      retentionDays: 365,
+    });
+    expect(persisted.analysis.logicalSizeBytes).toBeLessThanOrEqual(8 * 1024);
   });
 
   test("明示されたIDとハッシュから有効期限付きの保存モデルを作る", () => {
@@ -334,6 +344,8 @@ describe("PublishedAnalysis model", () => {
       "2027-07-13T00:00:00.000Z",
     );
     expect(created.analysis.deletePasswordHash).toBe(deletePasswordHash);
+    expect(created.analysis.logicalSizeBytes).toBeGreaterThan(0);
+    expect(created.analysis.logicalSizeBytes).toBeLessThanOrEqual(8 * 1024);
     expect(parseDeletePassword("too-short")).toBeNull();
   });
 
