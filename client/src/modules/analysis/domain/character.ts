@@ -28,6 +28,7 @@ export const CHARACTER_CATALOG = [
   { id: "RYU", label: "RYU" },
   { id: "SAGAT", label: "SAGAT" },
   { id: "TERRY", label: "TERRY" },
+  { id: "YASMINE", label: "YASMINE" },
   { id: "ZANGIEF", label: "ZANGIEF" },
 ] as const;
 

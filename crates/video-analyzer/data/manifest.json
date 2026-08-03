@@ -1,16 +1,16 @@
 {
  "schema_version": 1,
- "data_version": "2026-07-23.1",
+ "data_version": "2026-08-03.1",
  "files": {
   "frame_data.json": {
-   "sha256": "6cf05faab7cbeae192d3e4a1068a9d0925db5e0f39ef49c1a498b3a227733bd2",
-   "character_count": 30,
-   "move_count": 1605
+   "sha256": "58e25782cddc21356fa3a7e34164d1225732522428278408ddf24e35c00d3fab",
+   "character_count": 31,
+   "move_count": 1649
   },
   "attack_data.json": {
-   "sha256": "4a18039e244fc76c861ec3e70143b83be0694c2f03ed540d9f287028b1ed9cef",
-   "character_count": 30,
-   "move_count": 1796
+   "sha256": "44c11aed41dd9d9f7aa2f70393e8700826ecfd36d36f1edc8fa0436391ff1565",
+   "character_count": 31,
+   "move_count": 1840
   }
  }
 }

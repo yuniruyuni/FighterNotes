@@ -15,6 +15,7 @@ describe("character catalog", () => {
 
   test("既知のIDだけを受理する", () => {
     expect(isCharacterId("A_K_I")).toBe(true);
+    expect(isCharacterId("YASMINE")).toBe(true);
     expect(isCharacterId("ZANGIEF")).toBe(true);
     expect(isCharacterId("juri")).toBe(false);
     expect(isCharacterId("UNKNOWN")).toBe(false);

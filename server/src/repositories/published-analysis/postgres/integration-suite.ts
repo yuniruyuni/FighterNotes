@@ -41,6 +41,27 @@ export function registerPublishedAnalysisRepositoryIntegrationTests(
       expect(restored).toEqual(expected);
     });
 
+    test("Yasmineを自分側・相手側のcharacterとして保存できる", async () => {
+      const content = createPublishedAnalysisContent({
+        ...candidate(),
+        ownCharacter: "YASMINE",
+        opponentCharacter: "YASMINE",
+      });
+      if (!content.ok) throw new Error("fixture is invalid");
+      const persisted = {
+        ...persistableAnalysis(),
+        content: content.value,
+      };
+      await repository.create(createDbWriteCtx(database()), persisted);
+
+      const restored = await repository.get(
+        createDbReadCtx(database()),
+        PublishedAnalysisSpec.ById(persisted.id),
+      );
+      expect(restored?.content.ownCharacter).toBe("YASMINE");
+      expect(restored?.content.opponentCharacter).toBe("YASMINE");
+    });
+
     test("ruleset v9のSA/CA availabilityと両者集計を復元する", async () => {
       const persisted = persistableAnalysis({
         id: "Cbcdefghijklmnopqrstu_" as ShareId,

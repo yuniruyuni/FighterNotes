@@ -59,6 +59,7 @@ const EXPECTED_CHARACTER_IDS = [
   "RYU",
   "SAGAT",
   "TERRY",
+  "YASMINE",
   "ZANGIEF",
 ] as const;
 

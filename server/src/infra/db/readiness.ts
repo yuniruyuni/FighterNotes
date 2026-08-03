@@ -1,5 +1,5 @@
 import type { QueryResultRow } from "pg";
-import { SCHEMA_VERSION } from "../../models/published-analysis";
+import { CHARACTER_IDS, SCHEMA_VERSION } from "../../models/published-analysis";
 import type { ILogger } from "../logger/types";
 import type { Database } from "./database";
 import { sql } from "./sql";
@@ -85,6 +85,11 @@ export async function inspectDatabaseReadiness(
     ) AS statement_timeout
   `);
   const expectedSchemaConstraint = `CHECK (schema_version = ${SCHEMA_VERSION})`;
+  const characterArray = CHARACTER_IDS.map(
+    (character) => `'${character}'::text`,
+  ).join(", ");
+  const expectedOwnCharacterConstraint = `CHECK (own_character = ANY (ARRAY[${characterArray}]))`;
+  const expectedOpponentCharacterConstraint = `CHECK (opponent_character = ANY (ARRAY[${characterArray}]))`;
   const row = await db.queryGet<CompatibilityRow>(sql`
     WITH required_columns(
       table_name, column_name, data_type, not_null
@@ -213,6 +218,8 @@ export async function inspectDatabaseReadiness(
         ('published_analyses', 'published_analyses_schema_version_check', 'c', ${expectedSchemaConstraint}),
         ('published_analyses', 'published_analyses_ruleset_version_check', 'c', 'CHECK (ruleset_version = ANY (ARRAY[3, 4, 5, 6, 7, 8, 9]))'),
         ('published_analyses', 'published_analyses_presentation_revision_check', 'c', 'CHECK (presentation_revision = 1)'),
+        ('published_analyses', 'published_analyses_own_character_check', 'c', ${expectedOwnCharacterConstraint}),
+        ('published_analyses', 'published_analyses_opponent_character_check', 'c', ${expectedOpponentCharacterConstraint}),
         ('published_analyses', 'published_analyses_logical_size_bytes_check', 'c', 'CHECK (logical_size_bytes >= 1 AND logical_size_bytes <= 8192)'),
         ('published_analyses', 'published_analyses_check1', 'c', 'CHECK (expires_at > created_at)'),
         ('published_analysis_findings', 'published_analysis_findings_pkey', 'p', 'PRIMARY KEY (analysis_id, kind)'),

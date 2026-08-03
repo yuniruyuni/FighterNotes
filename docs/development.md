@@ -347,7 +347,7 @@ JSONはcharacter keyとfield順を固定した1-space indent、LF終端のcanoni
 
 ```bash
 bun test scripts/
-bun run scripts/gen-frame-data.ts 2026-07-24.1
+bun run scripts/gen-frame-data.ts 2026-08-03.1
 bun scripts/validate-frame-data.ts
 cargo test -p video-analyzer
 ```

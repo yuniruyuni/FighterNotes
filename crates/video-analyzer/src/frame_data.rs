@@ -254,9 +254,10 @@ mod tests {
     #[test]
     fn test_frame_data_loads() {
         let names = character_names();
-        assert!(names.len() >= 30, "{names:?}");
+        assert!(names.len() >= 31, "{names:?}");
         assert!(names.contains(&"KEN"));
         assert!(names.contains(&"INGRID"));
+        assert!(names.contains(&"YASMINE"));
     }
 
     #[test]
@@ -293,6 +294,10 @@ mod tests {
             strike_kind_for_input("INGRID", "DL", &["弱K".to_string()], false, false, Some(5),),
             Some(StrikeKind::Low)
         );
+        assert_eq!(
+            strike_kind_for_input("YASMINE", "D", &["弱K".to_string()], false, false, Some(5),),
+            Some(StrikeKind::Low)
+        );
     }
 
     #[test]
@@ -319,6 +324,17 @@ mod tests {
         for m in &opts {
             assert!(m.startup <= 7 && m.damage > 0, "{m:?}");
         }
+    }
+
+    #[test]
+    fn yasmine_punish_options_exclude_automatic_follow_up_hits() {
+        let opts = punish_options("YASMINE", 60, 100);
+        assert!(!opts.is_empty());
+        assert!(
+            opts.iter()
+                .all(|move_data| !move_data.name.contains("Alon(2)")),
+            "{opts:?}"
+        );
     }
 
     #[test]
@@ -356,6 +372,10 @@ mod tests {
         );
         assert_eq!(
             rising_reversal_kind("KEN"),
+            Some(RisingReversalKind::Motion)
+        );
+        assert_eq!(
+            rising_reversal_kind("YASMINE"),
             Some(RisingReversalKind::Motion)
         );
         assert_eq!(rising_reversal_kind("ZANGIEF"), None);

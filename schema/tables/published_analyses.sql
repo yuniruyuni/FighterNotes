@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS published_analyses (
       'CHUN_LI', 'DEE_JAY', 'DHALSIM', 'E_HONDA', 'ED', 'ELENA',
       'GUILE', 'INGRID', 'JAMIE', 'JP', 'JURI', 'KEN', 'KIMBERLY',
       'LILY', 'LUKE', 'M_BISON', 'MAI', 'MANON', 'MARISA', 'RASHID',
-      'RYU', 'SAGAT', 'TERRY', 'ZANGIEF'
+      'RYU', 'SAGAT', 'TERRY', 'YASMINE', 'ZANGIEF'
     )),
   opponent_character TEXT NOT NULL
     CHECK (opponent_character IN (
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS published_analyses (
       'CHUN_LI', 'DEE_JAY', 'DHALSIM', 'E_HONDA', 'ED', 'ELENA',
       'GUILE', 'INGRID', 'JAMIE', 'JP', 'JURI', 'KEN', 'KIMBERLY',
       'LILY', 'LUKE', 'M_BISON', 'MAI', 'MANON', 'MARISA', 'RASHID',
-      'RYU', 'SAGAT', 'TERRY', 'ZANGIEF'
+      'RYU', 'SAGAT', 'TERRY', 'YASMINE', 'ZANGIEF'
     )),
   rounds_detected SMALLINT NOT NULL
     CHECK (rounds_detected BETWEEN 0 AND 255),
@@ -58,6 +58,29 @@ ALTER TABLE published_analyses
 ALTER TABLE published_analyses
   ADD CONSTRAINT published_analyses_ruleset_version_check
   CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9));
+-- 既存環境のcharacter制約にも追加キャラクターを反映する。
+ALTER TABLE published_analyses
+  DROP CONSTRAINT IF EXISTS published_analyses_own_character_check;
+ALTER TABLE published_analyses
+  ADD CONSTRAINT published_analyses_own_character_check
+  CHECK (own_character IN (
+    'A_K_I', 'AKUMA', 'ALEX', 'BLANKA', 'C_VIPER', 'CAMMY',
+    'CHUN_LI', 'DEE_JAY', 'DHALSIM', 'E_HONDA', 'ED', 'ELENA',
+    'GUILE', 'INGRID', 'JAMIE', 'JP', 'JURI', 'KEN', 'KIMBERLY',
+    'LILY', 'LUKE', 'M_BISON', 'MAI', 'MANON', 'MARISA', 'RASHID',
+    'RYU', 'SAGAT', 'TERRY', 'YASMINE', 'ZANGIEF'
+  ));
+ALTER TABLE published_analyses
+  DROP CONSTRAINT IF EXISTS published_analyses_opponent_character_check;
+ALTER TABLE published_analyses
+  ADD CONSTRAINT published_analyses_opponent_character_check
+  CHECK (opponent_character IN (
+    'A_K_I', 'AKUMA', 'ALEX', 'BLANKA', 'C_VIPER', 'CAMMY',
+    'CHUN_LI', 'DEE_JAY', 'DHALSIM', 'E_HONDA', 'ED', 'ELENA',
+    'GUILE', 'INGRID', 'JAMIE', 'JP', 'JURI', 'KEN', 'KIMBERLY',
+    'LILY', 'LUKE', 'M_BISON', 'MAI', 'MANON', 'MARISA', 'RASHID',
+    'RYU', 'SAGAT', 'TERRY', 'YASMINE', 'ZANGIEF'
+  ));
 CREATE INDEX IF NOT EXISTS published_analyses_expires_at_idx
   ON published_analyses (expires_at);
 CREATE INDEX IF NOT EXISTS published_analyses_cleanup_idx

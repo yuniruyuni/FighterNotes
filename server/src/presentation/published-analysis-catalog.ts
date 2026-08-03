@@ -45,6 +45,7 @@ const CHARACTER_NAMES: Record<CharacterId, string> = {
   RYU: "RYU",
   SAGAT: "SAGAT",
   TERRY: "TERRY",
+  YASMINE: "YASMINE",
   ZANGIEF: "ZANGIEF",
 };
 
