@@ -5,6 +5,7 @@ import type {
   SpatialFrameHints,
   VideoCodecConfig,
 } from "../../domain/result.js";
+import type { BlobSampleReaderStats } from "../video-decoding/blob-sample-reader.js";
 import { decodeSampleRange } from "../video-decoding/webcodecs-frame-decoder.js";
 import {
   EMPTY_SPATIAL_DECODE_STATS,
@@ -19,7 +20,7 @@ export async function decodeSpatialWindows(options: {
   readonly windows: readonly SpatialCandidateWindow[];
   readonly sampleData: readonly FrameSample[];
   readonly frameToSampleIdx: readonly number[];
-  readonly videoArrayBuffer: ArrayBuffer;
+  readonly videoFile: Blob;
   readonly codecConfig: VideoCodecConfig;
   readonly resetWindow: () => Promise<void>;
   readonly sendFrame: (
@@ -43,6 +44,7 @@ export async function decodeSpatialWindows(options: {
   let processedFrames = 0;
   let peakDecoderQueueSize = 0;
   let peakDecoderOutstandingFrames = 0;
+  const sampleReads = emptySampleReadStats();
 
   for (const window of options.windows) {
     throwIfAborted(options.signal);
@@ -59,7 +61,7 @@ export async function decodeSpatialWindows(options: {
     );
     const decodeStats = await decodeSampleRange({
       samples: options.sampleData,
-      videoArrayBuffer: options.videoArrayBuffer,
+      videoBlob: options.videoFile,
       codecConfig: options.codecConfig,
       firstSampleIndex: plan.firstSampleIndex,
       lastSampleIndex: plan.lastSampleIndex,
@@ -101,13 +103,57 @@ export async function decodeSpatialWindows(options: {
       peakDecoderOutstandingFrames,
       decodeStats.peakDecoderOutstandingFrames,
     );
+    accumulateSampleReadStats(sampleReads, decodeStats.sampleReads);
     await options.drain();
+  }
+  if (sampleReads.readCount > 0) {
+    console.log(
+      `[perf] spatial-blob reads=${sampleReads.readCount} read=${sampleReads.totalBytesRead} peak_blob=${sampleReads.peakReadBytes} peak_cache=${sampleReads.peakCacheBytes} peak_spatial_retained=${sampleReads.peakRetainedBytes} cache_hits=${sampleReads.cacheHits} cache_misses=${sampleReads.cacheMisses}`,
+    );
   }
   return {
     ...EMPTY_SPATIAL_DECODE_STATS,
     peakDecoderQueueSize,
     peakDecoderOutstandingFrames,
   };
+}
+
+function emptySampleReadStats(): MutableSampleReadStats {
+  return {
+    readCount: 0,
+    totalBytesRead: 0,
+    peakReadBytes: 0,
+    cacheHits: 0,
+    cacheMisses: 0,
+    peakCacheBytes: 0,
+    peakRetainedBytes: 0,
+  };
+}
+
+interface MutableSampleReadStats {
+  readCount: number;
+  totalBytesRead: number;
+  peakReadBytes: number;
+  cacheHits: number;
+  cacheMisses: number;
+  peakCacheBytes: number;
+  peakRetainedBytes: number;
+}
+
+function accumulateSampleReadStats(
+  total: MutableSampleReadStats,
+  next: BlobSampleReaderStats,
+): void {
+  total.readCount += next.readCount;
+  total.totalBytesRead += next.totalBytesRead;
+  total.peakReadBytes = Math.max(total.peakReadBytes, next.peakReadBytes);
+  total.cacheHits += next.cacheHits;
+  total.cacheMisses += next.cacheMisses;
+  total.peakCacheBytes = Math.max(total.peakCacheBytes, next.peakCacheBytes);
+  total.peakRetainedBytes = Math.max(
+    total.peakRetainedBytes,
+    next.peakRetainedBytes,
+  );
 }
 
 function throwIfAborted(signal: AbortSignal): void {

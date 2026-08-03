@@ -105,7 +105,7 @@ describe("DebugView navigation", () => {
     }
   });
 
-  test("inactiveで初期decodeを破棄し、大容量bufferを解放して再初期化する", async () => {
+  test("inactiveで初期decodeを破棄し、全体bufferを作らず再初期化する", async () => {
     const decoded = deferred<VideoFrame | null>();
     const closeDecodedFrame = mock(() => {});
     const sourceData: DebugFrameSourceData[] = [];
@@ -146,7 +146,7 @@ describe("DebugView navigation", () => {
         </ResultsServicesProvider>,
       );
       await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
-      expect(sourceData[0].videoArrayBuffer?.byteLength).toBe(file.size);
+      expect(sourceData[0].file).toBe(file);
 
       view.rerender(
         <ResultsServicesProvider services={services}>
@@ -154,7 +154,6 @@ describe("DebugView navigation", () => {
         </ResultsServicesProvider>,
       );
       expect(destroys[0]).toHaveBeenCalledTimes(1);
-      expect(sourceData[0].videoArrayBuffer).toBeNull();
 
       view.rerender(
         <ResultsServicesProvider services={services}>
@@ -163,7 +162,7 @@ describe("DebugView navigation", () => {
       );
       await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
       expect(seekFallback).toHaveBeenCalledWith(0);
-      expect(sourceData[1].videoArrayBuffer?.byteLength).toBe(file.size);
+      expect(sourceData[1].file).toBe(file);
 
       await act(async () => {
         decoded.resolve({ close: closeDecodedFrame } as unknown as VideoFrame);
@@ -175,85 +174,8 @@ describe("DebugView navigation", () => {
 
       view.unmount();
       expect(destroys[1]).toHaveBeenCalledTimes(1);
-      expect(sourceData[1].videoArrayBuffer).toBeNull();
     } finally {
       restoreCanvas();
-    }
-  });
-
-  test("inactiveで進行中の動画buffer読込をabortし、遅延完了を無視する", async () => {
-    const originalFileReader = Object.getOwnPropertyDescriptor(
-      globalThis,
-      "FileReader",
-    );
-    Object.defineProperty(globalThis, "FileReader", {
-      configurable: true,
-      writable: true,
-      value: ControlledFileReader,
-    });
-    ControlledFileReader.instances = [];
-    const destroy = mock(() => {});
-    const create = mock(
-      (): DebugFrameSource => ({
-        fallbackSource: document.createElement("canvas"),
-        usesExactFrames: false,
-        initialize: async () => {},
-        decode: async () => null,
-        seekFallback: () => {},
-        destroy,
-      }),
-    );
-    const services = debugServices(create);
-    const result = { ...syntheticAnalysisResult(), sampleData: [] };
-    const file = new File(["video"], "replay.mp4", { type: "video/mp4" });
-    const restoreCanvas = installCanvasContext({});
-
-    try {
-      const view = render(
-        <ResultsServicesProvider services={services}>
-          <DebugView active file={file} result={result} side="p1" />
-        </ResultsServicesProvider>,
-      );
-      await waitFor(() =>
-        expect(ControlledFileReader.instances).toHaveLength(1),
-      );
-
-      view.rerender(
-        <ResultsServicesProvider services={services}>
-          <DebugView active={false} file={file} result={result} side="p1" />
-        </ResultsServicesProvider>,
-      );
-      expect(ControlledFileReader.instances[0].abortCount).toBe(1);
-      ControlledFileReader.instances[0].resolve(
-        new ArrayBuffer(8 * 1024 * 1024),
-      );
-      await Promise.resolve();
-      expect(create).not.toHaveBeenCalled();
-      expect(screen.queryByText(/エラー:/)).toBeNull();
-
-      view.rerender(
-        <ResultsServicesProvider services={services}>
-          <DebugView active file={file} result={result} side="p1" />
-        </ResultsServicesProvider>,
-      );
-      await waitFor(() =>
-        expect(ControlledFileReader.instances).toHaveLength(2),
-      );
-      await act(async () => {
-        ControlledFileReader.instances[1].resolve(
-          new ArrayBuffer(8 * 1024 * 1024),
-        );
-        await Promise.resolve();
-      });
-      await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
-
-      view.unmount();
-      expect(destroy).toHaveBeenCalledTimes(1);
-    } finally {
-      restoreCanvas();
-      if (originalFileReader) {
-        Object.defineProperty(globalThis, "FileReader", originalFileReader);
-      }
     }
   });
 });
@@ -321,40 +243,6 @@ function deferred<T>() {
     resolve = resolvePromise;
   });
   return { promise, resolve };
-}
-
-class ControlledFileReader {
-  static readonly EMPTY = 0;
-  static readonly LOADING = 1;
-  static readonly DONE = 2;
-  static instances: ControlledFileReader[] = [];
-  readyState = ControlledFileReader.EMPTY;
-  result: string | ArrayBuffer | null = null;
-  error: DOMException | null = null;
-  onload: ((event: ProgressEvent<FileReader>) => void) | null = null;
-  onerror: ((event: ProgressEvent<FileReader>) => void) | null = null;
-  onabort: ((event: ProgressEvent<FileReader>) => void) | null = null;
-  abortCount = 0;
-
-  constructor() {
-    ControlledFileReader.instances.push(this);
-  }
-
-  readAsArrayBuffer(): void {
-    this.readyState = ControlledFileReader.LOADING;
-  }
-
-  abort(): void {
-    this.abortCount += 1;
-    this.readyState = ControlledFileReader.DONE;
-    this.onabort?.({} as ProgressEvent<FileReader>);
-  }
-
-  resolve(value: ArrayBuffer): void {
-    this.readyState = ControlledFileReader.DONE;
-    this.result = value;
-    this.onload?.({} as ProgressEvent<FileReader>);
-  }
 }
 
 function parallelogram() {

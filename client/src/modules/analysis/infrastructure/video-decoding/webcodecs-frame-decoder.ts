@@ -1,4 +1,9 @@
 import type { FrameSample, VideoCodecConfig } from "../../domain/result.js";
+import type { BlobSliceSource } from "./blob-range-reader.js";
+import {
+  BlobSampleReader,
+  type BlobSampleReaderStats,
+} from "./blob-sample-reader.js";
 import { FrameDecodePlan } from "./frame-decode-plan.js";
 
 export interface DecodeBackpressureOptions {
@@ -11,11 +16,12 @@ export interface DecodeBackpressureOptions {
 export interface DecodeSampleRangeStats {
   readonly peakDecoderQueueSize: number;
   readonly peakDecoderOutstandingFrames: number;
+  readonly sampleReads: BlobSampleReaderStats;
 }
 
 interface DecodeSampleRangeOptions {
   readonly samples: readonly FrameSample[];
-  readonly videoArrayBuffer: ArrayBuffer;
+  readonly videoBlob: BlobSliceSource;
   readonly codecConfig: VideoCodecConfig;
   readonly firstSampleIndex: number;
   readonly lastSampleIndex: number;
@@ -30,6 +36,8 @@ interface DecodeSampleRangeOptions {
   readonly shouldProcessFrame?: (frame: VideoFrame) => boolean;
   readonly signal?: AbortSignal;
   readonly backpressure?: DecodeBackpressureOptions;
+  /** Test seam for a controlled Blob read. */
+  readonly sampleReader?: BlobSampleReader;
 }
 
 interface FlowWaiter {
@@ -51,32 +59,51 @@ export async function decodeSampleRange(
   throwIfAborted(options.signal);
   const limits = options.backpressure ?? DEFAULT_BACKPRESSURE;
   validateWatermarks(limits);
+  const sampleReader =
+    options.sampleReader ??
+    new BlobSampleReader(options.videoBlob, options.signal);
 
   let retryFrames: readonly OutputFrameIdentity[] | undefined;
   let peakDecoderQueueSize = 0;
   let peakDecoderOutstandingFrames = 0;
-  do {
-    const pass = await decodeSampleRangePass(options, limits, retryFrames);
-    peakDecoderQueueSize = Math.max(
-      peakDecoderQueueSize,
-      pass.peakDecoderQueueSize,
-    );
-    peakDecoderOutstandingFrames = Math.max(
-      peakDecoderOutstandingFrames,
-      pass.peakDecoderOutstandingFrames,
-    );
-    if (pass.unmatchedRetryFrames > 0) {
-      throw new Error(
-        `再デコード対象のVideoFrameを${pass.unmatchedRetryFrames}件再取得できませんでした`,
+  try {
+    do {
+      const pass = await decodeSampleRangePass(
+        options,
+        limits,
+        retryFrames,
+        sampleReader,
       );
-    }
-    retryFrames = pass.deferredFrames;
-  } while (retryFrames.length > 0);
+      peakDecoderQueueSize = Math.max(
+        peakDecoderQueueSize,
+        pass.peakDecoderQueueSize,
+      );
+      peakDecoderOutstandingFrames = Math.max(
+        peakDecoderOutstandingFrames,
+        pass.peakDecoderOutstandingFrames,
+      );
+      if (pass.unmatchedRetryFrames > 0) {
+        throw new Error(
+          `再デコード対象のVideoFrameを${pass.unmatchedRetryFrames}件再取得できませんでした`,
+        );
+      }
+      retryFrames = pass.deferredFrames;
+    } while (retryFrames.length > 0);
+  } finally {
+    sampleReader.stop();
+  }
+  throwIfAborted(options.signal);
 
-  return { peakDecoderQueueSize, peakDecoderOutstandingFrames };
+  return {
+    peakDecoderQueueSize,
+    peakDecoderOutstandingFrames,
+    sampleReads: sampleReader.statistics,
+  };
 }
 
-interface DecodePassResult extends DecodeSampleRangeStats {
+interface DecodePassResult {
+  readonly peakDecoderQueueSize: number;
+  readonly peakDecoderOutstandingFrames: number;
   readonly deferredFrames: readonly OutputFrameIdentity[];
   readonly unmatchedRetryFrames: number;
 }
@@ -101,6 +128,7 @@ async function decodeSampleRangePass(
   options: DecodeSampleRangeOptions,
   limits: DecodeBackpressureOptions,
   retryFrames: readonly OutputFrameIdentity[] | undefined,
+  sampleReader: BlobSampleReader,
 ): Promise<DecodePassResult> {
   throwIfAborted(options.signal);
 
@@ -142,6 +170,7 @@ async function decodeSampleRangePass(
   const fail = (reason: unknown) => {
     if (failure) return;
     failure = { reason };
+    sampleReader.stop(reason);
     processing.abort(reason);
     wake();
     closeDecoder();
@@ -209,7 +238,15 @@ async function decodeSampleRangePass(
       if (admission) await admission;
       const sample = options.samples[sampleIndex];
       if (!sample) continue;
-      decoder.decode(encodedChunk(sample, options.videoArrayBuffer));
+      const sampleRead = sampleReader.readSample(options.samples, sampleIndex);
+      const sampleBytes =
+        sampleRead instanceof Uint8Array ? sampleRead : await sampleRead;
+      throwFailure(failure);
+      throwIfAborted(options.signal);
+      const chunk = encodedChunk(sample, sampleBytes);
+      throwFailure(failure);
+      throwIfAborted(options.signal);
+      decoder.decode(chunk);
       peakQueueSize = Math.max(peakQueueSize, decoder.decodeQueueSize);
     }
     await decoder.flush();
@@ -219,15 +256,16 @@ async function decodeSampleRangePass(
   } catch (error) {
     fail(preferredFailure(error, options.signal, failure));
   } finally {
-    options.signal?.removeEventListener("abort", onAbort);
     if (decoder.ondequeue === wake) decoder.ondequeue = null;
     closeDecoder();
     processing.abort(failure?.reason ?? new Error("decode range completed"));
     wake();
     await frameChain;
+    options.signal?.removeEventListener("abort", onAbort);
   }
 
   throwFailure(failure);
+  throwIfAborted(options.signal);
   return {
     peakDecoderQueueSize: peakQueueSize,
     peakDecoderOutstandingFrames: peakOutstandingFrames,
@@ -301,7 +339,7 @@ class OutputFrameSelector {
 
 export async function decodeFrameAt(options: {
   readonly samples: readonly FrameSample[];
-  readonly videoArrayBuffer: ArrayBuffer;
+  readonly videoBlob: BlobSliceSource;
   readonly codecConfig: VideoCodecConfig;
   readonly frameToSampleIndex: readonly number[] | null;
   readonly frameIndex: number;
@@ -325,6 +363,7 @@ export async function decodeFrameAt(options: {
         if (!result.frame) result.frame = frame.clone();
       },
     });
+    throwIfAborted(options.signal);
   } catch (error) {
     result.frame?.close();
     throw error;
@@ -334,12 +373,12 @@ export async function decodeFrameAt(options: {
 
 function encodedChunk(
   sample: FrameSample,
-  videoArrayBuffer: ArrayBuffer,
+  sampleBytes: Uint8Array<ArrayBuffer>,
 ): EncodedVideoChunk {
   return new EncodedVideoChunk({
     type: sample.isSync ? "key" : "delta",
     timestamp: sample.timestampUs,
-    data: new Uint8Array(videoArrayBuffer, sample.offset, sample.size),
+    data: sampleBytes,
   });
 }
 

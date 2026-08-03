@@ -16,7 +16,6 @@ export interface DebugViewerData {
   frameCount: number;
   frameTimestamps: number[];
   sampleData: FrameSample[] | null;
-  videoArrayBuffer: ArrayBuffer | null;
   codecConfig: VideoCodecConfig | null;
   frameToSampleIndex: number[] | null;
 }

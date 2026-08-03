@@ -34,7 +34,7 @@ function movie(overrides: Partial<Movie["videoTracks"][number]> = {}): Movie {
 function isoFile(cts: readonly number[]): ISOFile {
   return {
     getTrackSamplesInfo: () =>
-      cts.map((timestamp) => ({ cts: timestamp })) as Sample[],
+      cts.map((timestamp) => ({ cts: timestamp, size: 1024 })) as Sample[],
     getTrackById: () => undefined,
   } as unknown as ISOFile;
 }
@@ -58,6 +58,7 @@ describe("MP4 video metadata parser", () => {
         rotation: 0,
         framesPerSecond: 59.94005994005994,
         constantFrameRate: true,
+        maxSampleBytes: 1024,
       },
     });
 
@@ -253,6 +254,34 @@ describe("MP4 video metadata parser", () => {
     expect(offsets).toEqual([0, 16]);
     expect(result.metadataBytesRead).toBe(8);
     expect(result.track).toBeNull();
+    expect(stopped).toBe(1);
+  });
+
+  test("metadata budgetを使い切ったMP4を専用理由で拒否する", async () => {
+    let stopped = 0;
+    const parser = {
+      appendBuffer(buffer: MP4BoxBuffer) {
+        return buffer.fileStart + buffer.byteLength;
+      },
+      flush() {},
+      stop() {
+        stopped += 1;
+      },
+    } as unknown as ISOFile;
+
+    await expect(
+      inspectMp4VideoFile(
+        new File([Uint8Array.of(0, 0, 0)], "replay.mp4", {
+          type: "video/mp4",
+        }),
+        new AbortController().signal,
+        {
+          createIsoFile: () => parser,
+          chunkBytes: 1,
+          maxMetadataBytes: 2,
+        },
+      ),
+    ).rejects.toMatchObject({ code: "metadata_size" });
     expect(stopped).toBe(1);
   });
 

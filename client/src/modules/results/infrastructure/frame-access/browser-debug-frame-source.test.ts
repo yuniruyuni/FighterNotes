@@ -3,12 +3,15 @@ import type { DebugFrameSourceData } from "../../application/debug-frame-source.
 import { browserDebugFrameSourceFactory } from "./browser-debug-frame-source.js";
 
 describe("browser debug frame source lifecycle", () => {
-  test("初期化中のdestroyでObject URLと動画bufferを一度だけ解放する", async () => {
+  test("初期化中のdestroyでObject URLを一度だけ解放する", async () => {
     const createObjectURL = mock(() => "blob:debug-video");
     const revokeObjectURL = mock(() => {});
     const restoreUrls = installObjectUrlMocks(createObjectURL, revokeObjectURL);
-    const data = sourceData(new ArrayBuffer(8 * 1024 * 1024));
+    const data = sourceData();
     const source = browserDebugFrameSourceFactory.create(data, () => {});
+    expect((source.fallbackSource as HTMLVideoElement).preload).toBe(
+      "metadata",
+    );
 
     try {
       const initialization = source.initialize();
@@ -18,7 +21,6 @@ describe("browser debug frame source lifecycle", () => {
       await expect(initialization).rejects.toHaveProperty("name", "AbortError");
       expect(createObjectURL).toHaveBeenCalledTimes(1);
       expect(revokeObjectURL).toHaveBeenCalledTimes(1);
-      expect(data.videoArrayBuffer).toBeNull();
       expect(source.usesExactFrames).toBeFalse();
       expect(
         (source.fallbackSource as HTMLVideoElement).hasAttribute("src"),
@@ -51,7 +53,7 @@ describe("browser debug frame source lifecycle", () => {
       value: FakeEncodedVideoChunk,
     });
     ControlledVideoDecoder.instances = [];
-    const data = sourceData(new ArrayBuffer(1));
+    const data = sourceData();
     const source = browserDebugFrameSourceFactory.create(data, () => {});
 
     try {
@@ -62,6 +64,7 @@ describe("browser debug frame source lifecycle", () => {
       await initialization;
 
       const decoding = source.decode(0);
+      await Promise.resolve();
       expect(ControlledVideoDecoder.instances).toHaveLength(1);
       source.destroy();
       source.destroy();
@@ -69,8 +72,72 @@ describe("browser debug frame source lifecycle", () => {
       await expect(decoding).rejects.toHaveProperty("name", "AbortError");
       expect(ControlledVideoDecoder.instances[0].closeCount).toBe(1);
       expect(revokeObjectURL).toHaveBeenCalledTimes(1);
-      expect(data.videoArrayBuffer).toBeNull();
     } finally {
+      restoreUrls();
+      restoreGlobal("VideoDecoder", videoDecoder);
+      restoreGlobal("EncodedVideoChunk", encodedVideoChunk);
+    }
+  });
+
+  test("100件のdecode要求をlatest-winsで直列化する", async () => {
+    const restoreUrls = installObjectUrlMocks(
+      mock(() => "blob:debug-video"),
+      mock(() => {}),
+    );
+    const videoDecoder = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "VideoDecoder",
+    );
+    const encodedVideoChunk = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "EncodedVideoChunk",
+    );
+    Object.defineProperty(globalThis, "VideoDecoder", {
+      configurable: true,
+      writable: true,
+      value: ControlledVideoDecoder,
+    });
+    Object.defineProperty(globalThis, "EncodedVideoChunk", {
+      configurable: true,
+      writable: true,
+      value: FakeEncodedVideoChunk,
+    });
+    ControlledVideoDecoder.instances = [];
+    ControlledVideoDecoder.activeCount = 0;
+    ControlledVideoDecoder.peakActiveCount = 0;
+    const source = browserDebugFrameSourceFactory.create(
+      sourceData(),
+      () => {},
+    );
+
+    try {
+      const initialization = source.initialize();
+      (source.fallbackSource as HTMLVideoElement).dispatchEvent(
+        new Event("loadedmetadata"),
+      );
+      await initialization;
+
+      const requests: Array<Promise<VideoFrame | null>> = [source.decode(0)];
+      await Promise.resolve();
+      expect(ControlledVideoDecoder.instances).toHaveLength(1);
+      for (let index = 1; index < 100; index += 1) {
+        requests.push(source.decode(0));
+      }
+
+      expect(await Promise.all(requests.slice(0, -1))).toEqual(
+        Array.from({ length: 99 }, () => null),
+      );
+      expect(ControlledVideoDecoder.instances).toHaveLength(2);
+      expect(ControlledVideoDecoder.peakActiveCount).toBe(1);
+
+      source.destroy();
+      await expect(requests.at(-1)!).rejects.toHaveProperty(
+        "name",
+        "AbortError",
+      );
+      expect(ControlledVideoDecoder.activeCount).toBe(0);
+    } finally {
+      source.destroy();
       restoreUrls();
       restoreGlobal("VideoDecoder", videoDecoder);
       restoreGlobal("EncodedVideoChunk", encodedVideoChunk);
@@ -78,12 +145,11 @@ describe("browser debug frame source lifecycle", () => {
   });
 });
 
-function sourceData(videoArrayBuffer: ArrayBuffer): DebugFrameSourceData {
+function sourceData(): DebugFrameSourceData {
   return {
     file: new File(["video"], "replay.mp4", { type: "video/mp4" }),
     frameTimestamps: [0],
     sampleData: [{ isSync: true, timestampUs: 0, offset: 0, size: 1 }],
-    videoArrayBuffer,
     codecConfig: { codec: "avc1.42E01E", width: 1920, height: 1080 },
     frameToSampleIndex: [0],
   };
@@ -127,9 +193,11 @@ function restoreProperty(
 
 class ControlledVideoDecoder {
   static instances: ControlledVideoDecoder[] = [];
+  static activeCount = 0;
+  static peakActiveCount = 0;
   state: CodecState = "unconfigured";
   closeCount = 0;
-  readonly #flushed = deferred<void>();
+  #flushed: ReturnType<typeof deferred<void>> | undefined;
 
   constructor() {
     ControlledVideoDecoder.instances.push(this);
@@ -137,11 +205,17 @@ class ControlledVideoDecoder {
 
   configure(): void {
     this.state = "configured";
+    ControlledVideoDecoder.activeCount += 1;
+    ControlledVideoDecoder.peakActiveCount = Math.max(
+      ControlledVideoDecoder.peakActiveCount,
+      ControlledVideoDecoder.activeCount,
+    );
   }
 
   decode(): void {}
 
   flush(): Promise<void> {
+    this.#flushed ??= deferred<void>();
     return this.#flushed.promise;
   }
 
@@ -149,7 +223,8 @@ class ControlledVideoDecoder {
     if (this.state === "closed") return;
     this.state = "closed";
     this.closeCount += 1;
-    this.#flushed.reject(new DOMException("decoder closed", "AbortError"));
+    ControlledVideoDecoder.activeCount -= 1;
+    this.#flushed?.reject(new DOMException("decoder closed", "AbortError"));
   }
 }
 

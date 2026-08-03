@@ -28,7 +28,6 @@ const hpFrame = {
 
 describe("buildAnalysisResult", () => {
   test("parses worker payloads and retains decode artifacts", () => {
-    const videoArrayBuffer = new ArrayBuffer(4);
     const result = buildAnalysisResult(
       {
         type: "done",
@@ -62,14 +61,13 @@ describe("buildAnalysisResult", () => {
         analysisContext: context,
         frameTimestamps: [0, 1 / 60],
         sampleData: [],
-        videoArrayBuffer,
         codecConfig: null,
         frameToSampleIdx: [0, 1],
       },
     );
 
     expect(result.analysisContext).toBe(context);
-    expect(result.videoArrayBuffer).toBe(videoArrayBuffer);
+    expect(result.videoArrayBuffer).toBeNull();
     expect(result.frameCount).toBe(2);
     expect(result.trackedInputs).toEqual({ p1: [], p2: [] });
     expect(result.attackInfo).toHaveLength(1);
@@ -91,7 +89,6 @@ describe("buildAnalysisResult", () => {
         analysisContext: context,
         frameTimestamps: [],
         sampleData: [],
-        videoArrayBuffer: new ArrayBuffer(0),
         codecConfig: null,
         frameToSampleIdx: [],
       },

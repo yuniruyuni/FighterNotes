@@ -18,7 +18,9 @@ import {
   compareArtifactIdentity,
   compareFixtureIdSets,
   computeArtifactIdentity,
+  createDecodeMappingIdentity,
   type FixtureSettings,
+  LEGACY_RUNNER_VERSION,
   parseBaselineArtifact,
   parseSpatialPerformanceStats,
   REQUIRED_PERFORMANCE_STAGES,
@@ -46,6 +48,17 @@ import {
   beginOutputTransaction,
   prepareOutputDirectories,
 } from "./local-video-e2e-output";
+import {
+  type ProcessTreeRssSampler,
+  startProcessTreeRssSampler,
+} from "./local-video-e2e-process-rss";
+import {
+  compareStreamingPerformance,
+  parseStreamingPerformanceStats,
+  parseStreamingRunStats,
+  type StreamingRunStats,
+  summarizeStreamingPerformanceStats,
+} from "./local-video-e2e-streaming";
 
 const DEFAULT_MANIFEST = "video/local-video-e2e.json";
 const DEFAULT_OUTPUT = "output/local-video-e2e/current";
@@ -73,6 +86,7 @@ interface CliOptions {
 
 interface BrowserHandle {
   readonly cdpUrl: string;
+  readonly rootPid?: number;
   close(): Promise<void>;
 }
 
@@ -92,8 +106,10 @@ interface CapturedWorkerArtifacts {
   readonly spatialWindows?: string;
   readonly spatialObservations?: string;
   readonly spatialPerformance?: SpatialPerformanceStats;
+  readonly decodeMapping?: unknown;
   readonly perfLogs?: string[];
   readonly stageTimings?: Readonly<Record<string, number>>;
+  readonly firstEncodedSampleMs: number;
   readonly analysisMs: number;
 }
 
@@ -243,11 +259,23 @@ try {
           readonly stages: Readonly<Record<string, number>>;
         }> = [];
         const spatialPerformanceRuns: SpatialPerformanceStats[] = [];
+        const streamingPerformanceRuns: StreamingRunStats[] = [];
         for (let run = 0; run < measuredRuns; run += 1) {
           console.log(
             `[local-e2e] ${fixture.id}: measured ${run + 1}/${measuredRuns}`,
           );
-          const measured = await analyzeCase(browser.cdpUrl, appUrl, fixture);
+          const rssSampler = startProcessTreeRssSampler(browser.rootPid);
+          let measured: CapturedWorkerArtifacts;
+          try {
+            measured = await analyzeCase(
+              browser.cdpUrl,
+              appUrl,
+              fixture,
+              rssSampler,
+            );
+          } finally {
+            await rssSampler.stop();
+          }
           const digest = semanticCapturedDigest(measured);
           if (semanticDigest === undefined) semanticDigest = digest;
           else if (semanticDigest !== digest) semanticChangedBetweenRuns = true;
@@ -262,10 +290,22 @@ try {
               `${fixture.id}.spatialPerformance[${run}]`,
             ),
           );
+          streamingPerformanceRuns.push(
+            parseStreamingRunStats(
+              measured.perfLogs ?? [],
+              `${fixture.id}.streamingPerformance[${run}]`,
+              measured.firstEncodedSampleMs,
+              rssSampler.peakBytes,
+            ),
+          );
         }
         if (!captured)
           throw new Error(`${fixture.id}: no measured run was captured`);
         const report = parseArtifact(captured.report, "report", fixture.id);
+        const decodeMapping = createDecodeMappingIdentity(
+          captured.decodeMapping,
+          `${fixture.id}.decodeMapping`,
+        );
         const regressionEvents = parseArtifact(
           captured.regressionEvents,
           "regressionEvents",
@@ -275,6 +315,10 @@ try {
         const spatialPerformance = summarizeSpatialPerformanceStats(
           spatialPerformanceRuns,
           `${fixture.id}.spatialPerformance`,
+        );
+        const streamingPerformance = summarizeStreamingPerformanceStats(
+          streamingPerformanceRuns,
+          `${fixture.id}.streamingPerformance`,
         );
         const artifacts: Record<string, unknown> = {
           schemaVersion: 2,
@@ -318,6 +362,8 @@ try {
             fixture.id,
           ),
           spatialPerformance,
+          decodeMapping,
+          streamingPerformance,
           perfLogs: captured.perfLogs ?? [],
         };
         const artifactText = JSON.stringify(artifacts, null, 2);
@@ -576,6 +622,7 @@ async function openBrowser(options: CliOptions): Promise<BrowserHandle> {
 
   return {
     cdpUrl,
+    rootPid: subprocess.pid,
     async close() {
       subprocess.kill();
       await subprocess.exited;
@@ -644,6 +691,7 @@ async function analyzeCase(
   cdpUrl: string,
   appUrl: string,
   fixture: LocalVideoCase,
+  rssSampler?: ProcessTreeRssSampler,
 ): Promise<CapturedWorkerArtifacts> {
   const target = await createTarget(cdpUrl);
   const cdp = await CdpSession.connect(target.webSocketDebuggerUrl);
@@ -722,6 +770,7 @@ async function analyzeCase(
           return false;
         }
         state.startedAt = performance.now();
+        state.firstEncodedSampleAt = undefined;
         button.click();
         return true;
       })()
@@ -754,10 +803,31 @@ async function analyzeCase(
       timeoutMs,
       `${fixture.id}: analysis timed out after ${timeoutMs / 1_000}s`,
     );
-    const serialized = await cdp.evaluate<string>(
-      "JSON.stringify(globalThis.__fighterNotesLocalE2E.artifacts)",
+    await poll(
+      async () =>
+        cdp.evaluate<boolean>(
+          "Boolean(globalThis.__fighterNotesDecodeMapping)",
+        ),
+      5_000,
+      `${fixture.id}: decode mapping was not captured`,
     );
-    return JSON.parse(serialized) as CapturedWorkerArtifacts;
+    // Keep the RSS window through analysis completion and mapping publication,
+    // but exclude the potentially large JSON serialization and CDP copy.
+    await rssSampler?.stop();
+    const serialized = await cdp.evaluate<string>(`JSON.stringify({
+      ...globalThis.__fighterNotesLocalE2E.artifacts,
+      decodeMapping: globalThis.__fighterNotesDecodeMapping,
+    })`);
+    const captured = JSON.parse(serialized) as CapturedWorkerArtifacts;
+    if (
+      !Number.isFinite(captured.firstEncodedSampleMs) ||
+      captured.firstEncodedSampleMs < 0
+    ) {
+      throw new Error(
+        `${fixture.id}: first encoded sample was not observed after analysis click`,
+      );
+    }
+    return captured;
   } finally {
     cdp.close();
     await fetch(`${cdpUrl}/json/close/${target.id}`).catch(() => undefined);
@@ -768,9 +838,11 @@ function captureBootstrap(): string {
   return `
     (() => {
       const NativeWorker = globalThis.Worker;
+      const NativeEncodedVideoChunk = globalThis.EncodedVideoChunk;
       const state = {
         done: false,
         startedAt: 0,
+        firstEncodedSampleAt: undefined,
         firstPassAt: 0,
         workerError: undefined,
         spatialWindows: undefined,
@@ -778,6 +850,17 @@ function captureBootstrap(): string {
         artifacts: undefined,
       };
       globalThis.__fighterNotesLocalE2E = state;
+      if (typeof NativeEncodedVideoChunk === "function") {
+        globalThis.EncodedVideoChunk = new Proxy(NativeEncodedVideoChunk, {
+          construct(target, args, newTarget) {
+            const chunk = Reflect.construct(target, args, newTarget);
+            if (state.startedAt > 0 && state.firstEncodedSampleAt === undefined) {
+              state.firstEncodedSampleAt = performance.now();
+            }
+            return chunk;
+          },
+        });
+      }
       const nativeConsoleLog = console.log.bind(console);
       console.log = (...args) => {
         if (typeof args[0] === "string" && args[0].startsWith("[perf]")) {
@@ -811,6 +894,10 @@ function captureBootstrap(): string {
                   firstPass: state.firstPassAt - state.startedAt,
                   spatialPass: performance.now() - state.firstPassAt,
                 },
+                firstEncodedSampleMs:
+                  state.firstEncodedSampleAt === undefined
+                    ? undefined
+                    : state.firstEncodedSampleAt - state.startedAt,
                 analysisMs: performance.now() - state.startedAt,
               };
               state.done = true;
@@ -1071,6 +1158,7 @@ function semanticCapturedDigest(captured: CapturedWorkerArtifacts): string {
       captured.regressionEvents,
       captured.spatialWindows ?? "",
       captured.spatialObservations ?? "",
+      JSON.stringify(captured.decodeMapping ?? null),
     ].join("\u0000"),
   );
 }
@@ -1089,7 +1177,11 @@ function parseRunSummary(value: unknown, label: string): RunSummary {
     ],
     label,
   );
-  if (value.schemaVersion !== 2 || value.runnerVersion !== RUNNER_VERSION) {
+  if (
+    value.schemaVersion !== 2 ||
+    (value.runnerVersion !== RUNNER_VERSION &&
+      value.runnerVersion !== LEGACY_RUNNER_VERSION)
+  ) {
     throw new Error(
       `${label} is an incompatible baseline; regenerate it with this runner`,
     );
@@ -1119,7 +1211,7 @@ function parseRunSummary(value: unknown, label: string): RunSummary {
     throw new Error(`${label}.cases contains duplicate ids`);
   return {
     schemaVersion: 2,
-    runnerVersion: RUNNER_VERSION,
+    runnerVersion: value.runnerVersion,
     warmupRuns,
     measuredRuns,
     generatedAt,
@@ -1564,8 +1656,35 @@ async function compareWithBaseline(
     currentArtifact.spatialPerformance,
     `${fixture.id}.spatialPerformance`,
   );
+  const currentStreamingPerformance = parseStreamingPerformanceStats(
+    currentArtifact.streamingPerformance,
+    `${fixture.id}.streamingPerformance`,
+    baseline.summary.measuredRuns,
+  );
+  const baselineStreamingPerformance = parsedArtifact.streamingPerformance;
+  if (baselineStreamingPerformance) {
+    failures.push(
+      ...compareStreamingPerformance(
+        currentStreamingPerformance,
+        baselineStreamingPerformance,
+        policy.maxMedianRegressionRatio ?? 1.1,
+        policy.maxP90RegressionRatio ?? 1.15,
+      ).map((failure) => `${fixture.id}: streaming ${failure}`),
+    );
+    console.log(
+      `[local-e2e] ${fixture.id}: click-to-first-sample median ${currentStreamingPerformance.firstSampleMedianMs.toFixed(1)}ms vs ${baselineStreamingPerformance.firstSampleMedianMs.toFixed(1)}ms, ` +
+        `p90 ${currentStreamingPerformance.firstSampleP90Ms.toFixed(1)}ms vs ${baselineStreamingPerformance.firstSampleP90Ms.toFixed(1)}ms, ` +
+        `internal demux median ${currentStreamingPerformance.demuxFirstSampleMedianMs.toFixed(1)}ms vs ${baselineStreamingPerformance.demuxFirstSampleMedianMs.toFixed(1)}ms, ` +
+        `Chrome process-tree peak RSS ${formatProcessTreeRssComparison(currentStreamingPerformance.processTreePeakRssBytes, baselineStreamingPerformance.processTreePeakRssBytes)}`,
+    );
+  } else {
+    console.log(
+      `[local-e2e] ${fixture.id}: runner v4 baseline has no streaming/startup/RSS metrics; those comparisons are explicitly skipped`,
+    );
+  }
   if (
     parsedArtifact.caseId !== previous.id ||
+    parsedArtifact.runnerVersion !== baseline.summary.runnerVersion ||
     parsedArtifact.videoName !== previous.videoName ||
     parsedArtifact.analysisMs !== previous.analysisMs ||
     canonicalJson(parsedArtifact.performance) !==
@@ -1614,7 +1733,11 @@ async function compareWithBaseline(
   }
   const semanticDifferences = diffSemanticValues(
     semanticSnapshot(parsedArtifact),
-    semanticSnapshot(currentArtifact),
+    semanticSnapshot(
+      parsedArtifact.runnerVersion === LEGACY_RUNNER_VERSION
+        ? { ...currentArtifact, decodeMapping: undefined }
+        : currentArtifact,
+    ),
   );
   if (semanticDifferences.length > 0) {
     failures.push(
@@ -1625,4 +1748,16 @@ async function compareWithBaseline(
       console.error(`  - ${difference}`);
   }
   return failures;
+}
+
+function formatProcessTreeRssComparison(
+  current: number | null,
+  baseline: number | null,
+): string {
+  if (current === null && baseline === null) {
+    return "unsupported on both runs (comparison skipped)";
+  }
+  const format = (bytes: number | null) =>
+    bytes === null ? "unsupported" : `${(bytes / 1024 ** 2).toFixed(1)}MiB`;
+  return `${format(current)} vs ${format(baseline)}`;
 }

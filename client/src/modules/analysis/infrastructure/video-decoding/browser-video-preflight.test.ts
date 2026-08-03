@@ -23,6 +23,7 @@ function track(
     framesPerSecond: 59.94,
     constantFrameRate: true,
     totalSamples: 600,
+    maxSampleBytes: 1024,
     timescale: 60_000,
     duration: 600_600,
     decoderConfig: {
@@ -102,6 +103,18 @@ describe("browser video preflight", () => {
         },
       }),
     ).toMatchObject({ status: "invalid", code: "non_mp4" });
+    const oversizedMetadata = await preflightBrowserVideo(source, signal, {
+      inspect: async () => {
+        throw new Mp4InspectionError("metadata_size", "too much metadata");
+      },
+    });
+    expect(oversizedMetadata).toMatchObject({
+      status: "invalid",
+      code: "metadata_size",
+    });
+    if (oversizedMetadata.status === "invalid") {
+      expect(oversizedMetadata.message).toContain("再エンコード");
+    }
     const broken = await preflightBrowserVideo(source, signal, {
       inspect: async () => {
         throw new Error("broken moov");

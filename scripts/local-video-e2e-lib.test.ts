@@ -505,6 +505,21 @@ test("semantic snapshot ignores build ids and produces structural paths", () => 
   ]);
 });
 
+test("semantic diff treats signed zero as equivalent", () => {
+  expect(
+    diffSemanticValues(
+      { negativeZero: -0, positiveZero: 0 },
+      { negativeZero: 0, positiveZero: -0 },
+    ),
+  ).toEqual([]);
+  expect(diffSemanticValues({ value: Number.NaN }, { value: 0 })).toEqual([
+    "$.value: null -> 0",
+  ]);
+  expect(diffSemanticValues({ value: 1 }, { value: -1 })).toEqual([
+    "$.value: 1 -> -1",
+  ]);
+});
+
 test("timing comparison only includes matching baselines", () => {
   expect(
     compareTimings({ first: 800, second: 200 }, { first: 1_000, third: 500 }),

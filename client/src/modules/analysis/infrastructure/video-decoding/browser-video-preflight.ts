@@ -47,6 +47,12 @@ export async function preflightBrowserVideo(
         "MP4形式の動画を選択してください。OBSでは録画形式をMP4にするか、録画後にMP4へ再多重化してください。",
       );
     }
+    if (error instanceof Mp4InspectionError && error.code === "metadata_size") {
+      return videoPreflightFailure(
+        "metadata_size",
+        "MP4の動画情報が大きすぎるため解析できません。通常のMP4へ再多重化するか、H.264のMP4へ再エンコードしてください。",
+      );
+    }
     return videoPreflightFailure(
       "invalid_mp4",
       `MP4の動画情報を読み取れませんでした。ファイルが破損していないか確認し、MP4として書き出し直してください。${errorMessageSuffix(error)}`,

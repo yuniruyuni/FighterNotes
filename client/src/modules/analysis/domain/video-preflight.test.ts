@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { MAX_ENCODED_SAMPLE_BYTES } from "./encoded-video-limits.js";
 import {
   type InspectedVideo,
   type InspectedVideoTrack,
@@ -32,6 +33,7 @@ function track(
     framesPerSecond: 60,
     constantFrameRate: true,
     totalSamples: 600,
+    maxSampleBytes: 1024,
     timescale: 60_000,
     duration: 600_000,
     decoderConfig: {
@@ -162,6 +164,24 @@ describe("video input preflight", () => {
         inspected({ track: track({ constantFrameRate: false }) }),
       ),
     ).toMatchObject({ status: "invalid", code: "variable_frame_rate" });
+  });
+
+  test("巨大な圧縮フレームを解析開始前に再エンコード案内で拒否する", () => {
+    const result = validateInspectedVideo(
+      file(),
+      inspected({
+        track: track({ maxSampleBytes: MAX_ENCODED_SAMPLE_BYTES + 1 }),
+      }),
+    );
+
+    expect(result).toMatchObject({
+      status: "invalid",
+      code: "encoded_sample_size",
+    });
+    if (result.status === "invalid") {
+      expect(result.message).toContain("再エンコード");
+      expect(result.message).toContain("16MiB");
+    }
   });
 
   test("adapter固有の失敗も同じ閉じたfailure形式にする", () => {
