@@ -64,33 +64,53 @@ const stripTags = (html: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+/** 公式frame pageのcharacter navigationから公開済みslugを抽出する。 */
+export function frameCharacterSlugs(html: string): string[] {
+  return [
+    ...new Set(
+      [
+        ...html.matchAll(
+          /\/6\/(?:[a-z]{2}(?:-[a-z]{2,4})?\/)?character\/([a-z0-9_]+)\/frame\b/g,
+        ),
+      ].map((match) => match[1]),
+    ),
+  ].sort();
+}
+
 // "800 (400x2)" や "1,000" から先頭の数値を取る。非数値（"-" 等）は 0
 const leadingNumber = (html: string): number => {
-  const m = stripTags(html).replace(/,/g, "").match(/^(\d+)/);
+  const m = stripTags(html)
+    .replace(/,/g, "")
+    .match(/^(\d+)/);
   return m ? Number(m[1]) : 0;
 };
 
-/**
- * 技名セルから numpad 記法の技名を作る。空中技は null（地上技のみ収録）。
- * コマンド画像がない技（Sun Veil 等の設置・共通行動）は英語技名を使う。
- */
+/** 技名セルから numpad 記法の技名を作る。直接入力できない技は null。 */
 export function moveName(cell: string): string | null {
   const arts = cell.match(/<span class="frame_arts[^"]*"[^>]*>(.*?)<\/span>/s);
   const artsName = arts ? stripTags(arts[1]) : stripTags(cell);
   const classic = cell.match(/<p class="frame_classic[^"]*"[^>]*>(.*?)<\/p>/s);
-  if (!classic) return artsName;
+  if (!classic) {
+    throw new Error(`Classicコマンドが見つかりません: ${artsName}`);
+  }
   const body = classic[1];
+  // 公式表でコマンドが「-」の行は、多段技の後半など単独では入力できない
+  // 内部状態。英語技名へのfallbackで確反候補に混ぜない。
+  if (/^[-ー]$/.test(stripTags(body))) return null;
   // 中立から出せない技（空中技・スタンス派生・追撃・ガード中限定）は
   // 確反提案の対象外。投げの近距離条件やリソース条件（飲酒レベル等）は残す
   const conditions = stripTags(body).match(/\([^)]*\)/g) ?? [];
-  if (conditions.some((c) => /^\((During|After|While|while|When blocking|when coming)/.test(c))) {
+  if (
+    conditions.some((c) =>
+      /^\((During|After|While|while|When blocking|when coming)/.test(c),
+    )
+  ) {
     return null;
   }
 
   let name = "";
   const re = /<img[^>]*\/([a-z0-9_-]+)\.png[^>]*>|Hold/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(body)) !== null) {
+  for (const m of body.matchAll(re)) {
     if (m[0] === "Hold") {
       name += "[H]";
       continue;
@@ -103,7 +123,9 @@ export function moveName(cell: string): string | null {
   }
   // 回転2周（720 コマンド）は慣用表記に正規化
   name = name.replace("360360", "720");
-  return name !== "" ? name : artsName;
+  // 入力tokenがない行は、自動発動・当身成立後・多段技の後半など。
+  // 技名だけを候補にすると中立から出せる技と誤認するためfail closedにする。
+  return name !== "" ? name : null;
 }
 
 /** フレームデータページ全体から地上技の一覧を抽出する。 */
@@ -127,7 +149,9 @@ export function parseCharacterPage(html: string): MoveData[] {
     if (name === null) continue;
     if (category === null) {
       // セクション見出しより先にデータ行が来た = ページ構造が変わった
-      throw new Error(`セクション見出しが見つからないままデータ行が出現: ${name}`);
+      throw new Error(
+        `セクション見出しが見つからないままデータ行が出現: ${name}`,
+      );
     }
     moves.push({
       name,

@@ -860,7 +860,7 @@
   },
   {
    "name": "MP",
-   "startup": 10,
+   "startup": 9,
    "damage": 700,
    "category": "normal"
   },
@@ -1141,18 +1141,6 @@
    "category": "special"
   },
   {
-   "name": "Blanka-chan Bomb (Activated)",
-   "startup": 36,
-   "damage": 800,
-   "category": "special"
-  },
-  {
-   "name": "OD Blanka-chan Bomb (Activated)",
-   "startup": 36,
-   "damage": 1200,
-   "category": "special"
-  },
-  {
    "name": "236236P",
    "startup": 8,
    "damage": 2000,
@@ -1336,7 +1324,7 @@
   },
   {
    "name": "236[H]HK",
-   "startup": 27,
+   "startup": 25,
    "damage": 800,
    "category": "special"
   },
@@ -1366,7 +1354,7 @@
   },
   {
    "name": "623[H]HK",
-   "startup": 24,
+   "startup": 22,
    "damage": 0,
    "category": "special"
   },
@@ -2176,7 +2164,7 @@
   },
   {
    "name": "236KK",
-   "startup": 19,
+   "startup": 17,
    "damage": 1300,
    "category": "special"
   },
@@ -3698,7 +3686,7 @@
   },
   {
    "name": "HK",
-   "startup": 13,
+   "startup": 12,
    "damage": 800,
    "category": "normal"
   },
@@ -4423,7 +4411,7 @@
   {
    "name": "6MK~MK",
    "startup": 15,
-   "damage": 400,
+   "damage": 600,
    "category": "unique"
   },
   {
@@ -5521,7 +5509,7 @@
   {
    "name": "2MP",
    "startup": 6,
-   "damage": 700,
+   "damage": 600,
    "category": "normal"
   },
   {
@@ -5905,18 +5893,6 @@
    "category": "special"
   },
   {
-   "name": "Arc Step",
-   "startup": 6,
-   "damage": 450,
-   "category": "special"
-  },
-  {
-   "name": "OD Arc Step",
-   "startup": 6,
-   "damage": 270,
-   "category": "special"
-  },
-  {
    "name": "236LP",
    "startup": 10,
    "damage": 810,
@@ -6145,6 +6121,12 @@
    "startup": 20,
    "damage": 800,
    "category": "unique"
+  },
+  {
+   "name": "214LP",
+   "startup": 19,
+   "damage": 900,
+   "category": "special"
   },
   {
    "name": "214MP",
@@ -6625,7 +6607,7 @@
   {
    "name": "214214P",
    "startup": 5,
-   "damage": 2800,
+   "damage": 3000,
    "category": "super"
   },
   {
@@ -6963,13 +6945,13 @@
   {
    "name": "214PP",
    "startup": 16,
-   "damage": 1000,
+   "damage": 1300,
    "category": "special"
   },
   {
    "name": "214PP",
    "startup": 16,
-   "damage": 1100,
+   "damage": 1400,
    "category": "special"
   },
   {
@@ -7727,18 +7709,6 @@
    "category": "special"
   },
   {
-   "name": "Scutum(Physical counter version)",
-   "startup": 7,
-   "damage": 700,
-   "category": "special"
-  },
-  {
-   "name": "OD Scutum(Physical counter version)",
-   "startup": 7,
-   "damage": 700,
-   "category": "special"
-  },
-  {
    "name": "236236P",
    "startup": 19,
    "damage": 2200,
@@ -8031,7 +8001,7 @@
   {
    "name": "214PP",
    "startup": 14,
-   "damage": 1700,
+   "damage": 1800,
    "category": "special"
   },
   {
@@ -8858,7 +8828,7 @@
   },
   {
    "name": "MK~HK",
-   "startup": 19,
+   "startup": 16,
    "damage": 800,
    "category": "unique"
   },
@@ -8871,13 +8841,13 @@
   {
    "name": "2MP~HP",
    "startup": 20,
-   "damage": 600,
+   "damage": 700,
    "category": "unique"
   },
   {
    "name": "2MP~HK",
    "startup": 18,
-   "damage": 1000,
+   "damage": 1100,
    "category": "unique"
   },
   {
@@ -9143,7 +9113,7 @@
   {
    "name": "MP~HK~HK",
    "startup": 18,
-   "damage": 1300,
+   "damage": 800,
    "category": "unique"
   },
   {
@@ -9203,7 +9173,7 @@
   {
    "name": "214LPMP",
    "startup": 10,
-   "damage": 1400,
+   "damage": 1600,
    "category": "special"
   },
   {
@@ -9329,6 +9299,302 @@
   {
    "name": "236236P",
    "startup": 8,
+   "damage": 4500,
+   "category": "super"
+  },
+  {
+   "name": "5/6LPLK",
+   "startup": 5,
+   "damage": 1200,
+   "category": "throw"
+  },
+  {
+   "name": "4LPLK",
+   "startup": 5,
+   "damage": 1200,
+   "category": "throw"
+  },
+  {
+   "name": "HPHK",
+   "startup": 26,
+   "damage": 800,
+   "category": "common"
+  },
+  {
+   "name": "MPMK",
+   "startup": 1,
+   "damage": 0,
+   "category": "common"
+  },
+  {
+   "name": "MPMK",
+   "startup": 1,
+   "damage": 0,
+   "category": "common"
+  },
+  {
+   "name": "MPMK",
+   "startup": 1,
+   "damage": 0,
+   "category": "common"
+  }
+ ],
+ "YASMINE": [
+  {
+   "name": "LP",
+   "startup": 5,
+   "damage": 300,
+   "category": "normal"
+  },
+  {
+   "name": "LK",
+   "startup": 5,
+   "damage": 300,
+   "category": "normal"
+  },
+  {
+   "name": "MP",
+   "startup": 6,
+   "damage": 600,
+   "category": "normal"
+  },
+  {
+   "name": "MK",
+   "startup": 10,
+   "damage": 700,
+   "category": "normal"
+  },
+  {
+   "name": "HP",
+   "startup": 9,
+   "damage": 800,
+   "category": "normal"
+  },
+  {
+   "name": "HK",
+   "startup": 14,
+   "damage": 800,
+   "category": "normal"
+  },
+  {
+   "name": "2LP",
+   "startup": 4,
+   "damage": 300,
+   "category": "normal"
+  },
+  {
+   "name": "2LK",
+   "startup": 5,
+   "damage": 200,
+   "category": "normal"
+  },
+  {
+   "name": "2MP",
+   "startup": 6,
+   "damage": 600,
+   "category": "normal"
+  },
+  {
+   "name": "2MK",
+   "startup": 8,
+   "damage": 500,
+   "category": "normal"
+  },
+  {
+   "name": "2HP",
+   "startup": 8,
+   "damage": 800,
+   "category": "normal"
+  },
+  {
+   "name": "2HK",
+   "startup": 10,
+   "damage": 900,
+   "category": "normal"
+  },
+  {
+   "name": "6MP",
+   "startup": 22,
+   "damage": 600,
+   "category": "unique"
+  },
+  {
+   "name": "4HK",
+   "startup": 22,
+   "damage": 800,
+   "category": "unique"
+  },
+  {
+   "name": "LP~LP",
+   "startup": 8,
+   "damage": 400,
+   "category": "unique"
+  },
+  {
+   "name": "MP~MP",
+   "startup": 12,
+   "damage": 400,
+   "category": "unique"
+  },
+  {
+   "name": "MK~MK",
+   "startup": 13,
+   "damage": 400,
+   "category": "unique"
+  },
+  {
+   "name": "MK~MK~HK",
+   "startup": 16,
+   "damage": 500,
+   "category": "unique"
+  },
+  {
+   "name": "2MK~HK",
+   "startup": 8,
+   "damage": 500,
+   "category": "unique"
+  },
+  {
+   "name": "236LP",
+   "startup": 12,
+   "damage": 400,
+   "category": "special"
+  },
+  {
+   "name": "236LP~6P",
+   "startup": 13,
+   "damage": 300,
+   "category": "special"
+  },
+  {
+   "name": "236MP",
+   "startup": 16,
+   "damage": 400,
+   "category": "special"
+  },
+  {
+   "name": "236MP~6P",
+   "startup": 13,
+   "damage": 300,
+   "category": "special"
+  },
+  {
+   "name": "236HP",
+   "startup": 21,
+   "damage": 400,
+   "category": "special"
+  },
+  {
+   "name": "236HP~6P",
+   "startup": 13,
+   "damage": 150,
+   "category": "special"
+  },
+  {
+   "name": "236PP",
+   "startup": 12,
+   "damage": 400,
+   "category": "special"
+  },
+  {
+   "name": "236PP~6P",
+   "startup": 13,
+   "damage": 300,
+   "category": "special"
+  },
+  {
+   "name": "214MP",
+   "startup": 21,
+   "damage": 1100,
+   "category": "special"
+  },
+  {
+   "name": "214HP",
+   "startup": 30,
+   "damage": 1200,
+   "category": "special"
+  },
+  {
+   "name": "214PP",
+   "startup": 18,
+   "damage": 800,
+   "category": "special"
+  },
+  {
+   "name": "623LK",
+   "startup": 5,
+   "damage": 1000,
+   "category": "special"
+  },
+  {
+   "name": "623MK",
+   "startup": 6,
+   "damage": 1200,
+   "category": "special"
+  },
+  {
+   "name": "623HK",
+   "startup": 7,
+   "damage": 1300,
+   "category": "special"
+  },
+  {
+   "name": "623KK",
+   "startup": 6,
+   "damage": 1600,
+   "category": "special"
+  },
+  {
+   "name": "22LP",
+   "startup": 25,
+   "damage": 600,
+   "category": "special"
+  },
+  {
+   "name": "22MP",
+   "startup": 25,
+   "damage": 600,
+   "category": "special"
+  },
+  {
+   "name": "22HP",
+   "startup": 25,
+   "damage": 600,
+   "category": "special"
+  },
+  {
+   "name": "22LPMP",
+   "startup": 25,
+   "damage": 900,
+   "category": "special"
+  },
+  {
+   "name": "22LPHP",
+   "startup": 25,
+   "damage": 900,
+   "category": "special"
+  },
+  {
+   "name": "22MPHP",
+   "startup": 25,
+   "damage": 900,
+   "category": "special"
+  },
+  {
+   "name": "236236K",
+   "startup": 7,
+   "damage": 2000,
+   "category": "super"
+  },
+  {
+   "name": "236236P",
+   "startup": 10,
+   "damage": 4000,
+   "category": "super"
+  },
+  {
+   "name": "236236P",
+   "startup": 10,
    "damage": 4500,
    "category": "super"
   },
@@ -9575,7 +9841,7 @@
    "category": "special"
   },
   {
-   "name": "63214K",
+   "name": "63214LK/MK",
    "startup": 28,
    "damage": 2700,
    "category": "special"
@@ -9587,7 +9853,7 @@
    "category": "special"
   },
   {
-   "name": "63214K",
+   "name": "63214LK/MK",
    "startup": 55,
    "damage": 2700,
    "category": "special"

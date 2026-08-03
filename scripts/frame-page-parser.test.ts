@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { moveName, parseCharacterPage } from "./frame-page-parser";
+import {
+  frameCharacterSlugs,
+  moveName,
+  parseCharacterPage,
+} from "./frame-page-parser";
 
 const classic = (inner: string) =>
   `<span class="frame_arts__x">Dummy</span><p class="frame_classic__x">${inner}</p>`;
@@ -8,6 +12,19 @@ const img = (token: string) =>
 const sectionRow = (heading: string) => `<tr><th>${heading}</th></tr>`;
 const moveRow = (name: string, startup: string, damage: string) =>
   `<tr><td>${name}</td><td>${startup}</td>${"<td>-</td>".repeat(5)}<td>${damage}</td></tr>`;
+
+describe("frameCharacterSlugs", () => {
+  test("locale付きlinkを重複排除して公開済みcharacterを列挙する", () => {
+    const html = [
+      '<a href="/6/character/ryu/frame">Ryu</a>',
+      '<a href="/6/ja-jp/character/yasmine/frame">Yasmine</a>',
+      '<a href="/6/en-asia/character/yasmine/frame">Yasmine</a>',
+      '<a href="/6/character/ryu">profile only</a>',
+    ].join("");
+
+    expect(frameCharacterSlugs(html)).toEqual(["ryu", "yasmine"]);
+  });
+});
 
 describe("moveName", () => {
   test("立ち通常技はボタンのみ", () => {
@@ -117,12 +134,36 @@ describe("moveName", () => {
     ).toBe("214MK");
   });
 
-  test("コマンド画像がない技は英語技名にフォールバック", () => {
+  test("直接入力tokenがない自動発動・当身成立後の技は除外する", () => {
     expect(
       moveName(
-        `<span class="frame_arts__x">Sun Veil</span><p class="frame_classic__x"></p>`,
+        `<span class="frame_arts__x">Arc Step</span><p class="frame_classic__x">(Automatically activates after getting close with Sprint)</p>`,
       ),
-    ).toBe("Sun Veil");
+    ).toBeNull();
+    expect(
+      moveName(
+        `<span class="frame_arts__x">Scutum (Physical counter version)</span><p class="frame_classic__x">&#42;Take an attack during Scutum</p>`,
+      ),
+    ).toBeNull();
+  });
+
+  test("コマンドがdashの多段技後半は確反候補から除外する", () => {
+    expect(
+      moveName(
+        `<span class="frame_arts__x">L Alon(2)</span><p class="frame_classic__x">-</p>`,
+      ),
+    ).toBeNull();
+    expect(
+      moveName(
+        `<span class="frame_arts__x">Follow-up</span><p class="frame_classic__x">ー</p>`,
+      ),
+    ).toBeNull();
+  });
+
+  test("Classicコマンド欄が消えた構造変更は例外にする", () => {
+    expect(() =>
+      moveName(`<span class="frame_arts__x">Changed Markup</span>`),
+    ).toThrow("Classicコマンドが見つかりません");
   });
 
   test("未知のコマンド画像は例外（変換漏れ検知）", () => {
@@ -174,7 +215,7 @@ describe("parseCharacterPage", () => {
         "1,200",
       ),
       sectionRow("Common Moves"),
-      moveRow(named("System Action", ""), "26", "800"),
+      moveRow(named("Automatic Follow-up", ""), "26", "800"),
       "</tbody></table>",
     ].join("");
 
@@ -185,7 +226,6 @@ describe("parseCharacterPage", () => {
       { name: "236LP", startup: 17, damage: 1000, category: "special" },
       { name: "236236K", startup: 9, damage: 2000, category: "super" },
       { name: "LPLK", startup: 5, damage: 1200, category: "throw" },
-      { name: "System Action", startup: 26, damage: 800, category: "common" },
     ]);
   });
 

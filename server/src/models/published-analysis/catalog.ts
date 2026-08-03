@@ -28,6 +28,7 @@ export const CHARACTER_IDS = [
   "RYU",
   "SAGAT",
   "TERRY",
+  "YASMINE",
   "ZANGIEF",
 ] as const;
 

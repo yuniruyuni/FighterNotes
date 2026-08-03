@@ -736,7 +736,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 28,
@@ -750,7 +758,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 33,
@@ -766,7 +782,7 @@
    ],
    "modern_inputs": [
     {
-     "direction": "down",
+     "direction": "down_diagonal",
      "buttons": [
       "SP"
      ],
@@ -2076,7 +2092,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 19,
@@ -2092,7 +2116,7 @@
    ],
    "modern_inputs": [
     {
-     "direction": "horizontal",
+     "direction": "down",
      "buttons": [
       "SP"
      ],
@@ -2112,7 +2136,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 18,
@@ -2145,7 +2177,7 @@
    ],
    "modern_inputs": [
     {
-     "direction": "horizontal",
+     "direction": "down",
      "buttons": [
       "SP"
      ],
@@ -4091,7 +4123,7 @@
    ]
   },
   {
-   "startup": 10,
+   "startup": 9,
    "kind": "high",
    "classic_inputs": [
     {
@@ -6163,7 +6195,7 @@
      "buttons": [
       "中"
      ],
-     "auto": true
+     "auto": false
     }
    ]
   },
@@ -6179,15 +6211,7 @@
      "auto": false
     }
    ],
-   "modern_inputs": [
-    {
-     "direction": "standing",
-     "buttons": [
-      "中"
-     ],
-     "auto": false
-    }
-   ]
+   "modern_inputs": []
   },
   {
    "startup": 8,
@@ -6281,7 +6305,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "中"
+     ],
+     "auto": true
+    }
+   ]
   },
   {
    "startup": 8,
@@ -6627,7 +6659,7 @@
    ]
   },
   {
-   "startup": 27,
+   "startup": 25,
    "kind": "high",
    "classic_inputs": [
     {
@@ -6785,7 +6817,7 @@
    ]
   },
   {
-   "startup": 24,
+   "startup": 22,
    "kind": "high",
    "classic_inputs": [
     {
@@ -9288,7 +9320,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 27,
@@ -9324,7 +9364,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 26,
@@ -12197,7 +12245,7 @@
    ]
   },
   {
-   "startup": 19,
+   "startup": 17,
    "kind": "high",
    "classic_inputs": [
     {
@@ -13653,7 +13701,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "any",
+     "buttons": [
+      "弱"
+     ],
+     "auto": true
+    }
+   ]
   },
   {
    "startup": 9,
@@ -13755,7 +13811,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 15,
@@ -13791,7 +13855,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 12,
@@ -18424,7 +18496,7 @@
    "modern_inputs": []
   },
   {
-   "startup": 13,
+   "startup": 12,
    "kind": "high",
    "classic_inputs": [
     {
@@ -20942,7 +21014,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "中"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 18,
@@ -21666,7 +21746,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 22,
@@ -21702,7 +21790,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 18,
@@ -22205,15 +22301,7 @@
      "auto": false
     }
    ],
-   "modern_inputs": [
-    {
-     "direction": "standing",
-     "buttons": [
-      "中"
-     ],
-     "auto": false
-    }
-   ]
+   "modern_inputs": []
   },
   {
    "startup": 8,
@@ -22233,7 +22321,7 @@
      "buttons": [
       "中"
      ],
-     "auto": true
+     "auto": false
     }
    ]
   },
@@ -22337,7 +22425,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "中"
+     ],
+     "auto": true
+    }
+   ]
   },
   {
    "startup": 9,
@@ -22631,11 +22727,11 @@
    ],
    "modern_inputs": [
     {
-     "direction": "neutral",
+     "direction": "down_diagonal",
      "buttons": [
       "SP"
      ],
-     "auto": false
+     "auto": true
     }
    ]
   },
@@ -22651,7 +22747,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "SP"
+     ],
+     "auto": true
+    }
+   ]
   },
   {
    "startup": 28,
@@ -22665,7 +22769,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": true
+    }
+   ]
   },
   {
    "startup": 19,
@@ -22698,7 +22810,7 @@
    ],
    "modern_inputs": [
     {
-     "direction": "standing",
+     "direction": "down",
      "buttons": [
       "SP"
      ],
@@ -25584,7 +25696,7 @@
    ]
   },
   {
-   "startup": 10,
+   "startup": 8,
    "kind": "high",
    "classic_inputs": [
     {
@@ -27933,21 +28045,21 @@
    ],
    "modern_inputs": [
     {
-     "direction": "neutral",
+     "direction": "horizontal",
      "buttons": [
       "弱"
      ],
      "auto": false
     },
     {
-     "direction": "neutral",
+     "direction": "horizontal",
      "buttons": [
       "中"
      ],
      "auto": false
     },
     {
-     "direction": "neutral",
+     "direction": "horizontal",
      "buttons": [
       "強"
      ],
@@ -27969,21 +28081,21 @@
    ],
    "modern_inputs": [
     {
-     "direction": "neutral",
+     "direction": "horizontal",
      "buttons": [
       "弱"
      ],
      "auto": false
     },
     {
-     "direction": "neutral",
+     "direction": "horizontal",
      "buttons": [
       "中"
      ],
      "auto": false
     },
     {
-     "direction": "neutral",
+     "direction": "horizontal",
      "buttons": [
       "強"
      ],
@@ -29410,6 +29522,28 @@
      "direction": "horizontal",
      "buttons": [
       "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 19,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱"
      ],
      "auto": false
     }
@@ -31053,7 +31187,7 @@
    ]
   },
   {
-   "startup": 9,
+   "startup": 8,
    "kind": "air",
    "classic_inputs": [
     {
@@ -33441,7 +33575,7 @@
    ],
    "modern_inputs": [
     {
-     "direction": "down",
+     "direction": "down_diagonal",
      "buttons": [
       "SP"
      ],
@@ -33457,6 +33591,28 @@
      "direction": "horizontal",
      "buttons": [
       "弱K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 15,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "中K"
      ],
      "auto": false
     }
@@ -33483,21 +33639,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
-  },
-  {
-   "startup": 15,
-   "kind": "high",
-   "classic_inputs": [
+   "modern_inputs": [
     {
-     "direction": "horizontal",
+     "direction": "down",
      "buttons": [
-      "中K"
+      "SP"
      ],
      "auto": false
     }
-   ],
-   "modern_inputs": []
+   ]
   },
   {
    "startup": 18,
@@ -33511,7 +33661,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 18,
@@ -33525,7 +33683,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 14,
@@ -36636,13 +36802,6 @@
     {
      "direction": "horizontal",
      "buttons": [
-      "SP"
-     ],
-     "auto": false
-    },
-    {
-     "direction": "horizontal",
-     "buttons": [
       "中"
      ],
      "auto": false
@@ -36777,7 +36936,7 @@
      "auto": false
     },
     {
-     "direction": "down",
+     "direction": "horizontal",
      "buttons": [
       "SP"
      ],
@@ -36882,7 +37041,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 24,
@@ -36896,7 +37063,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 29,
@@ -36910,7 +37085,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 24,
@@ -38725,7 +38908,53 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "any",
+     "buttons": [
+      "弱",
+      "中"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "any",
+     "buttons": [
+      "弱",
+      "強"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "any",
+     "buttons": [
+      "中",
+      "強"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "any",
+     "buttons": [
+      "弱"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "any",
+     "buttons": [
+      "中"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "any",
+     "buttons": [
+      "強"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 12,
@@ -40281,7 +40510,7 @@
    ],
    "modern_inputs": [
     {
-     "direction": "horizontal",
+     "direction": "down_diagonal",
      "buttons": [
       "SP"
      ],
@@ -40303,7 +40532,7 @@
    ],
    "modern_inputs": [
     {
-     "direction": "horizontal",
+     "direction": "down_diagonal",
      "buttons": [
       "SP"
      ],
@@ -40323,7 +40552,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 17,
@@ -40337,7 +40574,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 26,
@@ -40351,7 +40596,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 17,
@@ -40365,7 +40618,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 21,
@@ -40398,7 +40659,7 @@
    ],
    "modern_inputs": [
     {
-     "direction": "horizontal",
+     "direction": "down",
      "buttons": [
       "SP"
      ],
@@ -40437,7 +40698,7 @@
    ],
    "modern_inputs": [
     {
-     "direction": "horizontal",
+     "direction": "down",
      "buttons": [
       "SP"
      ],
@@ -40459,7 +40720,7 @@
    ],
    "modern_inputs": [
     {
-     "direction": "down",
+     "direction": "horizontal",
      "buttons": [
       "SP"
      ],
@@ -40549,7 +40810,7 @@
    ],
    "modern_inputs": [
     {
-     "direction": "down",
+     "direction": "horizontal",
      "buttons": [
       "SP"
      ],
@@ -42088,7 +42349,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 18,
@@ -42124,7 +42393,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 17,
@@ -44750,7 +45027,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 20,
@@ -44786,7 +45071,15 @@
      "auto": false
     }
    ],
-   "modern_inputs": []
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    }
+   ]
   },
   {
    "startup": 19,
@@ -45360,6 +45653,1359 @@
      "buttons": [
       "中P",
       "強P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": []
+  }
+ ],
+ "YASMINE": [
+  {
+   "startup": 5,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "弱P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": []
+  },
+  {
+   "startup": 5,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "弱K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "弱"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 6,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "中P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "中"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 10,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "中K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": []
+  },
+  {
+   "startup": 9,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "強P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "強"
+     ],
+     "auto": true
+    }
+   ]
+  },
+  {
+   "startup": 14,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "強K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 4,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "弱P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "弱"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 5,
+   "kind": "low",
+   "classic_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "弱K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "弱"
+     ],
+     "auto": true
+    }
+   ]
+  },
+  {
+   "startup": 6,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "中P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "中"
+     ],
+     "auto": true
+    }
+   ]
+  },
+  {
+   "startup": 8,
+   "kind": "low",
+   "classic_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "中K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "中"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 8,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "強P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 10,
+   "kind": "low",
+   "classic_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "強K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": []
+  },
+  {
+   "startup": 4,
+   "kind": "air",
+   "classic_inputs": [
+    {
+     "direction": "any",
+     "buttons": [
+      "弱P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "any",
+     "buttons": [
+      "弱"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 4,
+   "kind": "air",
+   "classic_inputs": [
+    {
+     "direction": "any",
+     "buttons": [
+      "弱K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "any",
+     "buttons": [
+      "弱"
+     ],
+     "auto": true
+    }
+   ]
+  },
+  {
+   "startup": 7,
+   "kind": "air",
+   "classic_inputs": [
+    {
+     "direction": "any",
+     "buttons": [
+      "中P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "any",
+     "buttons": [
+      "中"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 7,
+   "kind": "air",
+   "classic_inputs": [
+    {
+     "direction": "any",
+     "buttons": [
+      "中K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "any",
+     "buttons": [
+      "中"
+     ],
+     "auto": true
+    }
+   ]
+  },
+  {
+   "startup": 9,
+   "kind": "air",
+   "classic_inputs": [
+    {
+     "direction": "any",
+     "buttons": [
+      "強P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "any",
+     "buttons": [
+      "強"
+     ],
+     "auto": true
+    }
+   ]
+  },
+  {
+   "startup": 10,
+   "kind": "air",
+   "classic_inputs": [
+    {
+     "direction": "any",
+     "buttons": [
+      "強K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "any",
+     "buttons": [
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 22,
+   "kind": "overhead",
+   "classic_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "中P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "中"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 22,
+   "kind": "low",
+   "classic_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "強K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 10,
+   "kind": "low",
+   "classic_inputs": [],
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 12,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 16,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "中P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "中"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 21,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "強P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 12,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱P",
+      "中P"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱P",
+      "強P"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "中P",
+      "強P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "SP"
+     ],
+     "auto": true
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱",
+      "中"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱",
+      "強"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "中",
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 21,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "中P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "中"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 30,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "強P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 18,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱P",
+      "中P"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱P",
+      "強P"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "中P",
+      "強P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": true
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱",
+      "中"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱",
+      "強"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "中",
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 17,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "弱P"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "中P"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "強P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "弱"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "down",
+     "buttons": [
+      "中"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "down",
+     "buttons": [
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 17,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "弱P",
+      "中P"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "弱P",
+      "強P"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "中P",
+      "強P"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "弱P"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "中P"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "強P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "SP"
+     ],
+     "auto": true
+    },
+    {
+     "direction": "down",
+     "buttons": [
+      "弱",
+      "中"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "down",
+     "buttons": [
+      "弱",
+      "強"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "down",
+     "buttons": [
+      "中",
+      "強"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "down",
+     "buttons": [
+      "弱"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "down",
+     "buttons": [
+      "中"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "down",
+     "buttons": [
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 17,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "弱K"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "中K"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "強K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "弱"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "中"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 17,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "弱K",
+      "中K"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "弱K",
+      "強K"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "中K",
+      "強K"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "弱K"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "中K"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "強K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "SP"
+     ],
+     "auto": true
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "弱",
+      "中"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "弱",
+      "強"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "中",
+      "強"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "弱"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "中"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "standing",
+     "buttons": [
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 5,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "弱K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "弱"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 6,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "中K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "中"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 7,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "強K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 6,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "弱K",
+      "中K"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "弱K",
+      "強K"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "中K",
+      "強K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "SP"
+     ],
+     "auto": true
+    },
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "弱",
+      "中"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "弱",
+      "強"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "down_diagonal",
+     "buttons": [
+      "中",
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 22,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱K",
+      "中K"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱K",
+      "強K"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "中K",
+      "強K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "中",
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 7,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱K"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "中K"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "強K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "neutral",
+     "buttons": [
+      "強",
+      "SP"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "強",
+      "SP"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 10,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱P"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "中P"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "強P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "強",
+      "SP"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 10,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "弱P"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "中P"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "強P"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": [
+    {
+     "direction": "down",
+     "buttons": [
+      "強",
+      "SP"
+     ],
+     "auto": false
+    },
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "強"
+     ],
+     "auto": false
+    }
+   ]
+  },
+  {
+   "startup": 26,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "standing",
+     "buttons": [
+      "強P",
+      "強K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": []
+  },
+  {
+   "startup": 20,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "強P",
+      "強K"
+     ],
+     "auto": false
+    }
+   ],
+   "modern_inputs": []
+  },
+  {
+   "startup": 18,
+   "kind": "high",
+   "classic_inputs": [
+    {
+     "direction": "horizontal",
+     "buttons": [
+      "強P",
+      "強K"
      ],
      "auto": false
     }

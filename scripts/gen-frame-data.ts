@@ -10,7 +10,7 @@ import {
   parseOfficialFrameBundle,
 } from "./frame-bundle-parser";
 import type { MoveData } from "./frame-page-parser";
-import { parseCharacterPage } from "./frame-page-parser";
+import { frameCharacterSlugs, parseCharacterPage } from "./frame-page-parser";
 
 // key は frame_data.json のキャラ名キー（既存キーを維持、新キャラは同じ流儀）
 const CHARACTERS: Array<{ slug: string; key: string }> = [
@@ -43,6 +43,7 @@ const CHARACTERS: Array<{ slug: string; key: string }> = [
   { slug: "ryu", key: "RYU" },
   { slug: "sagat", key: "SAGAT" },
   { slug: "terry", key: "TERRY" },
+  { slug: "yasmine", key: "YASMINE" },
   { slug: "zangief", key: "ZANGIEF" },
 ];
 
@@ -50,7 +51,7 @@ const dataVersion = process.argv[2];
 if (!dataVersion || !/^\d{4}-\d{2}-\d{2}\.\d+$/.test(dataVersion)) {
   throw new Error(
     "data versionをYYYY-MM-DD.N形式で指定してください: " +
-      "bun run scripts/gen-frame-data.ts 2026-07-24.1",
+      "bun run scripts/gen-frame-data.ts 2026-08-03.1",
   );
 }
 
@@ -73,6 +74,17 @@ const fetchOfficial = async (url: string) => {
 // 内包するフレーム表 chunk から取得する。chunk 名のハッシュは固定しない。
 const indexUrl = "https://www.streetfighter.com/6/character/ingrid/frame";
 const indexHtml = await fetchOfficial(indexUrl);
+const configuredSlugs = CHARACTERS.map(({ slug }) => slug).sort();
+const officialSlugs = frameCharacterSlugs(indexHtml);
+if (JSON.stringify(configuredSlugs) !== JSON.stringify(officialSlugs)) {
+  const configured = new Set(configuredSlugs);
+  const official = new Set(officialSlugs);
+  const missing = officialSlugs.filter((slug) => !configured.has(slug));
+  const removed = configuredSlugs.filter((slug) => !official.has(slug));
+  throw new Error(
+    `公式character一覧とgenerator設定が一致しません (未設定: ${missing.join(", ") || "なし"}, 公式に存在しない設定: ${removed.join(", ") || "なし"})`,
+  );
+}
 const bundleUrl = new URL(frameBundlePath(indexHtml), indexUrl).toString();
 const officialRows = parseOfficialFrameBundle(await fetchOfficial(bundleUrl));
 

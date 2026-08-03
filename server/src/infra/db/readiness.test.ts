@@ -77,6 +77,26 @@ describe("database readiness", () => {
     expect(compatibilityQuery).toContain(
       "published_analyses_schema_version_check",
     );
+    expect(compatibilityQuery).toContain(
+      "published_analyses_own_character_check",
+    );
+    expect(compatibilityQuery).toContain(
+      "published_analyses_opponent_character_check",
+    );
+    const compatibilityParams = fixture.queries[1]?.params ?? [];
+    expect(compatibilityParams).toContainEqual(
+      expect.stringContaining(
+        "own_character = ANY (ARRAY['A_K_I'::text, 'AKUMA'::text",
+      ),
+    );
+    expect(compatibilityParams).toContainEqual(
+      expect.stringContaining(
+        "'TERRY'::text, 'YASMINE'::text, 'ZANGIEF'::text",
+      ),
+    );
+    expect(compatibilityParams).toContainEqual(
+      expect.stringContaining("opponent_character = ANY"),
+    );
     expect(compatibilityQuery).toContain("logical_size_bytes");
     expect(compatibilityQuery).toContain("format_type");
     expect(compatibilityQuery).toContain("required_defaults");
