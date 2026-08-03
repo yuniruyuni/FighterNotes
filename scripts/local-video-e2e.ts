@@ -49,6 +49,10 @@ import {
   prepareOutputDirectories,
 } from "./local-video-e2e-output";
 import {
+  type ProcessTreeRssSampler,
+  startProcessTreeRssSampler,
+} from "./local-video-e2e-process-rss";
+import {
   compareStreamingPerformance,
   parseStreamingPerformanceStats,
   parseStreamingRunStats,
@@ -625,72 +629,6 @@ async function openBrowser(options: CliOptions): Promise<BrowserHandle> {
       await rm(profileDir, { recursive: true, force: true });
     },
   };
-}
-
-interface ProcessTreeRssSampler {
-  readonly peakBytes: number | null;
-  stop(): Promise<void>;
-}
-
-function startProcessTreeRssSampler(
-  rootPid: number | undefined,
-): ProcessTreeRssSampler {
-  if (process.platform !== "linux" || rootPid === undefined) {
-    return { peakBytes: null, stop: async () => undefined };
-  }
-  let running = true;
-  let peakBytes = 0;
-  const sampling = (async () => {
-    while (running) {
-      peakBytes = Math.max(peakBytes, await linuxProcessTreeRssBytes(rootPid));
-      if (running) await Bun.sleep(100);
-    }
-    peakBytes = Math.max(peakBytes, await linuxProcessTreeRssBytes(rootPid));
-  })();
-  return {
-    get peakBytes() {
-      return peakBytes;
-    },
-    async stop() {
-      running = false;
-      await sampling;
-    },
-  };
-}
-
-async function linuxProcessTreeRssBytes(rootPid: number): Promise<number> {
-  const pending = [rootPid];
-  const seen = new Set<number>();
-  let total = 0;
-  while (pending.length > 0) {
-    const pid = pending.pop();
-    if (pid === undefined) continue;
-    if (seen.has(pid)) continue;
-    seen.add(pid);
-    const [status, children] = await Promise.all([
-      readProcFile(`/proc/${pid}/status`),
-      readProcFile(`/proc/${pid}/task/${pid}/children`),
-    ]);
-    const rss = status?.match(/^VmRSS:\s+(\d+)\s+kB$/m);
-    if (rss) total += Number(rss[1]) * 1024;
-    for (const child of children?.trim().split(/\s+/) ?? []) {
-      const childPid = Number(child);
-      if (Number.isSafeInteger(childPid) && childPid > 0) {
-        pending.push(childPid);
-      }
-    }
-  }
-  return total;
-}
-
-async function readProcFile(path: string): Promise<string | undefined> {
-  try {
-    const file = Bun.file(path);
-    return (await file.exists()) ? await file.text() : undefined;
-  } catch {
-    // A Chrome child may exit while its process tree is sampled.
-    return undefined;
-  }
 }
 
 async function discoverBrowserExecutable(): Promise<string | undefined> {
