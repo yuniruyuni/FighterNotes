@@ -1653,7 +1653,12 @@ function collectDiff(
   differences: string[],
   limit: number,
 ): void {
-  if (differences.length >= limit || Object.is(baseline, current)) return;
+  if (
+    differences.length >= limit ||
+    Object.is(baseline, current) ||
+    (baseline === 0 && current === 0)
+  )
+    return;
   if (Array.isArray(baseline) && Array.isArray(current)) {
     if (baseline.length !== current.length) {
       differences.push(
