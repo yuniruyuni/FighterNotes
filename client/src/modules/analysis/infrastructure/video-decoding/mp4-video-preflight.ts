@@ -7,13 +7,16 @@ import {
   type MP4BoxBuffer,
   type Sample,
 } from "mp4box";
+import {
+  DEMUX_METADATA_CHUNK_BYTES,
+  MAX_DEMUX_METADATA_BYTES,
+} from "../../domain/encoded-video-limits.js";
 import type {
   InspectedVideo,
   InspectedVideoTrack,
   VideoRotation,
 } from "../../domain/video-preflight.js";
 
-const METADATA_CHUNK_BYTES = 1024 * 1024;
 const ROTATION_SCALE = 1 << 16;
 const MATRIX_TOLERANCE = 1 / ROTATION_SCALE;
 const PERSPECTIVE_SCALE = 2 ** 30;
@@ -45,9 +48,12 @@ const MP4_MAJOR_BRANDS = new Set([
 ]);
 
 export class Mp4InspectionError extends Error {
-  readonly code: "non_mp4" | "invalid_mp4";
+  readonly code: "non_mp4" | "invalid_mp4" | "metadata_size";
 
-  constructor(code: "non_mp4" | "invalid_mp4", message: string) {
+  constructor(
+    code: "non_mp4" | "invalid_mp4" | "metadata_size",
+    message: string,
+  ) {
     super(message);
     this.name = "Mp4InspectionError";
     this.code = code;
@@ -57,6 +63,8 @@ export class Mp4InspectionError extends Error {
 interface Mp4MetadataReaderDependencies {
   readonly createIsoFile?: () => ISOFile;
   readonly chunkBytes?: number;
+  /** Test seam; production always uses the shared 32 MiB metadata cap. */
+  readonly maxMetadataBytes?: number;
 }
 
 export async function inspectMp4VideoFile(
@@ -71,9 +79,14 @@ export async function inspectMp4VideoFile(
     );
   }
   const file = dependencies.createIsoFile?.() ?? createFile(false);
-  const chunkBytes = dependencies.chunkBytes ?? METADATA_CHUNK_BYTES;
+  const chunkBytes = dependencies.chunkBytes ?? DEMUX_METADATA_CHUNK_BYTES;
+  const maxMetadataBytes =
+    dependencies.maxMetadataBytes ?? MAX_DEMUX_METADATA_BYTES;
   if (!Number.isSafeInteger(chunkBytes) || chunkBytes <= 0) {
     throw new Error("MP4 metadata chunk size must be a positive integer");
+  }
+  if (!Number.isSafeInteger(maxMetadataBytes) || maxMetadataBytes <= 0) {
+    throw new Error("MP4 metadata byte limit must be a positive integer");
   }
 
   let movie: Movie | undefined;
@@ -90,7 +103,15 @@ export async function inspectMp4VideoFile(
     let offset = 0;
     while (!movie && offset < source.size) {
       throwIfAborted(signal);
-      const end = Math.min(source.size, offset + chunkBytes);
+      const remainingMetadataBytes = maxMetadataBytes - metadataBytesRead;
+      if (remainingMetadataBytes <= 0) {
+        throw metadataSizeError(maxMetadataBytes);
+      }
+      const end = Math.min(
+        source.size,
+        offset + chunkBytes,
+        offset + remainingMetadataBytes,
+      );
       const buffer = (await source
         .slice(offset, end)
         .arrayBuffer()) as MP4BoxBuffer;
@@ -127,6 +148,13 @@ export async function inspectMp4VideoFile(
   } finally {
     file.stop();
   }
+}
+
+function metadataSizeError(limit: number): Mp4InspectionError {
+  return new Mp4InspectionError(
+    "metadata_size",
+    `MP4の動画情報が${limit / (1024 * 1024)}MiBを超えています。通常のMP4へ再多重化するか、動画を再エンコードしてください。`,
+  );
 }
 
 export function inspectMovie(
@@ -244,6 +272,7 @@ function inspectVideoTrack(
   file: ISOFile,
   track: Movie["videoTracks"][number],
 ): InspectedVideoTrack {
+  const samples = file.getTrackSamplesInfo(track.id) ?? [];
   const codedWidth = track.video?.width ?? Number.NaN;
   const codedHeight = track.video?.height ?? Number.NaN;
   const rotation = rotationFromTrackMatrix(track.matrix);
@@ -251,7 +280,7 @@ function inspectVideoTrack(
   const trackHeight = positiveDimension(track.track_height, codedHeight);
   const swapsDimensions = rotation === 90 || rotation === 270;
   const timing = summarizeFrameTiming(
-    file.getTrackSamplesInfo(track.id) ?? [],
+    samples,
     track.timescale,
     track.nb_samples,
   );
@@ -266,6 +295,7 @@ function inspectVideoTrack(
     rotation,
     ...timing,
     totalSamples: track.nb_samples,
+    maxSampleBytes: maximumSampleBytes(samples),
     timescale: track.timescale,
     duration: track.duration,
     decoderConfig: {
@@ -281,6 +311,17 @@ function inspectVideoTrack(
       description,
     },
   };
+}
+
+function maximumSampleBytes(samples: readonly Sample[]): number {
+  let maximum = 0;
+  for (const sample of samples) {
+    if (!Number.isSafeInteger(sample.size) || sample.size <= 0) {
+      return Number.NaN;
+    }
+    maximum = Math.max(maximum, sample.size);
+  }
+  return maximum;
 }
 
 function extractCodecDescription(

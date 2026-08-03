@@ -45,7 +45,7 @@ export async function createDebugViewerSession({
   onError,
 }: DebugViewerSessionOptions): Promise<DebugViewerSession> {
   let frameIndex = 0;
-  let latestSeekIndex = -1;
+  let latestRequest = 0;
   let currentVisibility = { ...visibility };
   let source: DebugFrameSource | undefined;
   let sourceData: Parameters<DebugFrameSourceFactory["create"]>[0] | undefined;
@@ -54,10 +54,8 @@ export async function createDebugViewerSession({
   const destroy = () => {
     if (destroyed) return;
     destroyed = true;
-    latestSeekIndex += 1;
+    latestRequest += 1;
     signal.removeEventListener("abort", destroy);
-    data.videoArrayBuffer = null;
-    if (sourceData) sourceData.videoArrayBuffer = null;
     source?.destroy();
   };
   signal.addEventListener("abort", destroy, { once: true });
@@ -93,11 +91,9 @@ export async function createDebugViewerSession({
       file: data.file,
       frameTimestamps: data.frameTimestamps,
       sampleData: data.sampleData,
-      videoArrayBuffer: data.videoArrayBuffer,
       codecConfig: data.codecConfig,
       frameToSampleIndex: data.frameToSampleIndex,
     };
-    data.videoArrayBuffer = null;
     const activeSource = frameSourceFactory.create(sourceData, renderFallback);
     source = activeSource;
     await activeSource.initialize();
@@ -106,21 +102,21 @@ export async function createDebugViewerSession({
     const seekTo = async (requestedIndex: number): Promise<void> => {
       if (destroyed) return;
       frameIndex = DebugFrameNavigation.clamp(requestedIndex, totalFrames);
-      latestSeekIndex = frameIndex;
+      const request = ++latestRequest;
       if (!activeSource.usesExactFrames) {
         activeSource.seekFallback(frameIndex);
         return;
       }
 
-      const requested = frameIndex;
-      const frame = await activeSource.decode(requested);
-      if (destroyed || signal.aborted || latestSeekIndex !== requested) {
+      const requestedFrame = frameIndex;
+      const frame = await activeSource.decode(requestedFrame);
+      if (destroyed || signal.aborted || latestRequest !== request) {
         frame?.close();
         throwIfAborted(signal);
         return;
       }
       await renderer.render(
-        requested,
+        requestedFrame,
         frame ?? activeSource.fallbackSource,
         currentVisibility,
         Boolean(frame),

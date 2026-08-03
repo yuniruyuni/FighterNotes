@@ -1,3 +1,5 @@
+import { MAX_ENCODED_SAMPLE_BYTES } from "./encoded-video-limits.js";
+
 export const VIDEO_INPUT_WIDTH = 1920;
 export const VIDEO_INPUT_HEIGHT = 1080;
 export const VIDEO_INPUT_MIN_FPS = 59;
@@ -14,6 +16,8 @@ export type VideoPreflightFailureCode =
   | "dimensions"
   | "frame_rate"
   | "variable_frame_rate"
+  | "metadata_size"
+  | "encoded_sample_size"
   | "unsupported_codec"
   | "frame_extraction"
   | "invalid_mp4";
@@ -36,6 +40,7 @@ export interface InspectedVideoTrack {
   readonly framesPerSecond: number;
   readonly constantFrameRate: boolean;
   readonly totalSamples: number;
+  readonly maxSampleBytes: number;
   readonly timescale: number;
   readonly duration: number;
   readonly decoderConfig: VideoDecoderConfig;
@@ -170,6 +175,16 @@ export function validateInspectedVideo(
       "可変フレームレート（VFR）を検出しました。OBSなどで固定60fps（CFR）を指定して録画し直してください。",
     );
   }
+  if (
+    !Number.isSafeInteger(track.maxSampleBytes) ||
+    track.maxSampleBytes <= 0 ||
+    track.maxSampleBytes > MAX_ENCODED_SAMPLE_BYTES
+  ) {
+    return failure(
+      "encoded_sample_size",
+      `動画内の圧縮フレームが大きすぎるため解析できません。映像品質またはビットレートを下げ、1フレームを${formatMegabytes(MAX_ENCODED_SAMPLE_BYTES)}MiB以下にしてMP4を再エンコードしてください。`,
+    );
+  }
   return {
     status: "valid",
     video: {
@@ -205,4 +220,8 @@ function formatInteger(value: number): string {
 
 function formatFrameRate(value: number): string {
   return Number.isFinite(value) ? value.toFixed(2) : "不明";
+}
+
+function formatMegabytes(bytes: number): string {
+  return String(bytes / (1024 * 1024));
 }

@@ -113,9 +113,6 @@ export function useDebugViewer(options: DebugViewerOptions) {
           frameCount: options.result.frameCount,
           frameTimestamps: options.result.frameTimestamps,
           sampleData: options.result.sampleData,
-          videoArrayBuffer: options.result.sampleData
-            ? await readFileBuffer(options.file, controller.signal)
-            : null,
           codecConfig: options.result.codecConfig,
           frameToSampleIndex: options.result.frameToSampleIdx,
         };
@@ -187,55 +184,4 @@ function isFormControl(target: EventTarget | null): boolean {
 
 function errorMessage(cause: unknown): string {
   return `エラー: ${cause instanceof Error ? cause.message : String(cause)}`;
-}
-
-function readFileBuffer(file: File, signal: AbortSignal): Promise<ArrayBuffer> {
-  return new Promise<ArrayBuffer>((resolve, reject) => {
-    const reader = new FileReader();
-    let settled = false;
-    const cleanup = () => {
-      signal.removeEventListener("abort", onAbort);
-      reader.onload = null;
-      reader.onerror = null;
-      reader.onabort = null;
-    };
-    const settle = (callback: () => void) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      callback();
-    };
-    const onAbort = () => {
-      if (reader.readyState === FileReader.LOADING) reader.abort();
-      settle(() => reject(abortReason(signal)));
-    };
-    reader.onload = () => {
-      const result = reader.result;
-      settle(() => {
-        if (result instanceof ArrayBuffer) resolve(result);
-        else reject(new Error("デバッグ動画を読み込めませんでした"));
-      });
-    };
-    reader.onerror = () =>
-      settle(() =>
-        reject(reader.error ?? new Error("デバッグ動画を読み込めませんでした")),
-      );
-    reader.onabort = onAbort;
-    signal.addEventListener("abort", onAbort, { once: true });
-    if (signal.aborted) {
-      onAbort();
-      return;
-    }
-    try {
-      reader.readAsArrayBuffer(file);
-    } catch (cause) {
-      settle(() => reject(cause));
-    }
-  });
-}
-
-function abortReason(signal: AbortSignal): Error {
-  return signal.reason instanceof Error
-    ? signal.reason
-    : new DOMException("認識デバッグを終了しました", "AbortError");
 }

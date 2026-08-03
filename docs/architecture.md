@@ -104,7 +104,9 @@ domain model が action ごとの移動フレーム数とカーソル範囲を�
 `spatial-analysis` が候補区間の第二段解析、`worker-bridge` が main thread と Worker の通信、
 `wasm-bridge` が生成済み WASM API との境界、`diagnostics` が browser の開発者向け出力を所有する。
 
-`video-decoding/mp4-video-source.ts` が動画トラックを demux して、
+`video-decoding/mp4-video-source.ts` は元の `File` / `Blob` を全量展開せず、MP4Boxが要求する
+最大1MiBのmetadata範囲と次の抽出batchに必要なmedia範囲だけを読む。末尾`moov`でも、先に破棄した
+`mdat`をsample table確定後に正確なoffsetで読み直す。1回のpullで最大1batchだけを抽出し、
 WebCodecs の `VideoDecoder` へ encoded sample を供給する。各 decoded frame から
 次の領域だけを `OffscreenCanvas` へ切り出す。
 
@@ -119,6 +121,19 @@ WebCodecs の `VideoDecoder` へ encoded sample を供給する。各 decoded fr
 第一段と候補区間の再デコードは、デコーダの queue、decoded frame、Worker 未処理フレーム数を
 high/low watermark で制限する。長い動画や密な候補窓でも ImageData が無制限に滞留しないよう
 backpressure を掛け、abort / error 時は VideoFrame と待機中 admission を解放する。
+
+圧縮sampleは16MiB、抽出batchは8sampleかつ16MiB、JavaScript側の未投入sample queueは
+16sampleかつ32MiBを固定上限とする。`VideoDecoder`投入後からWorker完了前までは12frameのcount上限で、
+1sample上限からの理論値は192MiBになる。metadata累積読込は32MiB、MP4Boxから観測できるinput bufferはmetadata時32MiB・
+media時48MiB、MP4Box sample dataは16MiB、demuxが論理的に所有する合計は96MiBを超えると停止する。
+これらはJavaScriptとMP4Boxから追跡できるbuffer所有量の上限であり、allocator、decoder内部copy、
+codec、GPUを含むprocess RSSそのものの上限ではない。native側を含む実使用量はローカルE2EのChrome
+process-tree RSSをproxyとして比較する。第二段は最大16MiBのsample cacheを1個だけ持ち、入替え読込中の
+旧cacheとの合計も32MiB以下にする。
+
+認識デバッグは解析時の`File`とsample mappingを保持し、表示対象frameに必要なkeyframe以降だけを
+再decodeする。連続操作はlatest-winsで直列化し、置き換えられたdecodeのframeを閉じてから次を始める。
+mappingを利用できない旧履歴だけは`video`要素のseekへfallbackする。
 
 動画解析は Secure Context と WebCodecs `VideoDecoder` を必須とする。HTTPS ではない
 LAN 内 IP、Worker、OffscreenCanvas 2D、`VideoFrame` の bitmap 切り出し、`VideoDecoder` の

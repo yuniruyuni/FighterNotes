@@ -7,7 +7,6 @@ export interface DebugFrameSourceData {
   file: File;
   frameTimestamps: readonly number[];
   sampleData: FrameSample[] | null;
-  videoArrayBuffer: ArrayBuffer | null;
   codecConfig: VideoCodecConfig | null;
   frameToSampleIndex: number[] | null;
 }

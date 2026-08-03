@@ -11,7 +11,6 @@ interface AnalysisResultArtifacts {
   readonly analysisContext: AnalysisContext;
   readonly frameTimestamps: number[];
   readonly sampleData: FrameSample[];
-  readonly videoArrayBuffer: ArrayBuffer;
   readonly codecConfig: VideoCodecConfig | null;
   readonly frameToSampleIdx: number[];
 }
@@ -22,6 +21,9 @@ export function buildAnalysisResult(
 ): AnalysisResult {
   return {
     ...artifacts,
+    // Encoded video bytes stay in the caller-owned File and are read through
+    // bounded Blob slices for exact frame inspection.
+    videoArrayBuffer: null,
     report: JSON.parse(message.report),
     timeline: JSON.parse(message.timeline),
     trackedInputs: message.trackedInputs

@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { FrameSample } from "../../domain/result.js";
+import { BlobRangeReader } from "./blob-range-reader.js";
+import { BlobSampleReader } from "./blob-sample-reader.js";
 import { decodeFrameAt, decodeSampleRange } from "./webcodecs-frame-decoder.js";
 
 const globals = new Map<
   "VideoDecoder" | "EncodedVideoChunk",
   PropertyDescriptor | undefined
 >();
+const VIDEO_BLOB = new Blob([new Uint8Array(2048)]);
 
 beforeEach(() => {
   globals.set(
@@ -31,6 +34,7 @@ beforeEach(() => {
   FakeVideoDecoder.flushError = null;
   FakeVideoDecoder.omitTimestampOnReplay = null;
   FakeVideoDecoder.outputMode = "normal";
+  FakeVideoDecoder.onClose = null;
   FakeVideoFrame.instances = [];
 });
 
@@ -44,7 +48,7 @@ describe("decodeSampleRange backpressure", () => {
     const frameCount = 1_001;
     const stats = await decodeSampleRange({
       samples: samples(frameCount),
-      videoArrayBuffer: new ArrayBuffer(0),
+      videoBlob: VIDEO_BLOB,
       codecConfig: { codec: "fake", width: 1920, height: 1080 },
       firstSampleIndex: 0,
       lastSampleIndex: frameCount - 1,
@@ -78,7 +82,7 @@ describe("decodeSampleRange backpressure", () => {
     const seen: number[] = [];
     const decoding = decodeSampleRange({
       samples: samples(frameCount),
-      videoArrayBuffer: new ArrayBuffer(0),
+      videoBlob: VIDEO_BLOB,
       codecConfig: { codec: "fake", width: 1920, height: 1080 },
       firstSampleIndex: 0,
       lastSampleIndex: frameCount - 1,
@@ -128,7 +132,7 @@ describe("decodeSampleRange backpressure", () => {
 
     const stats = await decodeSampleRange({
       samples: input,
-      videoArrayBuffer: new ArrayBuffer(0),
+      videoBlob: VIDEO_BLOB,
       codecConfig: { codec: "fake", width: 1920, height: 1080 },
       firstSampleIndex: 0,
       lastSampleIndex: input.length - 1,
@@ -164,7 +168,7 @@ describe("decodeSampleRange backpressure", () => {
 
     const stats = await decodeSampleRange({
       samples: samples(25),
-      videoArrayBuffer: new ArrayBuffer(0),
+      videoBlob: VIDEO_BLOB,
       codecConfig: { codec: "fake", width: 1920, height: 1080 },
       firstSampleIndex: 0,
       lastSampleIndex: 24,
@@ -186,7 +190,7 @@ describe("decodeSampleRange backpressure", () => {
 
     const decoding = decodeSampleRange({
       samples: samples(13),
-      videoArrayBuffer: new ArrayBuffer(0),
+      videoBlob: VIDEO_BLOB,
       codecConfig: { codec: "fake", width: 1920, height: 1080 },
       firstSampleIndex: 0,
       lastSampleIndex: 12,
@@ -208,7 +212,7 @@ describe("decodeSampleRange backpressure", () => {
     const started = deferred<void>();
     const decoding = decodeSampleRange({
       samples: samples(100),
-      videoArrayBuffer: new ArrayBuffer(0),
+      videoBlob: VIDEO_BLOB,
       codecConfig: { codec: "fake", width: 1920, height: 1080 },
       firstSampleIndex: 0,
       lastSampleIndex: 99,
@@ -230,6 +234,45 @@ describe("decodeSampleRange backpressure", () => {
     ).toBeTrue();
   });
 
+  test("abort during a blocked Blob read never submits the late sample", async () => {
+    const controller = new AbortController();
+    const reason = new Error("cancel blocked spatial sample read");
+    let resolveRead!: (buffer: ArrayBuffer) => void;
+    let markReadStarted!: () => void;
+    const readStarted = new Promise<void>((resolve) => {
+      markReadStarted = resolve;
+    });
+    const rangeReader = new BlobRangeReader(VIDEO_BLOB, controller.signal, {
+      readSlice: () => {
+        markReadStarted();
+        return new Promise<ArrayBuffer>((resolve) => {
+          resolveRead = resolve;
+        });
+      },
+    });
+    const sampleReader = new BlobSampleReader(VIDEO_BLOB, controller.signal, {
+      reader: rangeReader,
+    });
+    const decoding = decodeSampleRange({
+      samples: samples(1),
+      videoBlob: VIDEO_BLOB,
+      codecConfig: { codec: "fake", width: 1920, height: 1080 },
+      firstSampleIndex: 0,
+      lastSampleIndex: 0,
+      sampleReader,
+      signal: controller.signal,
+      onFrame() {},
+    });
+    await readStarted;
+
+    controller.abort(reason);
+    resolveRead(new ArrayBuffer(1));
+
+    await expect(decoding).rejects.toBe(reason);
+    expect(FakeVideoDecoder.instances).toHaveLength(1);
+    expect(FakeVideoDecoder.instances[0].decodeCount).toBe(0);
+  });
+
   test("decoder errors reject flow waiters and close delivered VideoFrames", async () => {
     const reason = new DOMException(
       "synthetic decoder failure",
@@ -240,7 +283,7 @@ describe("decodeSampleRange backpressure", () => {
 
     const decoding = decodeSampleRange({
       samples: samples(100),
-      videoArrayBuffer: new ArrayBuffer(0),
+      videoBlob: VIDEO_BLOB,
       codecConfig: { codec: "fake", width: 1920, height: 1080 },
       firstSampleIndex: 0,
       lastSampleIndex: 99,
@@ -263,7 +306,7 @@ describe("decodeSampleRange backpressure", () => {
     await expect(
       decodeSampleRange({
         samples: samples(4),
-        videoArrayBuffer: new ArrayBuffer(0),
+        videoBlob: VIDEO_BLOB,
         codecConfig: { codec: "fake", width: 1920, height: 1080 },
         firstSampleIndex: 0,
         lastSampleIndex: 3,
@@ -279,7 +322,7 @@ describe("decodeSampleRange backpressure", () => {
   test("decodeFrameAt returns a clone while closing every decoder-owned frame", async () => {
     const result = await decodeFrameAt({
       samples: samples(3),
-      videoArrayBuffer: new ArrayBuffer(0),
+      videoBlob: VIDEO_BLOB,
       codecConfig: { codec: "fake", width: 1920, height: 1080 },
       frameToSampleIndex: [0, 1, 2],
       frameIndex: 2,
@@ -298,14 +341,36 @@ describe("decodeSampleRange backpressure", () => {
     result?.close();
     expect(retained.closeCount).toBe(1);
   });
+
+  test("abort raised while closing the decoder rejects and closes the retained clone", async () => {
+    const controller = new AbortController();
+    const reason = new Error("abort from decoder close hook");
+    FakeVideoDecoder.onClose = () => controller.abort(reason);
+
+    await expect(
+      decodeFrameAt({
+        samples: samples(1),
+        videoBlob: VIDEO_BLOB,
+        codecConfig: { codec: "fake", width: 1920, height: 1080 },
+        frameToSampleIndex: [0],
+        frameIndex: 0,
+        signal: controller.signal,
+      }),
+    ).rejects.toBe(reason);
+
+    expect(FakeVideoFrame.instances).toHaveLength(2);
+    expect(FakeVideoFrame.instances.map((frame) => frame.closeCount)).toEqual([
+      1, 1,
+    ]);
+  });
 });
 
 function samples(count: number): FrameSample[] {
   return Array.from({ length: count }, (_, timestampUs) => ({
     isSync: timestampUs === 0,
     timestampUs,
-    offset: 0,
-    size: 0,
+    offset: timestampUs,
+    size: 1,
   }));
 }
 
@@ -364,6 +429,7 @@ class FakeVideoDecoder extends EventTarget {
   static flushError: DOMException | null = null;
   static omitTimestampOnReplay: number | null = null;
   static outputMode: "normal" | "flush" | "none" = "normal";
+  static onClose: (() => void) | null = null;
   static decoderError: DOMException = new DOMException(
     "synthetic decoder failure",
     "EncodingError",
@@ -425,6 +491,7 @@ class FakeVideoDecoder extends EventTarget {
     if (this.state === "closed") return;
     this.state = "closed";
     this.closeCount += 1;
+    FakeVideoDecoder.onClose?.();
     this.#queue.length = 0;
     this.#pendingOutputs.length = 0;
     this.decodeQueueSize = 0;

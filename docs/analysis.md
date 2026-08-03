@@ -56,11 +56,22 @@ WebCodecs などの実行環境条件も揃うまで解析 Worker と WASM は�
 
 ### Demux と decode
 
-事前検証は MP4Box の progressive parser が要求する file offset だけを 1MiB 単位で読み、
-大きな `mdat` を保持せず `moov` と sample table を確認する。検証済み track metadata と
-`File` identity は解析開始時へ引き渡し、同じファイルであることを再確認してから再利用する。
-その後 `client/src/modules/analysis/infrastructure/video-decoding/mp4-video-source.ts` が元ファイルを
-ArrayBuffer として一度読み、MP4Box で video sample を取り出す。解析全体の調停は
+事前検証は MP4Box の progressive parser が要求する file offset だけを最大 1MiB ずつ読み、
+大きな `mdat` を保持せず `moov` と sample table を確認する。metadata の累積読込量は 32MiB を
+上限とする。検証済み track metadata と `File` identity は解析開始時へ引き渡し、同じファイルで
+あることを再確認してから再利用する。
+
+`client/src/modules/analysis/infrastructure/video-decoding/mp4-video-source.ts` は元の `File` / `Blob` を
+全量の `ArrayBuffer` にせず、MP4Box が要求する metadata 範囲と、次の抽出batchに必要なvideo sample
+範囲だけを読む。末尾 `moov` の解析前に破棄された先頭側 `mdat` も、sample table確定後に必要範囲だけ
+読み直す。圧縮sampleは1個16MiB、抽出batchは8sampleかつ16MiB、JavaScript側の未投入sample queueは
+16sampleかつ32MiBを固定上限とし、queueが8sampleかつ16MiBまで減ってから供給を再開する。
+`VideoDecoder`投入後はWorker完了前を12frameまでに制限する。1sample上限からの理論上は192MiBで、
+decoder内部copy、codec、GPU memoryはJavaScriptのbuffer統計に含まれない。metadataまたは
+圧縮frameが上限を超える入力は、通常のMP4への再多重化または低bitrateでの再エンコードを案内して
+解析を停止する。
+
+解析全体の調停は
 `client/src/modules/analysis/infrastructure/pipeline/webcodecs-analysis-pipeline.ts` が担当する。
 WebCodecs の `VideoDecoder` は encoded sample を順に decode し、各 `VideoFrame` から HUD、入力、
 フレームメーターの strip を切り出す。
@@ -68,6 +79,7 @@ WebCodecs の `VideoDecoder` は encoded sample を順に decode し、各 `Vide
 main thread は描画と buffer 転送を担当し、`client/src/entrypoints/analyzer-worker.ts` から
 起動した Worker runtime が WASM を実行する。
 2 slot の ping-pong buffer、decode queue 上限、Worker 未完了数の上限で memory 使用量を抑える。
+native側を含む実使用量は、ローカルE2EのChrome process-tree RSSを補助指標として比較する。
 
 ### 知覚層
 
@@ -172,7 +184,9 @@ meter や入力が読めない場合、一部のイベントは HP ベースへ 
 480x270 の frame から actor anchor、bounding box、相対距離、左右順序、水平移動、
 小型移動体の軌道を抽出する。
 
-再 decode でも encoded queue と未処理 decoded frame を high/low watermark で制限する。
+再 decode でも元の `File` / `Blob` からsample範囲だけを読み、1個のbounded cacheを再利用する。
+cache miss中も旧cacheと新しい読込の合計を固定上限内に保つ。encoded queue と未処理 decoded frameを
+high/low watermark で制限する。
 RGBA buffer の Worker 転送も予約時点で pending 上限を確保し、ack が low watermark まで
 戻ったときだけ再開する。このため長い候補窓でも VideoFrame と transferable buffer の滞留量は
 窓長に比例しない。中断、decoder error、Worker error では待機中の admission を棄却し、受領済みの

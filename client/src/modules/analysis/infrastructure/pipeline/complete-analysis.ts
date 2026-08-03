@@ -33,7 +33,7 @@ export interface AnalysisCompletionSession {
 interface CompleteAnalysisOptions {
   readonly session: AnalysisCompletionSession;
   readonly analysisContext: AnalysisContext;
-  readonly videoArrayBuffer: ArrayBuffer;
+  readonly videoFile: Blob;
   readonly sampleData: FrameSample[];
   readonly frameToSampleIdx: number[];
   readonly frameTimestamps: number[];
@@ -48,7 +48,7 @@ export async function completeAnalysis(
   const {
     session,
     analysisContext,
-    videoArrayBuffer,
+    videoFile,
     sampleData,
     frameToSampleIdx,
     frameTimestamps,
@@ -71,7 +71,7 @@ export async function completeAnalysis(
       windows,
       sampleData,
       frameToSampleIdx,
-      videoArrayBuffer,
+      videoFile,
       codecConfig,
       resetWindow: () => waitForAbort(session.resetSpatialWindow(), signal),
       sendFrame: (frameIndex, createRgbaBuffer, hints, processingSignal) =>
@@ -102,7 +102,6 @@ export async function completeAnalysis(
     analysisContext,
     frameTimestamps,
     sampleData,
-    videoArrayBuffer,
     codecConfig,
     frameToSampleIdx,
   });

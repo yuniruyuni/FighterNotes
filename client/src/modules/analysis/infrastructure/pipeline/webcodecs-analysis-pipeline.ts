@@ -1,4 +1,10 @@
 import type { AnalysisContext } from "../../domain/context.js";
+import {
+  ENCODED_QUEUE_BYTE_LOW_WATERMARK,
+  ENCODED_QUEUE_SAMPLE_LOW_WATERMARK,
+  MAX_ENCODED_QUEUE_BYTES,
+  MAX_ENCODED_QUEUE_SAMPLES,
+} from "../../domain/encoded-video-limits.js";
 import type {
   AnalysisProgress,
   AnalysisResult,
@@ -45,8 +51,10 @@ export async function analyzeWithWebCodecs(
   signal: AbortSignal,
 ): Promise<AnalysisResult> {
   throwIfAborted(signal);
-  const arrayBuffer = await file.arrayBuffer();
-  throwIfAborted(signal);
+  // Startup latency begins at the analysis pipeline entry. Keeping this
+  // origin outside the demux source also captures any file materialization or
+  // worker/decoder setup that precedes the first encoded sample.
+  const analysisStartedAt = performance.now();
   // 独立した WASM インスタンスでメーターと HUD・入力を並列解析する。
   const workerUrl = new URL("./analyzer-worker.js", import.meta.url);
   const resultWorker = new Worker(workerUrl, { type: "module" });
@@ -71,6 +79,7 @@ export async function analyzeWithWebCodecs(
     const cleanup = (reason?: unknown) => {
       signal.removeEventListener("abort", onAbort);
       videoSource?.stop();
+      decodePump.stop();
       resultWorkerSession?.terminate(reason);
       meterWorkerSession?.terminate(reason);
       if (decoder && decoder.state !== "closed") decoder.close();
@@ -106,6 +115,13 @@ export async function analyzeWithWebCodecs(
     const decodePump = new DecodePump<EncodedVideoChunk>({
       maxDecodeQueue: 12,
       maxOutstandingFrames: 12,
+      maxQueuedSamples: MAX_ENCODED_QUEUE_SAMPLES,
+      queuedSampleLowWatermark: ENCODED_QUEUE_SAMPLE_LOW_WATERMARK,
+      maxQueuedBytes: MAX_ENCODED_QUEUE_BYTES,
+      queuedByteLowWatermark: ENCODED_QUEUE_BYTE_LOW_WATERMARK,
+      onQueueLow() {
+        videoSource?.pull();
+      },
       onReadyToFlush() {
         const activeDecoder = decoder;
         if (!activeDecoder) {
@@ -151,7 +167,7 @@ export async function analyzeWithWebCodecs(
     void completeAnalysis({
       session: resultWorkerSession,
       analysisContext,
-      videoArrayBuffer: arrayBuffer,
+      videoFile: file,
       sampleData,
       frameToSampleIdx,
       frameTimestamps,
@@ -164,6 +180,16 @@ export async function analyzeWithWebCodecs(
           frameIndex,
           tDraw: frameDispatcher.drawTime,
           ...frameBridge.timing,
+          ...(videoSource
+            ? {
+                streaming: {
+                  videoBytes: file.size,
+                  preflightMetadataBytes: validatedVideo.metadataBytesRead,
+                  demux: videoSource.statistics,
+                  encodedQueue: decodePump.statistics,
+                },
+              }
+            : {}),
         });
         succeed(result);
       })
@@ -212,26 +238,27 @@ export async function analyzeWithWebCodecs(
     }
 
     videoSource = new Mp4VideoSource(
-      arrayBuffer,
+      file,
       {
         onTrack: configureDecoder,
         onSamples(samples) {
           for (const sample of samples) {
             sampleByTs.add(sample.metadata.timestampUs, sampleData.length);
             sampleData.push(sample.metadata);
-            decodePump.enqueue(sample.chunk);
+            decodePump.enqueue(sample.chunk, sample.chunk.byteLength);
           }
           pumpDecoder();
         },
         onError: fail,
       },
       validatedVideo.track,
+      { signal },
     );
 
     resultWorkerSession.initialize(ownSide, analysisContext);
     meterWorkerSession.initialize(ownSide, analysisContext);
     try {
-      videoSource.start();
+      videoSource.start(analysisStartedAt);
     } catch (error) {
       fail(error);
     }

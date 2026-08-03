@@ -13,13 +13,21 @@ class BrowserDebugFrameSource implements DebugFrameSource {
     "認識デバッグの動画読込を中断しました",
     "AbortError",
   );
+  readonly #supersededError = new DOMException(
+    "新しいフレーム要求で置き換えました",
+    "AbortError",
+  );
   #data: DebugFrameSourceData | null;
   #videoUrl: string | undefined;
   #destroyed = false;
+  #decodeGeneration = 0;
+  #activeDecode: AbortController | undefined;
+  #decodeSettled: Promise<void> = Promise.resolve();
 
   constructor(data: DebugFrameSourceData, onFallbackFrame: () => void) {
     this.#data = data;
     this.fallbackSource.muted = true;
+    this.fallbackSource.preload = "metadata";
     this.fallbackSource.addEventListener("seeked", onFallbackFrame, {
       signal: this.#abort.signal,
     });
@@ -27,9 +35,7 @@ class BrowserDebugFrameSource implements DebugFrameSource {
 
   get usesExactFrames(): boolean {
     const data = this.#data;
-    return Boolean(
-      data?.sampleData && data.videoArrayBuffer && data.codecConfig,
-    );
+    return Boolean(data?.sampleData && data.codecConfig);
   }
 
   async initialize(): Promise<void> {
@@ -64,18 +70,46 @@ class BrowserDebugFrameSource implements DebugFrameSource {
   }
 
   async decode(index: number): Promise<VideoFrame | null> {
+    const generation = ++this.#decodeGeneration;
+    this.#activeDecode?.abort(this.#supersededError);
+    await this.#decodeSettled;
+    if (generation !== this.#decodeGeneration) return null;
     const data = this.#requireData();
-    const { sampleData, videoArrayBuffer, codecConfig, frameToSampleIndex } =
-      data;
-    if (!sampleData || !videoArrayBuffer || !codecConfig) return null;
-    return decodeFrameAt({
+    const { file, sampleData, codecConfig, frameToSampleIndex } = data;
+    if (!sampleData || !codecConfig) return null;
+    const controller = new AbortController();
+    this.#activeDecode = controller;
+    const decoding = decodeFrameAt({
       samples: sampleData,
-      videoArrayBuffer,
+      videoBlob: file,
       codecConfig,
       frameToSampleIndex,
       frameIndex: index,
-      signal: this.#abort.signal,
+      signal: controller.signal,
     });
+    this.#decodeSettled = decoding.then(
+      () => undefined,
+      () => undefined,
+    );
+    try {
+      const frame = await decoding;
+      if (generation !== this.#decodeGeneration || controller.signal.aborted) {
+        frame?.close();
+        if (controller.signal.reason === this.#supersededError) return null;
+        throw abortReason(controller.signal, this.#abortError);
+      }
+      return frame;
+    } catch (error) {
+      if (
+        controller.signal.aborted &&
+        controller.signal.reason === this.#supersededError
+      ) {
+        return null;
+      }
+      throw error;
+    } finally {
+      if (this.#activeDecode === controller) this.#activeDecode = undefined;
+    }
   }
 
   seekFallback(index: number): void {
@@ -90,12 +124,14 @@ class BrowserDebugFrameSource implements DebugFrameSource {
   destroy(): void {
     if (this.#destroyed) return;
     this.#destroyed = true;
+    this.#decodeGeneration += 1;
+    this.#activeDecode?.abort(this.#abortError);
+    this.#activeDecode = undefined;
     this.#abort.abort(this.#abortError);
     if (this.#videoUrl) {
       URL.revokeObjectURL(this.#videoUrl);
       this.#videoUrl = undefined;
     }
-    if (this.#data) this.#data.videoArrayBuffer = null;
     this.#data = null;
     this.fallbackSource.pause();
     this.fallbackSource.removeAttribute("src");
@@ -106,6 +142,10 @@ class BrowserDebugFrameSource implements DebugFrameSource {
     if (!this.#data) throw this.#abortError;
     return this.#data;
   }
+}
+
+function abortReason(signal: AbortSignal, fallback: DOMException): unknown {
+  return signal.reason instanceof Error ? signal.reason : fallback;
 }
 
 export const browserDebugFrameSourceFactory: DebugFrameSourceFactory = {

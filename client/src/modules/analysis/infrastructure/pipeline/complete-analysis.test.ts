@@ -32,7 +32,7 @@ function options(workerSession: AnalysisCompletionSession) {
   return {
     session: workerSession,
     analysisContext: { ownSide: "p1" as const, p1: {}, p2: {} },
-    videoArrayBuffer: new ArrayBuffer(0),
+    videoFile: new Blob(),
     sampleData: [],
     frameToSampleIdx: [],
     frameTimestamps: [0],

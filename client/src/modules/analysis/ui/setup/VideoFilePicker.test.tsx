@@ -25,6 +25,7 @@ function validatedVideo(): ValidatedVideoInput {
       framesPerSecond: 59.94,
       constantFrameRate: true,
       totalSamples: 600,
+      maxSampleBytes: 1024,
       timescale: 60_000,
       duration: 600_600,
       decoderConfig: {
