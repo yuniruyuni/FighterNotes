@@ -571,6 +571,9 @@ export function semanticSnapshot(artifact: Record<string, unknown>): unknown {
     regressionEvents: artifact.regressionEvents ?? null,
     spatialWindows: artifact.spatialWindows ?? null,
     spatialObservations: artifact.spatialObservations ?? null,
+    ...(artifact.decodeMapping === undefined
+      ? {}
+      : { decodeMapping: artifact.decodeMapping }),
   };
 }
 

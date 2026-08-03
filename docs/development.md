@@ -250,6 +250,10 @@ runner はファイル選択後に画面の `data-video-preflight-status` が `v
 MP4 metadata、codec、`VideoFrame` bitmap probe を通ったこともローカルE2Eで回帰確認できる。
 空間解析については処理frame数、decoder queue / decoded frame / Worker pendingのwatermarkとpeakも
 case artifactへ保存する。runnerはpeakがhigh watermarkを超えたartifactを拒否する。
+runner version 5は、全frame timestamp、frame-to-sample index、sample offset・size・timestampの
+canonical SHA-256と件数も保存する。baseline比較ではこのmapping identityを完全一致させ、streaming化で
+decode対象が変わっていないことを確認する。さらにmetadata/mediaの読込量、MP4BoxとBlob cacheのpeak、
+batch・encoded queueのpeakと固定上限をartifactへ保存し、固定上限超過または設定値の改変を即時に拒否する。
 通常の精度確認は1回で実行できる。`performance.measuredRuns`と`warmupRuns`、または
 `--runs`と`--warmup-runs`で統計計測回数を指定できる。
 出力は同じ親directoryの一時directoryで全caseとsummaryを完成させてから置換するため、解析中断や
@@ -258,6 +262,9 @@ artifact生成失敗で既存のcurrent directoryが部分的なrunに置き換�
 実行環境を固定した速度・精度比較では、変更前の出力directoryを残して`--baseline`で指定する。
 baseline比較はwarm-up後に最低3回を測り、総時間の中央値/p90とfirst pass、spatial pass、
 frame切り出し、Worker copy、meter WASM、HUD WASMの中央値を閾値判定する。閾値超過は非0終了になる。
+startupは解析buttonをclickした直前から、browserで最初の`EncodedVideoChunk`が構築されるまでを
+外側から計測し、中央値とp90を別々の閾値で判定する。demux内部の開始から最初のsample batchまでの
+時間も別の診断値として保存するが、変更前後で開始点が異なる実装の公平なstartup比較には使わない。
 同一fixtureの空間処理frame数も一致を要求し、Worker peak pendingは比較ログへ出力する。
 baseline側も1回以上のwarm-upと3回以上の計測で生成されていなければ比較を拒否する。
 動画内容のSHA-256、side・character設定、annotation・期待値の正規化hash、runner version、
@@ -267,6 +274,34 @@ summaryのcapture hash・semantic hashはcase artifactから再計算し、古�
 baseline比較を行うcaseには、1件以上の`semanticEvents`と`detectorGates`が必要になる。
 `--baseline`と`--output`はreal path上でも別かつ包含関係にないdirectoryでなければならず、symlinkを
 介して同じdirectoryを指定する比較も解析開始前に拒否する。
+
+Linuxでrunner自身がChromeを起動した場合は、target作成前から解析完了とdecode mapping公開まで、
+Chromeのprocess tree RSSを100ms間隔で測る。mappingのJSON化とCDP転送は測定外にする。この値は
+Chrome本体や共有processを含み、複数processのVmRSSに現れる共有memory pageを重複計上し得て、
+100ms未満の一時peakも捉えないため、同じhost・browser build・実行順でのA/B用proxyとして扱う。
+`--cdp`利用時とLinux以外ではRSSは`null`になる。変更前後がともに`null`なら比較を明示的にskipし、
+片側だけ`null`なら測定条件不一致として失敗する。
+
+full-buffer版とstreaming版を直接比較するときは、変更前revisionの一時worktreeへ、変更後と同じ
+click-to-first-`EncodedVideoChunk` probe、process-tree RSS sampler、decode mapping identity captureだけを
+適用する。解析実装と既存のartifact契約は変えず、同じ実動画・manifest・browserでcontrolを先、変更版を
+後に連続実行する。runner version 4のartifactはsemantic出力と総時間の比較には利用できるが、
+version 5で追加したdecode mapping、streaming、startup、RSS比較は明示的にskipされる。
+
+```bash
+# 変更前の一時worktree（外部probeだけを適用済み）
+bun run build
+bun run local:e2e -- --output output/local-video-e2e/control --runs 3 --warmup-runs 1
+
+# streaming変更後のworktree
+bun run build
+bun run local:e2e -- --output output/local-video-e2e/streaming --runs 3 --warmup-runs 1
+```
+
+controlの`<case>.full-buffer-probe.json`と変更後の`<case>.json`で、
+`firstSampleRunsMs`、`firstSampleMedianMs`、`firstSampleP90Ms`、`processTreePeakRssBytes`の4fieldと
+`decodeMapping.sha256`を照合する。変更後では4fieldは`streamingPerformance`内にある。mapping hashと
+件数が一致し、startup中央値/p90とRSSが同じ測定契約で改善した場合だけ直接比較の根拠にする。
 
 ```bash
 mv output/local-video-e2e/current output/local-video-e2e/baseline
