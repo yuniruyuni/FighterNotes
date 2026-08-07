@@ -46,5 +46,6 @@ mod throw_action_links_delayed_damage_and_deduplicates_held_input;
 mod throw_input_without_matching_execution_is_unconfirmed;
 mod throw_loses_to_invincible_reversal;
 mod timeline_projections_clip_entries_and_apply_later_overlaps;
+mod whiff_tracks_unconnected_attacks;
 
 pub(super) mod support;

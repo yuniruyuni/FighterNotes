@@ -28,6 +28,10 @@ const tactics = (): TacticStats => ({
   dash_throws_faced: 1,
   throw_whiffs: 2,
   minus_defense_opportunities: 5,
+  whiffs: 0,
+  whiffs_punished: 0,
+  opponent_whiffs: 0,
+  opponent_whiffs_punished: 0,
   advantage_opportunities: 0,
   advantage_continued: 0,
   advantage_abandoned: 0,
@@ -485,7 +489,7 @@ describe("share projection", () => {
     ).toEqual({ detected: 255, won: 0, lost: 0, unresolved: 255 });
   });
 
-  test("ruleset v3からv10を共有し、それ以外は理由付きで拒否する", () => {
+  test("ruleset v3からv11を共有し、それ以外は理由付きで拒否する", () => {
     const context: AnalysisContext = {
       ownSide: "p1",
       p1: { character: "LUKE" },
@@ -500,7 +504,7 @@ describe("share projection", () => {
     }
 
     // v9以降はSA/CA集計を必須にするため、同じ形で個別に確認する。
-    for (const rulesetVersion of [9, 10]) {
+    for (const rulesetVersion of [9, 10, 11]) {
       const current = report();
       current.ruleset_version = rulesetVersion;
       Object.assign(current.tactic_stats, {
@@ -521,7 +525,7 @@ describe("share projection", () => {
     }
 
     const unsupported = report();
-    unsupported.ruleset_version = 11;
+    unsupported.ruleset_version = 12;
     expect(() => PublishedAnalysisCandidate.from(context, unsupported)).toThrow(
       "この解析ルール世代は共有に対応していません",
     );

@@ -110,6 +110,23 @@ pub(crate) fn build_tactic_stats(
         })
         .count() as u32;
 
+    for whiff in events.whiffs.iter().filter(|whiff| {
+        event_in_round(whiff.round_no, whiff.frame) && whiff.confidence == EventConfidence::High
+    }) {
+        let punished = whiff.outcome == WhiffOutcome::Punished;
+        if whiff.side == own {
+            stats.whiffs += 1;
+            if punished {
+                stats.whiffs_punished += 1;
+            }
+        } else {
+            stats.opponent_whiffs += 1;
+            if punished {
+                stats.opponent_whiffs_punished += 1;
+            }
+        }
+    }
+
     for situation in events.advantage_situations.iter().filter(|situation| {
         event_in_round(situation.round_no, situation.frame)
             && situation.side == own

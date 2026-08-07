@@ -172,6 +172,18 @@ pub struct TacticStats {
     /// 入力を直接観測できた、ガード後 1F 以上不利の判断機会。
     #[serde(default)]
     pub minus_defense_opportunities: u32,
+    /// 接触しなかった自分の攻撃判定（投げ・DI・無敵技・弾を除く）。
+    #[serde(default)]
+    pub whiffs: u32,
+    /// そのうち硬直を狩られた数。
+    #[serde(default)]
+    pub whiffs_punished: u32,
+    /// 相手の空振り。差し返しの分母。
+    #[serde(default)]
+    pub opponent_whiffs: u32,
+    /// 相手の空振りを狩れた数。差し返しの分子。
+    #[serde(default)]
+    pub opponent_whiffs_punished: u32,
     /// 入力を直接観測できた、ガードさせて有利を取った側の判断機会。
     #[serde(default)]
     pub advantage_opportunities: u32,

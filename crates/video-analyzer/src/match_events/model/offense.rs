@@ -59,6 +59,44 @@ pub struct ThrowActionEvent {
     pub round_no: u32,
 }
 
+/// 空振りした攻撃の結末。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WhiffOutcome {
+    /// 空振りの硬直中から直後にかけて反撃を受けた。
+    Punished,
+    /// 反撃されずに済んだ。
+    Unpunished,
+}
+
+/// 相手へ届かなかった通常技の攻撃判定（空振り）。
+///
+/// 攻撃判定が出ているのに接触が一度も無かった run を空振りとする。
+/// 投げ・Drive Impact・無敵技はそれぞれ専用のイベントとカードを持つため
+/// ここには含めない。弾は距離を取って撃つ行動が正常なので対象外とする。
+///
+/// `Unpunished` は「反撃されなかった」だけを意味する。相手が届く位置に
+/// いたかまでは断定しないため、これだけで相手の見逃しとは扱わない。
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct WhiffEvent {
+    /// 空振りした側。
+    pub side: u8,
+    /// 攻撃判定の開始フレーム。
+    pub frame: u32,
+    /// 攻撃判定の終了フレーム。ここから硬直が始まる。
+    pub end_frame: u32,
+    pub outcome: WhiffOutcome,
+    /// `Punished` で失った HP（それ以外は 0）。
+    #[serde(default)]
+    pub drop: f32,
+    /// 反撃を受けた接触フレーム。
+    #[serde(default)]
+    pub punished_frame: Option<u32>,
+    #[serde(default)]
+    pub confidence: EventConfidence,
+    pub round_no: u32,
+}
+
 /// 有利のうちに開始した攻め継続の種類。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]

@@ -236,6 +236,10 @@ export interface TacticStats {
   dash_throws_faced: number;
   throw_whiffs: number;
   minus_defense_opportunities: number;
+  whiffs: number;
+  whiffs_punished: number;
+  opponent_whiffs: number;
+  opponent_whiffs_punished: number;
   advantage_opportunities: number;
   advantage_continued: number;
   advantage_abandoned: number;

@@ -8,7 +8,7 @@
 目的は試合を完全再現することではなく、複数の映像証拠が一致した場面を抽出し、
 利用者が動画を見直す順序を作ることである。
 
-判定は決定的なルールベース処理で、現在の `RULESET_VERSION` は 10。
+判定は決定的なルールベース処理で、現在の `RULESET_VERSION` は 11。
 機械学習モデルや外部推論 API は使わない。
 
 ## 入力条件
@@ -148,6 +148,7 @@ viewer と event layer は、この確定済み系列を共通の入力にする
 | Round / damage | round 境界、勝敗、HP 減少 sequence、ゲーム内damage・補正率・攻撃属性、freeze 前 anchor |
 | Contact | hit / block、projectile contact、attacker / victim |
 | Input action | jump、throw、Drive Impact、raw Drive Rush |
+| Whiff | 接触しなかった攻撃判定と、その硬直を狩られたか |
 | Resource | burnout 期間、SA1/2/3/CA 使用、ゲージ前後、使用文脈と結果 |
 | Frame interaction | punish chance、reversal、guard break、minus 後の最速打撃・投げ、plus 後の攻め継続 |
 | Threat | 残存 projectile、teleport、複合 threat |
@@ -164,6 +165,7 @@ viewer と event layer は、この確定済み系列を共通の入力にする
 - SA/CA使用数のavailabilityは全検出ラウンドのゲージ観測被覆から判定する。単発イベントはその1回の証拠にはなるが、ほかの使用が無かった証拠にはしない。
 - 接触しない SA2 は `NoImmediateContact` とし、技ごとの役割が不明なまま空振り失敗とは呼ばない。
 - projectile の block や弾撃ち合いを、近距離の mashing として扱わない。
+- 空振りは投げ・DI・無敵技・弾を除き、専用イベントを持つ行動と二重計上しない。
 - 原因別カードへ帰属した大被弾を汎用 `big_hits` へ重複掲載しない。
 
 meter や入力が読めない場合、一部のイベントは HP ベースへ fallback するか、未確認のまま出力しない。
@@ -215,7 +217,7 @@ coverage は「試合画面を確定ラウンドへ割り当てられた割合�
 中央攻撃表示はHP被弾列への帰属率も検証する。SAゲージを十分に読めない場合、検出イベントが
 無いことを「使用0回」とは扱わない。
 
-現在のカード ID は次の22種である。
+現在のカード ID は次の23種である。
 
 | ID | 対象 |
 | --- | --- |
@@ -237,6 +239,7 @@ coverage は「試合画面を確定ラウンドへ割り当てられた割合�
 | `low_conversion` | 確定反撃の低い return |
 | `throw_interrupted_by_invincible` | 投げ実行直後に相手の無敵技で被弾した場面 |
 | `throw_whiff_punished` | 投げ空振り後に反撃を受けた場面 |
+| `whiff_punished` | 接触しなかった技の硬直を狩られた場面 |
 | `throw_loop` | 短時間の連続 throw 成立 |
 | `early_hits` | round 開始直後の被弾 |
 | `lead_loss` | 大きな HP lead を失った round |

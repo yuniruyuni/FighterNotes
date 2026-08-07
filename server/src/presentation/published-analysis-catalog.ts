@@ -176,6 +176,20 @@ export const FINDING_PRESENTATIONS: Record<FindingKind, FindingPresentation> = {
     },
     tone: "critical",
   },
+  whiff_punished: {
+    title: "届かない技の硬直を繰り返し狩られている",
+    description:
+      "相手へ接触しなかった技の硬直を複数回反撃され、技を置く距離とタイミングが崩れているパターンです。",
+    practice:
+      "主力技が届く距離と届かない距離の境目を確認し、その手前で振る形を作ります。",
+    observation: {
+      title: "空振りした技の硬直を狩られた場面",
+      description: `接触しなかった技の硬直を反撃された事実です。間合いを測る空振りは差し合いの一部なので、この件数だけでは技を置く距離の癖とは${OBSERVATION_REVIEW_CAVEAT}。`,
+      practice:
+        "間合いを測る意図の空振りだったか、届くつもりで外したかを確認します。",
+    },
+    tone: "critical",
+  },
   guard_break: {
     title: "同じ方向へガード入力が繰り返し崩れている",
     description:
