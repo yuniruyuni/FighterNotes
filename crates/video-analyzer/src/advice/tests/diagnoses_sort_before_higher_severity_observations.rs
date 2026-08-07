@@ -35,7 +35,7 @@ fn diagnoses_sort_before_higher_severity_observations() {
     ];
 
     let report = detector_test_report(&ev, "p1");
-    assert_eq!(report.ruleset_version, 10);
+    assert_eq!(report.ruleset_version, 11);
     assert_eq!(report.cards[0].id, "throw_loop");
     assert_eq!(report.cards[0].kind, AdviceKind::Diagnosis);
     assert_eq!(report.cards[1].id, "big_hits");

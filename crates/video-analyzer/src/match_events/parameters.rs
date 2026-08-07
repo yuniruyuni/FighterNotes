@@ -64,6 +64,12 @@ pub(crate) const MINUS_PRESS_OUTCOME_WINDOW: u32 = 30;
 /// 不利ボタン: 押下直後このフレーム数以内に Invincible が出たら無敵技
 /// （reversal の領分）として除外する
 pub(crate) const MINUS_PRESS_INV_WINDOW: usize = 15;
+/// 空振り: 攻撃判定の前後で接触を探す猶予。コンタクト抽出の境界ずれと
+/// ヒットストップ表示の遅れを吸収する。
+pub(crate) const WHIFF_CONTACT_GRACE: u32 = 4;
+/// 空振り: 攻撃判定の終了後、反撃を受けたと結び付ける窓。これを超えてから
+/// の被弾は、その空振りの硬直を狩られた結果とは扱わない。
+pub(crate) const WHIFF_PUNISH_WINDOW: u32 = 40;
 /// 攻め継続の判断機会として扱う最小有利フレーム。+1/+2 は最速技でも次の
 /// 攻撃を確定させられず、動かないことを「有利を捨てた」とは呼べない。
 pub(crate) const ADVANTAGE_THRESHOLD: u32 = 3;

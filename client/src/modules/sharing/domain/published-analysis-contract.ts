@@ -19,6 +19,7 @@ export const SHAREABLE_FINDING_KINDS = [
   "low_conversion",
   "throw_interrupted_by_invincible",
   "throw_whiff_punished",
+  "whiff_punished",
   "throw_loop",
   "early_hits",
   "lead_loss",

@@ -12,6 +12,7 @@ mod rounds;
 mod super_efficiency;
 mod throw_loop;
 mod throw_whiff;
+mod whiff;
 
 pub(crate) use big_hits::detect_big_hits;
 pub(crate) use burnout::detect_burnout;
@@ -29,6 +30,7 @@ pub(crate) use rounds::{detect_early_hits, detect_lead_loss};
 pub(crate) use super_efficiency::detect_low_scaling_super;
 pub(crate) use throw_loop::detect_throw_loop;
 pub(crate) use throw_whiff::{detect_throw_interrupted_by_invincible, detect_throw_whiff_punished};
+pub(crate) use whiff::detect_whiff_punished;
 
 #[cfg(test)]
 mod tests;

@@ -29,6 +29,7 @@ fn detectors_abstain_without_relevant_events() {
             "throw_whiff_punished",
             detect_throw_whiff_punished(&events, 1),
         ),
+        ("whiff_punished", detect_whiff_punished(&events, 1)),
         ("guard_break", detect_guard_break(&events, 1)),
         ("reversal_punished", detect_reversal_punished(&events, 1)),
         ("low_scaling_super", detect_low_scaling_super(&events, 1)),

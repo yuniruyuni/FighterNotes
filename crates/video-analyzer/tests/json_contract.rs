@@ -102,6 +102,7 @@ fn events_json_keeps_the_serialized_boundary_and_omits_internal_series() {
             "presses_while_minus",
             "minus_situations",
             "advantage_situations",
+            "whiffs",
             "projectiles",
             "teleports",
             "compound_threats",

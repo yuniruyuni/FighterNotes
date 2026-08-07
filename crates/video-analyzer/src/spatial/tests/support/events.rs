@@ -26,6 +26,7 @@ pub(in crate::spatial::tests) fn empty_events() -> MatchEvents {
         presses_while_minus: vec![],
         minus_situations: vec![],
         advantage_situations: vec![],
+        whiffs: vec![],
         projectiles: vec![],
         teleports: vec![],
         compound_threats: vec![],

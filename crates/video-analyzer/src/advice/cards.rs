@@ -32,6 +32,7 @@ pub(crate) fn build_advice_cards(
         detect_low_conversion(events, own),
         detect_throw_interrupted_by_invincible(events, own),
         detect_throw_whiff_punished(events, own),
+        detect_whiff_punished(events, own),
         detect_throw_loop(events, opp),
         detect_early_hits(events, round_summaries, own),
         detect_lead_loss(events, round_summaries, own_index),
@@ -165,6 +166,12 @@ fn card_missing_requirements(
             (own_hp, OwnHp),
         ],
         "guard_break" => vec![(own_input, OwnInput), (contacts, Contacts), (own_hp, OwnHp)],
+        // 攻撃判定と接触の有無だけで成立する。入力表示は使わない。
+        "whiff_punished" => vec![
+            (both_meter, FrameMeter),
+            (contacts, Contacts),
+            (own_hp, OwnHp),
+        ],
         // 発生・硬直・接触をフレームメーターから作るカード。
         "reversal_punished" => vec![(punishes, Punishes), (own_hp, OwnHp)],
         "low_conversion" => vec![(punishes, Punishes), (opponent_hp, OpponentHp)],
