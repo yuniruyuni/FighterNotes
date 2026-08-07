@@ -129,16 +129,26 @@ const opponentSuperArtStatsSchema = z
   ])
   .superRefine(requireObservedPartial);
 
+type SuperArtLevelCounts = {
+  sa1: number;
+  sa2: number;
+  sa3: number;
+  ca: number;
+};
+
+/**
+ * `partial` は「観測できた使用が最低1回ある」ことを表すので、1回も無いなら
+ * `unavailable` でなければならない。levels は union 上 `partial` と `complete`
+ * で必須なため、`partial` へ絞り込んだ時点で必ず存在する。
+ */
 function requireObservedPartial(
-  value: {
-    availability: "complete" | "partial" | "unavailable";
-    levels?: { sa1: number; sa2: number; sa3: number; ca: number };
-  },
+  value:
+    | { availability: "complete" | "unavailable"; levels?: SuperArtLevelCounts }
+    | { availability: "partial"; levels: SuperArtLevelCounts },
   ctx: z.RefinementCtx,
 ): void {
   if (
     value.availability === "partial" &&
-    value.levels !== undefined &&
     value.levels.sa1 + value.levels.sa2 + value.levels.sa3 + value.levels.ca < 1
   ) {
     ctx.addIssue({

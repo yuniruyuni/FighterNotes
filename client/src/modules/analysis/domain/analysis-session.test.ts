@@ -310,4 +310,92 @@ describe("analysis session reducer", () => {
       }).progress,
     ).toBe(42.6);
   });
+
+  /**
+   * 中止処理の最中に開始できると、走っている解析を残したまま二重に始まる。
+   * 「解析中」と同じく開始不可でなければならない。
+   */
+  test("中止処理中は開始できない", () => {
+    const file = new File(["video"], "replay.mp4", { type: "video/mp4" });
+    const ready = {
+      ...AnalysisSession.initial(),
+      file,
+      videoPreflight: {
+        status: "valid" as const,
+        video: validatedVideo(file),
+      },
+      side: "p1" as const,
+      ownCharacter: "JURI",
+      opponentCharacter: "KEN",
+    };
+
+    expect(AnalysisSession.canStart(ready)).toBe(true);
+    expect(AnalysisSession.canStart({ ...ready, phase: "canceling" })).toBe(
+      false,
+    );
+    expect(AnalysisSession.canStart({ ...ready, phase: "analyzing" })).toBe(
+      false,
+    );
+    // 設定をやり直せる段階では、もう一度開始できる。
+    for (const phase of ["setup", "canceled", "ready"] as const) {
+      expect(AnalysisSession.canStart({ ...ready, phase })).toBe(true);
+    }
+  });
+
+  /**
+   * preflightは非同期に遅れて届く。設定段階を抜けた後の結果を適用すると、
+   * 解析中の状態を後から書き換えてしまう。
+   */
+  test("設定段階を抜けた後に届いたpreflight結果を適用しない", () => {
+    const file = new File(["video"], "replay.mp4", { type: "video/mp4" });
+    const selected = AnalysisSession.reduce(AnalysisSession.initial(), {
+      type: "file",
+      file,
+    });
+    const failure = {
+      status: "invalid" as const,
+      code: "variable_frame_rate" as const,
+      message: "VFRです",
+    };
+
+    for (const phase of ["analyzing", "canceling", "canceled"] as const) {
+      const running = { ...selected, phase };
+      expect(
+        AnalysisSession.reduce(running, {
+          type: "videoPreflightValid",
+          video: validatedVideo(file),
+        }),
+      ).toBe(running);
+      expect(
+        AnalysisSession.reduce(running, {
+          type: "videoPreflightInvalid",
+          failure,
+        }),
+      ).toBe(running);
+    }
+  });
+
+  /**
+   * 中止完了は、中止要求済みと解析中の両方から届きうる。それ以外の段階で
+   * 受け取ると、設定中や完了済みの画面を中止表示へ戻してしまう。
+   */
+  test("中止完了を中止中と解析中からだけ受け付ける", () => {
+    const base = AnalysisSession.initial();
+
+    for (const phase of ["canceling", "analyzing"] as const) {
+      expect(
+        AnalysisSession.reduce({ ...base, phase }, { type: "canceled" }),
+      ).toMatchObject({
+        phase: "canceled",
+        status: "解析を中止しました。設定を確認して再試行できます。",
+      });
+    }
+
+    for (const phase of ["setup", "canceled", "ready"] as const) {
+      const untouched = { ...base, phase };
+      expect(AnalysisSession.reduce(untouched, { type: "canceled" })).toBe(
+        untouched,
+      );
+    }
+  });
 });

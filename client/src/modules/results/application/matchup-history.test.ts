@@ -145,4 +145,40 @@ describe("recordAndSummarizeMatchups", () => {
       (await loadMatchupHistory(report.ruleset_version, repository)).records,
     ).toEqual([]);
   });
+
+  /**
+   * 履歴一覧は新しい順で見せる。repository の返す順序は保証されないため、
+   * 読み込み側で必ず並べ直す。
+   */
+  test("保存順にかかわらず新しい順で返す", async () => {
+    const repository = new MemoryHistoryRepository();
+    const report = syntheticAdviceReport();
+    const createdAt = [
+      "2026-08-01T00:00:00.000Z",
+      "2026-08-05T00:00:00.000Z",
+      "2026-08-03T00:00:00.000Z",
+    ];
+    for (const [index, timestamp] of createdAt.entries()) {
+      repository.records.push({
+        id: `v2:record-${index}`,
+        createdAt: timestamp,
+        rulesetVersion: report.ruleset_version,
+        ownCharacter: "JURI",
+        opponentCharacter: "KEN",
+        rounds: 2,
+        tactics: report.tactic_stats,
+      });
+    }
+
+    const snapshot = await loadMatchupHistory(
+      report.ruleset_version,
+      repository,
+    );
+
+    expect(snapshot.records.map((record) => record.createdAt)).toEqual([
+      "2026-08-05T00:00:00.000Z",
+      "2026-08-03T00:00:00.000Z",
+      "2026-08-01T00:00:00.000Z",
+    ]);
+  });
 });

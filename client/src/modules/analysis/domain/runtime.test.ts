@@ -65,7 +65,12 @@ describe("analysis runtime", () => {
       );
       expect(readiness.available).toBe(false);
       if (readiness.available) throw new Error("expected unavailable runtime");
+      // 不足している機能の名指しと、利用者が取れる対処の両方を必ず出す。
+      // 名前だけでは何をすればよいか分からない。
       expect(readiness.reason).toContain(message);
+      expect(readiness.reason).toContain(
+        "ブラウザを最新版に更新するか、対応ブラウザで開いてください。",
+      );
     }
   });
 });

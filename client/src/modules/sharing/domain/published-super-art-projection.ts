@@ -117,9 +117,11 @@ function observedAvailability(
     : "unavailable";
 }
 
+// 欠測（undefined）と範囲外を同じ文言にすると、共有できない原因を
+// 切り分けられない。型が違う時点で範囲検査とは別の理由として報告する。
 function count(value: unknown, field: string): number {
   if (typeof value !== "number") {
-    throw new ShareProjectionError(`${field} が不正です。`);
+    throw new ShareProjectionError(`${field} が数値ではありません。`);
   }
   return boundedInteger(value, MAX_COUNT, field);
 }

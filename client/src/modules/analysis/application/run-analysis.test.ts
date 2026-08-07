@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import { syntheticAnalysisResult } from "~/test-support/analysis.js";
+import { AnalysisCanceledError } from "../domain/analysis-cancellation.js";
 import type { ValidatedVideoInput } from "../domain/video-preflight.js";
 import type { AnalysisServices } from "./ports.js";
 import { runAnalysis } from "./run-analysis.js";
@@ -94,5 +95,83 @@ describe("runAnalysis", () => {
     });
     expect(rawResult.videoArrayBuffer).toBeInstanceOf(ArrayBuffer);
     expect(capture).toHaveBeenCalledWith(completed.result);
+  });
+
+  /**
+   * engine が中止に気付かず結果を返して戻ってくることがある。そのまま
+   * 完了として扱うと、中止したはずの解析が結果画面へ出てしまう。
+   * debug sink にも渡してはならない。
+   */
+  test("中止済みなら結果が返っても完了させない", async () => {
+    const file = new File(["video"], "replay.mp4", { type: "video/mp4" });
+    const validated = validatedVideo(file);
+    const capture = mock(() => undefined);
+    const controller = new AbortController();
+    const services: AnalysisServices = {
+      engine: {
+        readiness: () => ({ available: true }),
+        preflight: async () => ({ status: "valid", video: validated }),
+        analyze: async () => {
+          controller.abort(new AnalysisCanceledError("利用者が中止しました"));
+          return syntheticAnalysisResult();
+        },
+      },
+      debugSink: { capture },
+    };
+
+    const run = runAnalysis(
+      {
+        file,
+        validatedVideo: validated,
+        side: "p1",
+        ownCharacter: "JURI",
+        opponentCharacter: "KEN",
+      },
+      () => undefined,
+      services,
+      controller.signal,
+    );
+
+    // abort の理由が Error なら、その理由をそのまま伝える。
+    await expect(run).rejects.toThrow("利用者が中止しました");
+    expect(capture).not.toHaveBeenCalled();
+  });
+
+  /**
+   * `AbortController.abort()` を理由なしで呼ぶと reason は Error ではない
+   * DOMException になる。その場合でも Error として中止を伝える。
+   */
+  test("中止理由がErrorでなくても中止として投げる", async () => {
+    const file = new File(["video"], "replay.mp4", { type: "video/mp4" });
+    const validated = validatedVideo(file);
+    const capture = mock(() => undefined);
+    const controller = new AbortController();
+    const services: AnalysisServices = {
+      engine: {
+        readiness: () => ({ available: true }),
+        preflight: async () => ({ status: "valid", video: validated }),
+        analyze: async () => {
+          controller.abort("文字列の理由");
+          return syntheticAnalysisResult();
+        },
+      },
+      debugSink: { capture },
+    };
+
+    const run = runAnalysis(
+      {
+        file,
+        validatedVideo: validated,
+        side: "p1",
+        ownCharacter: "JURI",
+        opponentCharacter: "KEN",
+      },
+      () => undefined,
+      services,
+      controller.signal,
+    );
+
+    await expect(run).rejects.toThrow("動画解析を中止しました");
+    expect(capture).not.toHaveBeenCalled();
   });
 });
