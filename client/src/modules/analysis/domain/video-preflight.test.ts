@@ -179,8 +179,166 @@ describe("video input preflight", () => {
       code: "encoded_sample_size",
     });
     if (result.status === "invalid") {
-      expect(result.message).toContain("再エンコード");
-      expect(result.message).toContain("16MiB");
+      // 単位換算がずれると案内する上限値が変わるので、文言全体を固定する。
+      expect(result.message).toBe(
+        "動画内の圧縮フレームが大きすぎるため解析できません。" +
+          "映像品質またはビットレートを下げ、1フレームを16MiB以下にして" +
+          "MP4を再エンコードしてください。",
+      );
+    }
+  });
+
+  /**
+   * 圧縮フレームの上限は「大きすぎる」だけでなく、そもそも測れない値も
+   * 弾く。0以下や非整数を通すと、batch を組めないまま解析へ進む。
+   */
+  test("測定できない圧縮フレームサイズを拒否する", () => {
+    for (const maxSampleBytes of [
+      0,
+      -1,
+      1.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      MAX_ENCODED_SAMPLE_BYTES + 1,
+    ]) {
+      expect(
+        validateInspectedVideo(
+          file(),
+          inspected({ track: track({ maxSampleBytes }) }),
+        ),
+      ).toMatchObject({ status: "invalid", code: "encoded_sample_size" });
+    }
+
+    // 上限ちょうどは受け入れる。
+    expect(
+      validateInspectedVideo(
+        file(),
+        inspected({
+          track: track({ maxSampleBytes: MAX_ENCODED_SAMPLE_BYTES }),
+        }),
+      ).status,
+    ).toBe("valid");
+  });
+
+  test("VFRは固定fpsでの録画し直しを案内する", () => {
+    const result = validateInspectedVideo(
+      file(),
+      inspected({ track: track({ constantFrameRate: false }) }),
+    );
+
+    expect(result).toMatchObject({
+      status: "invalid",
+      code: "variable_frame_rate",
+    });
+    if (result.status !== "invalid") throw new Error("expected a failure");
+    expect(result.message).toBe(
+      "可変フレームレート（VFR）を検出しました。" +
+        "OBSなどで固定60fps（CFR）を指定して録画し直してください。",
+    );
+  });
+
+  test("File識別子を実際の値として取り出す", () => {
+    const source = file("replay.mp4", {
+      type: "video/mp4",
+      lastModified: 456,
+    });
+
+    expect(videoFileIdentity(source)).toEqual({
+      name: "replay.mp4",
+      size: source.size,
+      lastModified: 456,
+      type: "video/mp4",
+    });
+    expect(source.size).toBeGreaterThan(0);
+  });
+
+  test("同一Fileでも記録した識別子と1項目でも違えば別物として扱う", () => {
+    const source = file();
+    const result = validateInspectedVideo(source, inspected());
+    if (result.status !== "valid") throw new Error("expected valid video");
+    const validated = result.video;
+
+    expect(matchesValidatedVideoFile(source, validated)).toBe(true);
+
+    // File参照が同じでも、記録済み識別子が食い違えば再利用してはならない。
+    // 各項目が独立に効くことを1項目ずつ確認する。
+    const drifted: Array<Partial<typeof validated.identity>> = [
+      { name: "other.mp4" },
+      { size: validated.identity.size + 1 },
+      { lastModified: validated.identity.lastModified + 1 },
+      { type: "video/quicktime" },
+    ];
+    for (const override of drifted) {
+      expect(
+        matchesValidatedVideoFile(source, {
+          ...validated,
+          identity: { ...validated.identity, ...override },
+        }),
+      ).toBe(false);
+    }
+  });
+
+  test("拒否理由ごとに対処方法を含む案内を返す", () => {
+    const cases = [
+      {
+        video: { ...inspected(), container: "other" as const },
+        code: "non_mp4",
+        contains: "MP4",
+      },
+      {
+        video: inspected({ track: null }),
+        code: "missing_video_track",
+        contains: "映像トラック",
+      },
+      {
+        video: inspected({ fragmented: true }),
+        code: "fragmented_mp4",
+        contains: "再多重化",
+      },
+      {
+        video: inspected({ track: track({ timescale: 0 }) }),
+        code: "timing_unavailable",
+        contains: "CFR",
+      },
+    ];
+
+    for (const { video, code, contains } of cases) {
+      const result = validateInspectedVideo(file(), video);
+      expect(result).toMatchObject({ status: "invalid", code });
+      if (result.status !== "invalid") throw new Error("expected a failure");
+      expect(result.message).toContain(contains);
+      expect(result.message.length).toBeGreaterThan(0);
+    }
+  });
+
+  test("フレーム時刻を測れる最小sample数を受け入れる", () => {
+    // 2 sample あれば間隔を1つ測れる。ここが境界なので、1は拒否・2は受理。
+    expect(
+      validateInspectedVideo(
+        file(),
+        inspected({ track: track({ totalSamples: 2 }) }),
+      ).status,
+    ).toBe("valid");
+    expect(
+      validateInspectedVideo(
+        file(),
+        inspected({ track: track({ totalSamples: 1 }) }),
+      ),
+    ).toMatchObject({ status: "invalid", code: "timing_unavailable" });
+  });
+
+  test("coded・表示のどの寸法が違っても寸法違いとして拒否する", () => {
+    const overrides: Array<Partial<InspectedVideoTrack>> = [
+      { codedWidth: 1280 },
+      { codedHeight: 720 },
+      { displayWidth: 1280 },
+      { displayHeight: 720 },
+    ];
+
+    for (const override of overrides) {
+      expect(
+        validateInspectedVideo(file(), inspected({ track: track(override) })),
+      ).toMatchObject({ status: "invalid", code: "dimensions" });
     }
   });
 

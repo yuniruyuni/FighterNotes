@@ -428,6 +428,73 @@ describe("PublishedAnalysis model", () => {
     expect(parseDeletePassword("too-short")).toBeNull();
   });
 
+  /**
+   * logical size は storage quota の課金単位なので、保存前に必ず上限で止める。
+   * 通過してしまうと quota 計算が実体からずれる。
+   */
+  test("logical sizeが上限を超える保存を拒否する", () => {
+    const content = createPublishedAnalysisContent(candidate());
+    expect(content.ok).toBe(true);
+    if (!content.ok) return;
+    const id = parseShareId("Abcdefghijklmnopqrstu_");
+    if (!id) throw new Error("invalid fixture");
+    const persist = (hashLength: number) =>
+      createPersistablePublishedAnalysis({
+        id,
+        content: content.value,
+        deletePasswordHash: "x".repeat(hashLength) as DeletePasswordHash,
+        now: new Date("2026-07-13T00:00:00.000Z"),
+        retentionDays: 365,
+      });
+
+    // 上限ちょうどまでは保存でき、そこから1byte増えるだけで拒否する。
+    const withinLimit = persist(512);
+    expect(withinLimit.analysis.logicalSizeBytes).toBeLessThanOrEqual(8 * 1024);
+
+    const overflowHash = 8 * 1024 - withinLimit.analysis.logicalSizeBytes + 513;
+    expect(() => persist(overflowHash)).toThrow(
+      "Published analysis exceeds logical storage limit",
+    );
+    expect(persist(overflowHash - 1).analysis.logicalSizeBytes).toBe(8 * 1024);
+  });
+
+  /**
+   * logical size は保存する全項目を数える。どれかを外すと、実際より小さい
+   * 見積もりで quota を消費してしまう。
+   */
+  test("logical sizeが保存する全項目を数える", () => {
+    const content = createPublishedAnalysisContent(candidate());
+    expect(content.ok).toBe(true);
+    if (!content.ok) return;
+    const id = parseShareId("Abcdefghijklmnopqrstu_");
+    if (!id) throw new Error("invalid fixture");
+    const base = {
+      id,
+      content: content.value,
+      deletePasswordHash: "x".repeat(64) as DeletePasswordHash,
+      now: new Date("2026-07-13T00:00:00.000Z"),
+      retentionDays: 365,
+    };
+
+    const measured = createPersistablePublishedAnalysis(base);
+    const longerHash = createPersistablePublishedAnalysis({
+      ...base,
+      deletePasswordHash: "x".repeat(96) as DeletePasswordHash,
+    });
+    expect(longerHash.analysis.logicalSizeBytes).toBe(
+      measured.analysis.logicalSizeBytes + 32,
+    );
+
+    // 期限は保存対象なので、保持期間が変わればsizeの計算対象にも入る。
+    expect(
+      createPersistablePublishedAnalysis({ ...base, retentionDays: 30 })
+        .analysis.logicalSizeBytes,
+    ).toBe(measured.analysis.logicalSizeBytes);
+    expect(measured.analysis.logicalSizeBytes).toBeGreaterThan(
+      JSON.stringify(content.value).length,
+    );
+  });
+
   test("共有IDと削除passwordを境界値で検証する", () => {
     const id = "Abcdefghijklmnopqrstu_";
     expect(String(parseShareId(id))).toBe(id);

@@ -277,6 +277,29 @@ describe("publishedAnalysisCandidateSchema refinements", () => {
         message: "partial super art aggregates require an observed use",
       },
     ]);
+
+    // どのlevelの1回でも「観測できた使用」として partial を成立させる。
+    // 特定のlevelだけ数えていると、検出済みの使用を捨てることになる。
+    for (const level of ["sa1", "sa2", "sa3", "ca"] as const) {
+      expect(
+        publishedAnalysisCandidateSchema.safeParse({
+          ...base,
+          superArts: {
+            own: {
+              availability: "partial",
+              levels: { ...zeroLevels, [level]: 1 },
+              outcomes: zeroOutcomes,
+              contexts: zeroContexts,
+            },
+            opponent: {
+              availability: "partial",
+              levels: { ...zeroLevels, [level]: 1 },
+              outcomes: zeroOutcomes,
+            },
+          },
+        }).success,
+      ).toBe(true);
+    }
   });
 
   test("v9 aggregate内のdamage・gauge・frame・入力・自由文をstrictに拒否する", () => {

@@ -218,8 +218,10 @@ function formatInteger(value: number): string {
   return Number.isFinite(value) ? String(Math.round(value)) : "不明";
 }
 
+// 非有限の frame rate は timing_unavailable で先に弾いているため、
+// ここへ到達する値は必ず有限。
 function formatFrameRate(value: number): string {
-  return Number.isFinite(value) ? value.toFixed(2) : "不明";
+  return value.toFixed(2);
 }
 
 function formatMegabytes(bytes: number): string {

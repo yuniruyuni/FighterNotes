@@ -173,6 +173,62 @@ describe("damage origin summary", () => {
     ]);
   });
 
+  /**
+   * 接近手段からどの接触で崩されたかは、対策が変わるので区別する。
+   * 全ての接触種別を組み合わせとして出せることを確認する。
+   */
+  test("接近手段ごとに全ての接触種別を区別する", () => {
+    const contacts: Array<[DamageContact, string]> = [
+      ["throw", "投げ"],
+      ["strike", "打撃"],
+      ["drive_impact", "ドライブインパクト"],
+      ["projectile", "飛び道具"],
+    ];
+    const summary = summarizeDamageOrigins(
+      contacts.map(([contact], index) =>
+        damage(
+          index + 1,
+          1,
+          contacts.length - index,
+          "raw_drive_rush",
+          undefined,
+          "raw_drive_rush",
+          contact,
+        ),
+      ),
+      "all",
+    );
+
+    expect(summary.rows.map(({ key, label }) => [key, label])).toEqual(
+      contacts.map(([contact, label]) => [
+        `raw_drive_rush_${contact}`,
+        `生ドライブラッシュ→${label}`,
+      ]),
+    );
+  });
+
+  /**
+   * 組み合わせ分類は接近手段と接触の両方が揃ったときだけ。片方だけで
+   * 組み合わせキーを作ると、観測できていない側を断定することになる。
+   */
+  test("接近手段と接触が揃わなければ組み合わせにしない", () => {
+    const approachOnly = summarizeDamageOrigins(
+      [damage(1, 1, 1, "raw_drive_rush", undefined, "raw_drive_rush")],
+      "all",
+    );
+    expect(approachOnly.rows.map(({ key, label }) => [key, label])).toEqual([
+      ["raw_drive_rush", "生ドライブラッシュ"],
+    ]);
+
+    const contactOnly = summarizeDamageOrigins(
+      [damage(1, 1, 1, "throw", undefined, undefined, "throw")],
+      "all",
+    );
+    expect(contactOnly.rows.map(({ key, label }) => [key, label])).toEqual([
+      ["throw", "投げ"],
+    ]);
+  });
+
   test("最大剰余法で異なる端数と同率端数を決定的に配分する", () => {
     const unequal = summarizeDamageOrigins(
       [
