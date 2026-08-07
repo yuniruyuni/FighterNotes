@@ -20,6 +20,7 @@ pub(super) fn empty_events() -> MatchEvents {
         guard_breaks: vec![],
         presses_while_minus: vec![],
         minus_situations: vec![],
+        advantage_situations: vec![],
         projectiles: vec![],
         teleports: vec![],
         compound_threats: vec![],

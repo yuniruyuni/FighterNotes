@@ -110,6 +110,22 @@ pub(crate) fn build_tactic_stats(
         })
         .count() as u32;
 
+    for situation in events.advantage_situations.iter().filter(|situation| {
+        event_in_round(situation.round_no, situation.frame)
+            && situation.side == own
+            && situation.confidence == EventConfidence::High
+    }) {
+        stats.advantage_opportunities += 1;
+        if situation.action_frame.is_some() {
+            stats.advantage_continued += 1;
+        } else {
+            stats.advantage_abandoned += 1;
+            if situation.outcome == AdvantageOutcome::TurnLost {
+                stats.advantage_turns_lost += 1;
+            }
+        }
+    }
+
     for challenge in events.presses_while_minus.iter().filter(|challenge| {
         event_in_round(challenge.round_no, challenge.frame)
             && challenge.side == own

@@ -1,6 +1,6 @@
 # 動画解析パイプライン
 
-最終確認: 2026-08-03
+最終確認: 2026-08-07
 
 ## 解析の位置づけ
 
@@ -8,7 +8,7 @@
 目的は試合を完全再現することではなく、複数の映像証拠が一致した場面を抽出し、
 利用者が動画を見直す順序を作ることである。
 
-判定は決定的なルールベース処理で、現在の `RULESET_VERSION` は 9。
+判定は決定的なルールベース処理で、現在の `RULESET_VERSION` は 10。
 機械学習モデルや外部推論 API は使わない。
 
 ## 入力条件
@@ -149,7 +149,7 @@ viewer と event layer は、この確定済み系列を共通の入力にする
 | Contact | hit / block、projectile contact、attacker / victim |
 | Input action | jump、throw、Drive Impact、raw Drive Rush |
 | Resource | burnout 期間、SA1/2/3/CA 使用、ゲージ前後、使用文脈と結果 |
-| Frame interaction | punish chance、reversal、guard break、minus 後の最速打撃・投げ |
+| Frame interaction | punish chance、reversal、guard break、minus 後の最速打撃・投げ、plus 後の攻め継続 |
 | Threat | 残存 projectile、teleport、複合 threat |
 
 主な帰属上の不変条件は次のとおり。
@@ -215,7 +215,7 @@ coverage は「試合画面を確定ラウンドへ割り当てられた割合�
 中央攻撃表示はHP被弾列への帰属率も検証する。SAゲージを十分に読めない場合、検出イベントが
 無いことを「使用0回」とは扱わない。
 
-現在のカード ID は次の21種である。
+現在のカード ID は次の22種である。
 
 | ID | 対象 |
 | --- | --- |
@@ -228,6 +228,7 @@ coverage は「試合画面を確定ラウンドへ割り当てられた割合�
 | `mashing` | 守勢の button 押下と被弾の帰属 |
 | `press_while_minus` | 不利 frame 後の最速打撃 |
 | `throw_while_minus` | 不利 frame 後の最速投げ |
+| `advantage_abandoned` | ガードさせて有利を取った後に攻めを継続せず渡したターン |
 | `guard_break` | guard 方向を外した直後の被弾 |
 | `reversal_punished` | 無敵技を防がれた後の反撃 |
 | `low_scaling_super` | 低い補正率でSA/CAを組み込み、KOしなかった場面 |
@@ -282,7 +283,7 @@ ruleset が異なる判定結果を同じ率へ混ぜない。管理欄の保存
 - 入力履歴は画面に表示された row 0 を時系列補修した値で、内部 input log ではない。
 - 0件は「失敗しなかった」ではなく、「確認できる機会がなかった」場合を含む。
 - SA/CA は使用、hit / block、即時接触なし、反撃、KO、使用文脈を観測事実として集計する。
-  ruleset v9では両者別に`complete`・`partial`・`unavailable`を出力する。`complete`だけが0回を確定でき、
+  ruleset v9以降では両者別に`complete`・`partial`・`unavailable`を出力する。`complete`だけが0回を確定でき、
   `partial`は検出済み件数を下限として扱い、`unavailable`は件数を持たない。
   未使用ゲージだけから「使うべきだった」、残りHPだけから「倒し切れた」とは判定しない。
 - 攻撃面は punish、low conversion、与 damage、burnout 収支など一部だけで、neutral の技選択、

@@ -15,6 +15,7 @@ import {
   PublishedAnalysis,
   parseDeletePassword,
   parseShareId,
+  SUPPORTED_RULESET_VERSIONS,
   serializedByteLength,
   TARGET_PUBLISHED_ANALYSIS_BYTES,
 } from ".";
@@ -125,7 +126,11 @@ describe("PublishedAnalysis model", () => {
       .map((match) => match[1])
       .sort();
     expect(rustFindingKinds).toEqual([...FINDING_KINDS].sort());
-    expect(adviceParameters).toContain("pub const RULESET_VERSION: u32 = 9;");
+    // Rustが生成するrulesetは、常に共有側が受理する最新版と一致させる。
+    const newestSupported = Math.max(...SUPPORTED_RULESET_VERSIONS);
+    expect(adviceParameters).toContain(
+      `pub const RULESET_VERSION: u32 = ${newestSupported};`,
+    );
   });
 
   test("clientとDB migrationの閉じたIDがサーバーカタログと一致する", () => {

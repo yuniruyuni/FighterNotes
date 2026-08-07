@@ -10,6 +10,7 @@ export const SHAREABLE_FINDING_KINDS = [
   "mashing",
   "press_while_minus",
   "throw_while_minus",
+  "advantage_abandoned",
   "guard_break",
   "reversal_punished",
   "low_scaling_super",

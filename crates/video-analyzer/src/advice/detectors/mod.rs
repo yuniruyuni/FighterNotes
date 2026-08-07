@@ -19,7 +19,9 @@ pub(crate) use defense::{detect_guard_break, detect_layered_defense, detect_tele
 pub(crate) use direction::dir_arrow;
 pub(crate) use drive_impact::detect_committed_button_vs_di;
 pub(crate) use jumps::{detect_anti_air, detect_own_jumps};
-pub(crate) use pressure::{detect_mashing, detect_press_while_minus, detect_throw_while_minus};
+pub(crate) use pressure::{
+    detect_advantage_abandoned, detect_mashing, detect_press_while_minus, detect_throw_while_minus,
+};
 pub(crate) use punishment::{
     detect_low_conversion, detect_punish_fail, detect_punish_missed, detect_reversal_punished,
 };

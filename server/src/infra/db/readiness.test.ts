@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { RuntimeConfig } from "../../config";
+import { SUPPORTED_RULESET_VERSIONS } from "../../models/published-analysis";
 import type { ILogger } from "../logger/types";
 import type { Database } from "./database";
 import { initDatabase } from "./index";
@@ -97,6 +98,10 @@ describe("database readiness", () => {
     expect(compatibilityParams).toContainEqual(
       expect.stringContaining("opponent_character = ANY"),
     );
+    // 受理するrulesetを増やしたら、DBのCHECK制約もそこまで広げる必要がある。
+    expect(compatibilityParams).toContainEqual(
+      `CHECK (ruleset_version = ANY (ARRAY[${SUPPORTED_RULESET_VERSIONS.join(", ")}]))`,
+    );
     expect(compatibilityQuery).toContain("logical_size_bytes");
     expect(compatibilityQuery).toContain("format_type");
     expect(compatibilityQuery).toContain("required_defaults");
@@ -111,7 +116,6 @@ describe("database readiness", () => {
     expect(compatibilityQuery).toContain(
       "published_analysis_opponent_super_arts",
     );
-    expect(compatibilityQuery).toContain("ARRAY[3, 4, 5, 6, 7, 8, 9]");
     expect(compatibilityQuery).toContain("'DELETE'");
     expect(compatibilityQuery).toContain("has_table_privilege");
     expect(compatibilityQuery).toContain("has_column_privilege");

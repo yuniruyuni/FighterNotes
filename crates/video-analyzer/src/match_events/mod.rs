@@ -540,6 +540,7 @@ fn build_match_events_with_optional_fight_markers(
     );
     let presses_while_minus = minus_events.presses;
     let minus_situations = minus_events.situations;
+    let advantage_situations = minus_events.advantages;
 
     MatchEvents {
         rounds,
@@ -558,6 +559,7 @@ fn build_match_events_with_optional_fight_markers(
         guard_breaks,
         presses_while_minus,
         minus_situations,
+        advantage_situations,
         projectiles,
         teleports,
         compound_threats,

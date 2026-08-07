@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS published_analyses (
   schema_version SMALLINT NOT NULL
     CHECK (schema_version = 1),
   ruleset_version INTEGER NOT NULL
-    CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9)),
+    CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9, 10)),
   presentation_revision SMALLINT NOT NULL
     CHECK (presentation_revision IN (1)),
   own_character TEXT NOT NULL
@@ -57,7 +57,7 @@ ALTER TABLE published_analyses
   DROP CONSTRAINT IF EXISTS published_analyses_ruleset_version_check;
 ALTER TABLE published_analyses
   ADD CONSTRAINT published_analyses_ruleset_version_check
-  CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9));
+  CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9, 10));
 -- 既存環境のcharacter制約にも追加キャラクターを反映する。
 ALTER TABLE published_analyses
   DROP CONSTRAINT IF EXISTS published_analyses_own_character_check;
@@ -97,12 +97,13 @@ CREATE TABLE IF NOT EXISTS published_analysis_findings (
   analysis_id TEXT NOT NULL
     REFERENCES published_analyses (id) ON DELETE CASCADE,
   ordinal SMALLINT NOT NULL
-    CHECK (ordinal BETWEEN 0 AND 20),
+    CHECK (ordinal BETWEEN 0 AND 21),
   kind TEXT NOT NULL
     CHECK (kind IN (
       'layered_defense', 'teleport_defense', 'anti_air', 'own_jumps',
       'burnout', 'committed_button_vs_di', 'mashing',
       'press_while_minus', 'throw_while_minus',
+      'advantage_abandoned',
       'guard_break', 'reversal_punished', 'low_scaling_super',
       'punish_fail', 'punish_missed',
       'low_conversion', 'throw_interrupted_by_invincible',
@@ -125,7 +126,7 @@ CREATE TABLE IF NOT EXISTS published_analysis_findings (
 ALTER TABLE published_analysis_findings
   ADD COLUMN IF NOT EXISTS assessment TEXT
   CHECK (assessment IN ('diagnosis', 'observation', 'statistic'));
--- 新しいruleset v6カードを既存環境でも保存できるよう、閉じたIDとordinalを更新する。
+-- 新しいrulesetで追加したカードを既存環境でも保存できるよう、閉じたIDとordinalを更新する。
 ALTER TABLE published_analysis_findings
   DROP CONSTRAINT IF EXISTS published_analysis_findings_kind_check;
 ALTER TABLE published_analysis_findings
@@ -134,6 +135,7 @@ ALTER TABLE published_analysis_findings
     'layered_defense', 'teleport_defense', 'anti_air', 'own_jumps',
     'burnout', 'committed_button_vs_di', 'mashing',
     'press_while_minus', 'throw_while_minus',
+    'advantage_abandoned',
     'guard_break', 'reversal_punished', 'low_scaling_super',
     'punish_fail', 'punish_missed',
     'low_conversion', 'throw_interrupted_by_invincible',
@@ -144,7 +146,7 @@ ALTER TABLE published_analysis_findings
   DROP CONSTRAINT IF EXISTS published_analysis_findings_ordinal_check;
 ALTER TABLE published_analysis_findings
   ADD CONSTRAINT published_analysis_findings_ordinal_check
-  CHECK (ordinal BETWEEN 0 AND 20);
+  CHECK (ordinal BETWEEN 0 AND 21);
 GRANT SELECT, INSERT ON published_analysis_findings TO fighter_app;
 
 CREATE TABLE IF NOT EXISTS published_analysis_tactics (

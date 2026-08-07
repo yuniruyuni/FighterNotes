@@ -1,8 +1,6 @@
-use crate::advice::{
-    MIN_DECISION_BIAS_LOSSES, MIN_DECISION_BIAS_OPPORTUNITIES, MIN_DECISION_BIAS_PERCENT,
-    MIN_DECISION_BIAS_SELECTIONS,
-};
 use crate::match_events::{EventConfidence, MatchEvents};
+
+pub(super) use crate::advice::detectors::pressure::common::is_biased;
 
 pub(super) fn observed_opportunities(
     events: &MatchEvents,
@@ -23,11 +21,4 @@ pub(super) fn observed_opportunities(
             .count()
     };
     observed.max(selection_count)
-}
-
-pub(super) fn is_biased(opportunities: usize, selections: usize, losses: usize) -> bool {
-    opportunities >= MIN_DECISION_BIAS_OPPORTUNITIES
-        && selections >= MIN_DECISION_BIAS_SELECTIONS
-        && losses >= MIN_DECISION_BIAS_LOSSES
-        && selections * 100 >= opportunities * MIN_DECISION_BIAS_PERCENT
 }
