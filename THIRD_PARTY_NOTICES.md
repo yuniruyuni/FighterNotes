@@ -13,7 +13,7 @@ Declared SPDX expressions are preserved without selecting an OR alternative.
 Every packaged license document is retained for inspection; AND denotes terms
 that apply together, while OR preserves the alternatives offered upstream.
 
-- bun.lock SHA-256: `fa96e70b241aed4706cfaf23551632901f1eb3093d2036552d86add1632c0ad2`
+- bun.lock SHA-256: `3a297dce7d12888f29c8af8585b88e31025f8f926061f7d799749db4fd1510f5`
 - Cargo.lock SHA-256: `d24dfe87b4e3112095bba881eb5a6da9da8323297637f23e7dcb47b124eea50c`
 - npm scanner: `license-checker-rseidelsohn 5.0.1`
 - Cargo scanner: `cargo-about 0.9.1`
@@ -91,7 +91,7 @@ that apply together, while OR preserves the alternatives offered upstream.
 - @hono/trpc-server 0.4.2 (npm; server) — MIT
 - @trpc/client 11.18.0 (npm; browser) — MIT
 - @trpc/server 11.18.0 (npm; server) — MIT
-- hono 4.12.28 (npm; server) — MIT
+- hono 4.13.0 (npm; server) — MIT
 - lucide-react 0.575.0 (npm; browser) — ISC
 - mitt 3.0.1 (npm; browser) — MIT
 - mp4box 2.4.1 (npm; browser) — BSD-3-Clause
@@ -415,7 +415,7 @@ that apply together, while OR preserves the alternatives offered upstream.
 
 ---
 
-## hono 4.12.28
+## hono 4.13.0
 
 - Ecosystem: npm
 - Used by: server
@@ -1497,7 +1497,7 @@ Document names: LICENSE, Reviewed license notice
 Referenced by:
 
 - @hono/trpc-server 0.4.2 — Reviewed license notice
-- hono 4.12.28 — LICENSE
+- hono 4.13.0 — LICENSE
 
     MIT License
 
