@@ -130,6 +130,13 @@ jobs:
       - uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
         with:
           tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
+      # 対象パッケージの列挙は package.json の script が正本なので、cargo を
+      # 直接呼ばずに済むよう Bun だけ用意する（node_modules は使わない）。
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24
+      - name: Setup Bun
+        run: npm install -g bun@${BUN_VERSION}
       - name: Mutate verified Rust core
         run: bun run mutation:rust:core
       - name: Upload mutation report
