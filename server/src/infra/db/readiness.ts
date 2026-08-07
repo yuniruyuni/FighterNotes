@@ -1,5 +1,9 @@
 import type { QueryResultRow } from "pg";
-import { CHARACTER_IDS, SCHEMA_VERSION } from "../../models/published-analysis";
+import {
+  CHARACTER_IDS,
+  SCHEMA_VERSION,
+  SUPPORTED_RULESET_VERSIONS,
+} from "../../models/published-analysis";
 import type { ILogger } from "../logger/types";
 import type { Database } from "./database";
 import { sql } from "./sql";
@@ -90,6 +94,7 @@ export async function inspectDatabaseReadiness(
   ).join(", ");
   const expectedOwnCharacterConstraint = `CHECK (own_character = ANY (ARRAY[${characterArray}]))`;
   const expectedOpponentCharacterConstraint = `CHECK (opponent_character = ANY (ARRAY[${characterArray}]))`;
+  const expectedRulesetConstraint = `CHECK (ruleset_version = ANY (ARRAY[${SUPPORTED_RULESET_VERSIONS.join(", ")}]))`;
   const row = await db.queryGet<CompatibilityRow>(sql`
     WITH required_columns(
       table_name, column_name, data_type, not_null
@@ -216,7 +221,7 @@ export async function inspectDatabaseReadiness(
       VALUES
         ('published_analyses', 'published_analyses_pkey', 'p', 'PRIMARY KEY (id)'),
         ('published_analyses', 'published_analyses_schema_version_check', 'c', ${expectedSchemaConstraint}),
-        ('published_analyses', 'published_analyses_ruleset_version_check', 'c', 'CHECK (ruleset_version = ANY (ARRAY[3, 4, 5, 6, 7, 8, 9]))'),
+        ('published_analyses', 'published_analyses_ruleset_version_check', 'c', ${expectedRulesetConstraint}),
         ('published_analyses', 'published_analyses_presentation_revision_check', 'c', 'CHECK (presentation_revision = 1)'),
         ('published_analyses', 'published_analyses_own_character_check', 'c', ${expectedOwnCharacterConstraint}),
         ('published_analyses', 'published_analyses_opponent_character_check', 'c', ${expectedOpponentCharacterConstraint}),
