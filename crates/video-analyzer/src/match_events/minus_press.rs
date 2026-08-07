@@ -5,9 +5,11 @@
 //! 無敵技は別イベントへ排他的に帰属させる。
 
 use super::{
-    continuous_epoch, round_of, ContactEvent, DamageEvent, DefensiveActionKind, EventConfidence,
-    InputSegment, MeterState, MinusPressEvent, MinusPressOutcome, MinusSituationEvent, RoundInfo,
-    MINUS_PRESS_INV_WINDOW, MINUS_PRESS_MAX, MINUS_PRESS_OUTCOME_WINDOW, MINUS_PRESS_THRESHOLD,
+    continuous_epoch, round_of, AdvantageOutcome, AdvantageSituationEvent, ContactEvent,
+    DamageEvent, DefensiveActionKind, EventConfidence, InputSegment, MeterState, MinusPressEvent,
+    MinusPressOutcome, MinusSituationEvent, PressureFollowUp, RoundInfo, ADVANTAGE_ACTION_GRACE,
+    ADVANTAGE_OUTCOME_WINDOW, ADVANTAGE_THRESHOLD, MINUS_PRESS_INV_WINDOW, MINUS_PRESS_MAX,
+    MINUS_PRESS_OUTCOME_WINDOW, MINUS_PRESS_THRESHOLD,
 };
 
 const FASTEST_ACTION_GRACE: usize = 1;
@@ -30,6 +32,163 @@ fn move_in_progress(state: &[MeterState], frame: usize) -> bool {
 pub(crate) struct MinusEvents {
     pub(crate) presses: Vec<MinusPressEvent>,
     pub(crate) situations: Vec<MinusSituationEvent>,
+    pub(crate) advantages: Vec<AdvantageSituationEvent>,
+}
+
+/// 入力欄がその瞬間に読めていたか。欠測を「何もしなかった」と誤認しない。
+fn input_context_observed(segments: &[InputSegment], frame: u32) -> bool {
+    segments.iter().any(|segment| {
+        segment.evidence.has_direct_observation()
+            && segment.start_frame <= frame.saturating_add(2)
+            && segment.end_frame.saturating_add(2) >= frame
+    })
+}
+
+struct AdvantageInputs<'a> {
+    meter_epoch: &'a [Vec<i32>; 2],
+    /// 有利側のメーター状態。
+    state: &'a [MeterState],
+    side: u8,
+    index: usize,
+    /// 有利側が行動可能になったフレーム。
+    actionable: usize,
+    /// ガードした側が行動可能になったフレーム。
+    opponent_actionable: usize,
+    plus_frames: u32,
+    epoch: i32,
+    contact: &'a ContactEvent,
+    contacts: &'a [ContactEvent],
+    damage: &'a [DamageEvent],
+    segments: &'a [Vec<InputSegment>; 2],
+    rounds: &'a [RoundInfo],
+    used_frames: &'a mut Vec<u32>,
+    frames: usize,
+}
+
+/// ガードさせて有利を取った側が、その有利のうちに攻めたかを判定する。
+///
+/// 攻撃を開始しなかった場合の結果は、続けて相手の攻撃を受ける側へ回ったか
+/// （`TurnLost`）と、双方動かず仕切り直したか（`Reset`）だけを区別する。
+/// 「前に歩いた」「様子を見た」の内訳は入力表示から断定できないため持たない。
+fn extract_advantage(inputs: AdvantageInputs<'_>) -> Option<AdvantageSituationEvent> {
+    let AdvantageInputs {
+        meter_epoch,
+        state,
+        side,
+        index,
+        actionable,
+        opponent_actionable,
+        plus_frames,
+        epoch,
+        contact,
+        contacts,
+        damage,
+        segments,
+        rounds,
+        used_frames,
+        frames: n,
+    } = inputs;
+    if plus_frames < ADVANTAGE_THRESHOLD {
+        return None;
+    }
+    let advantage_frame = actionable as u32;
+    if used_frames.contains(&advantage_frame) {
+        return None;
+    }
+    // 有利側の入力欄が読めていた機会だけを分母に入れる。
+    if !input_context_observed(&segments[index], advantage_frame) {
+        return None;
+    }
+    used_frames.push(advantage_frame);
+    let round_no = round_of(rounds, advantage_frame).unwrap_or(0);
+
+    // 相手が動けるようになるまでに発生が始まっていれば、有利を使っている。
+    let action_end = (opponent_actionable + ADVANTAGE_ACTION_GRACE).min(n - 1);
+    let action_start = (actionable..=action_end).find(|&frame| {
+        same_epoch_at(meter_epoch, frame, epoch) && state[frame] == MeterState::Startup
+    });
+
+    if let Some(action_start) = action_start {
+        let action_frame = action_start as u32;
+        let input = segments[index]
+            .iter()
+            .filter(|segment| {
+                segment.has_button()
+                    && segment.evidence.has_direct_observation()
+                    && segment.start_frame >= contact.frame
+                    && segment.start_frame <= action_frame.saturating_add(2)
+                    && segment.end_frame.saturating_add(INPUT_LINK_WINDOW) >= action_frame
+            })
+            .max_by_key(|segment| segment.start_frame);
+        return Some(AdvantageSituationEvent {
+            side,
+            frame: advantage_frame,
+            plus_frames,
+            follow_up: input.map(|input| {
+                if input.throw {
+                    PressureFollowUp::Throw
+                } else {
+                    PressureFollowUp::Strike
+                }
+            }),
+            action_frame: Some(action_frame),
+            pressed: input.map_or_else(String::new, |input| input.badges.join("+")),
+            outcome: AdvantageOutcome::Continued,
+            drop: 0.0,
+            confidence: EventConfidence::High,
+            source_contact_frame: contact.frame,
+            round_no,
+        });
+    }
+
+    // 攻めなかった場合、結果窓のうちに攻守が入れ替わったかだけを見る。
+    let result_end = advantage_frame.saturating_add(ADVANTAGE_OUTCOME_WINDOW);
+    let turn_lost = contacts.iter().any(|candidate| {
+        candidate.attacker == contact.victim
+            && candidate.victim == contact.attacker
+            && candidate.frame > advantage_frame
+            && candidate.frame <= result_end
+            && same_epoch_at(meter_epoch, candidate.frame as usize, epoch)
+    });
+    let outcome = if turn_lost {
+        AdvantageOutcome::TurnLost
+    } else {
+        AdvantageOutcome::Reset
+    };
+    let drop = if turn_lost {
+        damage
+            .iter()
+            .filter(|event| {
+                event.victim == contact.attacker
+                    && event.start_frame > advantage_frame
+                    && event.start_frame <= result_end
+            })
+            .map(|event| event.drop)
+            .sum()
+    } else {
+        0.0
+    };
+    let window_end = (result_end as usize).min(n - 1);
+    let confidence = if continuous_epoch(&meter_epoch[index], actionable, window_end) == Some(epoch)
+        && continuous_epoch(&meter_epoch[1 - index], actionable, window_end) == Some(epoch)
+    {
+        EventConfidence::High
+    } else {
+        EventConfidence::Medium
+    };
+    Some(AdvantageSituationEvent {
+        side,
+        frame: advantage_frame,
+        plus_frames,
+        follow_up: None,
+        action_frame: None,
+        pressed: String::new(),
+        outcome,
+        drop,
+        confidence,
+        source_contact_frame: contact.frame,
+        round_no,
+    })
 }
 
 pub(crate) fn extract_minus_events(
@@ -45,13 +204,16 @@ pub(crate) fn extract_minus_events(
         return MinusEvents {
             presses: Vec::new(),
             situations: Vec::new(),
+            advantages: Vec::new(),
         };
     }
     let n = meter_state[0].len();
     let mut presses = Vec::new();
     let mut situations = Vec::new();
+    let mut advantages = Vec::new();
     let mut used_action_start: [Vec<u32>; 2] = [Vec::new(), Vec::new()];
     let mut used_situation_frame: [Vec<u32>; 2] = [Vec::new(), Vec::new()];
+    let mut used_advantage_frame: [Vec<u32>; 2] = [Vec::new(), Vec::new()];
 
     for contact in contacts
         .iter()
@@ -132,18 +294,36 @@ pub(crate) fn extract_minus_events(
             continue;
         }
 
+        // ── 有利側の攻め継続 ─────────────────────────────────────────────
+        // 守備側の不利幅は、そのまま攻撃側の有利幅になる。守備側の判定に
+        // 使う分岐へ入る前に処理し、片側の欠測でもう片側を落とさない。
+        if let Some(advantage) = extract_advantage(AdvantageInputs {
+            meter_epoch,
+            state: opponent,
+            side: contact.attacker,
+            index: opponent_index,
+            actionable: opponent_actionable,
+            opponent_actionable: own_actionable,
+            plus_frames: minus,
+            epoch,
+            contact,
+            contacts,
+            damage,
+            segments,
+            rounds,
+            used_frames: &mut used_advantage_frame[opponent_index],
+            frames: n,
+        }) {
+            advantages.push(advantage);
+        }
+
         let situation_frame = own_actionable as u32;
         if used_situation_frame[victim_index].contains(&situation_frame) {
             continue;
         }
         // 「何もしなかった」を分母に入れるには、その瞬間の入力欄が読めて
         // いたことが必要。欠測をガード継続と誤認しない。
-        let input_context_observed = segments[victim_index].iter().any(|segment| {
-            segment.evidence.has_direct_observation()
-                && segment.start_frame <= situation_frame.saturating_add(2)
-                && segment.end_frame.saturating_add(2) >= situation_frame
-        });
-        if !input_context_observed {
+        if !input_context_observed(&segments[victim_index], situation_frame) {
             continue;
         }
         used_situation_frame[victim_index].push(situation_frame);
@@ -299,9 +479,11 @@ pub(crate) fn extract_minus_events(
     }
     presses.sort_by_key(|event| event.frame);
     situations.sort_by_key(|event| event.frame);
+    advantages.sort_by_key(|event| event.frame);
     MinusEvents {
         presses,
         situations,
+        advantages,
     }
 }
 

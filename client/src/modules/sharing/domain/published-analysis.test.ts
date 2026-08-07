@@ -28,6 +28,10 @@ const tactics = (): TacticStats => ({
   dash_throws_faced: 1,
   throw_whiffs: 2,
   minus_defense_opportunities: 5,
+  advantage_opportunities: 0,
+  advantage_continued: 0,
+  advantage_abandoned: 0,
+  advantage_turns_lost: 0,
   fastest_strike_challenges: 3,
   fastest_strike_losses: 1,
   fastest_throw_challenges: 2,
@@ -481,7 +485,7 @@ describe("share projection", () => {
     ).toEqual({ detected: 255, won: 0, lost: 0, unresolved: 255 });
   });
 
-  test("ruleset v3からv9を共有し、それ以外は理由付きで拒否する", () => {
+  test("ruleset v3からv10を共有し、それ以外は理由付きで拒否する", () => {
     const context: AnalysisContext = {
       ownSide: "p1",
       p1: { character: "LUKE" },
@@ -495,26 +499,29 @@ describe("share projection", () => {
       ).toBe(rulesetVersion);
     }
 
-    const current = report();
-    current.ruleset_version = 9;
-    Object.assign(current.tactic_stats, {
-      super_art_stats_complete: false,
-      opponent_super_art_stats_complete: false,
-      sa1_used: 0,
-      sa2_used: 0,
-      sa3_used: 0,
-      ca_used: 0,
-      opponent_sa1_used: 0,
-      opponent_sa2_used: 0,
-      opponent_sa3_used: 0,
-      opponent_ca_used: 0,
-    });
-    expect(
-      PublishedAnalysisCandidate.from(context, current).rulesetVersion,
-    ).toBe(9);
+    // v9以降はSA/CA集計を必須にするため、同じ形で個別に確認する。
+    for (const rulesetVersion of [9, 10]) {
+      const current = report();
+      current.ruleset_version = rulesetVersion;
+      Object.assign(current.tactic_stats, {
+        super_art_stats_complete: false,
+        opponent_super_art_stats_complete: false,
+        sa1_used: 0,
+        sa2_used: 0,
+        sa3_used: 0,
+        ca_used: 0,
+        opponent_sa1_used: 0,
+        opponent_sa2_used: 0,
+        opponent_sa3_used: 0,
+        opponent_ca_used: 0,
+      });
+      expect(
+        PublishedAnalysisCandidate.from(context, current).rulesetVersion,
+      ).toBe(rulesetVersion);
+    }
 
     const unsupported = report();
-    unsupported.ruleset_version = 10;
+    unsupported.ruleset_version = 11;
     expect(() => PublishedAnalysisCandidate.from(context, unsupported)).toThrow(
       "この解析ルール世代は共有に対応していません",
     );

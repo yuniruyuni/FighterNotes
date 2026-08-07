@@ -74,7 +74,7 @@ function issues(value: unknown) {
 
 describe("publishedAnalysisCandidateSchema refinements", () => {
   test("support外rulesetのfieldと理由を返す", () => {
-    for (const rulesetVersion of [2, 10, 999]) {
+    for (const rulesetVersion of [2, 11, 999]) {
       expect(issues({ ...candidate(), rulesetVersion })).toEqual([
         {
           code: "custom",
@@ -140,7 +140,7 @@ describe("publishedAnalysisCandidateSchema refinements", () => {
     );
   });
 
-  test("ruleset v9だけにSA/CA集計を必須化し、旧rulesetの形を維持する", () => {
+  test("ruleset v9以降にSA/CA集計を必須化し、旧rulesetの形を維持する", () => {
     for (const rulesetVersion of [3, 4, 5, 6, 7, 8]) {
       expect(
         publishedAnalysisCandidateSchema.safeParse({
@@ -150,26 +150,31 @@ describe("publishedAnalysisCandidateSchema refinements", () => {
       ).toBe(true);
     }
 
-    const value = candidate();
-    value.rulesetVersion = 9;
-    expect(issues(value)).toEqual([
-      {
-        code: "custom",
-        path: ["superArts"],
-        message: "super art aggregates are required for ruleset v9 and later",
-      },
-    ]);
-
     const aggregate = {
       own: { availability: "unavailable" as const },
       opponent: { availability: "unavailable" as const },
     };
-    expect(
-      publishedAnalysisCandidateSchema.safeParse({
-        ...value,
-        superArts: aggregate,
-      }).success,
-    ).toBe(true);
+    // v9で導入した必須化は、以降のrulesetにも同じ形で適用する。
+    for (const rulesetVersion of [9, 10]) {
+      const required = candidate();
+      required.rulesetVersion = rulesetVersion;
+      expect(issues(required)).toEqual([
+        {
+          code: "custom",
+          path: ["superArts"],
+          message: "super art aggregates are required for ruleset v9 and later",
+        },
+      ]);
+      expect(
+        publishedAnalysisCandidateSchema.safeParse({
+          ...required,
+          superArts: aggregate,
+        }).success,
+      ).toBe(true);
+    }
+
+    const value = candidate();
+    value.rulesetVersion = 9;
     expect(
       publishedAnalysisCandidateSchema.safeParse({
         ...value,

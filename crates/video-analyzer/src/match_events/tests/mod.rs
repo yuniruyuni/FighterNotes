@@ -2,6 +2,7 @@
 
 use super::{actions, contacts, guard_breaks, punishes, reversals};
 
+mod advantage_situation_tracks_pressure_continuation;
 mod contact_does_not_bridge_meter_reset_epochs;
 mod damage_sequence_uses_gameplay_gap_across_sa_freeze;
 mod drive_impact_invincible_start_is_confirmed;

@@ -236,6 +236,10 @@ export interface TacticStats {
   dash_throws_faced: number;
   throw_whiffs: number;
   minus_defense_opportunities: number;
+  advantage_opportunities: number;
+  advantage_continued: number;
+  advantage_abandoned: number;
+  advantage_turns_lost: number;
   fastest_strike_challenges: number;
   fastest_strike_losses: number;
   fastest_throw_challenges: number;

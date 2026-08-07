@@ -64,6 +64,16 @@ pub(crate) const MINUS_PRESS_OUTCOME_WINDOW: u32 = 30;
 /// 不利ボタン: 押下直後このフレーム数以内に Invincible が出たら無敵技
 /// （reversal の領分）として除外する
 pub(crate) const MINUS_PRESS_INV_WINDOW: usize = 15;
+/// 攻め継続の判断機会として扱う最小有利フレーム。+1/+2 は最速技でも次の
+/// 攻撃を確定させられず、動かないことを「有利を捨てた」とは呼べない。
+pub(crate) const ADVANTAGE_THRESHOLD: u32 = 3;
+/// 有利側の発生開始を探す猶予。相手が動けるようになるフレームまでに発生が
+/// 始まっていれば、有利のうちに攻めたとみなす。入力表示とメーターの
+/// 境界ずれを吸収するぶんだけ広げる。
+pub(crate) const ADVANTAGE_ACTION_GRACE: usize = 2;
+/// 有利を使わなかった場合に、相手が攻撃を始めたかを見る窓。これを超えて
+/// から始まった攻撃は、この有利フレームの結果とは扱わない。
+pub(crate) const ADVANTAGE_OUTCOME_WINDOW: u32 = 45;
 pub(crate) const PAUSE_MIN: i64 = 5;
 /// 両者の停止スパンに要求する最小重なり
 pub(crate) const PAUSE_OVERLAP_MIN: i64 = 4;

@@ -23,6 +23,7 @@ pub(crate) fn build_advice_cards(
         detect_mashing(features, events, own, own_index),
         detect_press_while_minus(events, own),
         detect_throw_while_minus(events, own),
+        detect_advantage_abandoned(events, own),
         detect_guard_break(events, own),
         detect_reversal_punished(events, own),
         detect_low_scaling_super(events, own),
@@ -156,6 +157,7 @@ fn card_missing_requirements(
         "mashing"
         | "press_while_minus"
         | "throw_while_minus"
+        | "advantage_abandoned"
         | "throw_interrupted_by_invincible"
         | "throw_whiff_punished" => vec![
             (own_input, OwnInput),

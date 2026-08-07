@@ -144,7 +144,7 @@ rollbackはrelease summaryとCloud Run revisionに記録されたapplication / s
 - 削除後と期限切れの `/s/:id` が `404` になり、cache されない。
 
 共有 payload に動画、画像、ファイル名、詳細レポート、frame/input、SA/CAの正確なdamage値と
-最終gauge量が含まれず、ruleset v9ではavailability付き集計だけが含まれることもNetwork panelで確認する。
+最終gauge量が含まれず、ruleset v9以降ではavailability付き集計だけが含まれることもNetwork panelで確認する。
 
 ## Cleanup
 

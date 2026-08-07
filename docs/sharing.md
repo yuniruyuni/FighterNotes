@@ -48,7 +48,7 @@
 | `rounds` | 検出数、勝ち、負け、未確定 |
 | `findings` | 種別、assessment、件数、basis point 化した severity |
 | `tactics` | 対空、DI、raw Drive Rush、dash throw、throw whiff、minus 後の回答、burnout 集計 |
-| `superArts` | ruleset v9 の両者のSA1/2/3/CA使用数と結果、自分側だけの利用文脈。各側にcomplete / partial / unavailableを持つ |
+| `superArts` | ruleset v9以降の両者のSA1/2/3/CA使用数と結果、自分側だけの利用文脈。各側にcomplete / partial / unavailableを持つ |
 
 character ID、finding ID、assessment は client、server、database の全境界で allowlist にする。
 未知 ID、重複 finding、非整数、round 数の不整合、上限超過、未知 field は拒否する。
@@ -121,7 +121,7 @@ PostgreSQL は次の table を持つ。
 | `published_analyses` | ID、version、character、round、削除 hash、logical size、作成・期限 |
 | `published_analysis_findings` | finding の順序、種別、assessment、件数、severity |
 | `published_analysis_tactics` | 戦術統計 |
-| `published_analysis_super_arts` | ruleset v9のSA/CA公開契約が存在することを示すmarker |
+| `published_analysis_super_arts` | ruleset v9以降のSA/CA公開契約が存在することを示すmarker |
 | `published_analysis_own_super_arts` | complete / partialな自分側だけが持つ、完全性flagと全列必須のSA/CA集計 |
 | `published_analysis_opponent_super_arts` | complete / partialな相手側だけが持つ、完全性flagと全列必須のSA/CA集計 |
 | `published_analysis_create_events` | UTC 日次 create quota 用の成功 event |
@@ -132,7 +132,7 @@ finding、tactics、super arts markerとside集計はparent削除時にcascade d
 
 schema version は現在1、presentation revision は1。server はruleset 3〜9を受理し、
 新規解析はruleset 9を生成する。旧rulesetのrowはmarkerを持たず、従来どおりの公開ページを表示する。
-v9はmarkerを必須とし、side集計行が無ければ`unavailable`、行の`complete`がfalseなら`partial`、
+v9以降はmarkerを必須とし、side集計行が無ければ`unavailable`、行の`complete`がfalseなら`partial`、
 trueなら`complete`として復元する。
 
 ## 削除と期限

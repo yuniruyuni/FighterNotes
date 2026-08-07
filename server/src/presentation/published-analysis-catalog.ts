@@ -162,6 +162,20 @@ export const FINDING_PRESENTATIONS: Record<FindingKind, FindingPresentation> = {
     },
     tone: "critical",
   },
+  advantage_abandoned: {
+    title: "ガードさせて有利を取った後に攻めを継続できていない",
+    description:
+      "確認できた有利フレームの多くで次の攻撃を始めず、複数回そのまま攻め返されたパターンです。",
+    practice:
+      "同じ技をガードさせた状況から繋がる打撃と投げを1つずつ決め、有利を確認したら必ず出す形を作ります。",
+    observation: {
+      title: "有利フレームを取った後にターンを渡した場面",
+      description: `有利を取った直後に攻めず、続けて相手の攻撃を受けた事実です。距離やゲージ回復を優先した選択の可能性もあるため、攻めの止まる癖とは${OBSERVATION_REVIEW_CAVEAT}。`,
+      practice:
+        "その時点の距離とドライブゲージを確認し、密着で止まっている場合だけ攻め継続を用意します。",
+    },
+    tone: "critical",
+  },
   guard_break: {
     title: "同じ方向へガード入力が繰り返し崩れている",
     description:

@@ -62,6 +62,10 @@ pub struct MatchEvents {
     /// 不利フレーム後の回答偏重を測る分母。入力を直接観測できた機会だけ。
     #[serde(default)]
     pub minus_situations: Vec<MinusSituationEvent>,
+    /// ガードさせて有利を取った側の攻め継続。`minus_situations` と同じ接触から
+    /// 測るため、機会の分母も入力を直接観測できたものだけになる。
+    #[serde(default)]
+    pub advantage_situations: Vec<AdvantageSituationEvent>,
     /// キャラクター行動から独立して残る飛び道具
     #[serde(default)]
     pub projectiles: Vec<ProjectileThreat>,

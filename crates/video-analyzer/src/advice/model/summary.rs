@@ -172,6 +172,18 @@ pub struct TacticStats {
     /// 入力を直接観測できた、ガード後 1F 以上不利の判断機会。
     #[serde(default)]
     pub minus_defense_opportunities: u32,
+    /// 入力を直接観測できた、ガードさせて有利を取った側の判断機会。
+    #[serde(default)]
+    pub advantage_opportunities: u32,
+    /// 有利のうちに次の攻撃を開始した機会。
+    #[serde(default)]
+    pub advantage_continued: u32,
+    /// 有利のうちに攻撃を開始しなかった機会。前進・様子見・回復を含む。
+    #[serde(default)]
+    pub advantage_abandoned: u32,
+    /// 攻撃を開始せず、続けて相手の攻撃を受ける側へ回った機会。
+    #[serde(default)]
+    pub advantage_turns_lost: u32,
     pub fastest_strike_challenges: u32,
     pub fastest_strike_losses: u32,
     pub fastest_throw_challenges: u32,

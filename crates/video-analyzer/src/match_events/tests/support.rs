@@ -279,6 +279,20 @@ pub(super) fn minus_press_fixture() -> MinusPressFixture {
     ([own, opp], contacts, [vec![], vec![]], rounds)
 }
 
+/// ボタンを含まない、直接観測できた入力区間。
+/// 「入力欄は読めていたが攻撃はしていない」機会を作るために使う。
+pub(super) fn idle_input(start: u32, end: u32) -> InputSegment {
+    InputSegment {
+        start_frame: start,
+        end_frame: end,
+        dir: "N".to_string(),
+        badges: vec![],
+        auto: false,
+        throw: false,
+        evidence: Default::default(),
+    }
+}
+
 pub(super) fn minus_press(f: u32) -> InputSegment {
     InputSegment {
         start_frame: f,
