@@ -167,18 +167,30 @@ TEST_DATABASE_URL=postgres://fighter_test:fighter_test@localhost:5432/fighter_te
 
 Stryker の `Survived`、`NoCoverage`、`Timeout`、runtime error は失敗とする。
 生成不能な `CompileError` は結果に残すが失敗にはせず、`Ignored` は source 内に理由がある場合だけ
-許可する。Rust の必須対象は `video-analyzer` の `temporal` module、`frame-meter`、
-`meter-tracker` で、missed mutant と timeout のない状態を維持する。
-`reports/mutation` と `mutants.out-*` は生成物であり Git へ含めない。
+許可する。`reports/mutation` と `mutants.out-*` は生成物であり Git へ含めない。
 
-PR の mutation workflow は client、server model、PostgreSQL repository、検証済みRust coreを
-並列実行する。週次 workflow の Rust workspace 全体 shard は未導入領域を可視化する inventory で、
-検査を補強して必須対象へ昇格するまでは non-blocking とする。手元では必須対象全体、crate 別、
-またはworkspace全体を次のcommandで測定できる。
-今後、通常経路をcrate単位の高速なmutation testingへ絞る場合は、この週次workspace全体の検査を
-cross-crate回帰の定期gateとしてblocking化する。
+PR の mutation workflow は client、server model、PostgreSQL repository、
+そして **その PR が変更した Rust の行だけ** を並列実行する。
+
+Rust を差分限定にしているのは、workspace 全体が 1,500 mutant を超え、PR ごとに回すには
+桁が合わないためである（`temporal` 384、`frame-meter` 792、`meter-tracker` 328。
+45分の枠では `temporal` の途中までしか進まなかった）。差分限定なら検査量が変更の大きさに
+比例し、「新しく書いた Rust に検査が付いているか」を短時間で確かめられる。
+
+差分限定の job も現時点では non-blocking にしている。変更行に絞っても missed は 0 に
+なっておらず、残っているものの多くは下流のガードによって結果が変わらない等価変異で、
+テストでは殺せない（例: 欠測を弾く条件を反転しても、後段の範囲検査が同じ結果を返す）。
+0 に到達した時点で blocking へ昇格させる。
+
+既存コードの未検査分は週次 workflow の workspace 全体 shard が inventory として可視化する。
+こちらも non-blocking で、補強が進んだ範囲から blocking な定期 gate へ昇格させる。
 
 ```bash
+# PR と同じ範囲を手元で再現する
+git diff --no-color origin/main...HEAD -- '*.rs' > mutants.diff
+bun run mutation:rust:changed
+
+# 範囲を広げて測る
 bun run mutation:rust:core
 bun run mutation:rust:frame-meter
 bun run mutation:rust:meter-tracker

@@ -211,3 +211,72 @@ fn the_top_option_share_is_reported_per_situation() {
     // 機会が無い状況では割合を出さない。
     assert_eq!(option_bias(&decisions, DecisionSituation::Okizeme), None);
 }
+
+/// 射影の絞り込みは side と確度の両方で効く。どちらか片方だけになると、
+/// 相手の判断や未確定の観測が自分の偏りへ混ざる。
+#[test]
+fn the_projection_filters_on_both_side_and_confidence() {
+    use crate::match_events::{KnockdownEvent, OkizemeOutcome};
+
+    let mut events = empty_events();
+    // 相手側・確度高。side で落ちなければならない。
+    let mut other_side = press(
+        100,
+        DefensiveActionKind::Strike,
+        MinusPressOutcome::CounterHit,
+    );
+    other_side.side = 2;
+    // 自分側・確度低。confidence で落ちなければならない。
+    let mut low = press(
+        400,
+        DefensiveActionKind::Strike,
+        MinusPressOutcome::CounterHit,
+    );
+    low.confidence = EventConfidence::Medium;
+    events.presses_while_minus = vec![other_side, low];
+
+    let mut other_situation = situation(700, None);
+    other_situation.side = 2;
+    let mut low_situation = situation(1000, None);
+    low_situation.confidence = EventConfidence::Medium;
+    events.minus_situations = vec![other_situation, low_situation];
+
+    let mut other_advantage = AdvantageSituationEvent {
+        side: 2,
+        frame: 1300,
+        plus_frames: 4,
+        follow_up: None,
+        action_frame: None,
+        pressed: String::new(),
+        outcome: AdvantageOutcome::Reset,
+        drop: 0.0,
+        confidence: EventConfidence::High,
+        source_contact_frame: 1280,
+        round_no: 1,
+    };
+    let mut low_advantage = other_advantage.clone();
+    low_advantage.side = 1;
+    low_advantage.frame = 1600;
+    low_advantage.confidence = EventConfidence::Medium;
+    other_advantage.side = 2;
+    events.advantage_situations = vec![other_advantage, low_advantage];
+
+    let knockdown = |attacker: u8, confidence| KnockdownEvent {
+        side: 3 - attacker,
+        attacker,
+        frame: 1900,
+        wakeup_frame: 2000,
+        setup_frames: 40,
+        okizeme: OkizemeOutcome::Neutral,
+        confidence,
+        round_no: 1,
+    };
+    events.knockdowns = vec![
+        knockdown(2, EventConfidence::High),
+        knockdown(1, EventConfidence::Medium),
+    ];
+
+    let decisions = collect_decisions(&events, 1);
+
+    assert!(decisions.is_empty());
+}

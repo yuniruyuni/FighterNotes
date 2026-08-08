@@ -141,3 +141,145 @@ fn a_knockdown_without_a_causing_hit_is_not_attributed() {
     }];
     assert!(extract(&meter, &features, &rounds, &blocked).is_empty());
 }
+
+/// ダウンと認める stun の長さは境界そのもの。ちょうど閾値なら数え、
+/// 1フレーム短ければ数えない。
+#[test]
+fn the_stun_length_threshold_decides_at_its_edge() {
+    use MeterState::*;
+    let (mut meter, features, rounds) = knockdown_fixture();
+    // stun をちょうど KNOCKDOWN_MIN_STUN 分にする。
+    for state in meter[1].iter_mut().take(200).skip(100) {
+        *state = Free;
+    }
+    for state in meter[1].iter_mut().take(100 + KNOCKDOWN_MIN_STUN).skip(100) {
+        *state = Stun;
+    }
+    assert_eq!(
+        extract(&meter, &features, &rounds, &knockdown_hit()).len(),
+        1
+    );
+
+    // 1フレーム短いと足りない。
+    meter[1][100 + KNOCKDOWN_MIN_STUN - 1] = Free;
+    assert!(extract(&meter, &features, &rounds, &knockdown_hit()).is_empty());
+}
+
+/// 準備時間も境界で決める。攻撃側が自由な時間がちょうど閾値ならダウンとして
+/// 扱い、1フレーム足りなければ固めと区別できない。
+#[test]
+fn the_setup_length_threshold_decides_at_its_edge() {
+    use MeterState::*;
+    let (mut meter, features, rounds) = knockdown_fixture();
+    // 攻撃側は stun 中ずっと Active（固め）にしておき、末尾だけ自由にする。
+    for state in meter[0].iter_mut().take(200).skip(100) {
+        *state = Active;
+    }
+    for state in meter[0]
+        .iter_mut()
+        .take(200)
+        .skip(200 - KNOCKDOWN_MIN_SETUP)
+    {
+        *state = Free;
+    }
+    assert_eq!(
+        extract(&meter, &features, &rounds, &knockdown_hit()).len(),
+        1
+    );
+
+    meter[0][200 - KNOCKDOWN_MIN_SETUP] = Active;
+    assert!(extract(&meter, &features, &rounds, &knockdown_hit()).is_empty());
+}
+
+/// 原因のヒットを探す猶予も境界で決める。stun 開始より猶予ぶん前までは
+/// そのダウンの原因として認める。
+#[test]
+fn the_cause_lookback_decides_at_its_edge() {
+    let (meter, features, rounds) = knockdown_fixture();
+    let hit = |frame: u32| {
+        vec![ContactEvent {
+            frame,
+            attacker: 1,
+            victim: 2,
+            hit: true,
+            projectile: false,
+            round_no: 1,
+        }]
+    };
+
+    assert_eq!(
+        extract(
+            &meter,
+            &features,
+            &rounds,
+            &hit(100 - KNOCKDOWN_CAUSE_GRACE)
+        )
+        .len(),
+        1
+    );
+    assert!(extract(
+        &meter,
+        &features,
+        &rounds,
+        &hit(100 - KNOCKDOWN_CAUSE_GRACE - 1)
+    )
+    .is_empty());
+}
+
+/// 起き上がり直後の攻めと認める窓も境界で決める。窓の外で始めた攻撃は
+/// その起き上がりへの攻めではない。
+#[test]
+fn the_pressure_window_decides_at_its_edge() {
+    use MeterState::*;
+    let (mut meter, features, rounds) = knockdown_fixture();
+    let edge = (200 + OKIZEME_PRESSURE_WINDOW) as usize;
+    meter[0][edge] = Startup;
+    assert_eq!(
+        extract(&meter, &features, &rounds, &knockdown_hit())[0].okizeme,
+        OkizemeOutcome::Pressured
+    );
+
+    meter[0][edge] = Free;
+    meter[0][edge + 1] = Startup;
+    assert_eq!(
+        extract(&meter, &features, &rounds, &knockdown_hit())[0].okizeme,
+        OkizemeOutcome::Neutral
+    );
+}
+
+/// meter epoch が 0 以外でも同じように扱い、起き上がりで epoch が変われば
+/// 結果まで確定したとは言わない。
+#[test]
+fn the_epoch_decides_the_confidence() {
+    use MeterState::*;
+    let (mut meter, features, rounds) = knockdown_fixture();
+    for state in meter[0].iter_mut().take(206).skip(198) {
+        *state = Active;
+    }
+    let n = meter[0].len();
+
+    let same = extract_knockdowns(KnockdownInputs {
+        features: &features,
+        meter_state: &meter,
+        meter_epoch: &[vec![7; n], vec![7; n]],
+        contacts: &knockdown_hit(),
+        rounds: &rounds,
+    });
+    assert_eq!(same.len(), 1);
+    assert_eq!(same[0].confidence, EventConfidence::High);
+    assert_eq!(same[0].okizeme, OkizemeOutcome::Meaty);
+
+    let mut attacker_epoch = vec![0; n];
+    for value in attacker_epoch.iter_mut().skip(200) {
+        *value = 1;
+    }
+    let drifted = extract_knockdowns(KnockdownInputs {
+        features: &features,
+        meter_state: &meter,
+        meter_epoch: &[attacker_epoch, vec![0; n]],
+        contacts: &knockdown_hit(),
+        rounds: &rounds,
+    });
+    assert_eq!(drifted.len(), 1);
+    assert_eq!(drifted[0].confidence, EventConfidence::Medium);
+}

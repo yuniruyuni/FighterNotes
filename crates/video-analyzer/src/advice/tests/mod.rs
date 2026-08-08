@@ -13,6 +13,7 @@ mod decision_projection_matches_source_events;
 mod detector_coverage;
 mod diagnoses_sort_before_higher_severity_observations;
 mod drive_spend_is_measured_not_assumed;
+mod every_new_tactic_counter_is_pinned;
 mod input_stats_and_coverage_use_only_validated_rounds;
 mod legacy_card_without_classification_deserializes_conservatively;
 mod low_punish_return_must_repeat_before_it_is_a_diagnosis;

@@ -278,6 +278,27 @@ mod tests {
         }
     }
 
+    /// 空振り被反撃は攻撃判定と接触から作るので、入力表示には依存しない。
+    /// 逆に接触が読めなければ、届いたかどうかを判定できない。
+    #[test]
+    fn the_whiff_card_requires_contacts_but_not_the_opponents_input() {
+        let coverage = available_coverage_with_opponent_input_missing();
+
+        assert_eq!(
+            card_missing_requirements(&card("whiff_punished"), &coverage),
+            Vec::new()
+        );
+
+        let mut without_contacts = coverage;
+        if let Some(availability) = without_contacts.availability.as_mut() {
+            availability.contacts = EvidenceAvailability::Unavailable;
+        }
+        assert_eq!(
+            card_missing_requirements(&card("whiff_punished"), &without_contacts),
+            vec![EvidenceRequirement::Contacts]
+        );
+    }
+
     #[test]
     fn teleport_cards_require_the_opponents_observed_input() {
         let coverage = available_coverage_with_opponent_input_missing();

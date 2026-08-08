@@ -136,3 +136,91 @@ fn own_and_faced_drive_impacts_stay_separate() {
     assert_eq!(stats.di_hit, 1);
     assert_eq!(stats.di_returned, 0);
 }
+
+/// 生ラッシュの消費も同じ経路で実測する。DI だけ数えていると、ゲージの
+/// 主要な使途がひとつ丸ごと収支から抜ける。
+#[test]
+fn a_raw_drive_rush_contributes_its_own_spend() {
+    use crate::match_events::{DriveRushEvent, DriveRushOutcome};
+    let mut drive = vec![1.0_f32; 200];
+    for value in drive.iter_mut().skip(52) {
+        *value = 0.5;
+    }
+    let features = features_with_drive(&drive, None);
+    let mut events = events_with_impact(impact(9_999, DriveImpactOutcome::Hit, 0.0));
+    events.drive_impacts.clear();
+    events.drive_rushes = vec![DriveRushEvent {
+        side: 1,
+        frame: 50,
+        raw: true,
+        outcome: DriveRushOutcome::Hit,
+        contact_frame: Some(62),
+        damage: 0.3,
+        confidence: EventConfidence::High,
+        round_no: 1,
+    }];
+
+    let stats = build_tactic_stats(&features, &events, 1, 2);
+
+    assert_eq!(stats.drive_spend_samples, 1);
+    assert!((stats.drive_spent_on_rushes - 0.5).abs() < 0.005);
+    assert!((stats.drive_damage_from_rushes - 0.3).abs() < 1e-6);
+    assert_eq!(stats.drive_spent_on_impacts, 0.0);
+}
+
+/// 読み取り値そのものが壊れている frame は、uncertain でなくても使わない。
+/// 範囲外や非有限を混ぜると、消費量が実測とかけ離れる。
+#[test]
+fn a_broken_gauge_reading_is_not_used_as_a_baseline() {
+    let mut drive = vec![1.0_f32; 200];
+    // 行動直前だけ壊れた値にする。uncertain flag は立っていない。
+    drive[48] = f32::NAN;
+    drive[49] = 5.0;
+    drive[50] = -1.0;
+    for value in drive.iter_mut().skip(52) {
+        *value = 0.833;
+    }
+    let features = features_with_drive(&drive, None);
+    let events = events_with_impact(impact(50, DriveImpactOutcome::Hit, 0.22));
+
+    let stats = build_tactic_stats(&features, &events, 1, 2);
+
+    // 壊れた値を無視しても、猶予内の健全な frame から基準を取れる。
+    assert_eq!(stats.drive_spend_samples, 1);
+    assert!((stats.drive_spent_on_impacts - 0.167).abs() < 0.005);
+}
+
+/// 行動より後の窓は行動フレームの次から始める。行動フレーム自体を含めると、
+/// まだ減っていない値を「消費後」として読んでしまう。
+#[test]
+fn the_spend_window_starts_after_the_action_frame() {
+    let mut drive = vec![1.0_f32; 200];
+    // 行動フレームでは満タンのまま、次のフレームから減る。
+    for value in drive.iter_mut().skip(51) {
+        *value = 0.833;
+    }
+    let features = features_with_drive(&drive, None);
+    let events = events_with_impact(impact(50, DriveImpactOutcome::Hit, 0.22));
+
+    let stats = build_tactic_stats(&features, &events, 1, 2);
+
+    assert_eq!(stats.drive_spend_samples, 1);
+    assert!((stats.drive_spent_on_impacts - 0.167).abs() < 0.005);
+}
+
+/// 行動より前に読める frame が1つも無ければ基準を作れない。片側だけの
+/// 欠測でも消費としては数えない。
+#[test]
+fn a_missing_baseline_alone_blocks_the_measurement() {
+    let drive = vec![1.0_f32; 200];
+    let mut features = features_with_drive(&drive, None);
+    // 行動より前だけを読めなくする。後ろは読める。
+    for feature in features.iter_mut().take(51) {
+        feature.left_drive_uncertain = true;
+    }
+    let events = events_with_impact(impact(50, DriveImpactOutcome::Hit, 0.22));
+
+    let stats = build_tactic_stats(&features, &events, 1, 2);
+
+    assert_eq!(stats.drive_spend_samples, 0);
+}

@@ -22,6 +22,7 @@
     "generate:licenses": "bun scripts/generate-third-party-notices.ts",
     "local:e2e": "bun scripts/local-video-e2e.ts",
     "mutation": "bun run mutation:ts && bun run mutation:rust:core",
+    "mutation:rust:changed": "cargo mutants --jobs 2 --workspace --in-diff mutants.diff --output mutants.out-changed",
     "mutation:rust:core": "bun run mutation:rust:temporal && bun run mutation:rust:frame-meter && bun run mutation:rust:meter-tracker",
     "mutation:rust:frame-meter": "cargo mutants --jobs 2 --package frame-meter --output mutants.out-frame-meter",
     "mutation:rust:full": "cargo mutants --jobs 2 --workspace --output mutants.out-full",
@@ -29,8 +30,8 @@
     "mutation:rust:temporal": "cargo mutants --jobs 2 --package video-analyzer --file 'crates/video-analyzer/src/temporal/**/*.rs' --output mutants.out-temporal",
     "mutation:ts": "bun run mutation:ts:client && bun run mutation:ts:server-models",
     "mutation:ts:client": "stryker run stryker.client.config.mjs && bun scripts/check-stryker-results.ts reports/mutation/client.json",
-    "mutation:ts:server-repositories": "stryker run stryker.server-repositories.config.mjs && bun scripts/check-stryker-results.ts reports/mutation/server-repositories.json",
     "mutation:ts:server-models": "stryker run stryker.server-models.config.mjs && bun scripts/check-stryker-results.ts reports/mutation/server-models.json",
+    "mutation:ts:server-repositories": "stryker run stryker.server-repositories.config.mjs && bun scripts/check-stryker-results.ts reports/mutation/server-repositories.json",
     "prepare:check": "bun run --filter @fighter-notes/client build:wasm",
     "watch:run": "bun run --filter '*' --parallel watch:run"
   },

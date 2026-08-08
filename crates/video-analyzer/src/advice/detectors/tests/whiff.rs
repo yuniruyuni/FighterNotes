@@ -92,3 +92,20 @@ fn low_confidence_whiffs_are_ignored() {
 
     assert!(detect_whiff_punished(&events_with(whiffs), 1).is_none());
 }
+
+/// 説明文の割合は「空振りのうち何回狩られたか」。件数だけでは、
+/// 10回中2回と2回中2回が同じに見えてしまう。
+#[test]
+fn the_description_reports_the_punished_share() {
+    let events = events_with(vec![
+        whiff(100, WhiffOutcome::Punished, 0.1),
+        whiff(400, WhiffOutcome::Punished, 0.1),
+        whiff(700, WhiffOutcome::Unpunished, 0.0),
+        whiff(1000, WhiffOutcome::Unpunished, 0.0),
+    ]);
+
+    let card = detect_whiff_punished(&events, 1).expect("card");
+
+    assert!(card.description.contains("接触しなかった技 4 回"));
+    assert!(card.description.contains("2 回（50%）"));
+}
