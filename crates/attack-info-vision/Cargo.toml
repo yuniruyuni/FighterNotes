@@ -8,3 +8,6 @@ license = "MIT"
 input-vision = { path = "../input-vision" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+input-vision = { path = "../input-vision", features = ["test-support"] }

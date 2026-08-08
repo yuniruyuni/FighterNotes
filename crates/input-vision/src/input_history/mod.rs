@@ -32,8 +32,8 @@ pub const INPUT_STRIP_Y: u32 = 232;
 pub const INPUT_STRIP_H: u32 = 36;
 
 /// 数字ボックス: 幅 11、高さ 18。ones 桁の左端 x（P1）。桁は左へ 11px ずつ
-const DIGIT_W: usize = 11;
-const DIGIT_H: usize = 18;
+pub(crate) const DIGIT_W: usize = 11;
+pub(crate) const DIGIT_H: usize = 18;
 const P1_ONES_X: u32 = 68;
 const P2_ONES_X: u32 = 1856;
 /// 読む最大桁数（実測最大 3 桁 = 999 フレーム ≈ 16 秒）

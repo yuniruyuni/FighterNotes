@@ -569,6 +569,48 @@ mod tests {
         assert_eq!(read(0, ROW_SCAN_HEIGHT + 1), None);
     }
 
+    /// 括弧で挟まれた数値行を読み切れることを確かめる。
+    ///
+    /// 桁は連結成分の外接矩形から 1px 外側を起点に照合するので、明るい画素が
+    /// テンプレートの縁から 1px 内側に収まる数字でないと素直に組み立てられ
+    /// ない。その条件を満たすのは 7 だけ（input-vision 側で固定してある）。
+    #[test]
+    fn a_parenthesised_numeric_row_reads_both_groups() {
+        use input_vision::test_support::paint_digit;
+
+        let width = BASE_WIDTH;
+        let origin = (100usize, 5usize);
+        let mut rgba = vec![0u8; width * 64 * 4];
+
+        // 走査窓を基準に配置する。数字はテンプレート左上、括弧は塗り潰し。
+        let mut paint = |x: usize, y: usize, digit: usize| {
+            paint_digit(&mut rgba, width, origin.0 + x, origin.1 + y, digit);
+        };
+        for x in [0, 11] {
+            paint(x, 2, 7);
+        }
+        for x in [34, 45, 56] {
+            paint(x, 2, 7);
+        }
+
+        let mut bar = |x0: usize| {
+            for y in 2..=20 {
+                for x in x0..x0 + 3 {
+                    let index = ((origin.1 + y) * width + origin.0 + x) * 4;
+                    rgba[index..index + 4].copy_from_slice(&[255, 255, 255, 255]);
+                }
+            }
+        };
+        bar(28);
+        bar(68);
+
+        let read = read_numeric_row(&rgba, width, origin, 0, 25, 210, NumericRowKind::Combo);
+
+        let (first, second, score) = read.expect("括弧が揃った行は読める");
+        assert_eq!((first, second), (77, 777));
+        assert_eq!(score, 0, "テンプレートそのものなので誤差は出ない");
+    }
+
     /// 括弧のアンカーが無い行は、数字が並んでいても読み取らない。
     #[test]
     fn digits_without_parentheses_yield_nothing() {

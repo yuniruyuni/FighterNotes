@@ -9,3 +9,6 @@
 
 pub mod input_history;
 pub mod input_tracker;
+
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
