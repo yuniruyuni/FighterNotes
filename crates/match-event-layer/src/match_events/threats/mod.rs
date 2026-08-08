@@ -39,7 +39,7 @@ pub(crate) const PROJECTILE_MIN_GAME_FRAMES: usize = 8;
 /// Meter-only projectile contact search after its observed active run.
 pub(crate) const PROJECTILE_CONTACT_WINDOW: u32 = 36;
 /// Damage bars update after contact/hitstop, so allow a delayed HP transition.
-pub(crate) const THREAT_DAMAGE_WINDOW: u32 = 25;
+pub const THREAT_DAMAGE_WINDOW: u32 = 25;
 
 mod extraction;
 mod model;

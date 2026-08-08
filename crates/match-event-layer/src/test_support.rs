@@ -1,7 +1,16 @@
-pub(super) use super::super::*;
-pub(super) use crate::input_history::BadgeMark;
+//! イベント層のテストで使う観測列の組み立て補助。
+//!
+//! イベントから先（advice・spatial）を検査する上位 crate のテストも
+//! 同じ観測列を必要とするため、`test-support` feature で公開する。
 
-pub(crate) fn feat(i: u32, l: f32, r: f32) -> FrameFeatures {
+pub use crate::frame_features::FrameFeatures;
+pub use crate::input_history::BadgeMark;
+pub use crate::input_history::InputDir;
+pub use crate::input_tracker::TrackedInput;
+pub use crate::match_events::*;
+pub use meter_tracker::MeterTimeline;
+
+pub fn feat(i: u32, l: f32, r: f32) -> FrameFeatures {
     FrameFeatures {
         frame_index: i,
         fps: 60.0,
@@ -31,7 +40,7 @@ pub(crate) fn feat(i: u32, l: f32, r: f32) -> FrameFeatures {
     }
 }
 
-pub(super) fn tracked(
+pub fn tracked(
     count: u32,
     dir: InputDir,
     badges: Vec<BadgeMark>,
@@ -50,7 +59,7 @@ pub(super) fn tracked(
 }
 
 /// 2 ラウンドの合成試合: R1 は P2 が KO 負け、R2 は P1 が KO 負け
-pub(super) fn synth_two_rounds() -> Vec<FrameFeatures> {
+pub fn synth_two_rounds() -> Vec<FrameFeatures> {
     let mut fs = Vec::new();
     let mut i = 0u32;
     // R1: 全快 100f → P2 が 3 回被弾して 0 に
@@ -99,7 +108,7 @@ pub(super) fn synth_two_rounds() -> Vec<FrameFeatures> {
 }
 
 /// P2 視点の3ラウンド合成試合。勝者は P2, P1, P2 の順。
-pub(super) fn synth_three_rounds_for_p2() -> Vec<FrameFeatures> {
+pub fn synth_three_rounds_for_p2() -> Vec<FrameFeatures> {
     let mut features = Vec::new();
     let mut frame = 0u32;
 
@@ -128,7 +137,7 @@ pub(super) fn synth_three_rounds_for_p2() -> Vec<FrameFeatures> {
     features
 }
 
-pub(super) fn synth_timeline(entries: Vec<(i64, &str, i64, i64)>) -> MeterTimeline {
+pub fn synth_timeline(entries: Vec<(i64, &str, i64, i64)>) -> MeterTimeline {
     MeterTimeline {
         side: "test".to_string(),
         segments: vec![meter_tracker::TimelineSegment {
@@ -147,7 +156,7 @@ pub(super) fn synth_timeline(entries: Vec<(i64, &str, i64, i64)>) -> MeterTimeli
     }
 }
 
-pub(super) fn synth_segmented_timeline(
+pub fn synth_segmented_timeline(
     segment_id: i32,
     entries: Vec<(i64, &str, i64, i64)>,
 ) -> MeterTimeline {
@@ -171,11 +180,11 @@ pub(super) fn synth_segmented_timeline(
 
 /// 1 gf = 1 エントリの現実的なランを合成する（gf は 1 ずつ進む）。
 /// 有利フレームの game frame 計上を正しく通すために使う。
-pub(super) fn synth_run(gf0: i64, st: &str, a: i64, b: i64) -> Vec<(i64, &str, i64, i64)> {
+pub fn synth_run(gf0: i64, st: &str, a: i64, b: i64) -> Vec<(i64, &str, i64, i64)> {
     (0..=(b - a)).map(|k| (gf0 + k, st, a + k, a + k)).collect()
 }
 
-pub(super) fn extract_synth_punishes(
+pub fn extract_synth_punishes(
     base_frame: u32,
     p1: Vec<MeterState>,
     p2: Vec<MeterState>,
@@ -196,7 +205,7 @@ pub(super) fn extract_synth_punishes(
         p1_hp_end: 1.0,
         p2_hp_end: 1.0,
     }];
-    super::punishes::extract_punishes(super::punishes::PunishInputs {
+    crate::match_events::punishes::extract_punishes(crate::match_events::punishes::PunishInputs {
         features: &features,
         meter_state: &[p1, p2],
         meter_epoch: &epochs,
@@ -208,7 +217,7 @@ pub(super) fn extract_synth_punishes(
     })
 }
 
-pub(super) fn up_inputs(n: usize, ranges: &[(usize, usize)]) -> Vec<TrackedInput> {
+pub fn up_inputs(n: usize, ranges: &[(usize, usize)]) -> Vec<TrackedInput> {
     let mut inputs: Vec<_> = (0..n)
         .map(|k| tracked((k + 1) as u32, InputDir::Neutral, vec![], false, false))
         .collect();
@@ -233,7 +242,7 @@ pub(super) type MinusPressFixture = (
     Vec<RoundInfo>,
 );
 
-pub(super) fn minus_press_fixture() -> MinusPressFixture {
+pub fn minus_press_fixture() -> MinusPressFixture {
     use MeterState::*;
     let n = 300usize;
     let mut own = vec![Free; n]; // P1（自分）
@@ -281,7 +290,7 @@ pub(super) fn minus_press_fixture() -> MinusPressFixture {
 
 /// ボタンを含まない、直接観測できた入力区間。
 /// 「入力欄は読めていたが攻撃はしていない」機会を作るために使う。
-pub(super) fn idle_input(start: u32, end: u32) -> InputSegment {
+pub fn idle_input(start: u32, end: u32) -> InputSegment {
     InputSegment {
         start_frame: start,
         end_frame: end,
@@ -293,7 +302,7 @@ pub(super) fn idle_input(start: u32, end: u32) -> InputSegment {
     }
 }
 
-pub(super) fn minus_press(f: u32) -> InputSegment {
+pub fn minus_press(f: u32) -> InputSegment {
     InputSegment {
         start_frame: f,
         end_frame: f + 4,
@@ -305,7 +314,7 @@ pub(super) fn minus_press(f: u32) -> InputSegment {
     }
 }
 
-pub(super) fn extract_minus(
+pub fn extract_minus(
     meter_state: &[Vec<MeterState>; 2],
     contacts: &[ContactEvent],
     damage: &[DamageEvent],
@@ -318,7 +327,7 @@ pub(super) fn extract_minus(
         (0..n as i64).collect::<Vec<_>>(),
         (0..n as i64).collect::<Vec<_>>(),
     ];
-    extract_presses_while_minus(
+    crate::match_events::extract_presses_while_minus(
         meter_state,
         &epochs,
         &game_frames,
@@ -329,7 +338,7 @@ pub(super) fn extract_minus(
     )
 }
 
-pub(super) fn extract_minus_all(
+pub fn extract_minus_all(
     meter_state: &[Vec<MeterState>; 2],
     contacts: &[ContactEvent],
     damage: &[DamageEvent],

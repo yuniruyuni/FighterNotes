@@ -34,7 +34,7 @@ mod knockdowns;
 mod minus_press;
 mod model;
 mod parameters;
-mod punishes;
+pub(crate) mod punishes;
 mod reversals;
 mod rounds;
 mod runs;
@@ -57,14 +57,14 @@ pub(crate) use attack_evidence::{
 pub(crate) use contacts::*;
 pub(crate) use damage::{extend_rounds_through_freezes, extract_damage_sequences};
 pub(crate) use guard_breaks::*;
-#[allow(unused_imports)]
-pub(crate) use minus_press::*;
-pub(crate) use parameters::*;
+pub use minus_press::*;
+pub use parameters::*;
 pub(crate) use punishes::*;
 pub(crate) use reversals::*;
 pub(crate) use rounds::*;
 pub(crate) use segments::*;
-pub(crate) use threats::{extract_threats, THREAT_DAMAGE_WINDOW};
+pub(crate) use threats::extract_threats;
+pub use threats::THREAT_DAMAGE_WINDOW;
 pub(crate) use timeline::{
     both_freeze_spans, confidence_per_frame, continuous_epoch, epoch_per_frame, gf_per_frame,
     idx_of, movement_run_is_ground_attack_chain, movementish_per_frame, state_per_frame,

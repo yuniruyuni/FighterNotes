@@ -22,14 +22,14 @@ pub(crate) const DMG_MIN_DROP: f32 = 0.015;
 // HP ベースの窓（フォールバック用）は HP 減少検出の遅延 +3F を含む。
 // advice 層のダメージ帰属排他（暴れカードとの重複防止）でも同じ窓を使う。
 /// 対空 + 着地狩りの被弾窓上限（空中 〜f+42、着地硬直 〜f+45、+遅延 3F）
-pub(crate) const JUMP_SELF_HIT_WINDOW: u32 = 48;
+pub const JUMP_SELF_HIT_WINDOW: u32 = 48;
 /// GotHit は入力からこのフレーム数以降の被弾のみ。これ未満は予備動作狩られ
-pub(crate) const JUMP_SELF_HIT_MIN: u32 = 8;
+pub const JUMP_SELF_HIT_MIN: u32 = 8;
 /// ジャンプ攻撃ヒットの窓（最速の昇り攻撃 ≈f+9、最遅 f+42 + 遅延 3F）。
 /// これより後の相手被弾は着地後の地上技（実測 f1717: +51F の中足）であり
 /// 「飛び込みが通った」ではない
-pub(crate) const JUMP_ATTACK_MIN: u32 = 9;
-pub(crate) const JUMP_ATTACK_MAX: u32 = 45;
+pub const JUMP_ATTACK_MIN: u32 = 9;
+pub const JUMP_ATTACK_MAX: u32 = 45;
 /// ジャンプとみなす上入力セグメントの最小持続（video frames）。
 /// 上入力は 1F で成立する。「3F」はジャンプの予備動作（離地までの時間）で
 /// あって入力の保持時間ではない（利用者指摘 2026-07-09: タップジャンプの
@@ -45,11 +45,11 @@ pub(crate) const JUMP_AMBIGUOUS_REUSE_GAP: u32 = 45;
 // コンタクト（メーター）ベースの窓。コンタクトはヒット瞬間そのものなので
 // 遅延マージンは ±2F 程度でよい
 /// 予備動作狩られの上限（予備 4F + 2F）
-pub(crate) const JUMP_C_PRE_MAX: u32 = 6;
+pub const JUMP_C_PRE_MAX: u32 = 6;
 /// 対空 + 着地狩り被弾の上限（着地硬直末 f+45 + 2F）
-pub(crate) const JUMP_C_HIT_MAX: u32 = 47;
+pub const JUMP_C_HIT_MAX: u32 = 47;
 /// ジャンプ攻撃接触の窓（空中のみ。最遅 f+42 + 2F）
-pub(crate) const JUMP_C_ATK_MIN: u32 = 7;
+pub const JUMP_C_ATK_MIN: u32 = 7;
 pub(crate) const JUMP_C_ATK_MAX: u32 = 44;
 /// ヒットストップとみなす最小停止フレーム数（実測 10。通常進行は 1）
 /// 最速行動を記録する最小不利幅。-1Fから結果とセットで記録し、

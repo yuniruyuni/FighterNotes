@@ -43,7 +43,9 @@ SPA の配信、軽量な共有結果の保存と公開、期限切れデータ�
 | Input vision | `crates/input-vision` | 入力履歴欄の画素読み取りと系列の補修 |
 | Attack info vision | `crates/attack-info-vision` | 攻撃情報表示の読み取りと技ごとの系列化 |
 | Temporal confirm | `crates/temporal-confirm` | 読み取り結果の時系列突き合わせによる確定 |
-| Video analyzer | `crates/video-analyzer` | イベント帰属、空間再評価、助言レポート生成 |
+| Analysis context | `crates/analysis-context` | 対戦の前提（自分の側・キャラクター）と技のフレームデータ表 |
+| Match event layer | `crates/match-event-layer` | 確定済み観測から試合イベントを組み立てる |
+| Video analyzer | `crates/video-analyzer` | 空間再評価、助言レポート生成、パイプライン結線 |
 | Server | `server/src` | 静的配信、共有 API、公開ページ、rate limit、cleanup batch |
 | Database | `schema` | 共有結果、指摘、戦術統計、SA/CA公開集計、作成 quota event、共有rate-limit counterの保存 |
 | Delivery | `Dockerfile`、`cloudrun*.yaml`、`.github/workflows` | build、migration、Cloud Run service / Job のリリース |

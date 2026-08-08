@@ -1,4 +1,5 @@
-use super::support::*;
+use match_event_layer::test_support::*;
+use video_analyzer::{advice, spatial_candidate_windows};
 
 #[test]
 fn test_old_movement_run_does_not_confirm_new_takeoff() {
@@ -22,8 +23,11 @@ fn test_old_movement_run_does_not_confirm_new_takeoff() {
         .concat(),
     );
 
-    let context =
-        crate::context::AnalysisContext::from_characters("p2", Some("LUKE"), Some("CHUN_LI"));
+    let context = video_analyzer::context::AnalysisContext::from_characters(
+        "p2",
+        Some("LUKE"),
+        Some("CHUN_LI"),
+    );
     let ev = build_match_events_with_context(&fs, &[], &inputs, Some((&left, &right)), &context);
     let jumps: Vec<_> = ev.jumps.iter().filter(|jump| jump.side == 2).collect();
     assert_eq!(jumps.len(), 2, "曖昧候補は映像確認用に保持する: {jumps:?}");
@@ -39,7 +43,7 @@ fn test_old_movement_run_does_not_confirm_new_takeoff() {
         .iter()
         .all(|jump| jump.air_end <= jump.frame + JUMP_C_HIT_MAX));
 
-    let window = crate::spatial_candidate_windows(&ev)
+    let window = spatial_candidate_windows(&ev)
         .into_iter()
         .find(|window| window.start_frame <= 150 && window.end_frame >= 160)
         .expect("曖昧な離地候補を空間確認へ送る");
@@ -48,7 +52,7 @@ fn test_old_movement_run_does_not_confirm_new_takeoff() {
         .iter()
         .any(|hint| hint.side == 2 && hint.end_frame >= 160));
 
-    let report = crate::advice::build_report(&fs, &ev, "p2", Some("LUKE"));
+    let report = advice::build_report(&fs, &ev, "p2", Some("LUKE"));
     assert!(report.cards.iter().all(|card| card.id != "own_jumps"));
 }
 

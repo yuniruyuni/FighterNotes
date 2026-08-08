@@ -78,7 +78,7 @@ fn attack_table() -> &'static HashMap<String, Vec<AttackMoveData>> {
 /// 入力履歴と実測発生フレームから打撃属性を推定する。
 ///
 /// 最短候補だけに絞っても属性が複数残る場合は、誤分類を避けるため None。
-pub(crate) fn strike_kind_for_input(
+pub fn strike_kind_for_input(
     character: &str,
     dir: &str,
     badges: &[String],
@@ -213,7 +213,7 @@ pub enum RisingReversalKind {
 /// The frame meter can show one long motion run for air stalls and floats. That
 /// run is only allowed to extend jump attribution for explicitly calibrated
 /// characters; applying it to every character merges adjacent ground actions.
-pub(crate) fn has_extended_airtime(character: Option<&str>) -> bool {
+pub fn has_extended_airtime(character: Option<&str>) -> bool {
     character.is_some_and(|name| name.eq_ignore_ascii_case("DHALSIM"))
 }
 

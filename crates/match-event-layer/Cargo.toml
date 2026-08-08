@@ -1,21 +1,20 @@
 [package]
-name = "video-analyzer"
+name = "match-event-layer"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
+[features]
+# 試合イベントを組み立てる用の観測列を手で書く補助。イベントから先
+# （advice・spatial）を検査する上位 crate のテストが使う。
+test-support = []
+
 [dependencies]
 analysis-context = { path = "../analysis-context" }
 attack-info-vision = { path = "../attack-info-vision" }
-frame-meter = { path = "../frame-meter" }
 hud-vision = { path = "../hud-vision" }
 input-vision = { path = "../input-vision" }
-match-event-layer = { path = "../match-event-layer" }
-temporal-confirm = { path = "../temporal-confirm" }
 meter-tracker = { path = "../meter-tracker" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-
-[dev-dependencies]
-match-event-layer = { path = "../match-event-layer", features = ["test-support"] }
-image = { version = "0.25", default-features = false, features = ["png"] }
+temporal-confirm = { path = "../temporal-confirm" }

@@ -23,7 +23,7 @@ interface DataManifest {
 }
 
 const DATA_DIRECTORY = fileURLToPath(
-  new URL("../crates/video-analyzer/data/", import.meta.url),
+  new URL("../crates/analysis-context/data/", import.meta.url),
 );
 
 const DATA_FILE_NAMES = ["frame_data.json", "attack_data.json"] as const;

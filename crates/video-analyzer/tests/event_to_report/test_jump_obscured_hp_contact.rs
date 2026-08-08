@@ -1,4 +1,5 @@
-use super::support::*;
+use match_event_layer::test_support::*;
+use video_analyzer::spatial_candidate_windows;
 
 #[test]
 fn confirmed_jump_contact_with_obscured_hp_is_sent_to_spatial_refinement() {
@@ -33,7 +34,7 @@ fn confirmed_jump_contact_with_obscured_hp_is_sent_to_spatial_refinement() {
     assert_eq!(jump.contact_frame, Some(140));
     assert_eq!(jump.outcome, JumpOutcome::UnverifiedHit);
     assert!(
-        crate::spatial_candidate_windows(&events)
+        spatial_candidate_windows(&events)
             .iter()
             .any(|window| window.start_frame <= 140 && window.end_frame >= 140),
         "HP だけでは確定できない接触を空間解析へ送る"

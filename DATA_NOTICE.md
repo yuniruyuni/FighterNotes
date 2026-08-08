@@ -1,7 +1,7 @@
 # Data Notice
 
 ルートの [MIT License](./LICENSE) は、Fighter Notes が独自に作成したソースコードと
-文書に適用されますが、`crates/video-analyzer/data/` 以下の正規化済みデータおよび
+文書に適用されますが、`crates/analysis-context/data/` 以下の正規化済みデータおよび
 manifestと、後述する認識用テンプレートのデータ部分には適用されません。
 
 これらのファイルは、解析器が実行時に使用するために必要な項目だけを収録した

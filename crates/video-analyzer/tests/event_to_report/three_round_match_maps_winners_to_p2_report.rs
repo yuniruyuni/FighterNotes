@@ -1,4 +1,5 @@
-use super::support::*;
+use match_event_layer::test_support::*;
+use video_analyzer::advice;
 
 #[test]
 fn three_round_match_maps_winners_to_p2_report() {
@@ -13,7 +14,7 @@ fn three_round_match_maps_winners_to_p2_report() {
         [(1, Some(2)), (2, Some(1)), (3, Some(2))]
     );
 
-    let report = crate::advice::build_report(&features, &events, "p2", Some("KEN"));
+    let report = advice::build_report(&features, &events, "p2", Some("KEN"));
     assert_eq!(
         report
             .round_summaries

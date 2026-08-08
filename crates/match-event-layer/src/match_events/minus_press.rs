@@ -29,7 +29,7 @@ fn move_in_progress(state: &[MeterState], frame: usize) -> bool {
     })
 }
 
-pub(crate) struct MinusEvents {
+pub struct MinusEvents {
     pub(crate) presses: Vec<MinusPressEvent>,
     pub(crate) situations: Vec<MinusSituationEvent>,
     pub(crate) advantages: Vec<AdvantageSituationEvent>,
@@ -488,8 +488,8 @@ pub(crate) fn extract_minus_events(
 }
 
 /// 既存の単体テストと内部呼び出し向け互換ラッパー。
-#[cfg(test)]
-pub(crate) fn extract_presses_while_minus(
+#[cfg(any(test, feature = "test-support"))]
+pub fn extract_presses_while_minus(
     meter_state: &[Vec<MeterState>; 2],
     meter_epoch: &[Vec<i32>; 2],
     meter_game_frame: &[Vec<i64>; 2],

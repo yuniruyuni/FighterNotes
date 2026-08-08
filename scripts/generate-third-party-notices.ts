@@ -825,9 +825,9 @@ function collectDistributionMaterials(
   }
   for (const relativePath of [
     "crates/frame-meter/src/data/meter_digits.bin",
-    "crates/video-analyzer/data/attack_data.json",
-    "crates/video-analyzer/data/frame_data.json",
-    "crates/video-analyzer/data/manifest.json",
+    "crates/analysis-context/data/attack_data.json",
+    "crates/analysis-context/data/frame_data.json",
+    "crates/analysis-context/data/manifest.json",
     "crates/video-analyzer/src/input_history/templates.rs",
     "crates/video-analyzer/src/round_start/fight_template.bin",
   ]) {
@@ -891,7 +891,7 @@ function collectDistributionMaterials(
       category: "Data/model",
       name: "Analyzer data and recognition models",
       location:
-        "crates/video-analyzer/data, input_history/templates.rs, round_start/fight_template.bin, and meter_digits.bin",
+        "crates/analysis-context/data, input_history/templates.rs, round_start/fight_template.bin, and meter_digits.bin",
       treatment:
         "Project data/model; not part of the third-party software inventory. DATA_NOTICE applies.",
       reference: "/DATA_NOTICE.txt",

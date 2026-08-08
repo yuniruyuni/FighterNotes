@@ -1,4 +1,5 @@
-use super::support::*;
+use match_event_layer::test_support::*;
+use video_analyzer::advice;
 
 #[test]
 fn test_ground_attack_chain_does_not_confirm_takeoff() {
@@ -39,6 +40,6 @@ fn test_ground_attack_chain_does_not_confirm_takeoff() {
         "Active→Startup→Active の地上連係を離地確認にしない: {jump:?}"
     );
 
-    let report = crate::advice::build_report(&fs, &events, "p1", Some("CHUN_LI"));
+    let report = advice::build_report(&fs, &events, "p1", Some("CHUN_LI"));
     assert!(report.cards.iter().all(|card| card.id != "anti_air"));
 }
