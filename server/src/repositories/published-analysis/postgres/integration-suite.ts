@@ -104,6 +104,120 @@ export function registerPublishedAnalysisRepositoryIntegrationTests(
       expect(restored?.content.superArts).toEqual(content.value.superArts);
     });
 
+    /**
+     * availability は側ごとに独立して往復する。complete と partial は同じ
+     * side 行の boolean 一つで区別しているため、書き込みと読み出しの
+     * どちらかが反転すると、片側だけ静かに取り違える。
+     */
+    test("両者のavailabilityを独立に往復させる", async () => {
+      const cases = [
+        ["complete", "partial"],
+        ["partial", "complete"],
+        ["partial", "partial"],
+      ] as const;
+
+      for (const [
+        index,
+        [ownAvailability, opponentAvailability],
+      ] of cases.entries()) {
+        const input = v9Candidate();
+        const observed = input.superArts;
+        if (
+          !observed ||
+          observed.own.availability === "unavailable" ||
+          observed.opponent.availability === "unavailable"
+        ) {
+          throw new Error("fixture is invalid");
+        }
+        input.superArts = {
+          own: { ...observed.own, availability: ownAvailability },
+          opponent: {
+            ...observed.opponent,
+            availability: opponentAvailability,
+          },
+        };
+        const content = createPublishedAnalysisContent(input);
+        if (!content.ok) throw new Error("fixture is invalid");
+        const persisted = {
+          ...persistableAnalysis({
+            id: `Ebcdefghijklmnopqrst${index}_` as ShareId,
+            rulesetVersion: 9,
+          }),
+          content: content.value,
+        };
+        await repository.create(createDbWriteCtx(database()), persisted);
+
+        const restored = await repository.get(
+          createDbReadCtx(database()),
+          PublishedAnalysisSpec.ById(persisted.id),
+        );
+        expect(restored?.content.superArts?.own.availability).toBe(
+          ownAvailability,
+        );
+        expect(restored?.content.superArts?.opponent.availability).toBe(
+          opponentAvailability,
+        );
+        expect(restored?.content.superArts).toEqual(content.value.superArts);
+      }
+    });
+
+    /**
+     * 片側だけ観測できなかった場合、その側は行を持たない。もう片方の
+     * 集計まで落ちてはならない。
+     */
+    test("片側だけunavailableでも他方の集計を保つ", async () => {
+      const input = v9Candidate();
+      const observed = input.superArts;
+      if (!observed || observed.opponent.availability === "unavailable") {
+        throw new Error("fixture is invalid");
+      }
+      input.superArts = {
+        own: { availability: "unavailable" },
+        opponent: observed.opponent,
+      };
+      const content = createPublishedAnalysisContent(input);
+      if (!content.ok) throw new Error("fixture is invalid");
+      const persisted = {
+        ...persistableAnalysis({
+          id: "Fbcdefghijklmnopqrstu_" as ShareId,
+          rulesetVersion: 9,
+        }),
+        content: content.value,
+      };
+      await repository.create(createDbWriteCtx(database()), persisted);
+
+      const restored = await repository.get(
+        createDbReadCtx(database()),
+        PublishedAnalysisSpec.ById(persisted.id),
+      );
+      expect(restored?.content.superArts?.own).toEqual({
+        availability: "unavailable",
+      });
+      expect(restored?.content.superArts?.opponent).toEqual(
+        content.value.superArts?.opponent,
+      );
+    });
+
+    /**
+     * SA/CA を持たない ruleset の共有には super art の行が無い。
+     * 空の集計を捏造せず、項目ごと無いまま復元する。
+     */
+    test("SA/CAを持たないrulesetではsuperArtsを付けない", async () => {
+      const persisted = persistableAnalysis({
+        id: "Gbcdefghijklmnopqrstu_" as ShareId,
+      });
+      await repository.create(createDbWriteCtx(database()), persisted);
+
+      const restored = await repository.get(
+        createDbReadCtx(database()),
+        PublishedAnalysisSpec.ById(persisted.id),
+      );
+      expect(restored).not.toBeNull();
+      // undefined を持つ key があるだけでも「集計はあるが空」に読めるため、
+      // key ごと生えていないことまで確認する。
+      expect(Object.keys(restored?.content ?? {})).not.toContain("superArts");
+    });
+
     test("期限境界では作成済みモデルを返さない", async () => {
       const persisted = persistableAnalysis();
       await repository.create(createDbWriteCtx(database()), persisted);

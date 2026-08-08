@@ -57,7 +57,12 @@ pub(crate) fn extract_whiffs(inputs: WhiffInputs<'_>) -> Vec<WhiffEvent> {
                 continue;
             }
             let start = index;
-            let epoch = own_epoch.get(start).copied().unwrap_or(-1);
+            // epoch を読めない区間は run を作れない。ここで走査位置を進めて
+            // おかないと、後続の run 探索が同じ位置を再評価し続けて止まらない。
+            let Some(epoch) = own_epoch.get(start).copied().filter(|epoch| *epoch >= 0) else {
+                index += 1;
+                continue;
+            };
             while index < n
                 && own[index] == MeterState::Active
                 && own_epoch.get(index).copied() == Some(epoch)
@@ -65,9 +70,6 @@ pub(crate) fn extract_whiffs(inputs: WhiffInputs<'_>) -> Vec<WhiffEvent> {
                 index += 1;
             }
             let end = index - 1;
-            if epoch < 0 {
-                continue;
-            }
             let start_frame = features[start].frame_index;
             let end_frame = features[end].frame_index;
             let Some(round_no) = round_of(rounds, start_frame) else {

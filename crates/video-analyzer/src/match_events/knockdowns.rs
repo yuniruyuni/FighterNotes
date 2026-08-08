@@ -52,7 +52,12 @@ pub(crate) fn extract_knockdowns(inputs: KnockdownInputs<'_>) -> Vec<KnockdownEv
                 continue;
             }
             let start = index;
-            let epoch = down_epoch.get(start).copied().unwrap_or(-1);
+            // epoch を読めない区間は run を作れない。ここで走査位置を進めて
+            // おかないと、後続の run 探索が同じ位置を再評価し続けて止まらない。
+            let Some(epoch) = down_epoch.get(start).copied().filter(|epoch| *epoch >= 0) else {
+                index += 1;
+                continue;
+            };
             while index < n
                 && down[index] == MeterState::Stun
                 && down_epoch.get(index).copied() == Some(epoch)
@@ -60,7 +65,7 @@ pub(crate) fn extract_knockdowns(inputs: KnockdownInputs<'_>) -> Vec<KnockdownEv
                 index += 1;
             }
             let end = index - 1;
-            if epoch < 0 || end + 1 - start < KNOCKDOWN_MIN_STUN {
+            if end + 1 - start < KNOCKDOWN_MIN_STUN {
                 continue;
             }
 

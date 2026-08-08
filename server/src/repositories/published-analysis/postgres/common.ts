@@ -196,12 +196,9 @@ function hydrateSuperArts(row: AnalysisRow): unknown | undefined {
     own:
       row.own_super_art_analysis_id !== null
         ? {
-            availability:
-              row.own_super_art_complete === true
-                ? "complete"
-                : row.own_super_art_complete === false
-                  ? "partial"
-                  : null,
+            // complete は side 行の NOT NULL 列なので、行があれば真偽が
+            // 必ず入っている。null を第三の状態として扱わない。
+            availability: row.own_super_art_complete ? "complete" : "partial",
             levels: {
               sa1: row.own_sa1,
               sa2: row.own_sa2,
@@ -226,12 +223,11 @@ function hydrateSuperArts(row: AnalysisRow): unknown | undefined {
     opponent:
       row.opponent_super_art_analysis_id !== null
         ? {
-            availability:
-              row.opponent_super_art_complete === true
-                ? "complete"
-                : row.opponent_super_art_complete === false
-                  ? "partial"
-                  : null,
+            // complete は side 行の NOT NULL 列なので、行があれば真偽が
+            // 必ず入っている。null を第三の状態として扱わない。
+            availability: row.opponent_super_art_complete
+              ? "complete"
+              : "partial",
             levels: {
               sa1: row.opponent_sa1,
               sa2: row.opponent_sa2,

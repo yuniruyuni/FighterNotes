@@ -39,9 +39,47 @@ describe("PublishedAnalysisLifecycle cleanup batches", () => {
     expect(fixture.parameters()).toEqual([cutoff, 251, 250, 250]);
   });
 
-  test("範囲外limitをquery前に拒否する", () => {
-    expect(() => deleteExpiredBatch({} as Database, new Date(), 0)).toThrow(
-      "limit must be from 1 to 10000",
+  /**
+   * limit は境界そのもの。1件も消さない batch と、1回で上限を超える batch の
+   * どちらも cleanup の前提を壊すので、両端で拒否と受理を固定する。
+   */
+  test("範囲外limitをquery前に拒否する", async () => {
+    for (const invalid of [0, -1, 10_001, 1.5, Number.NaN]) {
+      expect(() =>
+        deleteExpiredBatch({} as Database, new Date(), invalid),
+      ).toThrow("limit must be from 1 to 10000");
+      expect(() =>
+        deleteCreatedAtOrBeforeBatch({} as Database, new Date(), invalid),
+      ).toThrow("limit must be from 1 to 10000");
+    }
+
+    for (const valid of [1, 10_000]) {
+      const fixture = queryFixture();
+      expect(
+        await deleteExpiredBatch(fixture.db, new Date(), valid),
+      ).toBeDefined();
+      expect(fixture.parameters()).toEqual([
+        expect.any(Date),
+        valid + 1,
+        valid,
+        valid,
+      ]);
+    }
+  });
+
+  /**
+   * batch の結果行が返らないのは、statement が想定どおり動いていない
+   * ということ。0件削除として続けると、cleanup が静かに空回りする。
+   */
+  test("結果行が返らない場合は失敗として扱う", async () => {
+    const db = {
+      async queryGet() {
+        return undefined;
+      },
+    } as unknown as Database;
+
+    expect(deleteExpiredBatch(db, new Date(), 500)).rejects.toThrow(
+      "Lifecycle delete batch returned no row",
     );
   });
 });
