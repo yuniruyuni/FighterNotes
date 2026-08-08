@@ -13,6 +13,7 @@
     "check:functions": "bun run --filter '*' check:functions",
     "check:licenses": "bun test scripts/license-policy.test.ts && bun scripts/generate-third-party-notices.ts --check",
     "check:lint": "bun run --filter '*' check:lint",
+    "check:mutation-coverage": "bun scripts/check-mutation-coverage.ts",
     "check:rust": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace",
     "check:scripts": "bun test scripts/",
     "check:test": "bun run --filter '*' check:test",

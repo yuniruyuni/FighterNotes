@@ -213,7 +213,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 実測 CPU 秒に比例したシャード数。最大が全体の所要時間になる。
           - name: match-event-layer-1
             packages: --package match-event-layer
             shard: 0/3
@@ -223,12 +222,6 @@ jobs:
           - name: match-event-layer-3
             packages: --package match-event-layer
             shard: 2/3
-          - name: advice-report-1
-            packages: --package advice-report
-            shard: 0/2
-          - name: advice-report-2
-            packages: --package advice-report
-            shard: 1/2
           - name: hud-vision-1
             packages: --package hud-vision
             shard: 0/2
@@ -241,17 +234,30 @@ jobs:
           - name: frame-meter
             packages: --package frame-meter
             shard: 0/1
-          - name: temporal-confirm
-            packages: --package temporal-confirm
+          - name: advice-detectors
+            packages: --package advice-detectors
             shard: 0/1
           - name: spatial-refine
             packages: --package spatial-refine
             shard: 0/1
-          # 単独では runner 一台に見合わない小さい crate をまとめる。
-          - name: small-crates
+          - name: match-event-model
+            packages: --package match-event-model
+            shard: 0/1
+          - name: temporal-and-attack-info
             packages: >-
-              --package analysis-context
               --package attack-info-vision
+              --package temporal-confirm
+            shard: 0/1
+          - name: advice-stats-and-origins
+            packages: >-
+              --package advice-damage-origins
+              --package advice-stats
+            shard: 0/1
+          - name: remaining-crates
+            packages: >-
+              --package advice-model
+              --package advice-report
+              --package analysis-context
               --package meter-tracker
               --package video-analyzer
               --package wasm-bridge
