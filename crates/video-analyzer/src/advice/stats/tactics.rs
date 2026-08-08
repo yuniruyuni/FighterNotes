@@ -163,6 +163,29 @@ pub(crate) fn build_tactic_stats(
         })
         .count() as u32;
 
+    for throw in events.throw_actions.iter().filter(|throw| {
+        event_in_round(throw.round_no, throw.input_frame)
+            && throw.thrower == opponent
+            && throw.confidence == EventConfidence::High
+    }) {
+        match throw.outcome {
+            ThrowOutcome::Hit => {
+                stats.throws_faced += 1;
+                stats.throws_taken += 1;
+            }
+            ThrowOutcome::Teched => {
+                stats.throws_faced += 1;
+                stats.throws_teched += 1;
+            }
+            ThrowOutcome::InterruptedByInvincible => {
+                stats.throws_faced += 1;
+                stats.throws_reversal_escaped += 1;
+            }
+            // 届かない位置で振られた投げは、守る機会ではない。
+            ThrowOutcome::ExecutedWhiff | ThrowOutcome::Unconfirmed => {}
+        }
+    }
+
     for down in events.knockdowns.iter().filter(|down| {
         event_in_round(down.round_no, down.frame) && down.confidence == EventConfidence::High
     }) {
