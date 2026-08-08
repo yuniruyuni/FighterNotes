@@ -238,6 +238,12 @@ export interface TacticStats {
   dash_throws_faced: number;
   throw_whiffs: number;
   minus_defense_opportunities: number;
+  knockdowns_scored: number;
+  okizeme_meaty: number;
+  okizeme_pressured: number;
+  okizeme_neutral: number;
+  knockdowns_taken: number;
+  okizeme_faced_meaty: number;
   own_di_used: number;
   own_di_hit: number;
   own_di_blocked: number;

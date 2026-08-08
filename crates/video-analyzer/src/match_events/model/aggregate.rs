@@ -66,6 +66,9 @@ pub struct MatchEvents {
     /// 測るため、機会の分母も入力を直接観測できたものだけになる。
     #[serde(default)]
     pub advantage_situations: Vec<AdvantageSituationEvent>,
+    /// ダウンと、その起き上がりへの攻め（メーター無しなら空）。
+    #[serde(default)]
+    pub knockdowns: Vec<KnockdownEvent>,
     /// 接触しなかった通常技の攻撃判定と、その結末（メーター無しなら空）。
     #[serde(default)]
     pub whiffs: Vec<WhiffEvent>,

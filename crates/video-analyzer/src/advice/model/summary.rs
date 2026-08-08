@@ -172,6 +172,25 @@ pub struct TacticStats {
     /// 入力を直接観測できた、ガード後 1F 以上不利の判断機会。
     #[serde(default)]
     pub minus_defense_opportunities: u32,
+    /// 自分が取ったダウンと、その起き上がりへの攻め。
+    #[serde(default)]
+    pub knockdowns_scored: u32,
+    /// 起き上がりに攻撃判定を重ねられた数（持続当て）。
+    #[serde(default)]
+    pub okizeme_meaty: u32,
+    /// 重ねてはいないが、起き上がり直後に攻めを始めた数。
+    #[serde(default)]
+    pub okizeme_pressured: u32,
+    /// 何も始めず仕切り直しになった数。距離を取る選択も含むため、
+    /// これだけでは失敗として扱わない。
+    #[serde(default)]
+    pub okizeme_neutral: u32,
+    /// 自分が取られたダウン。起き攻めを受けた回数の分母。
+    #[serde(default)]
+    pub knockdowns_taken: u32,
+    /// そのうち起き上がりに攻撃判定を重ねられた数。
+    #[serde(default)]
+    pub okizeme_faced_meaty: u32,
     /// 自分の Drive Impact の結果内訳。相手の DI を受けた側の `di_*` とは別。
     #[serde(default)]
     pub own_di_used: u32,

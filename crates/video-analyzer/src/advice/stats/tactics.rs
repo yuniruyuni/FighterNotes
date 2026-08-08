@@ -163,6 +163,24 @@ pub(crate) fn build_tactic_stats(
         })
         .count() as u32;
 
+    for down in events.knockdowns.iter().filter(|down| {
+        event_in_round(down.round_no, down.frame) && down.confidence == EventConfidence::High
+    }) {
+        if down.attacker == own {
+            stats.knockdowns_scored += 1;
+            match down.okizeme {
+                OkizemeOutcome::Meaty => stats.okizeme_meaty += 1,
+                OkizemeOutcome::Pressured => stats.okizeme_pressured += 1,
+                OkizemeOutcome::Neutral => stats.okizeme_neutral += 1,
+            }
+        } else {
+            stats.knockdowns_taken += 1;
+            if down.okizeme == OkizemeOutcome::Meaty {
+                stats.okizeme_faced_meaty += 1;
+            }
+        }
+    }
+
     for whiff in events.whiffs.iter().filter(|whiff| {
         event_in_round(whiff.round_no, whiff.frame) && whiff.confidence == EventConfidence::High
     }) {

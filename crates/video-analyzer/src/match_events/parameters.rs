@@ -159,3 +159,14 @@ pub(crate) const BO_ROUND_END_MARGIN: u32 = 90;
 pub(crate) const DEAD_HP: f32 = 0.05;
 
 // ── 本体 ─────────────────────────────────────────────────────────────────────
+
+/// ダウンとみなす最小の stun 継続。通常のやられ・ガード硬直はこれより短い。
+pub(crate) const KNOCKDOWN_MIN_STUN: usize = 50;
+/// ダウンと確定するために必要な「攻撃側は動けるのに相手はまだ stun」の長さ。
+/// 連続ガードや連続ヒットの最中は攻撃側も拘束されるため、この空白があること
+/// が長い硬直とダウンを分ける。空白そのものが起き攻めの準備時間になる。
+pub(crate) const KNOCKDOWN_MIN_SETUP: usize = 20;
+/// ダウンの原因となったヒット接触を探す、stun 開始前後の猶予。
+pub(crate) const KNOCKDOWN_CAUSE_GRACE: u32 = 6;
+/// 起き上がり後、攻めを始めたと認める窓。
+pub(crate) const OKIZEME_PRESSURE_WINDOW: u32 = 20;

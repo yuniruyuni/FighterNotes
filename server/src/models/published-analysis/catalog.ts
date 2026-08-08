@@ -73,7 +73,7 @@ export type FindingAssessment = (typeof FINDING_ASSESSMENTS)[number];
 export const SCHEMA_VERSION = 1 as const;
 export const PRESENTATION_REVISION = 1 as const;
 export const SUPPORTED_RULESET_VERSIONS = [
-  3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+  3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
 ] as const;
 
 /** ruleset v5以前は共有payloadに判定区分が無いため、当時の表示規則を復元する。 */

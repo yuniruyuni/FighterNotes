@@ -8,7 +8,7 @@
 目的は試合を完全再現することではなく、複数の映像証拠が一致した場面を抽出し、
 利用者が動画を見直す順序を作ることである。
 
-判定は決定的なルールベース処理で、現在の `RULESET_VERSION` は 12。
+判定は決定的なルールベース処理で、現在の `RULESET_VERSION` は 13。
 機械学習モデルや外部推論 API は使わない。
 
 ## 入力条件
@@ -149,6 +149,7 @@ viewer と event layer は、この確定済み系列を共通の入力にする
 | Contact | hit / block、projectile contact、attacker / victim |
 | Input action | jump、throw、Drive Impact、raw Drive Rush |
 | Whiff | 接触しなかった攻撃判定と、その硬直を狩られたか |
+| Knockdown | ダウンと起き上がり、起き上がりへの持続当て |
 | Resource | burnout 期間、SA1/2/3/CA 使用、ゲージ前後、使用文脈と結果 |
 | Frame interaction | punish chance、reversal、guard break、minus 後の最速打撃・投げ、plus 後の攻め継続 |
 | Threat | 残存 projectile、teleport、複合 threat |
@@ -166,6 +167,8 @@ viewer と event layer は、この確定済み系列を共通の入力にする
 - 接触しない SA2 は `NoImmediateContact` とし、技ごとの役割が不明なまま空振り失敗とは呼ばない。
 - projectile の block や弾撃ち合いを、近距離の mashing として扱わない。
 - 空振りは投げ・DI・無敵技・弾を除き、専用イベントを持つ行動と二重計上しない。
+- ダウンは stun の長さだけで決めず、攻撃側が自由に動けるのに相手が stun の
+  ままである空白を必須にする。連続ガードや連続ヒットと区別するため。
 - Drive ゲージの消費量はSF6の本数を仮定せず、行動前後の実測差だけを積む。
   読めない区間と、1行動では説明できない大きな減少は消費へ帰属しない。
 - 原因別カードへ帰属した大被弾を汎用 `big_hits` へ重複掲載しない。
