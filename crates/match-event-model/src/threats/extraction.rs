@@ -6,7 +6,7 @@ use super::*;
 /// `inv -> active` signature is also produced by DPs and supers; treating it as
 /// a teleport would recreate the same semantic error this layer is meant to
 /// remove. Additional characters can be added through explicit move profiles.
-pub(crate) fn extract_threats(
+pub fn extract_threats(
     inputs: ThreatInputs<'_>,
 ) -> (
     Vec<ProjectileThreat>,

@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) fn response_in_window(
+pub fn response_in_window(
     defender: usize,
     start: u32,
     end: u32,
@@ -25,7 +25,7 @@ pub(super) fn response_in_window(
         })
 }
 
-pub(super) fn damage_assigned_to_contact<'a>(
+pub fn damage_assigned_to_contact<'a>(
     contact: &ContactEvent,
     contacts: &[ContactEvent],
     damage: &'a [DamageEvent],

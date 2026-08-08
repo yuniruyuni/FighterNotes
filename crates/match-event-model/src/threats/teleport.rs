@@ -1,6 +1,6 @@
 use super::{InputSegment, TELEPORT_INPUT_LOOKBACK};
 
-pub(super) fn is_dhalsim(character: Option<&str>) -> bool {
+pub fn is_dhalsim(character: Option<&str>) -> bool {
     character.is_some_and(|name| name.eq_ignore_ascii_case("DHALSIM"))
 }
 
@@ -29,7 +29,7 @@ fn is_teleport_button_chord(segment: &InputSegment) -> bool {
     punches >= 2 || kicks >= 2
 }
 
-pub(super) fn teleport_input(segments: &[InputSegment], inv_start: u32) -> Option<&InputSegment> {
+pub fn teleport_input(segments: &[InputSegment], inv_start: u32) -> Option<&InputSegment> {
     let mut candidates: Vec<&InputSegment> = segments
         .iter()
         .filter(|segment| {

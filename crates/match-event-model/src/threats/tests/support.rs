@@ -26,9 +26,9 @@ macro_rules! extract_test_threats {
     };
 }
 
-pub(super) use extract_test_threats;
+pub(crate) use extract_test_threats;
 
-pub(super) fn timeline(side: &str, runs: &[(u32, u32, &str)]) -> MeterTimeline {
+pub fn timeline(side: &str, runs: &[(u32, u32, &str)]) -> MeterTimeline {
     MeterTimeline {
         side: side.to_string(),
         segments: runs
@@ -50,7 +50,7 @@ pub(super) fn timeline(side: &str, runs: &[(u32, u32, &str)]) -> MeterTimeline {
     }
 }
 
-pub(super) fn feature(frame_index: u32) -> FrameFeatures {
+pub fn feature(frame_index: u32) -> FrameFeatures {
     FrameFeatures {
         frame_index,
         fps: 60.0,
@@ -80,7 +80,7 @@ pub(super) fn feature(frame_index: u32) -> FrameFeatures {
     }
 }
 
-pub(super) fn round() -> RoundInfo {
+pub fn round() -> RoundInfo {
     RoundInfo {
         round_no: 1,
         start_frame: 0,
@@ -91,7 +91,7 @@ pub(super) fn round() -> RoundInfo {
     }
 }
 
-pub(super) fn teleport_segment(frame: u32) -> InputSegment {
+pub fn teleport_segment(frame: u32) -> InputSegment {
     InputSegment {
         start_frame: frame,
         end_frame: frame + 2,

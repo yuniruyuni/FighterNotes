@@ -2,16 +2,13 @@ use super::MeterTimeline;
 use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Copy)]
-pub(super) struct StateRun {
-    pub(super) start: u32,
-    pub(super) end: u32,
-    pub(super) distinct_game_frames: usize,
+pub struct StateRun {
+    pub start: u32,
+    pub end: u32,
+    pub distinct_game_frames: usize,
 }
 
-pub(super) fn state_runs(
-    timeline: &MeterTimeline,
-    predicate: impl Fn(&str) -> bool,
-) -> Vec<StateRun> {
+pub fn state_runs(timeline: &MeterTimeline, predicate: impl Fn(&str) -> bool) -> Vec<StateRun> {
     let mut spans: Vec<(u32, u32, i64)> = timeline
         .segments
         .iter()

@@ -5,7 +5,7 @@ use super::*;
 /// SA 暗転・投げ演出中はゲームが止まり、メーターの 1 エントリが
 /// FREEZE_MIN_DWELL 以上の video frame にまたがる。両側のそのような
 /// スパンの重なりを取り、近接するものを連結して返す（video frame, 昇順）。
-pub(crate) fn both_freeze_spans(left: &MeterTimeline, right: &MeterTimeline) -> Vec<(u32, u32)> {
+pub fn both_freeze_spans(left: &MeterTimeline, right: &MeterTimeline) -> Vec<(u32, u32)> {
     let long_spans = |tl: &MeterTimeline| -> Vec<(u32, u32)> {
         let mut v: Vec<(u32, u32)> = tl
             .segments
@@ -51,7 +51,7 @@ pub(crate) fn both_freeze_spans(left: &MeterTimeline, right: &MeterTimeline) -> 
 /// 複数の video frame にまたがる。フレーム有利の計算は video frame の
 /// 引き算ではなくこの写像で game frame を数える必要がある
 /// （フィードバック③: 停止が挟まると実 +2 が +12 と過大表示された）。
-pub(crate) fn gf_per_frame(tl: &MeterTimeline, n: usize) -> Vec<i64> {
+pub fn gf_per_frame(tl: &MeterTimeline, n: usize) -> Vec<i64> {
     let mut out = vec![-1i64; n];
     for seg in &tl.segments {
         for e in &seg.entries {
@@ -70,7 +70,7 @@ pub(crate) fn gf_per_frame(tl: &MeterTimeline, n: usize) -> Vec<i64> {
 
 /// ビデオフレームごとのメータートラッカー区間ID（未観測は -1）。
 /// フレームメーターのリセットをまたぐ状態同士を因果付けないために使う。
-pub(crate) fn epoch_per_frame(tl: &MeterTimeline, n: usize) -> Vec<i32> {
+pub fn epoch_per_frame(tl: &MeterTimeline, n: usize) -> Vec<i32> {
     let mut out = vec![-1i32; n];
     for segment in &tl.segments {
         for entry in &segment.entries {
@@ -87,7 +87,7 @@ pub(crate) fn epoch_per_frame(tl: &MeterTimeline, n: usize) -> Vec<i32> {
     out
 }
 
-pub(crate) fn continuous_epoch(epochs: &[i32], start: usize, end: usize) -> Option<i32> {
+pub fn continuous_epoch(epochs: &[i32], start: usize, end: usize) -> Option<i32> {
     if epochs.is_empty() || start >= epochs.len() || end >= epochs.len() || start > end {
         return None;
     }
@@ -101,7 +101,7 @@ pub(crate) fn continuous_epoch(epochs: &[i32], start: usize, end: usize) -> Opti
 /// 予備動作や一部キャラのジャンプを緑（counter）で表示する（検証済み試合:
 /// ブランカ通常ジャンプ = counter 連鎖 29gf / ダルシム側 = motion 38gf+）。
 /// 上入力ベースのジャンプ検出の確認証拠として使う。
-pub(crate) fn movementish_per_frame(tl: &MeterTimeline, n: usize) -> Vec<bool> {
+pub fn movementish_per_frame(tl: &MeterTimeline, n: usize) -> Vec<bool> {
     let mut out = vec![false; n];
     for seg in &tl.segments {
         for e in &seg.entries {
@@ -124,7 +124,7 @@ pub(crate) fn movementish_per_frame(tl: &MeterTimeline, n: usize) -> Vec<bool> {
 /// A long `counter` run can be either jump movement or ordinary move startup.
 /// When it is directly sandwiched between two Active states in one meter epoch,
 /// it belongs to a grounded attack chain and cannot independently confirm takeoff.
-pub(crate) fn movement_run_is_ground_attack_chain(
+pub fn movement_run_is_ground_attack_chain(
     states: &[MeterState],
     epochs: &[i32],
     start: usize,
@@ -149,7 +149,7 @@ pub(crate) fn movement_run_is_ground_attack_chain(
 }
 
 /// タイムラインをフレームごとの粗い状態列に展開する。
-pub(crate) fn state_per_frame(tl: &MeterTimeline, n: usize) -> Vec<MeterState> {
+pub fn state_per_frame(tl: &MeterTimeline, n: usize) -> Vec<MeterState> {
     let mut out = vec![MeterState::Free; n];
     for seg in &tl.segments {
         for e in &seg.entries {
@@ -183,7 +183,7 @@ fn meter_state_from_label(label: &str) -> MeterState {
 
 /// 非 Free 状態と対になる読取信頼度を動画フレームへ展開する。
 /// 重複時は state_per_frame と同じ走査順で上書きし、別状態の確度を混ぜない。
-pub(crate) fn confidence_per_frame(tl: &MeterTimeline, n: usize) -> Vec<f32> {
+pub fn confidence_per_frame(tl: &MeterTimeline, n: usize) -> Vec<f32> {
     let mut out = vec![0.0_f32; n];
     for segment in &tl.segments {
         for entry in &segment.entries {
@@ -209,7 +209,7 @@ pub fn round_of(rounds: &[RoundInfo], frame: u32) -> Option<u32> {
 }
 
 /// features 内で frame_index == frame となる位置（見つからなければ近似）。
-pub(crate) fn idx_of(features: &[FrameFeatures], frame: u32) -> usize {
+pub fn idx_of(features: &[FrameFeatures], frame: u32) -> usize {
     // frame_index は通常 0..n の連番。二分探索で頑健に
     features
         .binary_search_by_key(&frame, |f| f.frame_index)

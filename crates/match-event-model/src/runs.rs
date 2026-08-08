@@ -8,17 +8,17 @@
 use super::MeterState;
 
 /// 連続した同一状態・同一 epoch の区間。両端とも含む添字。
-pub(crate) struct MeterRun {
-    pub(crate) start: usize,
-    pub(crate) end: usize,
-    pub(crate) epoch: i32,
+pub struct MeterRun {
+    pub start: usize,
+    pub end: usize,
+    pub epoch: i32,
 }
 
 /// `state` が `wanted` であり、かつ epoch を読めて負でない区間を列挙する。
 ///
 /// epoch を読めない位置は区間に入れない。値が変わった位置で区間を切るので、
 /// meter のリセットをまたいだ区間は生まれない。
-pub(crate) fn runs_of(state: &[MeterState], epoch: &[i32], wanted: MeterState) -> Vec<MeterRun> {
+pub fn runs_of(state: &[MeterState], epoch: &[i32], wanted: MeterState) -> Vec<MeterRun> {
     let keyed: Vec<Option<i32>> = state
         .iter()
         .enumerate()

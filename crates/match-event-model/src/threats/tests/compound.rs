@@ -20,7 +20,7 @@ fn projectile_and_teleport_remain_independent_compound_threats() {
         frame: 155,
         outcome: JumpOutcome::Neutral,
         input_dir: "U".to_string(),
-        direction: crate::match_events::JumpDirection::Neutral,
+        direction: crate::JumpDirection::Neutral,
         contact_frame: None,
         takeoff_confirmed: true,
         air_end: 210,

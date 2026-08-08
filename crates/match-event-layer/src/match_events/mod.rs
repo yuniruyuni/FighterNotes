@@ -23,6 +23,10 @@ use meter_tracker::MeterTimeline;
 
 // ── 出力型 ───────────────────────────────────────────────────────────────────
 
+// 土台は match-event-model へ切り出してある。経路を変えないよう
+// モジュールごと再輸出する。
+pub(crate) use match_event_model::{model, parameters, runs, threats, timeline};
+
 mod actions;
 mod attack_evidence;
 mod burnouts;
@@ -32,16 +36,11 @@ mod guard_breaks;
 mod jumps;
 mod knockdowns;
 mod minus_press;
-mod model;
-mod parameters;
 pub(crate) mod punishes;
 mod reversals;
 mod rounds;
-mod runs;
 mod segments;
 mod super_arts;
-mod threats;
-mod timeline;
 mod whiffs;
 
 pub use model::*;
