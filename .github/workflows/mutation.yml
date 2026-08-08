@@ -273,6 +273,26 @@ jobs:
       - uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
         with:
           tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
+      # 変異検査の費用は 95% がビルドで、その大半は中間生成物の書き出し。
+      # runner のディスクは種類によって速さが桁で違うので、候補を実測して
+      # 一番速いところを作業場所にする。測定結果はログに残す。
+      - name: Pick the fastest scratch disk
+        run: |
+          best=""; best_rate=0
+          for dir in "$RUNNER_TEMP" /mnt /dev/shm; do
+            [ -d "$dir" ] || continue
+            probe="$dir/mutants-probe"
+            mkdir -p "$probe" 2>/dev/null || { sudo mkdir -p "$probe" && sudo chown "$(id -u)" "$probe"; } || continue
+            rate=$(dd if=/dev/zero of="$probe/probe.bin" bs=1M count=256 conv=fdatasync 2>&1 \
+                   | sed -n 's/.*, \([0-9.]*\) MB\/s/\1/p')
+            rm -rf "$probe"
+            echo "$dir: ${rate:-0} MB/s  ($(df -h --output=avail "$dir" | tail -1 | tr -d ' ') 空き)"
+            awk -v a="${rate:-0}" -v b="$best_rate" 'BEGIN{exit !(a>b)}' && { best="$dir"; best_rate="${rate:-0}"; }
+          done
+          [ -n "$best" ] || best="$RUNNER_TEMP"
+          echo "作業場所: $best (${best_rate} MB/s)"
+          mkdir -p "$best/mutants"
+          echo "TMPDIR=$best/mutants" >> "$GITHUB_ENV"
       # まだ missed を 0 にできていない crate なので、生存やタイムアウトが
       # あってもジョブは落とさない。件数だけ summary に残し、0 に到達した
       # ものから rust-clean へ移して落ちる扱いにする。
