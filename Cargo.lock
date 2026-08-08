@@ -9,6 +9,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "advice-report"
+version = "0.1.0"
+dependencies = [
+ "analysis-context",
+ "attack-info-vision",
+ "hud-vision",
+ "match-event-layer",
+ "serde",
+ "serde_json",
+ "temporal-confirm",
+]
+
+[[package]]
+name = "analysis-context"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "attack-info-vision"
+version = "0.1.0"
+dependencies = [
+ "input-vision",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -80,6 +110,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hud-vision"
+version = "0.1.0"
+dependencies = [
+ "pixel-color",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "image"
 version = "0.25.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -93,10 +132,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "input-vision"
+version = "0.1.0"
+dependencies = [
+ "pixel-color",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
+
+[[package]]
+name = "match-event-layer"
+version = "0.1.0"
+dependencies = [
+ "analysis-context",
+ "attack-info-vision",
+ "hud-vision",
+ "input-vision",
+ "meter-tracker",
+ "serde",
+ "serde_json",
+ "temporal-confirm",
+]
 
 [[package]]
 name = "memchr"
@@ -146,6 +208,10 @@ name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
+
+[[package]]
+name = "pixel-color"
+version = "0.1.0"
 
 [[package]]
 name = "png"
@@ -240,6 +306,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "703d5c7ef118737c72f1af64ad2f6f8c5e1921f818cdcb97b8fe6fc69bf66214"
 
 [[package]]
+name = "spatial-refine"
+version = "0.1.0"
+dependencies = [
+ "advice-report",
+ "analysis-context",
+ "match-event-layer",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "syn"
 version = "2.0.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -248,6 +325,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "temporal-confirm"
+version = "0.1.0"
+dependencies = [
+ "hud-vision",
 ]
 
 [[package]]
@@ -260,11 +344,19 @@ checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
 name = "video-analyzer"
 version = "0.1.0"
 dependencies = [
+ "advice-report",
+ "analysis-context",
+ "attack-info-vision",
  "frame-meter",
+ "hud-vision",
  "image",
+ "input-vision",
+ "match-event-layer",
  "meter-tracker",
  "serde",
  "serde_json",
+ "spatial-refine",
+ "temporal-confirm",
 ]
 
 [[package]]

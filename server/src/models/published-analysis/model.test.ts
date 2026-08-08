@@ -105,7 +105,7 @@ describe("PublishedAnalysis model", () => {
   test("Rustの全カードIDとrulesetを共有カタログが網羅する", () => {
     const adviceDir = join(
       import.meta.dir,
-      "../../../../crates/video-analyzer/src/advice",
+      "../../../../crates/advice-report/src/advice",
     );
     const detectorDir = join(adviceDir, "detectors");
     const detectors = [

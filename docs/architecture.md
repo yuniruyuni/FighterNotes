@@ -38,7 +38,16 @@ SPA の配信、軽量な共有結果の保存と公開、期限切れデータ�
 | WASM bridge | `crates/wasm-bridge` | JavaScript と Rust のメモリ境界、解析セッション API |
 | Frame meter | `crates/frame-meter` | リプレイ用フレームメーターのセル観測と状態分類 |
 | Meter tracker | `crates/meter-tracker` | セル観測からゲームフレーム単位の状態タイムラインを復元 |
-| Video analyzer | `crates/video-analyzer` | HUD・入力の確定、イベント帰属、空間再評価、助言レポート生成 |
+| Pixel color | `crates/pixel-color` | HUD と入力履歴が共有する色空間変換 |
+| HUD vision | `crates/hud-vision` | HP・ドライブ・SA ゲージとラウンド開始表示の画素読み取り |
+| Input vision | `crates/input-vision` | 入力履歴欄の画素読み取りと系列の補修 |
+| Attack info vision | `crates/attack-info-vision` | 攻撃情報表示の読み取りと技ごとの系列化 |
+| Temporal confirm | `crates/temporal-confirm` | 読み取り結果の時系列突き合わせによる確定 |
+| Analysis context | `crates/analysis-context` | 対戦の前提（自分の側・キャラクター）と技のフレームデータ表 |
+| Match event layer | `crates/match-event-layer` | 確定済み観測から試合イベントを組み立てる |
+| Advice report | `crates/advice-report` | 試合イベントから指摘・優先順位・根拠を組み立てる |
+| Spatial refine | `crates/spatial-refine` | 位置関係によるイベントの再評価 |
+| Video analyzer | `crates/video-analyzer` | 各層のパイプライン結線と公開 API |
 | Server | `server/src` | 静的配信、共有 API、公開ページ、rate limit、cleanup batch |
 | Database | `schema` | 共有結果、指摘、戦術統計、SA/CA公開集計、作成 quota event、共有rate-limit counterの保存 |
 | Delivery | `Dockerfile`、`cloudrun*.yaml`、`.github/workflows` | build、migration、Cloud Run service / Job のリリース |

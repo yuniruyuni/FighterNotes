@@ -1,0 +1,10 @@
+[package]
+name = "hud-vision"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+pixel-color = { path = "../pixel-color" }
+serde = { workspace = true }
+serde_json = { workspace = true }

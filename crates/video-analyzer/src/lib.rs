@@ -3,18 +3,18 @@
 //! Python `sf6_video.py` の主要ロジック（HP 検出・ラウンド検出・アドバイス生成）を移植。
 //! OCR・クリップエクスポート・HTML 生成は含まない。
 
-pub mod advice;
-pub mod attack_info;
-pub mod context;
-pub mod frame_data;
-pub mod frame_features;
-pub mod input_history;
-pub mod input_tracker;
-pub mod match_events;
+// 画素読み取りは独立した crate へ切り出してある。呼び出し側の経路を
+// 変えないよう、モジュールごとここで再輸出する。
+pub use advice_report::advice;
+pub use analysis_context::{context, frame_data};
+pub use attack_info_vision::attack_info;
+pub use hud_vision::{frame_features, round_start};
+pub use input_vision::{input_history, input_tracker};
+pub use match_event_layer::match_events;
+pub use spatial_refine::spatial;
+pub use temporal_confirm::temporal;
+
 pub mod pipeline;
-pub mod round_start;
-pub mod spatial;
-pub mod temporal;
 
 pub use advice::{
     AdviceCard, AdviceKind, AdviceReport, AttributedDamageEvent, DamageBreakdown, DamageContext,

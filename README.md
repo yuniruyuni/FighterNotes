@@ -50,9 +50,18 @@ server へ送るのは両者の character、round 集計、指摘の種別・件
 
 ```text
 crates/
+  pixel-color/       HUD と入力履歴が共有する色空間変換
   frame-meter/       frame-meter cell の認識
   meter-tracker/     game frame timeline の復元
-  video-analyzer/    HUD・入力・event・advice・空間解析
+  hud-vision/        HP・drive・SA gauge と round 開始表示の読み取り
+  input-vision/      入力履歴欄の読み取りと系列の補修
+  attack-info-vision/ 攻撃情報表示の読み取りと系列化
+  temporal-confirm/  読み取り結果の時系列確定
+  analysis-context/  対戦の前提と技の frame data
+  match-event-layer/ 確定済み観測から試合 event を組み立てる
+  advice-report/     event から指摘・優先順位・根拠を組み立てる
+  spatial-refine/    位置関係による event の再評価
+  video-analyzer/    各層の pipeline 結線と公開 API
   wasm-bridge/       browser Worker から使う WASM API
 client/              browser SPA、動画 decode、Worker、表示、local storage
 server/              static 配信、共有 API / page、cleanup batch
@@ -117,7 +126,7 @@ CI/CD、SQL schema、CSS、HTMLおよび文書は
 
 次のものはMIT Licenseの対象外です。
 
-- `crates/video-analyzer/data/`以下の正規化済みframe dataとmanifest
+- `crates/analysis-context/data/`以下の正規化済みframe dataとmanifest
 - 実ゲーム撮影動画から生成した認識用の数値・統計モデル
 - `client/src/shared/assets/`以下の画像その他のmedia asset
 - `THIRD_PARTY_NOTICES.md`および第三者のlicense・NOTICE本文

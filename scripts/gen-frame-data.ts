@@ -138,9 +138,9 @@ const manifest = `${JSON.stringify(
   1,
 )}\n`;
 
-await Bun.write("crates/video-analyzer/data/frame_data.json", frameData);
-console.log("wrote crates/video-analyzer/data/frame_data.json");
-await Bun.write("crates/video-analyzer/data/attack_data.json", attackData);
-console.log("wrote crates/video-analyzer/data/attack_data.json");
-await Bun.write("crates/video-analyzer/data/manifest.json", manifest);
-console.log("wrote crates/video-analyzer/data/manifest.json");
+await Bun.write("crates/analysis-context/data/frame_data.json", frameData);
+console.log("wrote crates/analysis-context/data/frame_data.json");
+await Bun.write("crates/analysis-context/data/attack_data.json", attackData);
+console.log("wrote crates/analysis-context/data/attack_data.json");
+await Bun.write("crates/analysis-context/data/manifest.json", manifest);
+console.log("wrote crates/analysis-context/data/manifest.json");

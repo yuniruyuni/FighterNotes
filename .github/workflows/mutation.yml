@@ -160,17 +160,50 @@ jobs:
           path: mutants.out-changed/mutants.out/
           if-no-files-found: ignore
 
-  rust-full-inventory:
+  # 全域を crate ごとに回す。以前は workspace を 4 分割していたが、どの
+  # crate が落ちたのかが分からず、直せた crate から必須へ上げていくことも
+  # できなかった。
+  #
+  # `tolerated: false` は missed を 0 にし終えた crate。以後は落ちたら
+  # ジョブも落ちる。残りは inventory として回し、0 にできた順に
+  # `tolerated: false` へ移す。
+  rust-full:
     if: >-
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && inputs.full_rust)
-    continue-on-error: true
+    continue-on-error: ${{ matrix.tolerated }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3]
+        include:
+          - crate: pixel-color
+            tolerated: false
+          - crate: analysis-context
+            tolerated: true
+          - crate: frame-meter
+            tolerated: true
+          - crate: meter-tracker
+            tolerated: true
+          - crate: hud-vision
+            tolerated: true
+          - crate: input-vision
+            tolerated: true
+          - crate: attack-info-vision
+            tolerated: true
+          - crate: temporal-confirm
+            tolerated: true
+          - crate: match-event-layer
+            tolerated: true
+          - crate: advice-report
+            tolerated: true
+          - crate: spatial-refine
+            tolerated: true
+          - crate: video-analyzer
+            tolerated: true
+          - crate: wasm-bridge
+            tolerated: true
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: dtolnay/rust-toolchain@f133eefe930d61f0d9371efd474daf0125ed3dd1 # 1.95.0
@@ -178,15 +211,15 @@ jobs:
       - uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
         with:
           tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
-      - name: Inventory full Rust workspace
+      - name: Mutate ${{ matrix.crate }}
         run: >-
-          cargo mutants --jobs 2 --workspace
-          --shard '${{ matrix.shard }}/4'
-          --output 'mutants.out-full-${{ matrix.shard }}'
+          cargo mutants --jobs 2
+          --package '${{ matrix.crate }}'
+          --output 'mutants.out-${{ matrix.crate }}'
       - name: Upload mutation report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: mutation-rust-full-${{ matrix.shard }}
-          path: mutants.out-full-${{ matrix.shard }}/mutants.out/
+          name: mutation-rust-${{ matrix.crate }}
+          path: mutants.out-${{ matrix.crate }}/mutants.out/
           if-no-files-found: ignore

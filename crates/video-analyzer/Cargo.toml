@@ -5,10 +5,20 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
+advice-report = { path = "../advice-report" }
+analysis-context = { path = "../analysis-context" }
+attack-info-vision = { path = "../attack-info-vision" }
 frame-meter = { path = "../frame-meter" }
+hud-vision = { path = "../hud-vision" }
+input-vision = { path = "../input-vision" }
+match-event-layer = { path = "../match-event-layer" }
+spatial-refine = { path = "../spatial-refine" }
+temporal-confirm = { path = "../temporal-confirm" }
 meter-tracker = { path = "../meter-tracker" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
+match-event-layer = { path = "../match-event-layer", features = ["test-support"] }
+spatial-refine = { path = "../spatial-refine", features = ["test-support"] }
 image = { version = "0.25", default-features = false, features = ["png"] }

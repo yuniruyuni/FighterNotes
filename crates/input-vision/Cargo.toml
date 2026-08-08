@@ -1,0 +1,15 @@
+[package]
+name = "input-vision"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[features]
+# テンプレートどおりの数字を描き込む補助。同じ照合器を使う攻撃情報表示の
+# 読み取りを検査する crate が使う。
+test-support = []
+
+[dependencies]
+pixel-color = { path = "../pixel-color" }
+serde = { workspace = true }
+serde_json = { workspace = true }

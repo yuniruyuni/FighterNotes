@@ -1,0 +1,13 @@
+[package]
+name = "attack-info-vision"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+input-vision = { path = "../input-vision" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+input-vision = { path = "../input-vision", features = ["test-support"] }
