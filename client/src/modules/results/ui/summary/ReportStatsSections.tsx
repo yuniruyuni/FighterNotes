@@ -7,6 +7,7 @@ import type {
 import {
   appendUnconfirmedCandidates,
   driveSpendBreakdown,
+  formatDecisionBias,
   formatDriveEfficiency,
   formatTacticCount,
   formatTacticRateWithCount,
@@ -356,6 +357,25 @@ export function TacticStatsSection({
       ],
       stats.drive_spend_samples,
       "自分のDriveゲージ、フレームメーター、または接触の認識率が不足しています。",
+    ),
+    coverageAwareItem(
+      ownInputAvailable && meterAvailable,
+      [
+        formatDecisionBias(
+          stats.disadvantage_top_option_percent,
+          stats.disadvantage_decisions,
+        ),
+        "不利フレーム後で最も多い回答の割合",
+        `有利フレーム後 ${formatDecisionBias(
+          stats.advantage_top_option_percent,
+          stats.advantage_decisions,
+        )} / 起き攻め ${formatDecisionBias(
+          stats.okizeme_top_option_percent,
+          stats.okizeme_decisions,
+        )}`,
+      ],
+      stats.disadvantage_decisions,
+      "自分の入力履歴またはフレームメーターの認識率が不足しています。",
     ),
     coverageAwareItem(
       meterAvailable && contactsAvailable && ownHpAvailable,
