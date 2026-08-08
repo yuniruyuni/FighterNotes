@@ -1,22 +1,20 @@
-use super::common::{is_biased, observed_opportunities};
+use super::common::observed_opportunities;
+use crate::advice::decisions::{
+    collect_decisions, losses as decision_losses, selections as decision_selections,
+    DecisionOption, DecisionSituation,
+};
+use crate::advice::detectors::pressure::common::is_biased;
 use crate::advice::{AdviceCard, AdviceKind, EvidenceClip, OBSERVATION_REVIEW_CAVEAT};
-use crate::match_events::{DefensiveActionKind, EventConfidence, MatchEvents, MinusPressOutcome};
+use crate::match_events::{EventConfidence, MatchEvents};
 
 pub(crate) fn detect_press_while_minus(events: &MatchEvents, own: u8) -> Option<AdviceCard> {
-    let selections: Vec<_> = events
-        .presses_while_minus
-        .iter()
-        .filter(|event| {
-            event.side == own
-                && event.action_kind == DefensiveActionKind::Strike
-                && event.confidence == EventConfidence::High
-        })
-        .collect();
-    let losses: Vec<_> = selections
-        .iter()
-        .copied()
-        .filter(|event| event.outcome == MinusPressOutcome::CounterHit)
-        .collect();
+    let decisions = collect_decisions(events, own);
+    let selections = decision_selections(
+        &decisions,
+        DecisionSituation::Disadvantage,
+        DecisionOption::Strike,
+    );
+    let losses = decision_losses(&selections);
     if losses.is_empty() {
         return None;
     }
@@ -65,7 +63,7 @@ pub(crate) fn detect_press_while_minus(events: &MatchEvents, own: u8) -> Option<
         evidence: losses.iter().map(|event| EvidenceClip {
             frame: event.frame,
             end_frame: None,
-            label: format!("R{} 不利{}Fで{}を押して被弾 -{:.0}%", event.round_no, event.minus_frames, event.pressed, event.drop * 100.0),
+            label: format!("R{} 不利{}Fで{}を押して被弾 -{:.0}%", event.round_no, event.frames, event.pressed, event.drop * 100.0),
         }).collect(),
     })
 }

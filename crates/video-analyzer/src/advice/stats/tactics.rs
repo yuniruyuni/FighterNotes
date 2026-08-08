@@ -163,6 +163,27 @@ pub(crate) fn build_tactic_stats(
         })
         .count() as u32;
 
+    // 状況ごとの回答の偏り。同じ場面で同じ回答へ寄っていないかを見る。
+    {
+        use crate::advice::decisions::{collect_decisions, option_bias, DecisionSituation};
+        let decisions = collect_decisions(events, own);
+        let bias = |situation| {
+            option_bias(&decisions, situation)
+                .map(|(_, top, total)| (total as u32, (top * 100 / total) as u32))
+                .unwrap_or((0, 0))
+        };
+        (
+            stats.disadvantage_decisions,
+            stats.disadvantage_top_option_percent,
+        ) = bias(DecisionSituation::Disadvantage);
+        (
+            stats.advantage_decisions,
+            stats.advantage_top_option_percent,
+        ) = bias(DecisionSituation::Advantage);
+        (stats.okizeme_decisions, stats.okizeme_top_option_percent) =
+            bias(DecisionSituation::Okizeme);
+    }
+
     for throw in events.throw_actions.iter().filter(|throw| {
         event_in_round(throw.round_no, throw.input_frame)
             && throw.thrower == opponent

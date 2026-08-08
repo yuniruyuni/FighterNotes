@@ -9,6 +9,7 @@ mod committed_button_vs_di;
 mod damage_breakdown_is_exclusive_and_preserves_all_damage;
 mod damage_breakdown_matches_official_modern_low_with_meter_startup;
 mod damage_breakdown_prefers_compound_threat_and_adds_advice_context;
+mod decision_projection_matches_source_events;
 mod detector_coverage;
 mod diagnoses_sort_before_higher_severity_observations;
 mod drive_spend_is_measured_not_assumed;

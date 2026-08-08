@@ -81,3 +81,19 @@ export function driveSpendBreakdown(stats: TacticStats): string {
       .join(" / ") || "ゲージ消費を実測できた行動がありません"
   );
 }
+
+/**
+ * 同じ場面で同じ回答へ寄っているかを見る指標。機会が少ないうちは偶然と
+ * 区別できないため、偏りの判定に使う最低機会数へ届くまで割合を出さない。
+ */
+const MIN_DECISION_BIAS_OPPORTUNITIES = 4;
+
+export function formatDecisionBias(
+  topPercent: number,
+  opportunities: number,
+): string {
+  if (opportunities < MIN_DECISION_BIAS_OPPORTUNITIES) {
+    return opportunities > 0 ? `機会${opportunities}件` : "確認なし";
+  }
+  return `${topPercent}% (${opportunities}件)`;
+}

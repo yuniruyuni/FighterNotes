@@ -30,6 +30,7 @@ mod builder;
 mod cards;
 mod coverage;
 mod damage_origins;
+pub(crate) mod decisions;
 mod detectors;
 mod model;
 mod parameters;

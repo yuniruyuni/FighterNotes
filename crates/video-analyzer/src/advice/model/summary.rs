@@ -172,6 +172,21 @@ pub struct TacticStats {
     /// 入力を直接観測できた、ガード後 1F 以上不利の判断機会。
     #[serde(default)]
     pub minus_defense_opportunities: u32,
+    /// 判断機会の数と、そこで最も多かった回答が占める割合（百分率）。
+    /// 回答が読まれているかを測る。機会が少ないうちは意味を持たないため、
+    /// 割合だけでなく機会数も一緒に持つ。
+    #[serde(default)]
+    pub disadvantage_decisions: u32,
+    #[serde(default)]
+    pub disadvantage_top_option_percent: u32,
+    #[serde(default)]
+    pub advantage_decisions: u32,
+    #[serde(default)]
+    pub advantage_top_option_percent: u32,
+    #[serde(default)]
+    pub okizeme_decisions: u32,
+    #[serde(default)]
+    pub okizeme_top_option_percent: u32,
     /// 自分が守る側になった投げ。抜けと被投げの分母。
     /// 相手が届かない位置で振った投げ（空振り）は、守る機会ではないので含めない。
     #[serde(default)]

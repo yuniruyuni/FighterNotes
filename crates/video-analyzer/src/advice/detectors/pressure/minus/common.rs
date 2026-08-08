@@ -1,7 +1,5 @@
 use crate::match_events::{EventConfidence, MatchEvents};
 
-pub(super) use crate::advice::detectors::pressure::common::is_biased;
-
 pub(super) fn observed_opportunities(
     events: &MatchEvents,
     own: u8,
