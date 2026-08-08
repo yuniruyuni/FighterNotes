@@ -29,6 +29,7 @@ pub(super) fn build(hits: Vec<MashHit>) -> Option<AdviceCard> {
             "守勢でボタンを押して被弾した場面"
         }.to_string(),
         severity: hp_lost,
+        hp_lost: Some(hp_lost),
         description: if repeated {
             format!(
                 "相手の攻めを受けている途中でボタンを押し、大きく被弾した場面が {} 回、合計 {:.0}% あります。同じ防御回答で複数回損失が出ているため改善候補です。最も多かった入力は {} でした。打撃を押すこと自体ではなく、相手の投げとの読み合いを含めて同じ回答が続いていないかを見直してください。",

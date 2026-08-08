@@ -65,6 +65,7 @@ pub(crate) fn detect_throw_interrupted_by_invincible(
         }
         .to_string(),
         severity: hp_lost,
+        hp_lost: Some(hp_lost),
         description: if repeated {
             format!(
                 "投げを実行した直後に相手の無敵技が始まり、被弾した場面が {} 件、合計 {:.0}% あります。投げ間合いの空振りではありません。複数回ありますが、同じ起き攻めで投げに偏っていたのか、別々の読み合いで無敵技がかみ合ったのかまでは断定できません。",
@@ -150,6 +151,7 @@ pub(crate) fn detect_throw_whiff_punished(events: &MatchEvents, own: u8) -> Opti
         }
         .to_string(),
         severity: hp_lost + 0.02 * whiff_count as f32,
+        hp_lost: Some(hp_lost),
         description: if repeated {
             format!(
                 "実行まで確認できた投げ空振りが {} 回あり、その後約1.5秒以内に被弾した一連の場面が {} 件、合計 {:.0}% あります。連続した空振りは同じ被弾へまとめています。相手の後退や無敵を読んだ結果かまでは断定しませんが、複数回確認できたため投げを押す距離・タイミングを見直す候補です。",

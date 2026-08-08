@@ -271,6 +271,7 @@ mod tests {
             confidence: EventConfidence::High,
             title: id.to_string(),
             severity: 0.0,
+            hp_lost: None,
             description: String::new(),
             practice: String::new(),
             evidence: Vec::new(),

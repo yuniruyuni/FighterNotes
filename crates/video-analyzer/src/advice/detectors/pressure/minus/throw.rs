@@ -34,6 +34,7 @@ pub(crate) fn detect_throw_while_minus(events: &MatchEvents, own: u8) -> Option<
             "不利フレーム後の最速投げで被弾した場面"
         }.to_string(),
         severity: hp_lost + 0.01 * (selections.len() - losses.len()) as f32,
+        hp_lost: Some(hp_lost),
         description: if biased {
             format!(
                 "入力まで確認できた不利フレーム後の判断 {} 回中、{} 回（{}%）で最速投げを選んでいます。うち {} 回は打撃に負け、合計 {:.0}% の HP を失いました。同じ回答への偏りが複数回利用されたことを指摘しています。投げ抜けではなく、自分から最速で投げた場面だけを数えています。",

@@ -45,6 +45,7 @@ pub(crate) fn detect_press_while_minus(events: &MatchEvents, own: u8) -> Option<
             "不利フレーム後の最速打撃で被弾した場面"
         }.to_string(),
         severity: hp_lost + 0.01 * escaped as f32,
+        hp_lost: Some(hp_lost),
         description: if biased {
             format!(
                 "入力まで確認できた不利フレーム後の判断 {} 回中、{} 回（{}%）で硬直明け最速打撃を選んでいます。うち {} 回はカウンターで狩られ、合計 {:.0}% の HP を失いました（被弾しなかったのは {} 回）。同じ回答へ偏り、相手の打撃重ねに複数回利用されている点が改善対象です。最も多かった入力は {} でした。",

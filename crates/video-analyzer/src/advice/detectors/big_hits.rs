@@ -133,6 +133,7 @@ pub(crate) fn detect_big_hits(
         confidence: EventConfidence::High,
         title: "原因を分類できなかった大ダメージ".to_string(),
         severity: hp_lost,
+        hp_lost: Some(hp_lost),
         description: format!(
             "一度のコンボ・連係で HP を {:.0}% 以上失い、対空・暴れ・不利後の回答など既存の原因別カードへ分類できなかった被弾が {} 回、合計 {:.0}% あります。{}各場面で被弾直前の行動を確認し、同じ入り口が繰り返されているかを利用者が判断するための一覧です。",
             BIG_HIT_LIST * 100.0, hits.len(), hp_lost * 100.0, attack_note

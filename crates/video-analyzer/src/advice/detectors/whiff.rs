@@ -42,6 +42,7 @@ pub(crate) fn detect_whiff_punished(events: &MatchEvents, own: u8) -> Option<Adv
         }
         .to_string(),
         severity: hp_lost + 0.01 * punished.len() as f32,
+        hp_lost: Some(hp_lost),
         description: if repeated {
             format!(
                 "接触しなかった技 {} 回のうち、{} 回（{}%）で硬直を狩られ、合計 {:.0}% の HP を失いました。空振り自体は間合いを測る手段として正当ですが、届かない位置から出した技を複数回反撃されているため、技を置く距離とタイミングが改善対象です。",

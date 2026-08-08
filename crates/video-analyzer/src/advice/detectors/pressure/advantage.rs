@@ -48,6 +48,7 @@ pub(crate) fn detect_advantage_abandoned(events: &MatchEvents, own: u8) -> Optio
         }
         .to_string(),
         severity: hp_lost + 0.01 * losses.len() as f32,
+        hp_lost: Some(hp_lost),
         description: if biased {
             format!(
                 "入力まで確認できた有利フレームの機会 {} 回中、{} 回（{}%）で次の攻撃を始めていません（平均 +{:.0}F）。うち {} 回はそのまま相手に攻め返され、合計 {:.0}% の HP を失いました（攻めを継続できたのは {} 回）。有利を取った直後に何もしない選択へ偏っており、相手に主導権を戻しています。",

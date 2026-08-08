@@ -52,6 +52,17 @@ pub(crate) fn detect_lead_loss(
         confidence: EventConfidence::Medium,
         title: "大きなリードから逆転された場面".to_string(),
         severity: 0.15 * losses.len() as f32,
+        hp_lost: Some(
+            losses
+                .iter()
+                .map(|(_, peak, flipped)| {
+                    let hp = &events.hp[own_index];
+                    let peak_hp = hp.get(*peak as usize).copied().unwrap_or(0.0);
+                    let flipped_hp = hp.get(*flipped as usize).copied().unwrap_or(0.0);
+                    (peak_hp - flipped_hp).max(0.0)
+                })
+                .sum(),
+        ),
         description: format!(
             "HP リード 30% 以上を持ちながら落としたラウンドが {} 回あります。逆転された事実だけでは、攻め継続・後退・ガードなど特定の選択が悪かったとは{OBSERVATION_REVIEW_CAVEAT}。最大リード以降に同じ行動で複数回被弾していないかを確認するための場面一覧です。",
             losses.len()

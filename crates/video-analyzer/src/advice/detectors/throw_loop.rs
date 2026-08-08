@@ -43,6 +43,8 @@ pub(crate) fn detect_throw_loop(events: &MatchEvents, opponent: u8) -> Option<Ad
         confidence: EventConfidence::High,
         title: if repeated { "投げを連続して受けている" } else { "投げを受けた場面" }.to_string(),
         severity: 0.12 * connected.len() as f32,
+        // ThrowEvent は被ダメージを持たない。推定で埋めず未設定にする。
+        hp_lost: None,
         description: if repeated {
             format!(
                 "相手の投げ {} 回中 {} 回が通り、最大 {} 回連続で投げられています。時々投げられるのは正常な読み合いですが、3回以上連続したため同じ守り方が続いていないか見直す候補です。",

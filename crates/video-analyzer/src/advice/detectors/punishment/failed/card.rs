@@ -13,6 +13,7 @@ pub(super) fn build(summary: &Summary<'_>, option_text: &str) -> AdviceCard {
             "ガード後の反撃が届かなかった場面"
         }.to_string(),
         severity: summary.hp_lost + 0.03 * summary.failures.len() as f32,
+        hp_lost: Some(summary.hp_lost),
         description: if summary.repeated {
             format!(
                 "相手の技をガードし、反撃が間に合う近〜中距離で攻撃を出したものの届かなかった場面が {} 回あります。同じ入力 {} が {} 回含まれ、確反成功は {} 回、空振り後の被ダメは合計 {:.0}% です。同じ距離で届かない反撃を繰り返している可能性があるため、技選択を見直す候補です。{}",

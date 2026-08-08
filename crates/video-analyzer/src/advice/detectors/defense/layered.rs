@@ -46,6 +46,7 @@ pub(crate) fn detect_layered_defense(events: &MatchEvents, own: u8) -> Option<Ad
         }
         .to_string(),
         severity: hp_lost + 0.02 * threats.len() as f32,
+        hp_lost: Some(hp_lost),
         description: if repeated {
             format!(
                 "飛び道具とテレポート後の攻撃が重なる状況を {} 回確認し、そのうちパリィを後段まで維持できず被弾した場面が {} 回、合計 {:.0}% あります。同じ短いパリィで複数回被弾しているため、防御回答の見直し候補です。地上テレポートから投げも成立する状況ではパリィ固定が正解とは限りません。",

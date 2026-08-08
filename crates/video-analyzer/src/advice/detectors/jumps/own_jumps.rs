@@ -52,6 +52,7 @@ pub(crate) fn detect_own_jumps(events: &MatchEvents, own: u8) -> Option<AdviceCa
         confidence: EventConfidence::High,
         title: if repeated { "ジャンプを繰り返し落とされている" } else { "ジャンプを落とされた場面" }.to_string(),
         severity: hp_lost + 0.02 * got_hit.len() as f32,
+        hp_lost: Some(hp_lost),
         description: if repeated {
             format!(
                 "自分の前・垂直ジャンプ {} 回のうち {} 回が迎撃され、合計 {:.0}% の HP を失いました。攻防結果を確定できたジャンプの半数以上を複数回落とされているため、相手が対空を見せた後も同じ接近手段を選んでいないか見直す価値があります。",
