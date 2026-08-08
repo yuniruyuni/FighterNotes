@@ -79,4 +79,42 @@ describe("AdviceSection", () => {
       "改善点がないという意味ではありません",
     );
   });
+  test("被ダメージが結果である指摘だけに失った体力を出す", () => {
+    render(
+      <AdviceSection
+        report={syntheticAdviceReport({
+          cards: [
+            {
+              id: "whiff_punished",
+              kind: "diagnosis",
+              confidence: "high",
+              title: "届かない技の硬直を繰り返し狩られている",
+              severity: 0.37,
+              hp_lost: 0.35,
+              description: "説明",
+              practice: "練習",
+              evidence: [{ frame: 100, label: "R1 空振りを狩られた" }],
+            },
+            {
+              // 機会費用の指摘は hp_lost を持たない。0% とは意味が違う。
+              id: "punish_missed",
+              kind: "diagnosis",
+              confidence: "high",
+              title: "確反を見逃している",
+              severity: 0.08,
+              description: "説明",
+              practice: "練習",
+              evidence: [{ frame: 200, label: "R1 確反見逃し" }],
+            },
+          ],
+          suppressed_cards: [],
+        })}
+        frameTimestamps={[]}
+        onSceneChange={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("この場面で失った体力 -35%")).toBeInTheDocument();
+    expect(screen.getAllByText(/この場面で失った体力/)).toHaveLength(1);
+  });
 });

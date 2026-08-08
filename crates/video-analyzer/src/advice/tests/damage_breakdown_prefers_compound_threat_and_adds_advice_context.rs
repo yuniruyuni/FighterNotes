@@ -69,6 +69,7 @@ fn damage_breakdown_prefers_compound_threat_and_adds_advice_context() {
             confidence: EventConfidence::High,
             title: String::new(),
             severity: 0.2,
+            hp_lost: None,
             description: String::new(),
             practice: String::new(),
             evidence: vec![EvidenceClip {

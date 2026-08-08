@@ -347,6 +347,12 @@
   color: var(--punish);
   margin-bottom: 0.3rem;
 }
+.advice-card .ac-cost {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--punish);
+  margin-bottom: 0.35rem;
+}
 .advice-card .ac-desc {
   font-size: 0.88rem;
   color: var(--text);

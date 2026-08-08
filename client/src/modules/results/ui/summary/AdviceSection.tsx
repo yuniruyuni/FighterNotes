@@ -101,6 +101,7 @@ function AdviceResultCard({
   ]
     .filter(Boolean)
     .join("・");
+  const hpLost = adviceHpLostLabel(card.hp_lost);
 
   return (
     <article className="advice-card">
@@ -110,6 +111,7 @@ function AdviceResultCard({
           {metadata && `【${metadata}】 `}({card.evidence.length}件)
         </span>
       </div>
+      {hpLost && <div className="ac-cost">この場面で失った体力 {hpLost}</div>}
       <div className="ac-desc">{card.description}</div>
       <div className="ac-practice">📝 {card.practice}</div>
       <div>
@@ -155,6 +157,16 @@ function EvidenceButton({
       {evidence.label} ({range})
     </button>
   );
+}
+
+/**
+ * 被ダメージが直接の結果である指摘だけが hp_lost を持つ。確反の取りこぼしの
+ * ように損失が機会費用であるものは未設定で、0% とは意味が異なるため表示しない。
+ */
+function adviceHpLostLabel(hpLost: AdviceCard["hp_lost"]): string | undefined {
+  if (hpLost === undefined || hpLost === null) return undefined;
+  if (hpLost <= 0) return undefined;
+  return `-${(hpLost * 100).toFixed(0)}%`;
 }
 
 function adviceKindLabel(kind: AdviceCard["kind"]): string | undefined {

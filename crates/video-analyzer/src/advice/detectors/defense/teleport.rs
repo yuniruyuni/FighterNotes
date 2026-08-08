@@ -41,6 +41,7 @@ pub(crate) fn detect_teleport_defense(events: &MatchEvents, own: u8) -> Option<A
         }
         .to_string(),
         severity: hp_lost + 0.02 * missed.len() as f32,
+        hp_lost: Some(hp_lost),
         description: format!(
             "飛び道具を重ねていないテレポート攻撃に対し、行動可能かつ昇竜系の対空が届くことを確認できたのに迎撃できなかった場面が {} 回、合計 {:.0}% あります。弾と挟まれる複合連係や、硬直中のテレポートはこの件数に含めていません。",
             missed.len(),

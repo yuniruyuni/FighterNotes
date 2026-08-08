@@ -98,6 +98,7 @@ pub(super) fn advice_card(id: &str, end_frame: Option<u32>) -> AdviceCard {
         confidence: EventConfidence::High,
         title: String::new(),
         severity: 0.0,
+        hp_lost: None,
         description: String::new(),
         practice: String::new(),
         evidence: vec![EvidenceClip {

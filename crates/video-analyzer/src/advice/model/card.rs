@@ -44,8 +44,15 @@ pub struct AdviceCard {
     #[serde(default = "default_advice_confidence")]
     pub confidence: EventConfidence,
     pub title: String,
-    /// 重大度（失った HP 量ベース。表示ソートキー）
+    /// 表示ソートキー。HP 量に件数の重みを足した相対値で、HP そのものではない。
     pub severity: f32,
+    /// この指摘が挙げた場面で実際に失った HP の合計。
+    ///
+    /// 「どれから直すべきか」を利用者が判断するための値なので、被ダメージが
+    /// 直接の結果である指摘にだけ入れる。確反の取りこぼしのように損失が
+    /// 機会費用であるものは、被ダメージへ換算せず `None` のままにする。
+    #[serde(default)]
+    pub hp_lost: Option<f32>,
     pub description: String,
     /// 練習メニュー提案
     pub practice: String,

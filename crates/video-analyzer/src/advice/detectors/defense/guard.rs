@@ -93,6 +93,7 @@ pub(crate) fn detect_guard_break(events: &MatchEvents, own: u8) -> Option<Advice
         }
         .to_string(),
         severity: hp_lost,
+        hp_lost: Some(hp_lost),
         description: if repeated {
             format!(
                 "ガード入力が外れた被弾を {} 回確認し、最も多い同一遷移は {}→{} の {} 回です。合計 {:.0}% 被弾しています。{}同じ方向への入力変更が複数回重なっているため、移動・ジャンプ・反撃を始めるタイミングの改善候補です。",

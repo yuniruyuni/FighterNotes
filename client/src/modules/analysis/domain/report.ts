@@ -97,6 +97,8 @@ export interface AdviceCard {
   confidence?: "low" | "medium" | "high";
   title: string;
   severity: number;
+  /** 被ダメージが直接の結果である指摘だけが持つ、失った体力の合計。 */
+  hp_lost?: number | null;
   description: string;
   practice: string;
   evidence: EvidenceClip[];

@@ -197,6 +197,7 @@ pub(crate) fn detect_committed_button_vs_di(
         }
         .to_string(),
         severity: hp_lost,
+        hp_lost: Some(hp_lost),
         description: if repeated {
             format!(
                 "入力表示とフレームメーターの両方で、通常技の実行中に相手DIがヒットした場面を {} 回確認し、合計 {:.0}% 被弾しています。最も多かった表示入力は {} でした。相手が技の出始めを見てDIしたのか、先に選んだDIと技がかみ合ったのかは、この時系列データだけでは断定できません。繰り返しているため、使用技のDIキャンセル可否と置く距離・頻度を見直す候補です。",

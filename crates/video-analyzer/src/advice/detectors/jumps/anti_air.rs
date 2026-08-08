@@ -55,6 +55,7 @@ pub(crate) fn detect_anti_air(events: &MatchEvents, own: u8, opp: u8) -> Option<
         confidence: EventConfidence::High,
         title: if repeated { "飛び込みを繰り返し通している" } else { "飛び込みを通した場面" }.to_string(),
         severity: hp_lost + 0.02 * landed.len() as f32,
+        hp_lost: Some(hp_lost),
         description: if repeated {
             format!(
                 "相手の前・垂直ジャンプ {} 回中、空中で迎撃できたのは {} 回、飛び込みを通されたのは {} 回です（残り {} 回はどちらでもないジャンプ）。通された割合が高く、同じ被弾が複数回あるため対空を改善候補とします。失った HP は合計 {:.0}% です。",

@@ -35,6 +35,8 @@ pub(crate) fn detect_punish_missed(
             "確定反撃を繰り返し見逃している"
         }.to_string(),
         severity: 0.04 * missed.len() as f32,
+        // 損失は機会費用であり、この指摘が原因で失った HP ではない。
+        hp_lost: None,
         description: format!(
             "相手の技をガードした後、フレーム上の反撃猶予があり、位置解析でも近距離だったのに反撃していない場面が {} 回あります。相手の危険な技を覚えて、ガードしたら反撃する意識を持ちましょう。{}",
             missed.len(), option_text

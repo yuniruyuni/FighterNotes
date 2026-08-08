@@ -76,6 +76,7 @@ pub(crate) fn detect_reversal_punished(events: &MatchEvents, own: u8) -> Option<
             "無敵技を狩られた場面"
         }.to_string(),
         severity: hp_lost + 0.02 * occurrence_count as f32,
+        hp_lost: Some(hp_lost),
         description: if super_only && repeated {
             format!(
                 "ゲージ消費で確認したSA/CAが通らず、その後に反撃を受けた場面が {occurrence_count} 回、合計 {:.0}% あります。SA/CAという高コストの回答で複数回損失が出ているため、使用場面を見直す候補です。",

@@ -38,6 +38,8 @@ pub(crate) fn detect_low_scaling_super(events: &MatchEvents, own: u8) -> Option<
         confidence: EventConfidence::Medium,
         title: "低い補正率でSA/CAを組み込んだ場面".to_string(),
         severity: 0.03 * uses.len() as f32,
+        // 損失は機会費用であり、この指摘が原因で失った HP ではない。
+        hp_lost: None,
         description: format!(
             "ゲーム内表示で、投入時の補正率が {LOW_ENTRY_SCALING}% 以下かつKOに至らなかったSA/CAを {} 回確認しました。SA投入後に増えた表示ダメージは合計 {marginal_total} です。低い補正率だけで使用ミスとは{OBSERVATION_REVIEW_CAVEAT}。残り体力、運び、起き攻め、ゲージ持ち越しを含めて使用目的を確認するための場面一覧です。",
             uses.len()

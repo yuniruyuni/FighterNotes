@@ -50,6 +50,7 @@ pub(crate) fn detect_burnout(events: &MatchEvents, own: u8) -> Option<AdviceCard
         },
         title: "バーンアウト管理".to_string(),
         severity: hp_lost + 0.03 * periods.len() as f32,
+        hp_lost: Some(hp_lost),
         description: format!(
             "バーンアウトに {} 回入り、{}、その間の被ダメは {:.0}%、与ダメは {:.0}% でした（ラウンド {}）。{}。被ダメだけでなく、攻めのために使い切ったのか、守りで削り切られたのかを分けて見直しましょう。",
             periods.len(), duration, hp_lost * 100.0, hp_dealt * 100.0,

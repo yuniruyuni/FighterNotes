@@ -25,6 +25,13 @@ pub(crate) fn detect_early_hits(
         confidence: EventConfidence::Medium,
         title: "開幕に被弾したラウンド".to_string(),
         severity: 0.05 * early.len() as f32,
+        hp_lost: Some(
+            early
+                .iter()
+                .filter_map(|round| first_hit(round))
+                .map(|damage| damage.drop)
+                .sum(),
+        ),
         description: format!(
             "{} ラウンド中 {} ラウンドで開幕 3 秒以内に被弾しています。この試合で同様の開幕被弾は {} 回です。現時点では最初に選んだ行動が同じかまでは確認できないため、回数が多くても開幕行動の癖とは{OBSERVATION_REVIEW_CAVEAT}。各クリップで最初の入力が共通しているかを確認してください。",
             rounds.len(), early.len(), early.len()

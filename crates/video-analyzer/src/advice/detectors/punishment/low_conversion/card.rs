@@ -38,6 +38,8 @@ pub(super) fn build(success_count: usize, lows: &[LowReturn]) -> AdviceCard {
             "確反が小さいリターンで終わった場面"
         }.to_string(),
         severity: 0.03 * lows.len() as f32,
+        // 損失は機会費用であり、この指摘が原因で失った HP ではない。
+        hp_lost: None,
         description: if repeated {
             format!(
                 "確反成功 {} 回中、12%未満の小さいリターンで終わった場面が {} 回、合計 {:.0}% あります。{}同じ入力 {} が {} 回含まれるため、ゲージ温存や位置取りを意図した選択でなければコンボへ繋ぐ改善候補です。",
