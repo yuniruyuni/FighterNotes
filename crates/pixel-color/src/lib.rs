@@ -4,6 +4,10 @@
 //! 変換を使う。どちらか一方の crate に置くと他方が読み取りモジュールへ
 //! 依存することになるため、変換だけを独立させる。
 
+/// これ未満の差は色みが無いものとして扱う。ちょうど同じ値は「色みあり」
+/// 側に残す（`<` であって `<=` ではない）。
+const FLAT: f32 = 1e-6;
+
 /// RGB f32 → HSV f32 (H: 0–179, S: 0–255, V: 0–255)  OpenCV 互換。
 ///
 /// H を 0–179 に収めるのは OpenCV の 8bit HSV に合わせるため。既存の
@@ -17,11 +21,11 @@ pub fn rgb_to_hsv(r: f32, g: f32, b: f32) -> [f32; 3] {
     let delta = max - min;
     let v = max * 255.0;
     let s = if max > 0.0 { delta / max * 255.0 } else { 0.0 };
-    let h_deg = if delta < 1e-6 {
+    let h_deg = if delta < FLAT {
         0.0_f32
-    } else if (max - r).abs() < 1e-6 {
+    } else if (max - r).abs() < FLAT {
         60.0 * ((g - b) / delta).rem_euclid(6.0)
-    } else if (max - g).abs() < 1e-6 {
+    } else if (max - g).abs() < FLAT {
         60.0 * ((b - r) / delta + 2.0)
     } else {
         60.0 * ((r - g) / delta + 4.0)
@@ -65,5 +69,31 @@ mod tests {
     #[test]
     fn value_follows_the_brightest_channel_and_saturation_the_spread() {
         close(rgb_to_hsv(200.0, 100.0, 100.0), [0.0, 127.5, 200.0]);
+    }
+
+    /// 純色は各成分の差が最大値と一致してしまい、色相の割り算を掛け算や
+    /// 剰余に変えても答えが変わらない。三方の分岐それぞれで、差と最大値が
+    /// 食い違う中間色を通す。
+    #[test]
+    fn mid_tones_pin_the_hue_arithmetic_in_every_branch() {
+        assert_eq!(rgb_to_hsv(200.0, 150.0, 100.0)[0], 15.0, "赤が最大");
+        assert_eq!(rgb_to_hsv(100.0, 200.0, 150.0)[0], 75.0, "緑が最大");
+        assert_eq!(rgb_to_hsv(150.0, 100.0, 200.0)[0], 135.0, "青が最大");
+    }
+
+    /// 閾値ちょうどの差は「色みなし」に倒さない。三つの比較はいずれも
+    /// 等号を含まないので、ちょうどの入力で分岐先が変わってはいけない。
+    #[test]
+    fn a_difference_exactly_at_the_threshold_still_has_a_hue() {
+        // FLAT * 255 を 255 で割ると FLAT に戻る（f32 で厳密に一致する）。
+        let at = FLAT * 255.0;
+        assert_eq!(at / 255.0, FLAT, "閾値ちょうどの入力を作れていない");
+
+        // delta がちょうど閾値。赤が最大なので赤の分岐へ入る。
+        assert_eq!(rgb_to_hsv(at, at / 2.0, 0.0)[0], 15.0);
+        // max - r がちょうど閾値。赤ではなく緑の分岐へ入る。
+        assert_eq!(rgb_to_hsv(0.0, at, 0.0)[0], 60.0);
+        // max - g がちょうど閾値。緑ではなく青の分岐へ入る。
+        assert_eq!(rgb_to_hsv(0.0, 0.0, at)[0], 120.0);
     }
 }
