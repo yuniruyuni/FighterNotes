@@ -14,7 +14,7 @@ Every packaged license document is retained for inspection; AND denotes terms
 that apply together, while OR preserves the alternatives offered upstream.
 
 - bun.lock SHA-256: `3a297dce7d12888f29c8af8585b88e31025f8f926061f7d799749db4fd1510f5`
-- Cargo.lock SHA-256: `7b061cca852d20549498767550029f2aba8bcdd6cd113aa9f2c075bab1d5efb8`
+- Cargo.lock SHA-256: `ec262fc4ebad6ef07335aebfa488e22f11d636c0c836702989b8b26c614a47eb`
 - npm scanner: `license-checker-rseidelsohn 5.0.1`
 - Cargo scanner: `cargo-about 0.9.1`
 
