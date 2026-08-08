@@ -551,6 +551,45 @@ fn empty_inspection() -> AttackInfoFrameInspection {
 mod tests {
     use super::*;
 
+    /// 数値行の走査は、読めない入力に対して必ず何も返さない。ここが値を
+    /// 返してしまうと、上位の妥当性検査（`numeric_values_are_plausible`）が
+    /// 存在しない数字を受け取ることになる。
+    #[test]
+    fn an_unreadable_numeric_row_yields_nothing() {
+        let width = BASE_WIDTH;
+        let blank = vec![0u8; width * 64 * 4];
+        let read =
+            |y1, y2| read_numeric_row(&blank, width, (100, 0), y1, y2, 210, NumericRowKind::Combo);
+
+        // 白画素が一つも無い行。
+        assert_eq!(read(0, 25), None);
+        // 高さの無い行。
+        assert_eq!(read(10, 10), None);
+        // 走査バッファに収まらない高さ。
+        assert_eq!(read(0, ROW_SCAN_HEIGHT + 1), None);
+    }
+
+    /// 括弧のアンカーが無い行は、数字が並んでいても読み取らない。
+    #[test]
+    fn digits_without_parentheses_yield_nothing() {
+        let width = BASE_WIDTH;
+        let mut rgba = vec![0u8; width * 64 * 4];
+        // 数字くらいの大きさの白い塊を等間隔に置く。括弧に見える細長い
+        // 塊は無いので、アンカーが取れず読み取りは成立しない。
+        for block in 0..3 {
+            for y in 4..20 {
+                for x in 0..8 {
+                    let index = (y * width + 100 + block * 15 + x) * 4;
+                    rgba[index..index + 4].copy_from_slice(&[255, 255, 255, 255]);
+                }
+            }
+        }
+
+        let read = read_numeric_row(&rgba, width, (100, 0), 0, 25, 210, NumericRowKind::Combo);
+
+        assert_eq!(read, None);
+    }
+
     fn component(x: usize, width: usize, y: usize, height: usize, pixels: usize) -> Component {
         Component {
             min_x: x,
