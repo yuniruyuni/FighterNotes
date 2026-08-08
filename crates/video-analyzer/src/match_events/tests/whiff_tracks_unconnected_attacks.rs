@@ -426,3 +426,166 @@ fn the_exclusion_only_matches_the_same_side_and_overlap() {
         1
     );
 }
+
+/// 攻撃判定が動画の最終フレームまで続く場合。走査の終端条件を誤ると
+/// 範囲外参照になる。結果窓が取れないので確度は落とす。
+#[test]
+fn an_active_run_reaching_the_last_frame_is_handled() {
+    use MeterState::*;
+    let (mut meter, features, rounds) = knockdown_free_fixture();
+    for state in meter[0].iter_mut().skip(100) {
+        *state = Active;
+    }
+
+    let whiffs = extract(&meter, &features, &rounds, Around::default());
+
+    assert_eq!(whiffs.len(), 1);
+    assert_eq!(whiffs[0].frame, 100);
+    assert_eq!(whiffs[0].end_frame, meter[0].len() as u32 - 1);
+}
+
+/// epoch 系列が meter より短い壊れた入力でも、既定値で「不明」として
+/// 扱い、有効な epoch と取り違えない。
+#[test]
+fn a_short_epoch_series_is_treated_as_unknown() {
+    let (meter, features, rounds) = knockdown_free_fixture();
+
+    let whiffs = extract_whiffs(WhiffInputs {
+        features: &features,
+        meter_state: &meter,
+        // 攻撃判定の開始位置まで届かない長さにする。
+        meter_epoch: &[vec![0; 50], vec![0; 50]],
+        contacts: &[],
+        damage: &[],
+        throw_actions: &[],
+        drive_impacts: &[],
+        reversals: &[],
+        rounds: &rounds,
+    });
+
+    assert!(whiffs.is_empty());
+}
+
+/// 接触猶予は攻撃判定の終了側にも効く。開始側だけ検査していると、
+/// 遅れて表示された接触を空振りと誤認する。
+#[test]
+fn the_contact_grace_also_covers_the_trailing_edge() {
+    let (meter, features, rounds) = knockdown_free_fixture();
+
+    let at_edge = vec![ContactEvent {
+        frame: 109 + WHIFF_CONTACT_GRACE,
+        attacker: 1,
+        victim: 2,
+        hit: true,
+        projectile: false,
+        round_no: 1,
+    }];
+    assert!(extract(&meter, &features, &rounds, around_contacts(&at_edge)).is_empty());
+
+    let outside = vec![ContactEvent {
+        frame: 109 + WHIFF_CONTACT_GRACE + 1,
+        attacker: 1,
+        victim: 2,
+        hit: true,
+        projectile: false,
+        round_no: 1,
+    }];
+    assert_eq!(
+        extract(&meter, &features, &rounds, around_contacts(&outside)).len(),
+        1
+    );
+}
+
+/// 被弾量は、狩られた接触に対応する被弾だけから取る。接触より前の被弾や
+/// 結果窓を越えた被弾を混ぜると、その空振りの代償を過大に見せる。
+#[test]
+fn only_damage_tied_to_the_punishing_contact_is_counted() {
+    let (meter, features, rounds) = knockdown_free_fixture();
+    let contacts = vec![ContactEvent {
+        frame: 120,
+        attacker: 2,
+        victim: 1,
+        hit: true,
+        projectile: false,
+        round_no: 1,
+    }];
+    let damage = |start_frame: u32, drop: f32| DamageEvent {
+        victim: 1,
+        start_frame,
+        pre_freeze_frame: start_frame,
+        end_frame: start_frame + 10,
+        hp_before: 1.0,
+        hp_after: 1.0 - drop,
+        drop,
+        round_no: 1,
+    };
+    let events = vec![
+        // 接触より猶予ぶん手前までは同じ被弾として認める。
+        damage(120 - WHIFF_CONTACT_GRACE, 0.2),
+        // それより前は別の被弾。
+        damage(120 - WHIFF_CONTACT_GRACE - 1, 0.9),
+        // 結果窓を越えた被弾も別。
+        damage(109 + WHIFF_PUNISH_WINDOW + 1, 0.9),
+    ];
+
+    let whiffs = extract(
+        &meter,
+        &features,
+        &rounds,
+        Around {
+            contacts: &contacts,
+            damage: &events,
+            ..Around::default()
+        },
+    );
+
+    assert_eq!(whiffs.len(), 1);
+    assert!((whiffs[0].drop - 0.2).abs() < 1e-6);
+}
+
+/// 除外判定の重なりも端で決める。猶予ぶん手前で始まった投げは同じ行動
+/// だが、そこから外れたものは別行動なので空振りを消してはならない。
+#[test]
+fn the_exclusion_overlap_is_decided_at_its_edge() {
+    let (meter, features, rounds) = knockdown_free_fixture();
+    let throw_at = |active: u32| {
+        vec![ThrowActionEvent {
+            thrower: 1,
+            input_frame: active.saturating_sub(4),
+            startup_frame: Some(active.saturating_sub(4)),
+            active_frame: Some(active),
+            outcome: ThrowOutcome::ExecutedWhiff,
+            damage: 0.0,
+            approach: Default::default(),
+            confidence: EventConfidence::High,
+            round_no: 1,
+        }]
+    };
+
+    let inside = throw_at(100 - WHIFF_CONTACT_GRACE);
+    assert!(extract(
+        &meter,
+        &features,
+        &rounds,
+        Around {
+            throw_actions: &inside,
+            ..Around::default()
+        },
+    )
+    .is_empty());
+
+    let outside = throw_at(100 - WHIFF_CONTACT_GRACE - 1);
+    assert_eq!(
+        extract(
+            &meter,
+            &features,
+            &rounds,
+            Around {
+                throw_actions: &outside,
+                ..Around::default()
+            },
+        )
+        .len(),
+        1
+    );
+}

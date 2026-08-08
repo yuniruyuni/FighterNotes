@@ -1,5 +1,17 @@
-# Dependency crates are also exercised through the analyzer and WASM contract tests.
-test_workspace = true
+# 変異させた crate のテストだけを回す。
+#
+# 以前は依存 crate も analyzer / WASM の contract test 経由で検査する意図で
+# workspace 全体を回していたが、実測ではその追加検査が1件も効いていない。
+# 一方で費用は大きく、2千行の crate の1変異ごとに 37,000 行の video-analyzer を
+# 再ビルド・再テストしていた。
+#
+#   frame-meter   792 mutants  18分 -> 2分   missed 47 で集合まで一致
+#   meter-tracker 328 mutants   9分 -> 50秒  missed 1 で集合まで一致
+#
+# crate をまたぐ振る舞いを守りたい場合は、その crate 自身の contract test
+# として書く。ここを true へ戻すのは、workspace 全体を回さないと落ちない
+# 変異を実際に観測してからにする。
+test_workspace = false
 timeout_multiplier = 4.0
 minimum_test_timeout = 20
 gitignore = true

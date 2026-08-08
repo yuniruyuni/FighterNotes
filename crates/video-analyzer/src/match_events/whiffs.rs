@@ -8,6 +8,7 @@
 //! 追跡しているため、ここでは重複して数えない。弾は距離を取って撃つ行動が
 //! 正常なので `ProjectileActive` も対象外とする。
 
+use super::runs::{runs_of, MeterRun};
 use super::{
     continuous_epoch, round_of, ContactEvent, DamageEvent, DriveImpactEvent, EventConfidence,
     MeterState, ReversalEvent, RoundInfo, ThrowActionEvent, WhiffEvent, WhiffOutcome,
@@ -50,24 +51,7 @@ pub(crate) fn extract_whiffs(inputs: WhiffInputs<'_>) -> Vec<WhiffEvent> {
         let own = &meter_state[side_index];
         let own_epoch = &meter_epoch[side_index];
 
-        let mut index = 0usize;
-        while index < n {
-            if own[index] != MeterState::Active {
-                index += 1;
-                continue;
-            }
-            let start = index;
-            let epoch = own_epoch.get(start).copied().unwrap_or(-1);
-            while index < n
-                && own[index] == MeterState::Active
-                && own_epoch.get(index).copied() == Some(epoch)
-            {
-                index += 1;
-            }
-            let end = index - 1;
-            if epoch < 0 {
-                continue;
-            }
+        for MeterRun { start, end, epoch } in runs_of(own, own_epoch, MeterState::Active) {
             let start_frame = features[start].frame_index;
             let end_frame = features[end].frame_index;
             let Some(round_no) = round_of(rounds, start_frame) else {
