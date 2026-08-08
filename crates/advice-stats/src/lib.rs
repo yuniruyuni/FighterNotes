@@ -21,3 +21,6 @@ pub use match_event_layer::match_events::{
 
 pub mod coverage;
 pub mod stats;
+
+#[cfg(test)]
+mod tests;

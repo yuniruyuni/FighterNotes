@@ -1,49 +1,10 @@
 pub(super) use super::super::*;
 pub(super) use crate::match_events::{
     BurnoutPeriod, CompoundThreat, DamageEvent, DefenseResponse, JumpEvent, PunishChance,
-    PunishOrigin, RoundInfo, TeleportEvent, ThrowEvent,
+    PunishOrigin, TeleportEvent, ThrowEvent,
 };
 
-pub(super) fn empty_events() -> MatchEvents {
-    MatchEvents {
-        rounds: vec![RoundInfo {
-            round_no: 1,
-            start_frame: 0,
-            end_frame: 5999,
-            winner: Some(2),
-            p1_hp_end: 0.0,
-            p2_hp_end: 0.5,
-        }],
-        damage: vec![],
-        attack_evidence: Default::default(),
-        jumps: vec![],
-        throws: vec![],
-        throw_actions: vec![],
-        drive_impacts: vec![],
-        drive_rushes: vec![],
-        burnouts: vec![],
-        contacts: vec![],
-        punishes: vec![],
-        reversals: vec![],
-        super_arts: vec![],
-        guard_breaks: vec![],
-        presses_while_minus: vec![],
-        minus_situations: vec![],
-        advantage_situations: vec![],
-        knockdowns: vec![],
-        whiffs: vec![],
-        projectiles: vec![],
-        teleports: vec![],
-        compound_threats: vec![],
-        meter_state: [vec![], vec![]],
-        meter_confidence: [vec![], vec![]],
-        meter_game_frame: [vec![], vec![]],
-        spatial_coverage: Default::default(),
-        input_coverage: Default::default(),
-        segments: [vec![], vec![]],
-        hp: [vec![1.0; 6000], vec![1.0; 6000]],
-    }
-}
+pub(super) use match_event_layer::test_support::empty_events;
 
 /// 検出器の契約テストではイベント自体を主題にするため、coverageによる抑制に
 /// 必要な各入力を明示的に満たした小さなレポートを組み立てる。

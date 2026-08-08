@@ -1,0 +1,11 @@
+//! 集計の数え方に対するテスト。
+
+mod support;
+
+mod drive_spend_is_measured_not_assumed;
+mod every_new_tactic_counter_is_pinned;
+mod tactic_stats_count_every_drive_outcome;
+mod tactic_stats_count_every_pressure_variant;
+mod tactic_stats_count_every_super_art_variant;
+mod tactic_stats_only_count_confirmed_interactions;
+mod throw_defence_counts_only_real_chances;
