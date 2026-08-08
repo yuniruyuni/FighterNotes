@@ -9,6 +9,7 @@
 //! 拘束されるため、この空白はダウン特有であり、同時に起き攻めの準備時間
 //! そのものになる。
 
+use super::runs::{runs_of, MeterRun};
 use super::{
     round_of, ContactEvent, EventConfidence, KnockdownEvent, MeterState, OkizemeOutcome, RoundInfo,
     KNOCKDOWN_CAUSE_GRACE, KNOCKDOWN_MIN_SETUP, KNOCKDOWN_MIN_STUN, OKIZEME_PRESSURE_WINDOW,
@@ -45,26 +46,7 @@ pub(crate) fn extract_knockdowns(inputs: KnockdownInputs<'_>) -> Vec<KnockdownEv
         let down_epoch = &meter_epoch[down_index];
         let attacker_epoch = &meter_epoch[1 - down_index];
 
-        let mut index = 0usize;
-        while index < n {
-            if down[index] != MeterState::Stun {
-                index += 1;
-                continue;
-            }
-            let start = index;
-            // epoch を読めない区間は run を作れない。ここで走査位置を進めて
-            // おかないと、後続の run 探索が同じ位置を再評価し続けて止まらない。
-            let Some(epoch) = down_epoch.get(start).copied().filter(|epoch| *epoch >= 0) else {
-                index += 1;
-                continue;
-            };
-            while index < n
-                && down[index] == MeterState::Stun
-                && down_epoch.get(index).copied() == Some(epoch)
-            {
-                index += 1;
-            }
-            let end = index - 1;
+        for MeterRun { start, end, epoch } in runs_of(down, down_epoch, MeterState::Stun) {
             if end + 1 - start < KNOCKDOWN_MIN_STUN {
                 continue;
             }
