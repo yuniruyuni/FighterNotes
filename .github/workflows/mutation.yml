@@ -126,12 +126,6 @@ jobs:
   # 付いているか」だけを短時間で見る。
   rust-changed:
     if: github.event_name == 'pull_request'
-    # 変更行に絞っても missed は 0 になっていない。残っているものの多くは
-    # 下流のガードによって結果が変わらない等価変異で、テストでは殺せない
-    # （例: 欠測を弾く条件を反転しても、後段の範囲検査が同じ結果を返す）。
-    # まずは新しい Rust の検査状況を可視化する inventory として運用し、
-    # 0 に到達した時点で blocking へ昇格させる。
-    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
