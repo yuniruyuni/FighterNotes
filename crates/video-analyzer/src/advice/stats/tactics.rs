@@ -61,6 +61,59 @@ pub(crate) fn build_tactic_stats(
         }
     }
 
+    // 自分側の Drive 消費と、その行動の結果。
+    // 消費量は SF6 の本数を仮定せず、確定済みゲージ系列の実測差から取る。
+    let own_index = own as usize - 1;
+    let spend_between = |input_frame: u32| observed_drive_spend(features, own_index, input_frame);
+
+    for impact in events
+        .drive_impacts
+        .iter()
+        .filter(|impact| event_in_round(impact.round_no, impact.input_frame) && impact.side == own)
+    {
+        if impact.confidence != EventConfidence::High {
+            stats.own_di_unconfirmed += 1;
+            continue;
+        }
+        stats.own_di_used += 1;
+        match impact.outcome {
+            DriveImpactOutcome::Hit => stats.own_di_hit += 1,
+            DriveImpactOutcome::Blocked => stats.own_di_blocked += 1,
+            DriveImpactOutcome::Parried => stats.own_di_parried += 1,
+            DriveImpactOutcome::Countered => stats.own_di_countered += 1,
+            DriveImpactOutcome::Whiffed => stats.own_di_whiffed += 1,
+            DriveImpactOutcome::Unconfirmed => stats.own_di_unconfirmed += 1,
+        }
+        if let Some(spent) = spend_between(impact.input_frame) {
+            stats.drive_spent_on_impacts += spent;
+            stats.drive_damage_from_impacts += impact.damage;
+            stats.drive_spend_samples += 1;
+        }
+    }
+
+    for rush in events
+        .drive_rushes
+        .iter()
+        .filter(|rush| event_in_round(rush.round_no, rush.frame) && rush.side == own && rush.raw)
+    {
+        if rush.confidence != EventConfidence::High {
+            continue;
+        }
+        stats.own_raw_drive_rushes += 1;
+        match rush.outcome {
+            DriveRushOutcome::Hit => stats.own_raw_drive_rush_hits += 1,
+            DriveRushOutcome::Blocked | DriveRushOutcome::Stopped | DriveRushOutcome::NoContact => {
+                stats.own_raw_drive_rush_defended += 1
+            }
+            DriveRushOutcome::Unconfirmed => {}
+        }
+        if let Some(spent) = spend_between(rush.frame) {
+            stats.drive_spent_on_rushes += spent;
+            stats.drive_damage_from_rushes += rush.damage;
+            stats.drive_spend_samples += 1;
+        }
+    }
+
     for rush in events.drive_rushes.iter().filter(|rush| {
         event_in_round(rush.round_no, rush.frame) && rush.side == opponent && rush.raw
     }) {
@@ -340,4 +393,58 @@ fn has_complete_super_coverage(
                 window.iter().filter(|&&sample| sample).count() >= SUPER_SPEND_CONFIRM_SAMPLES
             })
     })
+}
+
+/// ある行動が実際に消費した Drive ゲージ量を、確定済み系列の実測差から取る。
+///
+/// SF6 の消費本数を定数で仮定すると、行動の取り違えや仕様変更がそのまま
+/// 誤った数値になる。ここでは行動直前の信頼できる最大値と、消費が反映された
+/// あとの最小値の差だけを見る。読めない区間は数えず `None` を返す。
+fn observed_drive_spend(
+    features: &[FrameFeatures],
+    own_index: usize,
+    input_frame: u32,
+) -> Option<f32> {
+    let reliable = |feature: &FrameFeatures| {
+        let (ratio, uncertain) = if own_index == 0 {
+            (feature.left_drive_ratio, feature.left_drive_uncertain)
+        } else {
+            (feature.right_drive_ratio, feature.right_drive_uncertain)
+        };
+        (!uncertain && ratio.is_finite() && (0.0..=1.0).contains(&ratio)).then_some(ratio)
+    };
+    let in_range = |feature: &FrameFeatures, from: u32, to: u32| {
+        feature.frame_index >= from && feature.frame_index <= to
+    };
+
+    let before = features
+        .iter()
+        .filter(|feature| {
+            in_range(
+                feature,
+                input_frame.saturating_sub(DRIVE_SPEND_LOOKBACK),
+                input_frame,
+            )
+        })
+        .filter_map(reliable)
+        .fold(f32::MIN, f32::max);
+    let after = features
+        .iter()
+        .filter(|feature| {
+            in_range(
+                feature,
+                input_frame + 1,
+                input_frame.saturating_add(DRIVE_SPEND_SETTLE),
+            )
+        })
+        .filter_map(reliable)
+        .fold(f32::MAX, f32::min);
+    if before == f32::MIN || after == f32::MAX {
+        return None;
+    }
+
+    let spent = before - after;
+    (DRIVE_SPEND_MIN..=DRIVE_SPEND_MAX)
+        .contains(&spent)
+        .then_some(spent)
 }

@@ -1,4 +1,4 @@
-pub const RULESET_VERSION: u32 = 11;
+pub const RULESET_VERSION: u32 = 12;
 
 /// 「大被弾」とみなす HP ドロップ（暴れ指摘の対象）
 pub(crate) const BIG_DAMAGE: f32 = 0.10;
@@ -44,3 +44,14 @@ pub(crate) const LOW_RETURN_DROP: f32 = 0.12;
 pub(crate) const BIG_HIT_LIST: f32 = 0.18;
 /// コンボ（連続 hit コンタクト）のグループ化ギャップ
 pub(crate) const COMBO_GAP: u32 = 45;
+/// Drive 消費の観測: 行動直前の基準値を探す遡り幅。
+pub(crate) const DRIVE_SPEND_LOOKBACK: u32 = 10;
+/// Drive 消費の観測: 消費が表示へ反映されるまでの窓。ゲージは数フレームかけて
+/// 減少するため、行動直後の1点では読み切れない。
+pub(crate) const DRIVE_SPEND_SETTLE: u32 = 30;
+/// Drive 消費として採用する下限。これ未満は読み取りノイズと区別できない。
+pub(crate) const DRIVE_SPEND_MIN: f32 = 0.02;
+/// Drive 消費として採用する上限（ゲージ全量に対する比）。1行動の最大消費は
+/// 3本ぶんなので、これを超える減少はガード削りなどの重畳であり、その行動の
+/// 消費として帰属できない。
+pub(crate) const DRIVE_SPEND_MAX: f32 = 0.55;
