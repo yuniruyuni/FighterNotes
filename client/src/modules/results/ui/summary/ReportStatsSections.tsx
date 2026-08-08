@@ -358,6 +358,16 @@ export function TacticStatsSection({
       "自分のDriveゲージ、フレームメーター、または接触の認識率が不足しています。",
     ),
     coverageAwareItem(
+      meterAvailable && contactsAvailable && ownHpAvailable,
+      [
+        formatTacticRateWithCount(stats.throws_teched, stats.throws_faced),
+        "投げ抜け / 受けた投げ",
+        `投げられた ${stats.throws_taken} / 無敵技で潰した ${stats.throws_reversal_escaped}`,
+      ],
+      stats.throws_faced,
+      "フレームメーター、接触、または自分のHPバーの認識率が不足しています。",
+    ),
+    coverageAwareItem(
       meterAvailable && contactsAvailable,
       [
         formatTacticRateWithCount(stats.okizeme_meaty, stats.knockdowns_scored),

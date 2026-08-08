@@ -40,5 +40,6 @@ mod test_punish_missed_card_requires_confirmed_reach;
 mod test_throw_loop_needs_streak;
 mod test_throw_whiff_punished;
 mod test_throw_while_minus_has_its_own_card;
+mod throw_defence_counts_only_real_chances;
 
 mod support;

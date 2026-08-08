@@ -172,6 +172,19 @@ pub struct TacticStats {
     /// 入力を直接観測できた、ガード後 1F 以上不利の判断機会。
     #[serde(default)]
     pub minus_defense_opportunities: u32,
+    /// 自分が守る側になった投げ。抜けと被投げの分母。
+    /// 相手が届かない位置で振った投げ（空振り）は、守る機会ではないので含めない。
+    #[serde(default)]
+    pub throws_faced: u32,
+    /// 抜けられずに投げられた数。
+    #[serde(default)]
+    pub throws_taken: u32,
+    /// 投げ抜けが成立した数。
+    #[serde(default)]
+    pub throws_teched: u32,
+    /// 無敵技で投げを潰した数。抜けとは別の解決手段なので分けて数える。
+    #[serde(default)]
+    pub throws_reversal_escaped: u32,
     /// 自分が取ったダウンと、その起き上がりへの攻め。
     #[serde(default)]
     pub knockdowns_scored: u32,
