@@ -20,7 +20,7 @@ const outputPath =
   process.argv[3] ??
   resolve(
     import.meta.dir,
-    "../crates/video-analyzer/src/round_start/fight_template.bin",
+    "../crates/hud-vision/src/round_start/fight_template.bin",
   );
 
 if (!manifestPath) {

@@ -4,7 +4,7 @@ export const thirdPartyNoticeMetadata = {
     "3a297dce7d12888f29c8af8585b88e31025f8f926061f7d799749db4fd1510f5",
   cargoAboutVersion: "0.9.1",
   cargoLockSha256:
-    "d24dfe87b4e3112095bba881eb5a6da9da8323297637f23e7dcb47b124eea50c",
+    "7b061cca852d20549498767550029f2aba8bcdd6cd113aa9f2c075bab1d5efb8",
   npmLicenseCheckerVersion: "5.0.1",
 } as const;
 
@@ -37,7 +37,7 @@ export const distributedMaterials = [
     category: "Data/model",
     name: "Analyzer data and recognition models",
     location:
-      "crates/video-analyzer/data, input_history/templates.rs, round_start/fight_template.bin, and meter_digits.bin",
+      "crates/analysis-context/data, input_history/templates.rs, round_start/fight_template.bin, and meter_digits.bin",
     treatment:
       "Project data/model; not part of the third-party software inventory. DATA_NOTICE applies.",
     reference: "/DATA_NOTICE.txt",

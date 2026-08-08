@@ -828,8 +828,8 @@ function collectDistributionMaterials(
     "crates/analysis-context/data/attack_data.json",
     "crates/analysis-context/data/frame_data.json",
     "crates/analysis-context/data/manifest.json",
-    "crates/video-analyzer/src/input_history/templates.rs",
-    "crates/video-analyzer/src/round_start/fight_template.bin",
+    "crates/input-vision/src/input_history/templates.rs",
+    "crates/hud-vision/src/round_start/fight_template.bin",
   ]) {
     if (!existsSync(join(projectRoot, relativePath))) {
       throw new Error(`Distributed data/model is missing: ${relativePath}`);
