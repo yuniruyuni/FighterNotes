@@ -172,6 +172,43 @@ pub struct TacticStats {
     /// 入力を直接観測できた、ガード後 1F 以上不利の判断機会。
     #[serde(default)]
     pub minus_defense_opportunities: u32,
+    /// 自分の Drive Impact の結果内訳。相手の DI を受けた側の `di_*` とは別。
+    #[serde(default)]
+    pub own_di_used: u32,
+    #[serde(default)]
+    pub own_di_hit: u32,
+    #[serde(default)]
+    pub own_di_blocked: u32,
+    #[serde(default)]
+    pub own_di_parried: u32,
+    /// 相手の DI で返された数。
+    #[serde(default)]
+    pub own_di_countered: u32,
+    #[serde(default)]
+    pub own_di_whiffed: u32,
+    #[serde(default)]
+    pub own_di_unconfirmed: u32,
+    /// 自分の生 Drive Rush の結果内訳。
+    #[serde(default)]
+    pub own_raw_drive_rushes: u32,
+    #[serde(default)]
+    pub own_raw_drive_rush_hits: u32,
+    #[serde(default)]
+    pub own_raw_drive_rush_defended: u32,
+    /// 確定済みゲージ系列から実測した消費量（1.0 = ゲージ全量）。
+    /// SF6 の本数を仮定せず、行動前後の実際の減少だけを積む。
+    #[serde(default)]
+    pub drive_spent_on_impacts: f32,
+    #[serde(default)]
+    pub drive_spent_on_rushes: f32,
+    /// 上の消費に紐づけて確認できた与ダメージ。1本あたりの効率の分子。
+    #[serde(default)]
+    pub drive_damage_from_impacts: f32,
+    #[serde(default)]
+    pub drive_damage_from_rushes: f32,
+    /// 消費量を実測できた行動の数。0 のとき効率を表示しないための分母。
+    #[serde(default)]
+    pub drive_spend_samples: u32,
     /// 接触しなかった自分の攻撃判定（投げ・DI・無敵技・弾を除く）。
     #[serde(default)]
     pub whiffs: u32,

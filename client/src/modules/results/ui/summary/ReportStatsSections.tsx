@@ -6,6 +6,8 @@ import type {
 } from "~/modules/analysis/contracts.js";
 import {
   appendUnconfirmedCandidates,
+  driveSpendBreakdown,
+  formatDriveEfficiency,
   formatTacticCount,
 } from "./tactic-stat-format.js";
 
@@ -326,6 +328,33 @@ export function TacticStatsSection({
       ],
       stats.raw_drive_rushes_faced + stats.raw_drive_rushes_unconfirmed,
       "相手入力・Driveゲージ、フレームメーター、接触、自分のHPバー、または空間解析の認識率が不足しています。",
+    ),
+    coverageAwareItem(
+      ownInputAvailable && meterAvailable && contactsAvailable,
+      [
+        formatTacticCount(
+          stats.own_di_hit,
+          stats.own_di_used,
+          stats.own_di_unconfirmed,
+        ),
+        "自分のDIが通った / 使用",
+        appendUnconfirmedCandidates(
+          `ガードされた ${stats.own_di_blocked} / パリィ ${stats.own_di_parried} / 返された ${stats.own_di_countered} / 空振り ${stats.own_di_whiffed}`,
+          stats.own_di_unconfirmed,
+        ),
+      ],
+      stats.own_di_used + stats.own_di_unconfirmed,
+      "自分の入力、フレームメーター、または接触の認識率が不足しています。",
+    ),
+    coverageAwareItem(
+      driveAvailable && meterAvailable && contactsAvailable,
+      [
+        formatDriveEfficiency(stats),
+        "Driveゲージ1本あたりの与ダメージ",
+        driveSpendBreakdown(stats),
+      ],
+      stats.drive_spend_samples,
+      "自分のDriveゲージ、フレームメーター、または接触の認識率が不足しています。",
     ),
     coverageAwareItem(
       opponentInputAvailable &&
