@@ -1,0 +1,20 @@
+[package]
+name = "spatial-refine"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[features]
+# 空間観測列を手で書く補助。空間で詰めた結果が助言としてどう出るかを
+# 検査する上位 crate のテストが使う。
+test-support = []
+
+[dependencies]
+analysis-context = { path = "../analysis-context" }
+match-event-layer = { path = "../match-event-layer" }
+serde = { workspace = true }
+
+serde_json = { workspace = true }
+
+[dev-dependencies]
+advice-report = { path = "../advice-report" }

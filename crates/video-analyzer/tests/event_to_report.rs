@@ -6,6 +6,7 @@
 //! `match_event_layer::test_support` を共有する。
 
 mod event_to_report {
+    mod strike_whiff_accepts_stable_mid_but_rejects_far;
     mod test_ground_attack_chain_does_not_confirm_takeoff;
     mod test_jump_obscured_hp_contact;
     mod test_old_movement_run_does_not_confirm_new_takeoff;

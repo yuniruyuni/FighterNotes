@@ -1,6 +1,6 @@
 use super::super::*;
 
-pub(in crate::spatial::tests) fn empty_events() -> MatchEvents {
+pub fn empty_events() -> MatchEvents {
     MatchEvents {
         rounds: vec![RoundInfo {
             round_no: 1,
@@ -41,7 +41,7 @@ pub(in crate::spatial::tests) fn empty_events() -> MatchEvents {
     }
 }
 
-pub(in crate::spatial::tests) fn teleport(input_frame: u32) -> TeleportEvent {
+pub fn teleport(input_frame: u32) -> TeleportEvent {
     TeleportEvent {
         attacker: 2,
         defender: 1,
@@ -62,11 +62,7 @@ pub(in crate::spatial::tests) fn teleport(input_frame: u32) -> TeleportEvent {
     }
 }
 
-pub(in crate::spatial::tests) fn jump(
-    frame: u32,
-    outcome: JumpOutcome,
-    input_dir: &str,
-) -> crate::match_events::JumpEvent {
+pub fn jump(frame: u32, outcome: JumpOutcome, input_dir: &str) -> crate::match_events::JumpEvent {
     crate::match_events::JumpEvent {
         side: 2,
         frame,

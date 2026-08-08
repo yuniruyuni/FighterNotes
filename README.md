@@ -59,7 +59,9 @@ crates/
   temporal-confirm/  読み取り結果の時系列確定
   analysis-context/  対戦の前提と技の frame data
   match-event-layer/ 確定済み観測から試合 event を組み立てる
-  video-analyzer/    advice、空間解析、pipeline 結線
+  advice-report/     event から指摘・優先順位・根拠を組み立てる
+  spatial-refine/    位置関係による event の再評価
+  video-analyzer/    各層の pipeline 結線と公開 API
   wasm-bridge/       browser Worker から使う WASM API
 client/              browser SPA、動画 decode、Worker、表示、local storage
 server/              static 配信、共有 API / page、cleanup batch

@@ -1,10 +1,9 @@
 use super::*;
-use crate::match_events::{CompoundThreat, TeleportEvent, ThreatOutcome};
+use crate::match_events::{CompoundThreat, ThreatOutcome};
 use crate::{
-    AnalysisContext, DefenseResponse, DpReachability, DriveRushEvent, DriveRushOutcome,
-    EventConfidence, JumpDirection, JumpOutcome, MatchEvents, ProjectileThreat, PunishChance,
-    PunishOrigin, PunishOutcome, PunishReachability, RoundInfo, TeleportContext, ThrowApproach,
-    ThrowOutcome,
+    AnalysisContext, DpReachability, DriveRushEvent, DriveRushOutcome, EventConfidence,
+    JumpDirection, JumpOutcome, ProjectileThreat, PunishChance, PunishOrigin, PunishOutcome,
+    PunishReachability, ThrowApproach, ThrowOutcome,
 };
 
 mod airborne_region_requires_jump_hint_for_ground_track;
@@ -27,9 +26,8 @@ mod rejects_short_rgba_buffer;
 mod reset_allows_a_new_frame_size_after_rejecting_dimension_changes;
 mod semantic_windows_merge_and_keep_event_hints;
 mod spatial_observation_json_keeps_the_wasm_contract;
-mod strike_whiff_accepts_stable_mid_but_rejects_far;
 mod strike_whiff_gets_a_window_through_its_active_frame;
-mod support;
+use crate::test_support as support;
 mod tracks_actor_anchors_and_distance_band;
 
 use support::*;

@@ -24,8 +24,12 @@ pub(crate) use pressure::{
     detect_advantage_abandoned, detect_mashing, detect_press_while_minus, detect_throw_while_minus,
 };
 pub(crate) use punishment::{
-    detect_low_conversion, detect_punish_fail, detect_punish_missed, detect_reversal_punished,
+    detect_low_conversion, detect_punish_missed, detect_reversal_punished,
 };
+// 空間で距離を詰めた結果が確反失敗の指摘に届くかは、空間と助言の両方を
+// 通さないと確かめられない。その統合テストが video-analyzer 側にあるため、
+// この検出器だけ crate の外から呼べるようにしてある。
+pub use punishment::detect_punish_fail;
 pub(crate) use rounds::{detect_early_hits, detect_lead_loss};
 pub(crate) use super_efficiency::detect_low_scaling_super;
 pub(crate) use throw_loop::detect_throw_loop;

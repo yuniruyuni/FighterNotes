@@ -5,7 +5,7 @@ use super::options::failed_option_text;
 use crate::advice::AdviceCard;
 use crate::match_events::MatchEvents;
 
-pub(crate) fn detect_punish_fail(
+pub fn detect_punish_fail(
     events: &MatchEvents,
     own: u8,
     own_character: Option<&str>,
