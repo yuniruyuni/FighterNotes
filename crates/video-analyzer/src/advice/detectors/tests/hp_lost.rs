@@ -59,3 +59,46 @@ fn opportunity_cost_cards_do_not_claim_hp() {
         assert_eq!(card.hp_lost, None, "{} claimed hp", card.id);
     }
 }
+
+/// リード喪失の損失は、最大リード時点から逆転までに自分が失った HP。
+/// 引き算の向きを取り違えると符号が反転する。
+#[test]
+fn lead_loss_reports_the_hp_given_up_between_peak_and_flip() {
+    use crate::advice::RoundSummary;
+    use crate::match_events::RoundInfo;
+
+    let mut events = empty_events();
+    events.rounds = vec![RoundInfo {
+        round_no: 1,
+        start_frame: 0,
+        end_frame: 99,
+        winner: Some(2),
+        p1_hp_end: 0.1,
+        p2_hp_end: 0.6,
+    }];
+    // 自分は 1.0 から 0.1 へ、相手は 0.5 のまま。ピークは frame 0。
+    let own: Vec<f32> = (0..100)
+        .map(|frame| if frame < 50 { 1.0 } else { 0.1 })
+        .collect();
+    events.hp = [own, vec![0.5; 100]];
+
+    let summaries = vec![RoundSummary {
+        round_no: 1,
+        start_frame: 0,
+        end_frame: 99,
+        won: Some(false),
+        own_hp_end: 0.1,
+        opp_hp_end: 0.5,
+        own_hp_lost: 0.9,
+        opp_hp_lost: 0.5,
+        own_hits_taken: 1,
+        early_hit: false,
+        own_burnouts: 0,
+        detection_confidence: "high".to_string(),
+    }];
+
+    let card = detect_lead_loss(&events, &summaries, 0).expect("card");
+
+    let hp_lost = card.hp_lost.expect("lead loss reports hp");
+    assert!((hp_lost - 0.9).abs() < 1e-5);
+}
