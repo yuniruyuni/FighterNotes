@@ -80,6 +80,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hud-vision"
+version = "0.1.0"
+dependencies = [
+ "pixel-color",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "image"
 version = "0.25.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -90,6 +99,15 @@ dependencies = [
  "moxcms",
  "num-traits",
  "png",
+]
+
+[[package]]
+name = "input-vision"
+version = "0.1.0"
+dependencies = [
+ "pixel-color",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -146,6 +164,10 @@ name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
+
+[[package]]
+name = "pixel-color"
+version = "0.1.0"
 
 [[package]]
 name = "png"
@@ -261,7 +283,9 @@ name = "video-analyzer"
 version = "0.1.0"
 dependencies = [
  "frame-meter",
+ "hud-vision",
  "image",
+ "input-vision",
  "meter-tracker",
  "serde",
  "serde_json",

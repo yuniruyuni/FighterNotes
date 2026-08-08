@@ -74,7 +74,7 @@ use badges::read_badges;
 use button_glyphs::classify_btn_glyph_in_span;
 #[cfg(test)]
 use button_glyphs::{classify_btn_glyph, BTN_GLYPH_W};
-pub(crate) use digits::match_digit_gray;
+pub use digits::match_digit_gray;
 use digits::read_count;
 #[cfg(test)]
 use digits::DIGIT_AMBIG_MARGIN;
@@ -83,7 +83,7 @@ use direction::read_dir;
 use direction::{mask_centroid, shift_mask, DIR_MIN_MARGIN};
 use mask::glyph_distance;
 use model::DIR_ORDER;
-pub(crate) use pixel::Frame;
+pub use pixel::Frame;
 
 #[cfg(test)]
 mod tests;

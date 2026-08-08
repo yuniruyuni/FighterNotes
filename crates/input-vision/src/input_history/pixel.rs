@@ -1,4 +1,4 @@
-pub(crate) struct Frame<'a> {
+pub struct Frame<'a> {
     pub(crate) rgba: &'a [u8],
     pub(crate) w: usize,
     pub(crate) y_off: usize, // ストリップ運用時の先頭行 y（現状 0 = フルフレーム）
@@ -8,6 +8,19 @@ pub(crate) struct Frame<'a> {
 }
 
 impl<'a> Frame<'a> {
+    /// 走査対象のストリップを包む。
+    ///
+    /// `y_off` はストリップの先頭行がフレーム全体の何行目かを表す。
+    /// `white_th` は白判定の閾値で、通常は 210、画面暗転時は 180 を使う。
+    pub fn new(rgba: &'a [u8], w: usize, y_off: usize, white_th: u8) -> Self {
+        Self {
+            rgba,
+            w,
+            y_off,
+            white_th,
+        }
+    }
+
     #[inline]
     pub(crate) fn px(&self, x: usize, y: usize) -> Option<(u8, u8, u8)> {
         let yy = y.checked_sub(self.y_off)?;

@@ -8,7 +8,7 @@ use super::*;
 /// サンプルとテンプレート平均の正規化相関を取る。輝度・コントラスト
 /// 不変なので画面暗転にも単一パスで対応できる。
 /// score = (1 - 相関) × 100（小さいほど良い）。±1px シフトも試す。
-pub(crate) fn match_digit_gray(f: &Frame, x0: usize, y0: usize) -> (u32, u32, u32) {
+pub fn match_digit_gray(f: &Frame, x0: usize, y0: usize) -> (u32, u32, u32) {
     let mut best = (0u32, u32::MAX);
     let mut second = (0u32, u32::MAX);
     for (d, (mask, means)) in DIGIT_NCC.iter().enumerate() {

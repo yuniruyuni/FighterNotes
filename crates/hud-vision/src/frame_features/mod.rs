@@ -152,28 +152,9 @@ impl SlantedRoi<'_> {
     }
 }
 
-/// RGB f32 → HSV f32 (H: 0–179, S: 0–255, V: 0–255)  OpenCV 互換
-pub(crate) fn rgb_to_hsv(r: f32, g: f32, b: f32) -> [f32; 3] {
-    let r = r / 255.0;
-    let g = g / 255.0;
-    let b = b / 255.0;
-    let max = r.max(g).max(b);
-    let min = r.min(g).min(b);
-    let delta = max - min;
-    let v = max * 255.0;
-    let s = if max > 0.0 { delta / max * 255.0 } else { 0.0 };
-    let h_deg = if delta < 1e-6 {
-        0.0_f32
-    } else if (max - r).abs() < 1e-6 {
-        60.0 * ((g - b) / delta).rem_euclid(6.0)
-    } else if (max - g).abs() < 1e-6 {
-        60.0 * ((b - r) / delta + 2.0)
-    } else {
-        60.0 * ((r - g) / delta + 4.0)
-    };
-    let h = (h_deg / 2.0).round();
-    [h, s, v]
-}
+/// 色相判定は入力履歴の読み取りと共有する。経路を変えずに済むよう、
+/// ここからそのまま再輸出する。
+pub(crate) use pixel_color::rgb_to_hsv;
 
 // ── サブモジュール（frame_features.rs 3,019 行からの分割。公開 API 不変）──
 

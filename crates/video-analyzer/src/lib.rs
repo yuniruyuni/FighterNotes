@@ -4,15 +4,16 @@
 //! OCR・クリップエクスポート・HTML 生成は含まない。
 
 pub mod advice;
+// 画素読み取りは独立した crate へ切り出してある。呼び出し側の経路を
+// 変えないよう、モジュールごとここで再輸出する。
+pub use hud_vision::{frame_features, round_start};
+pub use input_vision::{input_history, input_tracker};
+
 pub mod attack_info;
 pub mod context;
 pub mod frame_data;
-pub mod frame_features;
-pub mod input_history;
-pub mod input_tracker;
 pub mod match_events;
 pub mod pipeline;
-pub mod round_start;
 pub mod spatial;
 pub mod temporal;
 

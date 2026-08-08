@@ -19,7 +19,7 @@ pub(super) fn classify_color_columns(
             if rf > 180.0 && gf > 180.0 && bf > 180.0 {
                 continue; // 白（文字・ハイライト）は色相判定から除外
             }
-            let [h, s, v] = crate::frame_features::rgb_to_hsv(rf, gf, bf);
+            let [h, s, v] = pixel_color::rgb_to_hsv(rf, gf, bf);
             if s > 90.0 && v > 90.0 {
                 if (24.0..=40.0).contains(&h) {
                     counts[0] += 1;

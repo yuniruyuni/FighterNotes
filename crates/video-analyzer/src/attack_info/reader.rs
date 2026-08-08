@@ -280,12 +280,7 @@ fn read_numeric_row(
         components.push(component);
     }
 
-    let frame = Frame {
-        rgba,
-        w: width,
-        y_off: 0,
-        white_th: threshold,
-    };
+    let frame = Frame::new(rgba, width, 0, threshold);
     let mut candidates = Vec::with_capacity(12);
     for component in &components {
         let component_width = component.max_x - component.min_x + 1;

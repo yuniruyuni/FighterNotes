@@ -15,7 +15,7 @@ use read::{read_gauge, Patch};
 
 /// 整数ラベルが下がっても、これ未満の差はストック境界の表示揺れであり、
 /// SA 消費として扱わない。
-pub(crate) const MIN_SUPER_SPEND_DROP: f32 = 0.65;
+pub const MIN_SUPER_SPEND_DROP: f32 = 0.65;
 
 const FULL_LABEL_LEFT: Patch = Patch {
     x: 55,

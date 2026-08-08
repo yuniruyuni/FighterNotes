@@ -6,6 +6,8 @@ license = "MIT"
 
 [dependencies]
 frame-meter = { path = "../frame-meter" }
+hud-vision = { path = "../hud-vision" }
+input-vision = { path = "../input-vision" }
 meter-tracker = { path = "../meter-tracker" }
 serde = { workspace = true }
 serde_json = { workspace = true }

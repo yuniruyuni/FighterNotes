@@ -50,9 +50,12 @@ server へ送るのは両者の character、round 集計、指摘の種別・件
 
 ```text
 crates/
+  pixel-color/       HUD と入力履歴が共有する色空間変換
   frame-meter/       frame-meter cell の認識
   meter-tracker/     game frame timeline の復元
-  video-analyzer/    HUD・入力・event・advice・空間解析
+  hud-vision/        HP・drive・SA gauge と round 開始表示の読み取り
+  input-vision/      入力履歴欄の読み取りと系列の補修
+  video-analyzer/    読み取り結果の確定、event、advice、空間解析
   wasm-bridge/       browser Worker から使う WASM API
 client/              browser SPA、動画 decode、Worker、表示、local storage
 server/              static 配信、共有 API / page、cleanup batch
