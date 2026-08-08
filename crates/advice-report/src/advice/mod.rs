@@ -15,26 +15,22 @@
 //!   - 原因診断・事実確認・統計の順、同種では証拠確度とダメージ総量
 //!     （severity）の順で提示。
 
-use crate::frame_data;
 use crate::frame_features::FrameFeatures;
-use crate::match_events::{
-    AdvantageOutcome, DefensiveActionKind, EventConfidence, JumpDirection, JumpOutcome,
-    MatchEvents, MinusPressOutcome, OkizemeOutcome, WhiffOutcome,
-};
 #[cfg(test)]
 use crate::match_events::{
-    DefenseResponseKind, DpReachability, PunishOutcome, PunishReachability, TeleportContext,
-    ThreatOutcome,
+    DefenseResponseKind, DefensiveActionKind, DpReachability, JumpDirection, JumpOutcome,
+    PunishOutcome, PunishReachability, TeleportContext, ThreatOutcome,
 };
+use crate::match_events::{EventConfidence, MatchEvents};
+// 土台は advice-model へ切り出してある。呼び出し側の経路を変えない
+// よう、モジュールごとここで再輸出する。
+pub use advice_damage_origins::damage_origins;
+pub use advice_detectors::detectors;
+pub use advice_model::{decisions, model, parameters};
+pub use advice_stats::{coverage, stats};
+
 mod builder;
 mod cards;
-mod coverage;
-mod damage_origins;
-pub(crate) mod decisions;
-mod detectors;
-mod model;
-mod parameters;
-mod stats;
 mod summaries;
 
 pub use builder::{build_report, build_report_with_context};

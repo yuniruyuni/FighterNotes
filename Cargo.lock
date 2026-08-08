@@ -9,15 +9,69 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
-name = "advice-report"
+name = "advice-damage-origins"
 version = "0.1.0"
 dependencies = [
+ "advice-model",
  "analysis-context",
  "attack-info-vision",
  "hud-vision",
  "match-event-layer",
  "serde",
  "serde_json",
+ "temporal-confirm",
+]
+
+[[package]]
+name = "advice-detectors"
+version = "0.1.0"
+dependencies = [
+ "advice-model",
+ "advice-stats",
+ "analysis-context",
+ "attack-info-vision",
+ "hud-vision",
+ "match-event-layer",
+ "serde",
+ "temporal-confirm",
+]
+
+[[package]]
+name = "advice-model"
+version = "0.1.0"
+dependencies = [
+ "analysis-context",
+ "match-event-layer",
+ "serde",
+]
+
+[[package]]
+name = "advice-report"
+version = "0.1.0"
+dependencies = [
+ "advice-damage-origins",
+ "advice-detectors",
+ "advice-model",
+ "advice-stats",
+ "analysis-context",
+ "attack-info-vision",
+ "hud-vision",
+ "match-event-layer",
+ "serde",
+ "serde_json",
+ "temporal-confirm",
+]
+
+[[package]]
+name = "advice-stats"
+version = "0.1.0"
+dependencies = [
+ "advice-model",
+ "analysis-context",
+ "attack-info-vision",
+ "hud-vision",
+ "match-event-layer",
+ "serde",
  "temporal-confirm",
 ]
 

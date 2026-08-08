@@ -1,5 +1,9 @@
 [workspace]
 members = [
+    "crates/advice-damage-origins",
+    "crates/advice-detectors",
+    "crates/advice-model",
+    "crates/advice-stats",
     "crates/advice-report",
     "crates/analysis-context",
     "crates/attack-info-vision",

@@ -1,0 +1,13 @@
+[package]
+name = "advice-model"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+analysis-context = { path = "../analysis-context" }
+match-event-layer = { path = "../match-event-layer" }
+serde = { workspace = true }
+
+[dev-dependencies]
+match-event-layer = { path = "../match-event-layer", features = ["test-support"] }

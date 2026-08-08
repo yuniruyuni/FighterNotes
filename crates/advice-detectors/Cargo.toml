@@ -1,21 +1,18 @@
 [package]
-name = "advice-report"
+name = "advice-detectors"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
 [dependencies]
-advice-damage-origins = { path = "../advice-damage-origins" }
-advice-detectors = { path = "../advice-detectors" }
 advice-model = { path = "../advice-model" }
-advice-stats = { path = "../advice-stats" }
 analysis-context = { path = "../analysis-context" }
 attack-info-vision = { path = "../attack-info-vision" }
 hud-vision = { path = "../hud-vision" }
 match-event-layer = { path = "../match-event-layer" }
 serde = { workspace = true }
-serde_json = { workspace = true }
 temporal-confirm = { path = "../temporal-confirm" }
 
 [dev-dependencies]
+advice-stats = { path = "../advice-stats" }
 match-event-layer = { path = "../match-event-layer", features = ["test-support"] }
