@@ -18,12 +18,6 @@ on:
   schedule:
     - cron: "17 18 * * 6"
   workflow_dispatch:
-    inputs:
-      full_rust:
-        description: Run the sharded full Rust mutation inventory
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -119,11 +113,9 @@ jobs:
           path: reports/mutation/server-repositories.*
           if-no-files-found: ignore
 
-  # pull request では、その変更が touch した行だけを mutate する。
-  # workspace 全体は 1,500 mutant を超え、PR ごとに回すには桁が合わない
-  # （45分では temporal の途中までしか進まなかった）。全量の走査は週次の
-  # rust-full-inventory が担当し、ここは「新しく書いた Rust に検査が
-  # 付いているか」だけを短時間で見る。
+  # その変更が touch した行だけを mutate する。全域は下の rust-clean /
+  # rust-pending が回すが、まだ missed を 0 にできていない crate は
+  # 落ちない扱いなので、そこへ入った変更を捕まえるのはこのジョブになる。
   rust-changed:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -160,50 +152,15 @@ jobs:
           path: mutants.out-changed/mutants.out/
           if-no-files-found: ignore
 
-  # 全域を crate ごとに回す。以前は workspace を 4 分割していたが、どの
-  # crate が落ちたのかが分からず、直せた crate から必須へ上げていくことも
-  # できなかった。
+  # 全域を毎 PR 回す。1 ジョブに収めると 28 分かかるので、実測した
+  # crate ごとの費用に比例させて分割する。runner は 4 vCPU なので
+  # `--jobs 4` まで使い切る。
   #
-  # `tolerated: false` は missed を 0 にし終えた crate。以後は落ちたら
-  # ジョブも落ちる。残りは inventory として回し、0 にできた順に
-  # `tolerated: false` へ移す。
-  rust-full:
-    if: >-
-      github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && inputs.full_rust)
-    continue-on-error: ${{ matrix.tolerated }}
+  # missed を 0 にし終えた crate は rust-clean へ移し、落ちたらジョブも
+  # 落ちる扱いにする。残りは rust-pending で inventory として回す。
+  rust-clean:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - crate: pixel-color
-            tolerated: false
-          - crate: analysis-context
-            tolerated: true
-          - crate: frame-meter
-            tolerated: true
-          - crate: meter-tracker
-            tolerated: true
-          - crate: hud-vision
-            tolerated: true
-          - crate: input-vision
-            tolerated: true
-          - crate: attack-info-vision
-            tolerated: true
-          - crate: temporal-confirm
-            tolerated: true
-          - crate: match-event-layer
-            tolerated: true
-          - crate: advice-report
-            tolerated: true
-          - crate: spatial-refine
-            tolerated: true
-          - crate: video-analyzer
-            tolerated: true
-          - crate: wasm-bridge
-            tolerated: true
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: dtolnay/rust-toolchain@f133eefe930d61f0d9371efd474daf0125ed3dd1 # 1.95.0
@@ -211,15 +168,87 @@ jobs:
       - uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
         with:
           tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
-      - name: Mutate ${{ matrix.crate }}
+      - name: Mutate the crates that are already clean
         run: >-
-          cargo mutants --jobs 2
-          --package '${{ matrix.crate }}'
-          --output 'mutants.out-${{ matrix.crate }}'
+          cargo mutants --jobs 4 --profile mutants
+          --package pixel-color
+          --output mutants.out-clean
       - name: Upload mutation report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: mutation-rust-${{ matrix.crate }}
-          path: mutants.out-${{ matrix.crate }}/mutants.out/
+          name: mutation-rust-clean
+          path: mutants.out-clean/mutants.out/
+          if-no-files-found: ignore
+
+  rust-pending:
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 実測 CPU 秒に比例したシャード数。最大が全体の所要時間になる。
+          - name: match-event-layer-1
+            packages: --package match-event-layer
+            shard: 0/3
+          - name: match-event-layer-2
+            packages: --package match-event-layer
+            shard: 1/3
+          - name: match-event-layer-3
+            packages: --package match-event-layer
+            shard: 2/3
+          - name: advice-report-1
+            packages: --package advice-report
+            shard: 0/2
+          - name: advice-report-2
+            packages: --package advice-report
+            shard: 1/2
+          - name: hud-vision-1
+            packages: --package hud-vision
+            shard: 0/2
+          - name: hud-vision-2
+            packages: --package hud-vision
+            shard: 1/2
+          - name: input-vision
+            packages: --package input-vision
+            shard: 0/1
+          - name: frame-meter
+            packages: --package frame-meter
+            shard: 0/1
+          - name: temporal-confirm
+            packages: --package temporal-confirm
+            shard: 0/1
+          - name: spatial-refine
+            packages: --package spatial-refine
+            shard: 0/1
+          # 単独では runner 一台に見合わない小さい crate をまとめる。
+          - name: small-crates
+            packages: >-
+              --package analysis-context
+              --package attack-info-vision
+              --package meter-tracker
+              --package video-analyzer
+              --package wasm-bridge
+            shard: 0/1
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: dtolnay/rust-toolchain@f133eefe930d61f0d9371efd474daf0125ed3dd1 # 1.95.0
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
+        with:
+          tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
+      - name: Mutate ${{ matrix.name }}
+        run: >-
+          cargo mutants --jobs 4 --profile mutants
+          ${{ matrix.packages }}
+          --shard '${{ matrix.shard }}'
+          --output 'mutants.out-${{ matrix.name }}'
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mutation-rust-${{ matrix.name }}
+          path: mutants.out-${{ matrix.name }}/mutants.out/
           if-no-files-found: ignore
