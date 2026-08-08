@@ -15,6 +15,23 @@ on:
       - server/src/models/**
       - server/src/repositories/**
       - stryker.*.config.mjs
+  # main でも回して cache を温める。PR ブランチで作った cache は
+  # その PR からしか見えず、他の PR が再利用できない。
+  push:
+    branches: [main]
+    paths:
+      - .cargo/mutants.toml
+      - .github/workflows/mutation.yml
+      - Cargo.lock
+      - Cargo.toml
+      - bun.lock
+      - client/src/**
+      - crates/**
+      - package.json
+      - scripts/check-stryker-results.*
+      - server/src/models/**
+      - server/src/repositories/**
+      - stryker.*.config.mjs
   schedule:
     - cron: "17 18 * * 6"
   workflow_dispatch:
@@ -126,6 +143,10 @@ jobs:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@f133eefe930d61f0d9371efd474daf0125ed3dd1 # 1.95.0
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          # 変異ジョブは同じ依存を使う。既定はジョブ名がキーに入るため、
+          # シャードごとに別 cache になって全て miss していた。
+          shared-key: mutants
       - uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
         with:
           tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
@@ -165,6 +186,10 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: dtolnay/rust-toolchain@f133eefe930d61f0d9371efd474daf0125ed3dd1 # 1.95.0
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          # 変異ジョブは同じ依存を使う。既定はジョブ名がキーに入るため、
+          # シャードごとに別 cache になって全て miss していた。
+          shared-key: mutants
       - uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
         with:
           tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
@@ -182,7 +207,6 @@ jobs:
           if-no-files-found: ignore
 
   rust-pending:
-    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -236,15 +260,42 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: dtolnay/rust-toolchain@f133eefe930d61f0d9371efd474daf0125ed3dd1 # 1.95.0
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          # 変異ジョブは同じ依存を使う。既定はジョブ名がキーに入るため、
+          # シャードごとに別 cache になって全て miss していた。
+          shared-key: mutants
       - uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
         with:
           tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
+      # まだ missed を 0 にできていない crate なので、生存があっても
+      # ジョブは落とさない。件数だけ summary に残し、0 に到達したものから
+      # rust-clean へ移して落ちる扱いにする。
       - name: Mutate ${{ matrix.name }}
-        run: >-
-          cargo mutants --jobs 4 --profile mutants
-          ${{ matrix.packages }}
-          --shard '${{ matrix.shard }}'
-          --output 'mutants.out-${{ matrix.name }}'
+        run: |
+          set +e
+          cargo mutants --jobs 4 --profile mutants \
+            ${{ matrix.packages }} \
+            --shard '${{ matrix.shard }}' \
+            --output 'mutants.out-${{ matrix.name }}'
+          status=$?
+          set -e
+          out='mutants.out-${{ matrix.name }}/mutants.out'
+          count() { [ -f "$out/$1.txt" ] && wc -l < "$out/$1.txt" || echo 0; }
+          caught=$(count caught); missed=$(count missed)
+          timeout=$(count timeout); unviable=$(count unviable)
+          {
+            echo "### ${{ matrix.name }}"
+            echo "caught $caught / missed $missed / timeout $timeout / unviable $unviable"
+          } >> "$GITHUB_STEP_SUMMARY"
+          # package 名を書き間違えても cargo-mutants は 0 を返す。1 件も
+          # 検査していない状態を成功と読み違えないよう、ここで弾く。
+          if [ "$((caught + missed + timeout + unviable))" -eq 0 ]; then
+            echo "no mutants were tested; check the package names" >&2
+            exit 1
+          fi
+          # 2 は「生存した変異がある」。この crate はまだ 0 にできていない
+          # ので落とさない。それ以外の異常終了はそのまま落とす。
+          case $status in 0 | 2) exit 0 ;; *) exit $status ;; esac
       - name: Upload mutation report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

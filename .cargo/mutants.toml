@@ -12,8 +12,15 @@
 # として書く。ここを true へ戻すのは、workspace 全体を回さないと落ちない
 # 変異を実際に観測してからにする。
 test_workspace = false
+# タイムアウトは baseline の実測テスト時間の 4 倍だけで決める。走査が
+# 止まらなくなる変異を捕まえるのが目的で、そこへ費やす時間は捨て金になる。
+#
+# 全 9,309 変異を通したテストの最大は 1.4 秒だったのに、既定の下限 20 秒が
+# 効いて 84 件のタイムアウトが 1,759 CPU 秒（全体の 19%）を食っていた。
+# baseline は実行するマシンで測るので、倍率だけにしておけば速いマシンでも
+# 遅いマシンでも同じ割合の余裕が残る。下限は置かない。
 timeout_multiplier = 4.0
-minimum_test_timeout = 20
+minimum_test_timeout = 0
 gitignore = true
 
 # Examples are diagnostic programs rather than shipped library behavior.
