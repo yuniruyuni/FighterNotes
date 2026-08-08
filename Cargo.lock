@@ -9,6 +9,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "attack-info-vision"
+version = "0.1.0"
+dependencies = [
+ "input-vision",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -273,6 +282,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "temporal-confirm"
+version = "0.1.0"
+dependencies = [
+ "hud-vision",
+]
+
+[[package]]
 name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -282,6 +298,7 @@ checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
 name = "video-analyzer"
 version = "0.1.0"
 dependencies = [
+ "attack-info-vision",
  "frame-meter",
  "hud-vision",
  "image",
@@ -289,6 +306,7 @@ dependencies = [
  "meter-tracker",
  "serde",
  "serde_json",
+ "temporal-confirm",
 ]
 
 [[package]]

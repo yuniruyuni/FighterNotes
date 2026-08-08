@@ -1,10 +1,12 @@
 [workspace]
 members = [
+    "crates/attack-info-vision",
     "crates/frame-meter",
     "crates/hud-vision",
     "crates/input-vision",
     "crates/meter-tracker",
     "crates/pixel-color",
+    "crates/temporal-confirm",
     "crates/video-analyzer",
     "crates/wasm-bridge",
 ]

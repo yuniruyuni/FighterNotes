@@ -1,7 +1,7 @@
 use crate::frame_features::{FrameFeatures, MIN_SUPER_SPEND_DROP};
 
-pub(crate) const SUPER_SPEND_CONFIRM_SAMPLES: usize = 12;
-pub(crate) const SUPER_SPEND_CONFIRM_LOOKAHEAD: usize = 90;
+pub const SUPER_SPEND_CONFIRM_SAMPLES: usize = 12;
+pub const SUPER_SPEND_CONFIRM_LOOKAHEAD: usize = 90;
 const HIGHER_LEVEL_CONFIRM_FRAMES: usize = 12;
 const HIGHER_LEVEL_LOOKAHEAD: usize = 45;
 const MAX_GAIN_BASE: f32 = 0.45;

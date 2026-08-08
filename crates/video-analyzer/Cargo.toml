@@ -5,9 +5,11 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
+attack-info-vision = { path = "../attack-info-vision" }
 frame-meter = { path = "../frame-meter" }
 hud-vision = { path = "../hud-vision" }
 input-vision = { path = "../input-vision" }
+temporal-confirm = { path = "../temporal-confirm" }
 meter-tracker = { path = "../meter-tracker" }
 serde = { workspace = true }
 serde_json = { workspace = true }

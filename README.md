@@ -55,7 +55,9 @@ crates/
   meter-tracker/     game frame timeline の復元
   hud-vision/        HP・drive・SA gauge と round 開始表示の読み取り
   input-vision/      入力履歴欄の読み取りと系列の補修
-  video-analyzer/    読み取り結果の確定、event、advice、空間解析
+  attack-info-vision/ 攻撃情報表示の読み取りと系列化
+  temporal-confirm/  読み取り結果の時系列確定
+  video-analyzer/    event、advice、空間解析
   wasm-bridge/       browser Worker から使う WASM API
 client/              browser SPA、動画 decode、Worker、表示、local storage
 server/              static 配信、共有 API / page、cleanup batch

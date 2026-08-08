@@ -41,7 +41,9 @@ SPA の配信、軽量な共有結果の保存と公開、期限切れデータ�
 | Pixel color | `crates/pixel-color` | HUD と入力履歴が共有する色空間変換 |
 | HUD vision | `crates/hud-vision` | HP・ドライブ・SA ゲージとラウンド開始表示の画素読み取り |
 | Input vision | `crates/input-vision` | 入力履歴欄の画素読み取りと系列の補修 |
-| Video analyzer | `crates/video-analyzer` | 読み取り結果の確定、イベント帰属、空間再評価、助言レポート生成 |
+| Attack info vision | `crates/attack-info-vision` | 攻撃情報表示の読み取りと技ごとの系列化 |
+| Temporal confirm | `crates/temporal-confirm` | 読み取り結果の時系列突き合わせによる確定 |
+| Video analyzer | `crates/video-analyzer` | イベント帰属、空間再評価、助言レポート生成 |
 | Server | `server/src` | 静的配信、共有 API、公開ページ、rate limit、cleanup batch |
 | Database | `schema` | 共有結果、指摘、戦術統計、SA/CA公開集計、作成 quota event、共有rate-limit counterの保存 |
 | Delivery | `Dockerfile`、`cloudrun*.yaml`、`.github/workflows` | build、migration、Cloud Run service / Job のリリース |
