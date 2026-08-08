@@ -30,6 +30,7 @@ mod contacts;
 mod damage;
 mod guard_breaks;
 mod jumps;
+mod knockdowns;
 mod minus_press;
 mod model;
 mod parameters;
@@ -543,6 +544,15 @@ fn build_match_events_with_optional_fight_markers(
     let minus_situations = minus_events.situations;
     let advantage_situations = minus_events.advantages;
 
+    // ── ダウンと起き攻め ─────────────────────────────────────────────────
+    let knockdowns = knockdowns::extract_knockdowns(knockdowns::KnockdownInputs {
+        features,
+        meter_state: &meter_state,
+        meter_epoch: &meter_epoch,
+        contacts: &contacts,
+        rounds: &rounds,
+    });
+
     // ── 接触しなかった攻撃判定 ───────────────────────────────────────────
     // 投げ・DI・無敵技を除外するため、それぞれのイベント確定後に抽出する。
     let whiffs = whiffs::extract_whiffs(whiffs::WhiffInputs {
@@ -575,6 +585,7 @@ fn build_match_events_with_optional_fight_markers(
         presses_while_minus,
         minus_situations,
         advantage_situations,
+        knockdowns,
         whiffs,
         projectiles,
         teleports,

@@ -59,6 +59,44 @@ pub struct ThrowActionEvent {
     pub round_no: u32,
 }
 
+/// ダウンを取った側が、相手の起き上がりに対して何をしたか。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OkizemeOutcome {
+    /// 起き上がりのフレームに攻撃判定が重なっていた（持続当て）。
+    Meaty,
+    /// 重ねてはいないが、起き上がり直後に攻撃を始めた。
+    Pressured,
+    /// 起き上がりまでに何も始めず、仕切り直しになった。
+    Neutral,
+}
+
+/// ダウンと、その起き上がりへの攻め。
+///
+/// 長い `Stun` だけではガード硬直や連続ヒットと区別できないため、
+/// 「攻撃側は動けるのに相手はまだ `Stun`」という空白があることを必須にする。
+/// この空白がダウンの証拠であり、同時に起き攻めの準備時間そのものになる。
+///
+/// `Neutral` は攻めなかったことだけを示す。強い無敵技を持つ相手に対して
+/// 距離を取る選択も正当なので、これだけでは失敗として扱わない。
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct KnockdownEvent {
+    /// ダウンした側。
+    pub side: u8,
+    /// ダウンさせた側。
+    pub attacker: u8,
+    /// `Stun` が始まったフレーム。
+    pub frame: u32,
+    /// 起き上がって行動可能になったフレーム。
+    pub wakeup_frame: u32,
+    /// 攻撃側が自由に動けた準備時間（フレーム数）。
+    pub setup_frames: u32,
+    pub okizeme: OkizemeOutcome,
+    #[serde(default)]
+    pub confidence: EventConfidence,
+    pub round_no: u32,
+}
+
 /// 空振りした攻撃の結末。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]

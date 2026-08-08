@@ -74,7 +74,7 @@ function issues(value: unknown) {
 
 describe("publishedAnalysisCandidateSchema refinements", () => {
   test("support外rulesetのfieldと理由を返す", () => {
-    for (const rulesetVersion of [2, 13, 999]) {
+    for (const rulesetVersion of [2, 14, 999]) {
       expect(issues({ ...candidate(), rulesetVersion })).toEqual([
         {
           code: "custom",
@@ -155,7 +155,7 @@ describe("publishedAnalysisCandidateSchema refinements", () => {
       opponent: { availability: "unavailable" as const },
     };
     // v9で導入した必須化は、以降のrulesetにも同じ形で適用する。
-    for (const rulesetVersion of [9, 10, 11, 12]) {
+    for (const rulesetVersion of [9, 10, 11, 12, 13]) {
       const required = candidate();
       required.rulesetVersion = rulesetVersion;
       expect(issues(required)).toEqual([

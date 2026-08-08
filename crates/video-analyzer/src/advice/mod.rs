@@ -19,7 +19,7 @@ use crate::frame_data;
 use crate::frame_features::FrameFeatures;
 use crate::match_events::{
     AdvantageOutcome, DefensiveActionKind, EventConfidence, JumpDirection, JumpOutcome,
-    MatchEvents, MinusPressOutcome, WhiffOutcome,
+    MatchEvents, MinusPressOutcome, OkizemeOutcome, WhiffOutcome,
 };
 #[cfg(test)]
 use crate::match_events::{

@@ -9,6 +9,7 @@ import {
   driveSpendBreakdown,
   formatDriveEfficiency,
   formatTacticCount,
+  formatTacticRateWithCount,
 } from "./tactic-stat-format.js";
 
 const MIN_DETECTOR_COVERAGE_PERCENT = 60;
@@ -355,6 +356,25 @@ export function TacticStatsSection({
       ],
       stats.drive_spend_samples,
       "自分のDriveゲージ、フレームメーター、または接触の認識率が不足しています。",
+    ),
+    coverageAwareItem(
+      meterAvailable && contactsAvailable,
+      [
+        formatTacticRateWithCount(stats.okizeme_meaty, stats.knockdowns_scored),
+        "起き上がりへの持続当て / 取ったダウン",
+        `攻めを継続 ${stats.okizeme_pressured} / 仕切り直し ${stats.okizeme_neutral}`,
+      ],
+      stats.knockdowns_scored,
+      "フレームメーターまたは接触の認識率が不足しています。",
+    ),
+    coverageAwareItem(
+      meterAvailable && contactsAvailable,
+      [
+        formatTacticCount(stats.okizeme_faced_meaty, stats.knockdowns_taken),
+        "起き上がりに重ねられた / 取られたダウン",
+      ],
+      stats.knockdowns_taken,
+      "フレームメーターまたは接触の認識率が不足しています。",
     ),
     coverageAwareItem(
       opponentInputAvailable &&
