@@ -5,13 +5,17 @@
 
 use super::*;
 
+mod bar;
 mod debug;
+mod label;
 mod model;
+mod pixels;
 mod read;
 
 pub use debug::super_gauge_debug_json;
 pub use model::SuperGaugeRead;
-use read::{read_gauge, Patch};
+use pixels::Patch;
+use read::read_gauge;
 
 /// 整数ラベルが下がっても、これ未満の差はストック境界の表示揺れであり、
 /// SA 消費として扱わない。

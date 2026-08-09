@@ -22,13 +22,13 @@ pub(crate) struct HpZonesDecode {
 ///                Fill/Ghost に出会ったら cap 消失確定 → uncertain。
 /// FillScan     : HP 充填色ゾーンをスキャン。
 ///                White(幅≤3) → fill_edge 確定 → AfterFillEdge。
-///                幅 > MAX_DARK_IN_FILL の Dark → fill 充填端確定 → AfterFillDark。
-///                  （fill を一度も見ていなければ HP≈0% → break のみ）
+///                幅 > MAX_DARK_IN_FILL の Dark → fill 充填端は last_fill_zone で
+///                  確定するが、安定HP の空き端とスプライト遮蔽が zone 構造上
+///                  区別できないため uncertain として終了。
+///                  （fill を一度も見ていなければ HP≈0% → 確定として終了）
 ///                Ghost（fill 未検出）→ HP=0 でダメージ残像のみ点灯（KO 直後）
 ///                  → HP≈0% 確定として InDamage へ。
 /// AfterFillEdge: ダメージゾーンか遠端 cap を探す。
-/// AfterFillDark: 安定HP（Orange なし）の空き端をスキャン。
-///                Fill/YW 再出現 → OD ゲージ遮蔽 → uncertain。
 /// InDamage     : 受けダメージの橙色帯をスキャン。Dark → 橙色帯終端 → 終了。
 pub(crate) fn decode_hp_zones(zones: &[HpZone], roi_w: usize) -> HpZonesDecode {
     const MAX_WHITE_WIDTH: usize = 3; // これを超える純白ゾーン幅 → 遮蔽
@@ -42,7 +42,6 @@ pub(crate) fn decode_hp_zones(zones: &[HpZone], roi_w: usize) -> HpZonesDecode {
         SeekCap,
         FillScan,
         AfterFillEdge,
-        AfterFillDark,
         InDamage,
     }
 
@@ -121,7 +120,7 @@ pub(crate) fn decode_hp_zones(zones: &[HpZone], roi_w: usize) -> HpZonesDecode {
                         if last_fill_zone.is_some() {
                             fill_edge_zone = last_fill_zone;
                             uncertain = true;
-                            Sm::AfterFillDark
+                            break 'scan;
                         } else {
                             break 'scan; // HP≈0%: fill_edge_zone は None のまま
                         }
@@ -156,24 +155,6 @@ pub(crate) fn decode_hp_zones(zones: &[HpZone], roi_w: usize) -> HpZonesDecode {
                     }
                     break 'scan; // 左端 cap（正常な 3 番目の White）→ 終了
                 }
-            },
-
-            // 安定HP（Orange なし）の空き端をスキャン。
-            // Fill/YW が再出現すれば fill edge の向こうに fill がある = OD 遮蔽。
-            Sm::AfterFillDark => match zone.color {
-                HpColColor::Dark => Sm::AfterFillDark,
-                HpColColor::White => {
-                    if zone.width() > MAX_WHITE_WIDTH {
-                        uncertain = true;
-                    }
-                    break 'scan; // 左端 cap または HP バー端 → 正常終了
-                }
-                HpColColor::Fill | HpColColor::YellowWhite | HpColColor::Ghost => {
-                    // fill edge の向こうに再び fill → OD ゲージ遮蔽
-                    uncertain = true;
-                    break 'scan;
-                }
-                HpColColor::Orange => break 'scan,
             },
 
             // ダメージゾーン（受けダメージの橙色帯 / 暗いゴースト残像）
