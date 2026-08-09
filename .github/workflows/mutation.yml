@@ -278,21 +278,37 @@ jobs:
       # 一番速いところを作業場所にする。測定結果はログに残す。
       - name: Pick the fastest scratch disk
         run: |
-          best=""; best_rate=0
+          best="$RUNNER_TEMP"
+          best_rate=0
           for dir in "$RUNNER_TEMP" /mnt /dev/shm; do
-            [ -d "$dir" ] || continue
             probe="$dir/mutants-probe"
-            mkdir -p "$probe" 2>/dev/null || { sudo mkdir -p "$probe" && sudo chown "$(id -u)" "$probe"; } || continue
-            rate=$(dd if=/dev/zero of="$probe/probe.bin" bs=1M count=256 conv=fdatasync 2>&1 \
-                   | sed -n 's/.*, \([0-9.]*\) MB\/s/\1/p')
-            rm -rf "$probe"
-            echo "$dir: ${rate:-0} MB/s  ($(df -h --output=avail "$dir" | tail -1 | tr -d ' ') 空き)"
-            awk -v a="${rate:-0}" -v b="$best_rate" 'BEGIN{exit !(a>b)}' && { best="$dir"; best_rate="${rate:-0}"; }
+            if ! mkdir -p "$probe" 2>/dev/null; then
+              sudo mkdir -p "$probe" && sudo chown "$(id -u)" "$probe" || continue
+            fi
+            rate=$(LC_ALL=C dd if=/dev/zero of="$probe/probe.bin" bs=1M count=256 conv=fdatasync 2>&1 | awk '/copied/ { r = $(NF - 1); u = $NF; if (u ~ /^GB/) r *= 1000; if (u ~ /^kB/) r /= 1000; print r }')
+            rate=${rate:-0}
+            avail=$(df -BG --output=avail "$dir" | tail -1 | tr -dc '0-9')
+            rm -rf "$probe" 2>/dev/null || sudo rm -rf "$probe" || true
+            echo "$dir: $rate MB/s (空き ${avail}G)"
+            # 4 並列がそれぞれ作業木と target を持つ。溢れるとビルドが
+            # 落ちるので、速くても狭い場所は選ばない（/dev/shm は RAM の
+            # 半分しかない）。
+            if [ "${avail:-0}" -lt 25 ]; then
+              echo "  空きが足りないので候補から外す"
+              continue
+            fi
+            if awk -v a="$rate" -v b="$best_rate" 'BEGIN { exit !(a > b) }'; then
+              best="$dir"
+              best_rate="$rate"
+            fi
           done
-          [ -n "$best" ] || best="$RUNNER_TEMP"
-          echo "作業場所: $best (${best_rate} MB/s)"
-          mkdir -p "$best/mutants"
+          echo "作業場所: $best ($best_rate MB/s)"
+          if ! mkdir -p "$best/mutants" 2>/dev/null; then
+            sudo mkdir -p "$best/mutants"
+            sudo chown "$(id -u):$(id -g)" "$best/mutants"
+          fi
           echo "TMPDIR=$best/mutants" >> "$GITHUB_ENV"
+
       # まだ missed を 0 にできていない crate なので、生存やタイムアウトが
       # あってもジョブは落とさない。件数だけ summary に残し、0 に到達した
       # ものから rust-clean へ移して落ちる扱いにする。
