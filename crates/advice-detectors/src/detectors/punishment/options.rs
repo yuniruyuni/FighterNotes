@@ -1,9 +1,12 @@
 use crate::frame_data;
 
 fn options(character: Option<&str>, advantage: u32) -> Vec<String> {
-    character
+    // 一時値に名前を付ける。式の途中で借りたままにすると、ソースを
+    // 変換する解析ツールの下で寿命が足りなくなる。
+    let moves = character
         .map(|name| frame_data::punish_options(name, advantage, 3))
-        .unwrap_or_default()
+        .unwrap_or_default();
+    moves
         .iter()
         .map(|move_data| {
             format!(

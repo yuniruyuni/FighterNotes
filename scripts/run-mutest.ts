@@ -44,6 +44,16 @@ async function runOne(crate: string): Promise<Result> {
       "run",
       "-p",
       crate,
+      // 統合テストは別バイナリとして本体を link するため、mutest が
+      // 本体側の変異ハーネスを見つけられない。crate 内のテストだけを使う。
+      "--lib",
+      // 変異によっては巻き戻せないパニックで abort する。隔離しないと
+      // そこで走査全体が止まる。
+      "--isolate=all",
+      // span が実ファイルに対応しない変異（マクロ由来）があると、
+      // メタデータ書き出しで mutest-driver 自身が落ちる。判定には
+      // 使わない出力なので止める。
+      "--no-emit-metadata",
       ...(hasTestSupport.has(crate) ? ["--features", "test-support"] : []),
     ],
     { stdout: "pipe", stderr: "pipe" },
