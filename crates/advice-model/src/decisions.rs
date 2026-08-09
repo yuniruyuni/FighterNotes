@@ -204,3 +204,6 @@ pub fn option_bias(
     .max_by_key(|(_, count)| *count)
     .map(|(option, count)| (option, count, total))
 }
+
+#[cfg(test)]
+mod tests;
