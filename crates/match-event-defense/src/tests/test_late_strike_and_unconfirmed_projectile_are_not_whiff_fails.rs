@@ -1,4 +1,4 @@
-use super::support::*;
+use crate::test_support::*;
 
 #[test]
 fn test_late_strike_and_unconfirmed_projectile_are_not_whiff_fails() {

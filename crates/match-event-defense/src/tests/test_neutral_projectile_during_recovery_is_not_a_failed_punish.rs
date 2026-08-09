@@ -1,4 +1,4 @@
-use super::support::*;
+use crate::test_support::*;
 
 #[test]
 fn test_neutral_projectile_during_recovery_is_not_a_failed_punish() {

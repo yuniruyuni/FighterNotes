@@ -1,34 +1,20 @@
 //! match_events 全体のユニットテスト。
 
-use super::{actions, contacts, guard_breaks, punishes, reversals};
+use super::{actions, contacts, punishes};
 
-mod advantage_situation_tracks_pressure_continuation;
 mod contact_does_not_bridge_meter_reset_epochs;
 mod damage_sequence_uses_gameplay_gap_across_sa_freeze;
 mod drive_impact_invincible_start_is_confirmed;
-mod drive_impact_is_not_reported_as_a_failed_reversal;
 mod empty_input_produces_an_empty_event_model;
-mod fragmented_invincible_run_is_one_reversal;
-mod guard_break_counts_one_release_per_damage_sequence;
-mod knockdown_needs_a_free_attacker;
 mod legacy_input_segment_defaults_to_direct_observation;
-mod minus_situation_keeps_observed_non_fastest_response_as_denominator;
-mod minus_situation_links_confirmed_fastest_action_and_outcome;
 mod punish_does_not_bridge_meter_reset_epochs;
 mod sustained_burnout_is_reported_and_clipped_to_its_round;
-mod test_blocked_close_strike_whiff_stays_spatial_candidate;
 mod test_contact_extraction_hit_and_block;
 mod test_contact_projectile_flag;
 mod test_damage_sequences;
 mod test_jump_landed_hit_excludes_post_landing_damage;
 mod test_jump_outcome;
 mod test_jump_outcome_by_contact_windows;
-mod test_late_strike_and_unconfirmed_projectile_are_not_whiff_fails;
-mod test_minus_press_caps_and_dp_exclusion;
-mod test_minus_press_counter_hit;
-mod test_minus_press_got_away_and_won;
-mod test_minus_press_threshold_and_exclusions;
-mod test_neutral_projectile_during_recovery_is_not_a_failed_punish;
 mod test_one_contact_is_assigned_to_the_nearest_jump_only;
 mod test_pre_freeze_anchor;
 mod test_punish_excludes_blocked_and_own_sa;
@@ -43,6 +29,5 @@ mod throw_action_links_delayed_damage_and_deduplicates_held_input;
 mod throw_input_without_matching_execution_is_unconfirmed;
 mod throw_loses_to_invincible_reversal;
 mod timeline_projections_clip_entries_and_apply_later_overlaps;
-mod whiff_tracks_unconnected_attacks;
 
 pub(super) use crate::test_support as support;

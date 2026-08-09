@@ -17,3 +17,6 @@ match-event-model = { path = "../match-event-model" }
 meter-tracker = { path = "../meter-tracker" }
 serde = { workspace = true }
 temporal-confirm = { path = "../temporal-confirm" }
+
+[dev-dependencies]
+match-event-offense = { path = "../match-event-offense" }

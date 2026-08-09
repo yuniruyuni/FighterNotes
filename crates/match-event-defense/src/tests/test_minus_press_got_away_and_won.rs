@@ -1,4 +1,4 @@
-use super::support::*;
+use crate::test_support::*;
 
 #[test]
 fn test_minus_press_got_away_and_won() {

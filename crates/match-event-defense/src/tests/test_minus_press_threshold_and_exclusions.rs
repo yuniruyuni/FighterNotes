@@ -1,4 +1,4 @@
-use super::support::*;
+use crate::test_support::*;
 
 #[test]
 fn test_minus_press_threshold_and_exclusions() {

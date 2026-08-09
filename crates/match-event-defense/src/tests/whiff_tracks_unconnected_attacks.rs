@@ -1,5 +1,5 @@
-use super::super::whiffs::{extract_whiffs, WhiffInputs};
-use super::support::*;
+use crate::test_support::*;
+use crate::whiffs::{extract_whiffs, WhiffInputs};
 
 /// P1 が f100..110 に攻撃判定を出す固定の場面を作る。
 fn knockdown_free_fixture() -> ([Vec<MeterState>; 2], Vec<FrameFeatures>, Vec<RoundInfo>) {

@@ -1,4 +1,4 @@
-use super::support::*;
+use crate::test_support::*;
 
 #[test]
 fn minus_situation_keeps_observed_non_fastest_response_as_denominator() {

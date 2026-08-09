@@ -1,4 +1,4 @@
-use super::support::*;
+use crate::test_support::*;
 
 #[test]
 fn test_blocked_close_strike_whiff_stays_spatial_candidate() {

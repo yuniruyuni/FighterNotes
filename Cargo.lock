@@ -209,6 +209,7 @@ dependencies = [
  "hud-vision",
  "input-vision",
  "match-event-model",
+ "match-event-offense",
  "meter-tracker",
  "serde",
  "temporal-confirm",

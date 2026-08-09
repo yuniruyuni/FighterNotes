@@ -1,4 +1,4 @@
-use super::support::*;
+use crate::test_support::*;
 
 #[test]
 fn fragmented_invincible_run_is_one_reversal() {
@@ -43,7 +43,7 @@ fn fragmented_invincible_run_is_one_reversal() {
         evidence: Default::default(),
     };
 
-    let reversals = super::reversals::extract_reversals(super::reversals::ReversalInputs {
+    let reversals = crate::reversals::extract_reversals(crate::reversals::ReversalInputs {
         features: &features,
         meter_state: &meter_state,
         meter_epoch: &epochs,

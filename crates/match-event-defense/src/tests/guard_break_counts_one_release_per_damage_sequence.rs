@@ -1,4 +1,4 @@
-use super::support::*;
+use crate::test_support::*;
 
 #[test]
 fn later_damage_in_the_same_guard_release_is_not_a_second_break() {
@@ -57,7 +57,7 @@ fn later_damage_in_the_same_guard_release_is_not_a_second_break() {
         p2_hp_end: 1.0,
     }];
 
-    let breaks = super::guard_breaks::extract_guard_breaks(
+    let breaks = crate::guard_breaks::extract_guard_breaks(
         &damage,
         &[own_meter, opponent_meter],
         &[own_hp, opponent_hp],

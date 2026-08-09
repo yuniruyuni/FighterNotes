@@ -1,4 +1,4 @@
-use super::support::*;
+use crate::test_support::*;
 
 #[test]
 fn minus_situation_links_confirmed_fastest_action_and_outcome() {

@@ -1,4 +1,4 @@
-use super::support::*;
+use crate::test_support::*;
 
 #[test]
 fn drive_impact_is_not_reported_as_a_failed_reversal() {
@@ -42,7 +42,7 @@ fn drive_impact_is_not_reported_as_a_failed_reversal() {
         evidence: Default::default(),
     };
 
-    let baseline = super::reversals::extract_reversals(super::reversals::ReversalInputs {
+    let baseline = crate::reversals::extract_reversals(crate::reversals::ReversalInputs {
         features: &features,
         meter_state: &meter_state,
         meter_epoch: &epochs,
@@ -55,7 +55,7 @@ fn drive_impact_is_not_reported_as_a_failed_reversal() {
     assert!(baseline.iter().any(|event| event.side == 1));
 
     let segments = [vec![di(100)], vec![di(110)]];
-    let impacts = super::actions::extract_drive_impacts(
+    let impacts = match_event_offense::actions::extract_drive_impacts(
         &meter_state,
         &epochs,
         &[],
@@ -68,7 +68,7 @@ fn drive_impact_is_not_reported_as_a_failed_reversal() {
             && impact.outcome == DriveImpactOutcome::Countered
             && impact.confidence == EventConfidence::High
     }));
-    let reversals = super::reversals::extract_reversals(super::reversals::ReversalInputs {
+    let reversals = crate::reversals::extract_reversals(crate::reversals::ReversalInputs {
         features: &features,
         meter_state: &meter_state,
         meter_epoch: &epochs,

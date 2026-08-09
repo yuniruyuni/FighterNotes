@@ -1,0 +1,22 @@
+//! 守り側の抽出に対するテスト。
+//!
+//! 観測列の組み立ては test-support から借りる。
+
+#[allow(unused_imports)]
+use crate::test_support as support;
+
+mod advantage_situation_tracks_pressure_continuation;
+mod drive_impact_is_not_reported_as_a_failed_reversal;
+mod fragmented_invincible_run_is_one_reversal;
+mod guard_break_counts_one_release_per_damage_sequence;
+mod knockdown_needs_a_free_attacker;
+mod minus_situation_keeps_observed_non_fastest_response_as_denominator;
+mod minus_situation_links_confirmed_fastest_action_and_outcome;
+mod test_blocked_close_strike_whiff_stays_spatial_candidate;
+mod test_late_strike_and_unconfirmed_projectile_are_not_whiff_fails;
+mod test_minus_press_caps_and_dp_exclusion;
+mod test_minus_press_counter_hit;
+mod test_minus_press_got_away_and_won;
+mod test_minus_press_threshold_and_exclusions;
+mod test_neutral_projectile_during_recovery_is_not_a_failed_punish;
+mod whiff_tracks_unconnected_attacks;

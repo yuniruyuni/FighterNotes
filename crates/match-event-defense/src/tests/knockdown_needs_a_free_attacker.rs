@@ -1,5 +1,5 @@
-use super::super::knockdowns::{extract_knockdowns, KnockdownInputs};
-use super::support::*;
+use crate::knockdowns::{extract_knockdowns, KnockdownInputs};
+use crate::test_support::*;
 
 const FRAMES: usize = 400;
 
