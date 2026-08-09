@@ -62,12 +62,6 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Mutate client domain and application code
         run: bun run mutation:ts:client
-      # 作業場所が狭すぎないかを実測で確かめ続ける。溢れかけていれば
-      # ここで気付ける。
-      - name: Report the scratch usage
-        if: always()
-        run: df -h "$MUTANTS_SCRATCH" | tail -1
-
       - name: Upload mutation report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -285,43 +279,6 @@ jobs:
       - uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
         with:
           tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
-      # 変異検査の費用は 95% がビルドで、その大半は中間生成物の書き出し。
-      # runner のディスクは種類によって速さが桁で違うので、候補を実測して
-      # 一番速いところを作業場所にする。測定結果はログに残す。
-      - name: Pick the fastest scratch disk
-        run: |
-          best="$RUNNER_TEMP"
-          best_rate=0
-          for dir in "$RUNNER_TEMP" /mnt /dev/shm; do
-            probe="$dir/mutants-probe"
-            if ! mkdir -p "$probe" 2>/dev/null; then
-              sudo mkdir -p "$probe" && sudo chown "$(id -u)" "$probe" || continue
-            fi
-            rate=$(LC_ALL=C dd if=/dev/zero of="$probe/probe.bin" bs=1M count=256 conv=fdatasync 2>&1 | awk '/copied/ { r = $(NF - 1); u = $NF; if (u ~ /^GB/) r *= 1000; if (u ~ /^kB/) r /= 1000; print r }')
-            rate=${rate:-0}
-            avail=$(df -BG --output=avail "$dir" | tail -1 | tr -dc '0-9')
-            rm -rf "$probe" 2>/dev/null || sudo rm -rf "$probe" || true
-            echo "$dir: $rate MB/s (空き ${avail}G)"
-            # 4 並列がそれぞれ作業木と target を持つ。実測のピークは
-            # 822MB なので数 GB あれば足りるが、溢れるとビルドごと落ちる
-            # ため余裕を見て 6GB を下限にする。
-            if [ "${avail:-0}" -lt 6 ]; then
-              echo "  空きが足りないので候補から外す"
-              continue
-            fi
-            if awk -v a="$rate" -v b="$best_rate" 'BEGIN { exit !(a > b) }'; then
-              best="$dir"
-              best_rate="$rate"
-            fi
-          done
-          echo "作業場所: $best ($best_rate MB/s)"
-          if ! mkdir -p "$best/mutants" 2>/dev/null; then
-            sudo mkdir -p "$best/mutants"
-            sudo chown "$(id -u):$(id -g)" "$best/mutants"
-          fi
-          echo "TMPDIR=$best/mutants" >> "$GITHUB_ENV"
-          echo "MUTANTS_SCRATCH=$best" >> "$GITHUB_ENV"
-
       # まだ missed を 0 にできていない crate なので、生存やタイムアウトが
       # あってもジョブは落とさない。件数だけ summary に残し、0 に到達した
       # ものから rust-clean へ移して落ちる扱いにする。
