@@ -150,6 +150,97 @@ fn ca_requires_the_c_and_a_hole_topology() {
     assert_eq!(read.value, 3.0);
 }
 
+/// ゲージの色は側ごとに違う。左は桃、右は水色。取り違えると、その側の
+/// 溜まり具合が読めない。
+#[test]
+fn each_side_reads_only_its_own_bar_colour() {
+    let mut rgba = vec![0; WIDTH * HEIGHT * 4];
+    paint_gauge(&mut rgba, "left", 1, 0.60);
+    // 左の帯の位置へ、右側の色を塗り足す。左の判定は拾ってはいけない。
+    let (bx, by, bw, bh) = PACKED_BAR_RIGHT;
+    fill_rect(&mut rgba, bx + 8, by + 4, bw / 2, bh - 8, [230, 25, 145]);
+
+    let right = super_gauge_read_from_hud_strip(&rgba, WIDTH as u32, "right");
+
+    assert_eq!(right.value, 0.0, "右の判定が左の色を拾っている");
+}
+
+/// 帯の端にある枠や角の光沢は、溜まりとして数えない。数えると
+/// 空のゲージが少し溜まって見える。
+#[test]
+fn the_padding_at_both_ends_is_not_part_of_the_fill() {
+    let mut rgba = vec![0; WIDTH * HEIGHT * 4];
+    let (lx, ly, _, lh) = PACKED_LABEL_LEFT;
+    paint_digit(&mut rgba, lx + 50, ly + 8, 30, lh - 12, 0);
+    let (bx, by, bw, bh) = PACKED_BAR_LEFT;
+    // 左右の端だけを光らせる。可視の帯そのものではない。
+    fill_rect(&mut rgba, bx, by + 4, 6, bh - 8, [230, 25, 145]);
+    fill_rect(&mut rgba, bx + bw - 6, by + 4, 6, bh - 8, [230, 25, 145]);
+
+    let read = super_gauge_read_from_hud_strip(&rgba, WIDTH as u32, "left");
+
+    assert_eq!(read.value, 0.0, "端の光を溜まりと読んでいる");
+}
+
+/// 帯の途中が大きく途切れていたら、その先は溜まりに数えない。演出や
+/// 遮蔽で飛び地が光ることがあり、それを繋ぐと過大に読む。
+#[test]
+fn a_wide_gap_stops_the_fill_from_continuing() {
+    let mut rgba = vec![0; WIDTH * HEIGHT * 4];
+    let (lx, ly, _, lh) = PACKED_LABEL_LEFT;
+    paint_digit(&mut rgba, lx + 50, ly + 8, 30, lh - 12, 1);
+    let (bx, by, bw, bh) = PACKED_BAR_LEFT;
+    let usable = bw - 18;
+    // 手前 20% を光らせ、大きく空けてから終端付近をもう一度光らせる。
+    fill_rect(
+        &mut rgba,
+        bx + 8,
+        by + 4,
+        usable / 5,
+        bh - 8,
+        [230, 25, 145],
+    );
+    fill_rect(
+        &mut rgba,
+        bx + 8 + usable * 4 / 5,
+        by + 4,
+        usable / 5,
+        bh - 8,
+        [230, 25, 145],
+    );
+
+    let read = super_gauge_read_from_hud_strip(&rgba, WIDTH as u32, "left");
+
+    assert!(
+        read.value - 1.0 < 0.45,
+        "飛び地を繋いで読んでいる: {}",
+        read.value
+    );
+}
+
+/// 溜まりが帯の手前から始まっていなければ、読み取りを諦める。途中から
+/// 光っているのはゲージではなく、背景か演出である。
+#[test]
+fn a_fill_that_does_not_start_at_the_near_end_is_rejected() {
+    let mut rgba = vec![0; WIDTH * HEIGHT * 4];
+    let (lx, ly, _, lh) = PACKED_LABEL_LEFT;
+    paint_digit(&mut rgba, lx + 50, ly + 8, 30, lh - 12, 2);
+    let (bx, by, bw, bh) = PACKED_BAR_LEFT;
+    // 帯の真ん中だけが光っている。
+    fill_rect(
+        &mut rgba,
+        bx + bw / 2,
+        by + 4,
+        bw / 4,
+        bh - 8,
+        [230, 25, 145],
+    );
+
+    let read = super_gauge_read_from_hud_strip(&rgba, WIDTH as u32, "left");
+
+    assert_eq!(read.value, 2.0, "途中から光る帯を溜まりと読んでいる");
+}
+
 fn paint_gauge(rgba: &mut [u8], side: &str, level: u8, fraction: f32) {
     let is_left = side == "left";
     let (lx, ly, lw, lh) = if is_left {

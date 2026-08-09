@@ -1,5 +1,7 @@
 mod active;
 mod damage_colors;
+mod palette;
+mod scan;
 
 pub use active::hp_col_active;
 pub use damage_colors::{

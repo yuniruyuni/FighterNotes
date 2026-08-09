@@ -3,7 +3,24 @@ name: Mutation testing
 on:
   pull_request:
     paths:
-      - .cargo/mutants.toml
+      - scripts/run-mutest.*
+      - .github/workflows/mutation.yml
+      - Cargo.lock
+      - Cargo.toml
+      - bun.lock
+      - client/src/**
+      - crates/**
+      - package.json
+      - scripts/check-stryker-results.*
+      - server/src/models/**
+      - server/src/repositories/**
+      - stryker.*.config.mjs
+  # main でも回して cache を温める。PR ブランチで作った cache は
+  # その PR からしか見えず、他の PR が再利用できない。
+  push:
+    branches: [main]
+    paths:
+      - scripts/run-mutest.*
       - .github/workflows/mutation.yml
       - Cargo.lock
       - Cargo.toml
@@ -18,12 +35,6 @@ on:
   schedule:
     - cron: "17 18 * * 6"
   workflow_dispatch:
-    inputs:
-      full_rust:
-        description: Run the sharded full Rust mutation inventory
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -34,7 +45,9 @@ concurrency:
 
 env:
   BUN_VERSION: 1.3.11
-  CARGO_MUTANTS_VERSION: 27.0.0
+  # mutest-rs は crates.io に無いので git から入れる。研究段階のツールで
+  # 破壊的な変更が入りうるため、追跡する版を固定する。
+  MUTEST_REF: "a55cb8abc50dcbc1687abf5d6c49efa737c9880a"
 
 jobs:
   client:
@@ -119,107 +132,84 @@ jobs:
           path: reports/mutation/server-repositories.*
           if-no-files-found: ignore
 
-  # pull request では、その変更が touch した行だけを mutate する。
-  # workspace 全体は 1,500 mutant を超え、PR ごとに回すには桁が合わない
-  # （45分では temporal の途中までしか進まなかった）。全量の走査は週次の
-  # rust-full-inventory が担当し、ここは「新しく書いた Rust に検査が
-  # 付いているか」だけを短時間で見る。
-  rust-changed:
-    if: github.event_name == 'pull_request'
+  # Rust の変異検査。全 crate を毎回、漏れなく回す。
+  #
+  # 以前は cargo-mutants を使っていた。変異ごとに増分ビルドするため費用の
+  # 95% がビルドで、14 シャードに分けても 13 分かかっていた。分けるほど
+  # ビルドが重複するので、並列度を上げても頭打ちだった。
+  #
+  # mutest-rs は実行時に切り替わる形へ一度だけ変換する。ビルドが重複しない
+  # ので、シャードに分けた分だけ素直に短くなる。
+  #
+  # 標本抽出も種類の間引きもしない。走るたびに対象が変わると結果が揺れ、
+  # 門番として信用できなくなる。全域を常に全部回すのが条件になる。
+  rust:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 手元の実測秒で均した組。最大が全体の所要時間になる。
+          - name: "1"
+            crates: frame-meter
+          - name: "2"
+            crates: advice-report match-event-defense match-event-layer
+          - name: "3"
+            crates: >-
+              advice-model advice-stats analysis-context hud-vision video-analyzer
+          - name: "4"
+            crates: >-
+              advice-damage-origins meter-tracker pixel-color temporal-confirm
+          - name: "5"
+            crates: attack-info-vision input-vision match-event-model
+          - name: "6"
+            crates: >-
+              advice-detectors match-event-offense spatial-refine wasm-bridge
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      # mutest はコンパイラ内部 API を使うため、固定の nightly が要る。
+      - uses: dtolnay/rust-toolchain@f133eefe930d61f0d9371efd474daf0125ed3dd1
         with:
-          fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@f133eefe930d61f0d9371efd474daf0125ed3dd1 # 1.95.0
+          toolchain: nightly-2026-07-18
+          components: rustc-dev, llvm-tools
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-      - uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
         with:
-          tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
-      # 対象の列挙は package.json の script が正本なので、cargo を直接
-      # 呼ばずに済むよう Bun だけ用意する（node_modules は使わない）。
+          shared-key: mutest
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
       - name: Setup Bun
         run: npm install -g bun@${BUN_VERSION}
-      - name: Collect the changed Rust lines
+      # mutest 自体のビルドに 80 秒かかる。追跡している版と toolchain が
+      # 変わらない限り結果は同じなので、成果物ごと持ち回す。driver は
+      # runtime の場所をビルド時に焼き込むが、MUTEST_SEARCH_PATH で
+      # 上書きできるので、置き場所は固定しておけばよい。
+      - name: Restore mutest-rs
+        id: mutest-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/bin/mutest-driver
+            ~/.cargo/bin/cargo-mutest
+            ~/mutest-artifacts
+          key: mutest-${{ env.MUTEST_REF }}-nightly-2026-07-18
+      - name: Install mutest-rs
+        if: steps.mutest-cache.outputs.cache-hit != 'true'
         run: |
-          git diff --no-color \
-            "origin/${{ github.base_ref }}...HEAD" \
-            -- '*.rs' > mutants.diff
-          wc -l mutants.diff
-      - name: Mutate the changed Rust lines
-        run: bun run mutation:rust:changed
-      - name: Upload mutation report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: mutation-rust-changed
-          path: mutants.out-changed/mutants.out/
-          if-no-files-found: ignore
-
-  # 全域を crate ごとに回す。以前は workspace を 4 分割していたが、どの
-  # crate が落ちたのかが分からず、直せた crate から必須へ上げていくことも
-  # できなかった。
-  #
-  # `tolerated: false` は missed を 0 にし終えた crate。以後は落ちたら
-  # ジョブも落ちる。残りは inventory として回し、0 にできた順に
-  # `tolerated: false` へ移す。
-  rust-full:
-    if: >-
-      github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && inputs.full_rust)
-    continue-on-error: ${{ matrix.tolerated }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - crate: pixel-color
-            tolerated: false
-          - crate: analysis-context
-            tolerated: true
-          - crate: frame-meter
-            tolerated: true
-          - crate: meter-tracker
-            tolerated: true
-          - crate: hud-vision
-            tolerated: true
-          - crate: input-vision
-            tolerated: true
-          - crate: attack-info-vision
-            tolerated: true
-          - crate: temporal-confirm
-            tolerated: true
-          - crate: match-event-layer
-            tolerated: true
-          - crate: advice-report
-            tolerated: true
-          - crate: spatial-refine
-            tolerated: true
-          - crate: video-analyzer
-            tolerated: true
-          - crate: wasm-bridge
-            tolerated: true
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-      - uses: dtolnay/rust-toolchain@f133eefe930d61f0d9371efd474daf0125ed3dd1 # 1.95.0
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-      - uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
-        with:
-          tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
-      - name: Mutate ${{ matrix.crate }}
-        run: >-
-          cargo mutants --jobs 2
-          --package '${{ matrix.crate }}'
-          --output 'mutants.out-${{ matrix.crate }}'
-      - name: Upload mutation report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: mutation-rust-${{ matrix.crate }}
-          path: mutants.out-${{ matrix.crate }}/mutants.out/
-          if-no-files-found: ignore
+          src="$RUNNER_TEMP/mutest-rs"
+          mkdir -p "$src"
+          cd "$src"
+          git init -q
+          git remote add origin https://github.com/zalanlevai/mutest-rs
+          git fetch -q --depth 1 origin "$MUTEST_REF"
+          git checkout -q FETCH_HEAD
+          cargo build --release -p mutest-runtime
+          cargo install --force --path mutest-driver
+          cargo install --force --path cargo-mutest
+          mkdir -p ~/mutest-artifacts
+          cp -r target/release/. ~/mutest-artifacts/
+      - name: Mutate shard ${{ matrix.name }}
+        run: |
+          export MUTEST_SEARCH_PATH="$HOME/mutest-artifacts"
+          bun scripts/run-mutest.ts ${{ matrix.crates }}

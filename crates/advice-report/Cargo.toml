@@ -5,6 +5,10 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
+advice-damage-origins = { path = "../advice-damage-origins" }
+advice-detectors = { path = "../advice-detectors" }
+advice-model = { path = "../advice-model" }
+advice-stats = { path = "../advice-stats" }
 analysis-context = { path = "../analysis-context" }
 attack-info-vision = { path = "../attack-info-vision" }
 hud-vision = { path = "../hud-vision" }

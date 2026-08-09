@@ -78,3 +78,6 @@ pub fn analyze_features_with_context(
 ) -> AdviceReport {
     analyze_match_with_context(features, &[], &[], None, context)
 }
+
+#[cfg(test)]
+mod tests;

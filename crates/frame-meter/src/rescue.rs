@@ -49,11 +49,8 @@ pub(crate) fn dominant_color_family(pixels: &[[u8; 3]]) -> Option<(CellState, Bg
         if !assigned[pixel_index] {
             continue;
         }
-        if PaletteName::all()[palette_index]
-            .state_family()
-            .as_ref()
-            .is_some_and(|family| family == best_state)
-        {
+        let family = PaletteName::all()[palette_index].state_family();
+        if family.as_ref().is_some_and(|family| family == best_state) {
             sum[0] += pixels[pixel_index][0] as f32;
             sum[1] += pixels[pixel_index][1] as f32;
             sum[2] += pixels[pixel_index][2] as f32;

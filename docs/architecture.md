@@ -44,8 +44,15 @@ SPA の配信、軽量な共有結果の保存と公開、期限切れデータ�
 | Attack info vision | `crates/attack-info-vision` | 攻撃情報表示の読み取りと技ごとの系列化 |
 | Temporal confirm | `crates/temporal-confirm` | 読み取り結果の時系列突き合わせによる確定 |
 | Analysis context | `crates/analysis-context` | 対戦の前提（自分の側・キャラクター）と技のフレームデータ表 |
-| Match event layer | `crates/match-event-layer` | 確定済み観測から試合イベントを組み立てる |
-| Advice report | `crates/advice-report` | 試合イベントから指摘・優先順位・根拠を組み立てる |
+| Match event model | `crates/match-event-model` | 試合イベントの形、閾値、時系列の読み方、脅威の観測 |
+| Match event offense | `crates/match-event-offense` | 攻め側の抽出（攻撃情報の裏取り、行動、SA、ジャンプ、バーンアウト） |
+| Match event defense | `crates/match-event-defense` | 守り側の抽出（暴れ、確反、切り返し、ガード崩壊、空振り、ダウン） |
+| Match event layer | `crates/match-event-layer` | 抽出器を束ねて試合イベントを組み立てる |
+| Advice model | `crates/advice-model` | 指摘カードの形、閾値、状況ラベルへの射影 |
+| Advice detectors | `crates/advice-detectors` | 個々の弱点を見つける検出器 |
+| Advice damage origins | `crates/advice-damage-origins` | 被弾をその原因へ帰属させる |
+| Advice stats | `crates/advice-stats` | 集計と、その観測範囲の判定 |
+| Advice report | `crates/advice-report` | 指摘の組み立てと全経路の統合テスト |
 | Spatial refine | `crates/spatial-refine` | 位置関係によるイベントの再評価 |
 | Video analyzer | `crates/video-analyzer` | 各層のパイプライン結線と公開 API |
 | Server | `server/src` | 静的配信、共有 API、公開ページ、rate limit、cleanup batch |

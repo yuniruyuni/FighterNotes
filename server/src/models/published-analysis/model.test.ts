@@ -103,11 +103,8 @@ function superArts(
 
 describe("PublishedAnalysis model", () => {
   test("Rustの全カードIDとrulesetを共有カタログが網羅する", () => {
-    const adviceDir = join(
-      import.meta.dir,
-      "../../../../crates/advice-report/src/advice",
-    );
-    const detectorDir = join(adviceDir, "detectors");
+    const crates = join(import.meta.dir, "../../../../crates");
+    const detectorDir = join(crates, "advice-detectors/src/detectors");
     const detectors = [
       ...new Bun.Glob("**/*.rs").scanSync({
         cwd: detectorDir,
@@ -119,7 +116,7 @@ describe("PublishedAnalysis model", () => {
       .map((path) => readFileSync(path, "utf8"))
       .join("\n");
     const adviceParameters = readFileSync(
-      join(adviceDir, "parameters.rs"),
+      join(crates, "advice-model/src/parameters.rs"),
       "utf8",
     );
     const rustFindingKinds = [...detectors.matchAll(/id: "([^"]+)"/g)]
