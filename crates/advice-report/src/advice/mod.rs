@@ -17,10 +17,7 @@
 
 use crate::frame_features::FrameFeatures;
 #[cfg(test)]
-use crate::match_events::{
-    DefenseResponseKind, DefensiveActionKind, DpReachability, JumpDirection, JumpOutcome,
-    PunishOutcome, PunishReachability, TeleportContext, ThreatOutcome,
-};
+use crate::match_events::{DefensiveActionKind, JumpDirection, JumpOutcome};
 use crate::match_events::{EventConfidence, MatchEvents};
 // 土台は advice-model へ切り出してある。呼び出し側の経路を変えない
 // よう、モジュールごとここで再輸出する。

@@ -20,3 +20,6 @@ pub use match_event_layer::match_events::{
 };
 
 pub mod detectors;
+
+#[cfg(test)]
+mod tests;
