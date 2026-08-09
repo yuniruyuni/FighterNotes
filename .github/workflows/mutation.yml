@@ -3,7 +3,7 @@ name: Mutation testing
 on:
   pull_request:
     paths:
-      - .cargo/mutants.toml
+      - scripts/run-mutest.*
       - .github/workflows/mutation.yml
       - Cargo.lock
       - Cargo.toml
@@ -20,7 +20,7 @@ on:
   push:
     branches: [main]
     paths:
-      - .cargo/mutants.toml
+      - scripts/run-mutest.*
       - .github/workflows/mutation.yml
       - Cargo.lock
       - Cargo.toml
@@ -45,7 +45,9 @@ concurrency:
 
 env:
   BUN_VERSION: 1.3.11
-  CARGO_MUTANTS_VERSION: 27.0.0
+  # mutest-rs は crates.io に無いので git から入れる。研究段階のツールで
+  # 破壊的な変更が入りうるため、追跡する版を固定する。
+  MUTEST_REF: "a55cb8abc50dcbc1687abf5d6c49efa737c9880a"
 
 jobs:
   client:
@@ -130,186 +132,44 @@ jobs:
           path: reports/mutation/server-repositories.*
           if-no-files-found: ignore
 
-  # その変更が touch した行だけを mutate する。全域は下の rust-clean /
-  # rust-pending が回すが、まだ missed を 0 にできていない crate は
-  # 落ちない扱いなので、そこへ入った変更を捕まえるのはこのジョブになる。
-  rust-changed:
-    if: github.event_name == 'pull_request'
+  # Rust の変異検査。全 crate を毎回まとめて回す。
+  #
+  # 以前は cargo-mutants を 14 シャードへ分けて 13 分かけていた。変異ごとに
+  # 増分ビルドするため費用の 95% がビルドで、分割しても下限が残っていた。
+  # mutest-rs は実行時に切り替わる形へ一度だけ変換するので、同じ 9,820 変異が
+  # 逐次 3 分で終わる。分割も、種類の間引きも、標本抽出も要らない。
+  #
+  # 標本にしなかったのは、走るたびに対象が変わると結果が揺れるため。全域を
+  # 常に全部回すことが、この検査を門番として信用できる条件になる。
+  rust:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      # mutest はコンパイラ内部 API を使うため、固定の nightly が要る。
+      # 版が変わると壊れるので、mutest 側の指定に合わせて固定する。
+      - uses: dtolnay/rust-toolchain@f133eefe930d61f0d9371efd474daf0125ed3dd1
         with:
-          fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@f133eefe930d61f0d9371efd474daf0125ed3dd1 # 1.95.0
+          toolchain: nightly-2026-07-18
+          components: rustc-dev, llvm-tools
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          # 変異ジョブは同じ依存を使う。既定はジョブ名がキーに入るため、
-          # シャードごとに別 cache になって全て miss していた。
-          shared-key: mutants
-      - uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
-        with:
-          tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
-      # 対象の列挙は package.json の script が正本なので、cargo を直接
-      # 呼ばずに済むよう Bun だけ用意する（node_modules は使わない）。
+          shared-key: mutest
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
       - name: Setup Bun
         run: npm install -g bun@${BUN_VERSION}
-      - name: Collect the changed Rust lines
+      - name: Install mutest-rs
         run: |
-          git diff --no-color \
-            "origin/${{ github.base_ref }}...HEAD" \
-            -- '*.rs' > mutants.diff
-          wc -l mutants.diff
-      - name: Mutate the changed Rust lines
-        run: bun run mutation:rust:changed
-      - name: Upload mutation report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: mutation-rust-changed
-          path: mutants.out-changed/mutants.out/
-          if-no-files-found: ignore
-
-  # 全域を毎 PR 回す。1 ジョブに収めると 28 分かかるので、実測した
-  # crate ごとの費用に比例させて分割する。runner は 4 vCPU なので
-  # `--jobs 4` まで使い切る。
-  #
-  # missed を 0 にし終えた crate は rust-clean へ移し、落ちたらジョブも
-  # 落ちる扱いにする。残りは rust-pending で inventory として回す。
-  rust-clean:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-      - uses: dtolnay/rust-toolchain@f133eefe930d61f0d9371efd474daf0125ed3dd1 # 1.95.0
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-        with:
-          # 変異ジョブは同じ依存を使う。既定はジョブ名がキーに入るため、
-          # シャードごとに別 cache になって全て miss していた。
-          shared-key: mutants
-      - uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
-        with:
-          tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
-      - name: Mutate the crates that are already clean
-        run: >-
-          cargo mutants --jobs 4 --profile mutants
-          --package pixel-color
-          --output mutants.out-clean
-      - name: Upload mutation report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: mutation-rust-clean
-          path: mutants.out-clean/mutants.out/
-          if-no-files-found: ignore
-
-  rust-pending:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: hud-vision-1
-            packages: --package hud-vision
-            shard: 0/3
-          - name: hud-vision-2
-            packages: --package hud-vision
-            shard: 1/3
-          - name: hud-vision-3
-            packages: --package hud-vision
-            shard: 2/3
-          - name: frame-meter-1
-            packages: --package frame-meter
-            shard: 0/2
-          - name: frame-meter-2
-            packages: --package frame-meter
-            shard: 1/2
-          - name: advice-detectors
-            packages: --package advice-detectors
-            shard: 0/1
-          - name: match-event-offense
-            packages: --package match-event-offense
-            shard: 0/1
-          - name: spatial-refine
-            packages: --package spatial-refine
-            shard: 0/1
-          - name: input-vision
-            packages: --package input-vision
-            shard: 0/1
-          - name: match-event-defense-and-layer
-            packages: >-
-              --package match-event-defense
-              --package match-event-layer
-            shard: 0/1
-          - name: advice-stats-and-origins
-            packages: >-
-              --package advice-damage-origins
-              --package advice-stats
-            shard: 0/1
-          - name: match-event-model-and-attack-info
-            packages: >-
-              --package attack-info-vision
-              --package match-event-model
-            shard: 0/1
-          - name: temporal-and-meter
-            packages: >-
-              --package meter-tracker
-              --package temporal-confirm
-            shard: 0/1
-          - name: remaining-crates
-            packages: >-
-              --package advice-model
-              --package advice-report
-              --package analysis-context
-              --package video-analyzer
-              --package wasm-bridge
-            shard: 0/1
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-      - uses: dtolnay/rust-toolchain@f133eefe930d61f0d9371efd474daf0125ed3dd1 # 1.95.0
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-        with:
-          # 変異ジョブは同じ依存を使う。既定はジョブ名がキーに入るため、
-          # シャードごとに別 cache になって全て miss していた。
-          shared-key: mutants
-      - uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
-        with:
-          tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
-      # まだ missed を 0 にできていない crate なので、生存やタイムアウトが
-      # あってもジョブは落とさない。件数だけ summary に残し、0 に到達した
-      # ものから rust-clean へ移して落ちる扱いにする。
-      #
-      # 終了コードは見ない。生存とタイムアウトで別のコードが返るうえ、
-      # package 名を書き間違えたときは 1 件も検査せず 0 が返る。走査が
-      # 最後まで進んだかどうかは、結果ファイルの件数で判断する。
-      - name: Mutate ${{ matrix.name }}
-        run: |
-          set +e
-          cargo mutants --jobs 4 --profile mutants \
-            ${{ matrix.packages }} \
-            --shard '${{ matrix.shard }}' \
-            --output 'mutants.out-${{ matrix.name }}'
-          set -e
-          out='mutants.out-${{ matrix.name }}/mutants.out'
-          count() { [ -f "$out/$1.txt" ] && wc -l < "$out/$1.txt" || echo 0; }
-          caught=$(count caught); missed=$(count missed)
-          timeout=$(count timeout); unviable=$(count unviable)
-          {
-            echo "### ${{ matrix.name }}"
-            echo "caught $caught / missed $missed / timeout $timeout / unviable $unviable"
-          } >> "$GITHUB_STEP_SUMMARY"
-          if [ "$((caught + missed + timeout + unviable))" -eq 0 ]; then
-            echo "no mutants were tested; check the package names" >&2
-            exit 1
-          fi
-      - name: Upload mutation report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: mutation-rust-${{ matrix.name }}
-          path: mutants.out-${{ matrix.name }}/mutants.out/
-          if-no-files-found: ignore
+          mkdir -p "$RUNNER_TEMP/mutest-rs"
+          cd "$RUNNER_TEMP/mutest-rs"
+          git init -q
+          git remote add origin https://github.com/zalanlevai/mutest-rs
+          git fetch -q --depth 1 origin "$MUTEST_REF"
+          git checkout -q FETCH_HEAD
+          cargo build --release -p mutest-runtime
+          cargo install --force --path mutest-driver
+          cargo install --force --path cargo-mutest
+      - name: Mutate every crate
+        run: bun run mutation:rust:mutest

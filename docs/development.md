@@ -149,13 +149,25 @@ cargo test -p wasm-bridge
 ### Mutation testing
 
 通常 test が実装の変更を実際に検出できることは、StrykerJS 9.6.1 と
-`cargo-mutants` 27.0.0 で確認する。Rust 側だけは最初に tool を導入する。
+mutest-rs で確認する。全 crate を毎回まとめて回す。
+
+Rust 側は mutest-rs を最初に導入する。crates.io に無いので git から入れる。
+コンパイラ内部 API を使うため nightly の版が固定されており、`rust-toolchain.toml`
+の指定に従って rustup が自動で用意する。追跡する版は
+`.github/workflows/mutation.yml` の `MUTEST_REF` が正本。
 
 ```bash
-cargo install cargo-mutants --version 27.0.0 --locked
+git clone https://github.com/zalanlevai/mutest-rs
+cd mutest-rs
+cargo build --release -p mutest-runtime
+cargo install --force --path mutest-driver
+cargo install --force --path cargo-mutest
+```
+
+```bash
 bun run mutation:ts:client
 bun run mutation:ts:server-models
-bun run mutation:rust:core
+bun run mutation:rust:mutest
 ```
 
 PostgreSQL repository は使い捨て DB を指定して別に実行する。
@@ -166,36 +178,39 @@ TEST_DATABASE_URL=postgres://fighter_test:fighter_test@localhost:5432/fighter_te
 ```
 
 Stryker の `Survived`、`NoCoverage`、`Timeout`、runtime error は失敗とする。
-生成不能な `CompileError` は結果に残すが失敗にはせず、`Ignored` は source 内に理由がある場合だけ
-許可する。`reports/mutation` と `mutants.out-*` は生成物であり Git へ含めない。
+生成不能な `CompileError` は結果に残すが失敗にはせず、`Ignored` は source 内に理由が
+ある場合だけ許可する。`reports/mutation` は生成物であり Git へ含めない。
 
-PR の mutation workflow は client、server model、PostgreSQL repository、
-そして **その PR が変更した Rust の行だけ** を並列実行する。
+#### 全域を毎回回す理由
 
-Rust を差分限定にしているのは、workspace 全体が 1,500 mutant を超え、PR ごとに回すには
-桁が合わないためである（`temporal` 384、`frame-meter` 792、`meter-tracker` 328。
-45分の枠では `temporal` の途中までしか進まなかった）。差分限定なら検査量が変更の大きさに
-比例し、「新しく書いた Rust に検査が付いているか」を短時間で確かめられる。
+以前は cargo-mutants を使い、PR では変更行だけ、全域は週次にしていた。cargo-mutants は
+変異ごとに増分ビルドするため費用の 95% がビルドで、workspace 全体は 13 並列で 13 分
+かかっていた。mutest-rs は実行時に切り替わる形へ一度だけ変換するので、同じ 9,820 変異が
+逐次 3 分で終わる。
 
-差分限定の job も現時点では non-blocking にしている。変更行に絞っても missed は 0 に
-なっておらず、残っているものの多くは下流のガードによって結果が変わらない等価変異で、
-テストでは殺せない（例: 欠測を弾く条件を反転しても、後段の範囲検査が同じ結果を返す）。
-0 に到達した時点で blocking へ昇格させる。
+標本抽出や種類の間引きは採らない。走るたびに対象が変わると結果が揺れ、この検査を
+門番として信用できなくなる。全域を常に全部回すことがその条件になる。
 
-既存コードの未検査分は週次 workflow の workspace 全体 shard が inventory として可視化する。
-こちらも non-blocking で、補強が進んだ範囲から blocking な定期 gate へ昇格させる。
+#### mutest-rs を使う上での約束事
 
-```bash
-# PR と同じ範囲を手元で再現する
-git diff --no-color origin/main...HEAD -- '*.rs' > mutants.diff
-bun run mutation:rust:changed
+`scripts/run-mutest.ts` が全 crate を回し、結果を判定する。判定には三つの理由がある。
 
-# 範囲を広げて測る
-bun run mutation:rust:core
-bun run mutation:rust:frame-meter
-bun run mutation:rust:meter-tracker
-bun run mutation:rust:full
-```
+- **変異が 0 個なら失敗**。mutest はテストからの呼び出しグラフを起点に変異を作るので、
+  テストが無い crate では変異が生成されず「成功」に見える。守られていない状態が緑に
+  なるのは門番として最悪なので、ここで弾く。
+- `--lib` を渡す。統合テストは本体を link する別バイナリなので、mutest が本体側の
+  変異ハーネスを見つけられない。
+- `--isolate=all` を渡す。変異によっては巻き戻せないパニックで abort し、隔離しないと
+  走査全体が止まる。
+- `--no-emit-metadata` を渡す。マクロ展開由来で実ファイルに対応しない span があると、
+  メタデータ書き出しで mutest-driver 自身が落ちる。この出力は判定に使わない。
+
+また、型推論と一時値の寿命に頼った書き方は mutest の変換の下で解けなくなる。
+`let x = None;` は型を明示し、式の途中で借りる一時値には名前を付ける。どちらも
+元の意図が読み取りやすくなるので、道具の都合を抜きにしても良い形になる。
+
+対象 crate は `package.json` の `mutation:rust:mutest` が正本で、
+`bun run check:mutation-coverage` が漏れと誤りを検査する。
 
 `server/src/repositories/published-analysis.integration.test.ts` は `TEST_DATABASE_URL` がない場合に
 skip される。この test は共有 table を truncate するため、production や共有開発 DB ではなく、
