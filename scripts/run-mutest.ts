@@ -54,6 +54,8 @@ async function runOne(crate: string): Promise<Result> {
       // メタデータ書き出しで mutest-driver 自身が落ちる。判定には
       // 使わない出力なので止める。
       "--no-emit-metadata",
+      // 変異の評価を並列に回す。結果は変わらず、実測で 2 倍以上速い。
+      "--parallel-mutants",
       ...(hasTestSupport.has(crate) ? ["--features", "test-support"] : []),
     ],
     { stdout: "pipe", stderr: "pipe" },

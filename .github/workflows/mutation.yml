@@ -152,15 +152,20 @@ jobs:
         include:
           # 手元の実測秒で均した組。最大が全体の所要時間になる。
           - name: "1"
-            crates: advice-report frame-meter match-event-layer video-analyzer
+            crates: frame-meter
           - name: "2"
-            crates: advice-stats attack-info-vision hud-vision match-event-model pixel-color
+            crates: advice-report match-event-defense match-event-layer
           - name: "3"
-            crates: analysis-context match-event-offense meter-tracker spatial-refine temporal-confirm
+            crates: >-
+              advice-model advice-stats analysis-context hud-vision video-analyzer
           - name: "4"
             crates: >-
-              advice-damage-origins advice-detectors advice-model input-vision
-              match-event-defense wasm-bridge
+              advice-damage-origins meter-tracker pixel-color temporal-confirm
+          - name: "5"
+            crates: attack-info-vision input-vision match-event-model
+          - name: "6"
+            crates: >-
+              advice-detectors match-event-offense spatial-refine wasm-bridge
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       # mutest はコンパイラ内部 API を使うため、固定の nightly が要る。
