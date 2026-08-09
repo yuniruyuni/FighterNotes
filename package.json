@@ -23,6 +23,7 @@
     "generate:licenses": "bun scripts/generate-third-party-notices.ts",
     "local:e2e": "bun scripts/local-video-e2e.ts",
     "mutation": "bun run mutation:ts && bun run mutation:rust:core",
+    "mutation:rust:mutest": "bun scripts/run-mutest.ts pixel-color analysis-context advice-model advice-report advice-stats advice-damage-origins advice-detectors match-event-model match-event-defense match-event-offense match-event-layer temporal-confirm attack-info-vision input-vision hud-vision frame-meter meter-tracker spatial-refine video-analyzer wasm-bridge",
     "mutation:rust:changed": "cargo mutants --jobs 4 --profile mutants --workspace --in-diff mutants.diff --output mutants.out-changed",
     "mutation:rust:core": "bun run mutation:rust:temporal && bun run mutation:rust:frame-meter && bun run mutation:rust:meter-tracker && bun run mutation:rust:hud-vision && bun run mutation:rust:input-vision && bun run mutation:rust:pixel-color && bun run mutation:rust:attack-info-vision && bun run mutation:rust:analysis-context",
     "mutation:rust:advice-report": "cargo mutants --jobs 4 --profile mutants --package advice-report --output mutants.out-advice-report",
