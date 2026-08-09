@@ -57,7 +57,7 @@ fn action_run(
     (Some(start), active, Some(epoch))
 }
 
-pub(crate) fn extract_throw_actions(
+pub fn extract_throw_actions(
     meter_state: &[Vec<MeterState>; 2],
     meter_epoch: &[Vec<i32>; 2],
     contacts: &[ContactEvent],
@@ -183,7 +183,7 @@ pub(crate) fn extract_throw_actions(
     out
 }
 
-pub(crate) fn extract_drive_impacts(
+pub fn extract_drive_impacts(
     meter_state: &[Vec<MeterState>; 2],
     meter_epoch: &[Vec<i32>; 2],
     contacts: &[ContactEvent],
@@ -333,7 +333,7 @@ pub(crate) fn extract_drive_impacts(
     out
 }
 
-pub(crate) fn extract_drive_rushes(
+pub fn extract_drive_rushes(
     features: &[FrameFeatures],
     meter_state: &[Vec<MeterState>; 2],
     meter_epoch: &[Vec<i32>; 2],

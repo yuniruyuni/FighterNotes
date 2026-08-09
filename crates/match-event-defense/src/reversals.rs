@@ -4,22 +4,22 @@
 
 use super::*;
 
-pub(crate) struct ReversalInputs<'a> {
-    pub(crate) features: &'a [FrameFeatures],
-    pub(crate) meter_state: &'a [Vec<MeterState>; 2],
-    pub(crate) meter_epoch: &'a [Vec<i32>; 2],
-    pub(crate) contacts: &'a [ContactEvent],
-    pub(crate) damage: &'a [DamageEvent],
-    pub(crate) segments: &'a [Vec<InputSegment>; 2],
-    pub(crate) rounds: &'a [RoundInfo],
-    pub(crate) teleports: &'a [TeleportEvent],
+pub struct ReversalInputs<'a> {
+    pub features: &'a [FrameFeatures],
+    pub meter_state: &'a [Vec<MeterState>; 2],
+    pub meter_epoch: &'a [Vec<i32>; 2],
+    pub contacts: &'a [ContactEvent],
+    pub damage: &'a [DamageEvent],
+    pub segments: &'a [Vec<InputSegment>; 2],
+    pub rounds: &'a [RoundInfo],
+    pub teleports: &'a [TeleportEvent],
 }
 
 /// 無敵技ぶっぱ被弾を抽出する。
 ///
 /// 自分の Invincible run（DP/SA リバーサルの発生・無敵）を列挙し、
 /// ヒットせず（ガード or 空振り）に後隙を狩られた（被弾した）ものを記録する。
-pub(crate) fn extract_reversals(inputs: ReversalInputs<'_>) -> Vec<ReversalEvent> {
+pub fn extract_reversals(inputs: ReversalInputs<'_>) -> Vec<ReversalEvent> {
     let ReversalInputs {
         features,
         meter_state,

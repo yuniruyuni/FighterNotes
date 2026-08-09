@@ -5,14 +5,14 @@ const CONTACT_WINDOW: u32 = 120;
 const RESULT_WINDOW: u32 = 360;
 const PUNISH_WINDOW: u32 = 90;
 
-pub(crate) struct SuperArtInputs<'a> {
-    pub(crate) features: &'a [FrameFeatures],
-    pub(crate) meter_state: &'a [Vec<MeterState>; 2],
-    pub(crate) contacts: &'a [ContactEvent],
-    pub(crate) damage: &'a [DamageEvent],
-    pub(crate) punishes: &'a [PunishChance],
-    pub(crate) rounds: &'a [RoundInfo],
-    pub(crate) freeze_spans: &'a [(u32, u32)],
+pub struct SuperArtInputs<'a> {
+    pub features: &'a [FrameFeatures],
+    pub meter_state: &'a [Vec<MeterState>; 2],
+    pub contacts: &'a [ContactEvent],
+    pub damage: &'a [DamageEvent],
+    pub punishes: &'a [PunishChance],
+    pub rounds: &'a [RoundInfo],
+    pub freeze_spans: &'a [(u32, u32)],
 }
 
 #[derive(Clone, Copy)]
@@ -21,7 +21,7 @@ struct ActionAnchor {
     evidence: bool,
 }
 
-pub(crate) fn extract_super_arts(inputs: SuperArtInputs<'_>) -> Vec<SuperArtEvent> {
+pub fn extract_super_arts(inputs: SuperArtInputs<'_>) -> Vec<SuperArtEvent> {
     let SuperArtInputs {
         features,
         meter_state,
@@ -346,7 +346,7 @@ fn gauge(feature: &FrameFeatures, side_index: usize) -> (f32, bool, bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::match_events::tests::support::feat;
+    use match_event_model::test_support::feat;
 
     #[test]
     fn gauge_drop_and_meter_action_create_a_level_two_hit() {

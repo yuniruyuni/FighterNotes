@@ -16,19 +16,19 @@ use super::{
 };
 use crate::frame_features::FrameFeatures;
 
-pub(crate) struct WhiffInputs<'a> {
-    pub(crate) features: &'a [FrameFeatures],
-    pub(crate) meter_state: &'a [Vec<MeterState>; 2],
-    pub(crate) meter_epoch: &'a [Vec<i32>; 2],
-    pub(crate) contacts: &'a [ContactEvent],
-    pub(crate) damage: &'a [DamageEvent],
-    pub(crate) throw_actions: &'a [ThrowActionEvent],
-    pub(crate) drive_impacts: &'a [DriveImpactEvent],
-    pub(crate) reversals: &'a [ReversalEvent],
-    pub(crate) rounds: &'a [RoundInfo],
+pub struct WhiffInputs<'a> {
+    pub features: &'a [FrameFeatures],
+    pub meter_state: &'a [Vec<MeterState>; 2],
+    pub meter_epoch: &'a [Vec<i32>; 2],
+    pub contacts: &'a [ContactEvent],
+    pub damage: &'a [DamageEvent],
+    pub throw_actions: &'a [ThrowActionEvent],
+    pub drive_impacts: &'a [DriveImpactEvent],
+    pub reversals: &'a [ReversalEvent],
+    pub rounds: &'a [RoundInfo],
 }
 
-pub(crate) fn extract_whiffs(inputs: WhiffInputs<'_>) -> Vec<WhiffEvent> {
+pub fn extract_whiffs(inputs: WhiffInputs<'_>) -> Vec<WhiffEvent> {
     let WhiffInputs {
         features,
         meter_state,

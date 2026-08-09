@@ -1,23 +1,19 @@
 [package]
-name = "match-event-layer"
+name = "match-event-defense"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
 [features]
-# 試合イベントを組み立てる用の観測列を手で書く補助。イベントから先
-# （advice・spatial）を検査する上位 crate のテストが使う。
-test-support = ["match-event-defense/test-support", "match-event-model/test-support"]
+# 観測列を手で書く補助を crate の外へ出す。
+test-support = ["match-event-model/test-support"]
 
 [dependencies]
 analysis-context = { path = "../analysis-context" }
 attack-info-vision = { path = "../attack-info-vision" }
 hud-vision = { path = "../hud-vision" }
 input-vision = { path = "../input-vision" }
-match-event-defense = { path = "../match-event-defense" }
 match-event-model = { path = "../match-event-model" }
-match-event-offense = { path = "../match-event-offense" }
 meter-tracker = { path = "../meter-tracker" }
 serde = { workspace = true }
-serde_json = { workspace = true }
 temporal-confirm = { path = "../temporal-confirm" }

@@ -33,7 +33,7 @@ struct EvidenceBuilder {
     assignments: Vec<AssignedSequence>,
 }
 
-pub(crate) fn build_attack_evidence(
+pub fn build_attack_evidence(
     observations: &[AttackInfoObservation],
     damage: &[DamageEvent],
     rounds: &[RoundInfo],
@@ -124,7 +124,7 @@ pub(crate) fn build_attack_evidence(
     }
 }
 
-pub(crate) fn attach_super_art_evidence(
+pub fn attach_super_art_evidence(
     attack_evidence: &mut AttackEvidence,
     super_arts: &[SuperArtEvent],
     damage: &[DamageEvent],
@@ -210,7 +210,7 @@ pub(crate) fn attach_super_art_evidence(
 ///
 /// 小さな追撃やチップまで無理に独立イベント化すると既存のアドバイス件数を
 /// 不安定にするため、条件を満たさない場合は元イベントをそのまま保持する。
-pub(crate) fn refine_damage_with_attack_evidence(
+pub fn refine_damage_with_attack_evidence(
     features: &[FrameFeatures],
     hp: &[Vec<f32>; 2],
     damage: &mut Vec<DamageEvent>,
@@ -491,7 +491,7 @@ fn interval_distance(frame: u32, start: u32, end: u32) -> u32 {
 mod tests {
     use super::*;
     use crate::attack_info::{AttackAttribute, AttackInfoSide};
-    use crate::match_events::SuperArtContext;
+    use crate::SuperArtContext;
 
     fn side(last: u32, combo: u32, max: u32) -> AttackInfoSide {
         AttackInfoSide {
@@ -550,7 +550,7 @@ mod tests {
         let features = p2_hp
             .iter()
             .enumerate()
-            .map(|(index, hp)| crate::match_events::tests::support::feat(index as u32, 1.0, *hp))
+            .map(|(index, hp)| match_event_model::test_support::feat(index as u32, 1.0, *hp))
             .collect();
         let observations = vec![
             observation(10, side(1000, 1000, 1000)),

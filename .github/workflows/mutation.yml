@@ -219,52 +219,58 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: match-event-layer-1
-            packages: --package match-event-layer
-            shard: 0/3
-          - name: match-event-layer-2
-            packages: --package match-event-layer
-            shard: 1/3
-          - name: match-event-layer-3
-            packages: --package match-event-layer
-            shard: 2/3
           - name: hud-vision-1
             packages: --package hud-vision
-            shard: 0/2
+            shard: 0/3
           - name: hud-vision-2
             packages: --package hud-vision
-            shard: 1/2
-          - name: input-vision
-            packages: --package input-vision
-            shard: 0/1
-          - name: frame-meter
+            shard: 1/3
+          - name: hud-vision-3
+            packages: --package hud-vision
+            shard: 2/3
+          - name: frame-meter-1
             packages: --package frame-meter
-            shard: 0/1
+            shard: 0/2
+          - name: frame-meter-2
+            packages: --package frame-meter
+            shard: 1/2
           - name: advice-detectors
             packages: --package advice-detectors
+            shard: 0/1
+          - name: match-event-offense
+            packages: --package match-event-offense
             shard: 0/1
           - name: spatial-refine
             packages: --package spatial-refine
             shard: 0/1
-          - name: match-event-model
-            packages: --package match-event-model
+          - name: input-vision
+            packages: --package input-vision
             shard: 0/1
-          - name: temporal-and-attack-info
+          - name: match-event-defense-and-layer
             packages: >-
-              --package attack-info-vision
-              --package temporal-confirm
+              --package match-event-defense
+              --package match-event-layer
             shard: 0/1
           - name: advice-stats-and-origins
             packages: >-
               --package advice-damage-origins
               --package advice-stats
             shard: 0/1
+          - name: match-event-model-and-attack-info
+            packages: >-
+              --package attack-info-vision
+              --package match-event-model
+            shard: 0/1
+          - name: temporal-and-meter
+            packages: >-
+              --package meter-tracker
+              --package temporal-confirm
+            shard: 0/1
           - name: remaining-crates
             packages: >-
               --package advice-model
               --package advice-report
               --package analysis-context
-              --package meter-tracker
               --package video-analyzer
               --package wasm-bridge
             shard: 0/1

@@ -1,16 +1,16 @@
 use super::*;
 
-pub(crate) struct BurnoutInputs<'a> {
-    pub(crate) features: &'a [FrameFeatures],
-    pub(crate) rounds: &'a [RoundInfo],
-    pub(crate) hp: &'a [Vec<f32>; 2],
-    pub(crate) contacts: &'a [ContactEvent],
-    pub(crate) drive_impacts: &'a [DriveImpactEvent],
-    pub(crate) drive_rushes: &'a [DriveRushEvent],
-    pub(crate) meter_state: &'a [Vec<MeterState>; 2],
+pub struct BurnoutInputs<'a> {
+    pub features: &'a [FrameFeatures],
+    pub rounds: &'a [RoundInfo],
+    pub hp: &'a [Vec<f32>; 2],
+    pub contacts: &'a [ContactEvent],
+    pub drive_impacts: &'a [DriveImpactEvent],
+    pub drive_rushes: &'a [DriveRushEvent],
+    pub meter_state: &'a [Vec<MeterState>; 2],
 }
 
-pub(crate) fn extract_burnouts(inputs: BurnoutInputs<'_>) -> Vec<BurnoutPeriod> {
+pub fn extract_burnouts(inputs: BurnoutInputs<'_>) -> Vec<BurnoutPeriod> {
     let BurnoutInputs {
         features,
         rounds,

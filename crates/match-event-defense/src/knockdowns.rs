@@ -16,15 +16,15 @@ use super::{
 };
 use crate::frame_features::FrameFeatures;
 
-pub(crate) struct KnockdownInputs<'a> {
-    pub(crate) features: &'a [FrameFeatures],
-    pub(crate) meter_state: &'a [Vec<MeterState>; 2],
-    pub(crate) meter_epoch: &'a [Vec<i32>; 2],
-    pub(crate) contacts: &'a [ContactEvent],
-    pub(crate) rounds: &'a [RoundInfo],
+pub struct KnockdownInputs<'a> {
+    pub features: &'a [FrameFeatures],
+    pub meter_state: &'a [Vec<MeterState>; 2],
+    pub meter_epoch: &'a [Vec<i32>; 2],
+    pub contacts: &'a [ContactEvent],
+    pub rounds: &'a [RoundInfo],
 }
 
-pub(crate) fn extract_knockdowns(inputs: KnockdownInputs<'_>) -> Vec<KnockdownEvent> {
+pub fn extract_knockdowns(inputs: KnockdownInputs<'_>) -> Vec<KnockdownEvent> {
     let KnockdownInputs {
         features,
         meter_state,

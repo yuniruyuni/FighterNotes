@@ -25,23 +25,16 @@ use meter_tracker::MeterTimeline;
 
 // 土台は match-event-model へ切り出してある。経路を変えないよう
 // モジュールごと再輸出する。
-pub(crate) use match_event_model::{model, parameters, runs, threats, timeline};
+pub(crate) use match_event_defense::{
+    guard_breaks, knockdowns, minus_press, punishes, reversals, whiffs,
+};
+pub(crate) use match_event_model::{model, parameters, threats, timeline};
+pub(crate) use match_event_offense::{actions, attack_evidence, burnouts, jumps, super_arts};
 
-mod actions;
-mod attack_evidence;
-mod burnouts;
 mod contacts;
 mod damage;
-mod guard_breaks;
-mod jumps;
-mod knockdowns;
-mod minus_press;
-pub(crate) mod punishes;
-mod reversals;
-mod rounds;
+pub(crate) mod rounds;
 mod segments;
-mod super_arts;
-mod whiffs;
 
 pub use model::*;
 pub use threats::{
@@ -65,8 +58,7 @@ pub(crate) use segments::*;
 pub(crate) use threats::extract_threats;
 pub use threats::THREAT_DAMAGE_WINDOW;
 pub(crate) use timeline::{
-    both_freeze_spans, confidence_per_frame, continuous_epoch, epoch_per_frame, gf_per_frame,
-    idx_of, movement_run_is_ground_attack_chain, movementish_per_frame, state_per_frame,
+    both_freeze_spans, confidence_per_frame, epoch_per_frame, gf_per_frame, idx_of, state_per_frame,
 };
 
 /// イベント層を構築する。

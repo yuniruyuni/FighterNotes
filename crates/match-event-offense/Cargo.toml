@@ -1,18 +1,18 @@
 [package]
-name = "match-event-model"
+name = "match-event-offense"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-
-[features]
-# 観測列を手で書く補助を crate の外へ出す。
-test-support = []
 
 [dependencies]
 analysis-context = { path = "../analysis-context" }
 attack-info-vision = { path = "../attack-info-vision" }
 hud-vision = { path = "../hud-vision" }
 input-vision = { path = "../input-vision" }
+match-event-model = { path = "../match-event-model" }
 meter-tracker = { path = "../meter-tracker" }
 serde = { workspace = true }
 temporal-confirm = { path = "../temporal-confirm" }
+
+[dev-dependencies]
+match-event-model = { path = "../match-event-model", features = ["test-support"] }

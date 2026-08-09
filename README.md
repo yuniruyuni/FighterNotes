@@ -59,7 +59,9 @@ crates/
   temporal-confirm/  読み取り結果の時系列確定
   analysis-context/  対戦の前提と技の frame data
   match-event-model/ 試合 event の形、閾値、時系列の読み方、脅威の観測
-  match-event-layer/ 確定済み観測から試合 event を組み立てる
+  match-event-offense/ 攻め側の抽出（攻撃情報の裏取り、行動、SA、jump、burnout）
+  match-event-defense/ 守り側の抽出（暴れ、確反、切り返し、guard 崩壊、空振り、down）
+  match-event-layer/ 抽出器を束ねて試合 event を組み立てる
   advice-model/      指摘 card の形、閾値、状況ラベルへの射影
   advice-detectors/  個々の弱点を見つける検出器
   advice-damage-origins/ 被弾をその原因へ帰属させる

@@ -36,22 +36,22 @@ fn takeoff_timing_matches(
         && continuous_epoch(meter_epoch, run_start_index, input_index).is_some()
 }
 
-pub(crate) struct JumpInputs<'a> {
-    pub(crate) features: &'a [FrameFeatures],
-    pub(crate) segments: &'a [Vec<InputSegment>; 2],
-    pub(crate) p1_stun: &'a [bool],
-    pub(crate) p2_stun: &'a [bool],
-    pub(crate) meter: Option<(&'a MeterTimeline, &'a MeterTimeline)>,
-    pub(crate) meter_game_frame: &'a [Vec<i64>; 2],
-    pub(crate) meter_state: &'a [Vec<MeterState>; 2],
-    pub(crate) meter_epoch: &'a [Vec<i32>; 2],
-    pub(crate) damage: &'a [DamageEvent],
-    pub(crate) contacts: &'a [ContactEvent],
-    pub(crate) rounds: &'a [RoundInfo],
-    pub(crate) characters: [Option<&'a str>; 2],
+pub struct JumpInputs<'a> {
+    pub features: &'a [FrameFeatures],
+    pub segments: &'a [Vec<InputSegment>; 2],
+    pub p1_stun: &'a [bool],
+    pub p2_stun: &'a [bool],
+    pub meter: Option<(&'a MeterTimeline, &'a MeterTimeline)>,
+    pub meter_game_frame: &'a [Vec<i64>; 2],
+    pub meter_state: &'a [Vec<MeterState>; 2],
+    pub meter_epoch: &'a [Vec<i32>; 2],
+    pub damage: &'a [DamageEvent],
+    pub contacts: &'a [ContactEvent],
+    pub rounds: &'a [RoundInfo],
+    pub characters: [Option<&'a str>; 2],
 }
 
-pub(crate) fn extract_jumps(inputs: JumpInputs<'_>) -> Vec<JumpEvent> {
+pub fn extract_jumps(inputs: JumpInputs<'_>) -> Vec<JumpEvent> {
     let JumpInputs {
         features,
         segments,

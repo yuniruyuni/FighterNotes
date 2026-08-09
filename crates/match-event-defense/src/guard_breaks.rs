@@ -8,7 +8,7 @@ use super::*;
 ///
 /// 画面反転に頑健にするため、ブロック時に実際に握っていた方向から
 /// ガード側（左右どちら向きの back か）を導出して判定する。
-pub(crate) fn guard_side_set(dir: &str) -> Option<[&'static str; 2]> {
+pub fn guard_side_set(dir: &str) -> Option<[&'static str; 2]> {
     match dir {
         "R" | "DR" => Some(["R", "DR"]), // 右向きガード（P2 が左を向いている）
         "L" | "DL" => Some(["L", "DL"]), // 左向きガード（P1 が右を向いている）
@@ -21,7 +21,7 @@ pub(crate) fn guard_side_set(dir: &str) -> Option<[&'static str; 2]> {
 /// 遮蔽・スーパー演出中はパネルが読めず（uncertain）、トラッカーが補修
 /// （repaired）した推測値になる。ガード入力崩れは「入力が実際にガードから
 /// 外れたのを目視できる」ことが要件なので、補修値では判定しない。
-pub(crate) fn observed_dir(inputs: &[TrackedInput], frame: u32) -> Option<&str> {
+pub fn observed_dir(inputs: &[TrackedInput], frame: u32) -> Option<&str> {
     let t = inputs.get(frame as usize)?;
     if t.uncertain || t.repaired {
         return None;
@@ -33,7 +33,7 @@ pub(crate) fn observed_dir(inputs: &[TrackedInput], frame: u32) -> Option<&str> 
 }
 
 /// ガード方向を握っていたのが崩れて「上（ジャンプ）or 前（歩き）」へ抜けたか。
-pub(crate) fn broke_direction(gset: [&str; 2], hd: &str) -> bool {
+pub fn broke_direction(gset: [&str; 2], hd: &str) -> bool {
     match gset {
         // ガード=右（back=右）→ 崩れ = 上 or 前（左方向）
         ["R", "DR"] => matches!(hd, "U" | "UR" | "UL" | "L" | "DL"),
@@ -59,7 +59,7 @@ pub(crate) fn broke_direction(gset: [&str; 2], hd: &str) -> bool {
 /// PreJumpClipped（ブロックから上に外れて予備動作を狩られた）は崩れ本体
 /// なので除外しない。対空された空中ジャンプ（GotHit）・無敵技・投げは除外。
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn extract_guard_breaks(
+pub fn extract_guard_breaks(
     damage: &[DamageEvent],
     meter_state: &[Vec<MeterState>; 2],
     hp: &[Vec<f32>; 2],

@@ -4,22 +4,22 @@
 
 use super::*;
 
-pub(crate) struct PunishInputs<'a> {
-    pub(crate) features: &'a [FrameFeatures],
-    pub(crate) meter_state: &'a [Vec<MeterState>; 2],
-    pub(crate) meter_epoch: &'a [Vec<i32>; 2],
-    pub(crate) meter_game_frame: &'a [Vec<i64>; 2],
-    pub(crate) contacts: &'a [ContactEvent],
-    pub(crate) damage: &'a [DamageEvent],
-    pub(crate) segments: &'a [Vec<InputSegment>; 2],
-    pub(crate) rounds: &'a [RoundInfo],
+pub struct PunishInputs<'a> {
+    pub features: &'a [FrameFeatures],
+    pub meter_state: &'a [Vec<MeterState>; 2],
+    pub meter_epoch: &'a [Vec<i32>; 2],
+    pub meter_game_frame: &'a [Vec<i64>; 2],
+    pub contacts: &'a [ContactEvent],
+    pub damage: &'a [DamageEvent],
+    pub segments: &'a [Vec<InputSegment>; 2],
+    pub rounds: &'a [RoundInfo],
 }
 
 /// 確定反撃の機会（相手の後隙 × 自分が行動可能）と結果を抽出する。
 ///
 /// 距離情報が無いため、攻撃しなかった場面は時間上の候補としてだけ記録する。
 /// `PunishReachability::Confirmed` への昇格は後段の空間解析に任せる。
-pub(crate) fn extract_punishes(inputs: PunishInputs<'_>) -> Vec<PunishChance> {
+pub fn extract_punishes(inputs: PunishInputs<'_>) -> Vec<PunishChance> {
     let PunishInputs {
         features,
         meter_state,

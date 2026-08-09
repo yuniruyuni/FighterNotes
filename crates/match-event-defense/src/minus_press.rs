@@ -30,9 +30,9 @@ fn move_in_progress(state: &[MeterState], frame: usize) -> bool {
 }
 
 pub struct MinusEvents {
-    pub(crate) presses: Vec<MinusPressEvent>,
-    pub(crate) situations: Vec<MinusSituationEvent>,
-    pub(crate) advantages: Vec<AdvantageSituationEvent>,
+    pub presses: Vec<MinusPressEvent>,
+    pub situations: Vec<MinusSituationEvent>,
+    pub advantages: Vec<AdvantageSituationEvent>,
 }
 
 /// 入力欄がその瞬間に読めていたか。欠測を「何もしなかった」と誤認しない。
@@ -191,7 +191,7 @@ fn extract_advantage(inputs: AdvantageInputs<'_>) -> Option<AdvantageSituationEv
     })
 }
 
-pub(crate) fn extract_minus_events(
+pub fn extract_minus_events(
     meter_state: &[Vec<MeterState>; 2],
     meter_epoch: &[Vec<i32>; 2],
     meter_game_frame: &[Vec<i64>; 2],
