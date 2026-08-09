@@ -31,7 +31,10 @@ export default {
     "/output/**",
     "/video/**",
   ],
-  concurrency: 2,
+  // runner は 4 vCPU。既定（cpus/2）だと半分遊ぶ。ここのテストは
+  // domain / application の純粋ロジックで共有資源を持たないため、
+  // 走らせるだけ並列にできる。
+  concurrency: 4,
   timeoutFactor: 4,
   timeoutMS: 10_000,
   reporters: ["clear-text", "html", "json"],
