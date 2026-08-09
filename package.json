@@ -36,7 +36,8 @@
     "@stryker-mutator/core": "9.6.1",
     "@types/spdx-expression-parse": "4.0.0",
     "license-checker-rseidelsohn": "5.0.1",
-    "spdx-expression-parse": "4.0.0"
+    "spdx-expression-parse": "4.0.0",
+    "yaml": "^2.9.0"
   },
   "overrides": {
     "brace-expansion": "5.0.9",

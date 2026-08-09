@@ -132,22 +132,38 @@ jobs:
           path: reports/mutation/server-repositories.*
           if-no-files-found: ignore
 
-  # Rust の変異検査。全 crate を毎回まとめて回す。
+  # Rust の変異検査。全 crate を毎回、漏れなく回す。
   #
-  # 以前は cargo-mutants を 14 シャードへ分けて 13 分かけていた。変異ごとに
-  # 増分ビルドするため費用の 95% がビルドで、分割しても下限が残っていた。
-  # mutest-rs は実行時に切り替わる形へ一度だけ変換するので、同じ 9,820 変異が
-  # 逐次 3 分で終わる。分割も、種類の間引きも、標本抽出も要らない。
+  # 以前は cargo-mutants を使っていた。変異ごとに増分ビルドするため費用の
+  # 95% がビルドで、14 シャードに分けても 13 分かかっていた。分けるほど
+  # ビルドが重複するので、並列度を上げても頭打ちだった。
   #
-  # 標本にしなかったのは、走るたびに対象が変わると結果が揺れるため。全域を
-  # 常に全部回すことが、この検査を門番として信用できる条件になる。
+  # mutest-rs は実行時に切り替わる形へ一度だけ変換する。ビルドが重複しない
+  # ので、シャードに分けた分だけ素直に短くなる。
+  #
+  # 標本抽出も種類の間引きもしない。走るたびに対象が変わると結果が揺れ、
+  # 門番として信用できなくなる。全域を常に全部回すのが条件になる。
   rust:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 手元の実測秒で均した組。最大が全体の所要時間になる。
+          - name: "1"
+            crates: advice-report frame-meter match-event-layer video-analyzer
+          - name: "2"
+            crates: advice-stats attack-info-vision hud-vision match-event-model pixel-color
+          - name: "3"
+            crates: analysis-context match-event-offense meter-tracker spatial-refine temporal-confirm
+          - name: "4"
+            crates: >-
+              advice-damage-origins advice-detectors advice-model input-vision
+              match-event-defense wasm-bridge
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       # mutest はコンパイラ内部 API を使うため、固定の nightly が要る。
-      # 版が変わると壊れるので、mutest 側の指定に合わせて固定する。
       - uses: dtolnay/rust-toolchain@f133eefe930d61f0d9371efd474daf0125ed3dd1
         with:
           toolchain: nightly-2026-07-18
@@ -160,10 +176,25 @@ jobs:
           node-version: 24
       - name: Setup Bun
         run: npm install -g bun@${BUN_VERSION}
+      # mutest 自体のビルドに 80 秒かかる。追跡している版と toolchain が
+      # 変わらない限り結果は同じなので、成果物ごと持ち回す。driver は
+      # runtime の場所をビルド時に焼き込むが、MUTEST_SEARCH_PATH で
+      # 上書きできるので、置き場所は固定しておけばよい。
+      - name: Restore mutest-rs
+        id: mutest-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/bin/mutest-driver
+            ~/.cargo/bin/cargo-mutest
+            ~/mutest-artifacts
+          key: mutest-${{ env.MUTEST_REF }}-nightly-2026-07-18
       - name: Install mutest-rs
+        if: steps.mutest-cache.outputs.cache-hit != 'true'
         run: |
-          mkdir -p "$RUNNER_TEMP/mutest-rs"
-          cd "$RUNNER_TEMP/mutest-rs"
+          src="$RUNNER_TEMP/mutest-rs"
+          mkdir -p "$src"
+          cd "$src"
           git init -q
           git remote add origin https://github.com/zalanlevai/mutest-rs
           git fetch -q --depth 1 origin "$MUTEST_REF"
@@ -171,5 +202,9 @@ jobs:
           cargo build --release -p mutest-runtime
           cargo install --force --path mutest-driver
           cargo install --force --path cargo-mutest
-      - name: Mutate every crate
-        run: bun run mutation:rust:mutest
+          mkdir -p ~/mutest-artifacts
+          cp -r target/release/. ~/mutest-artifacts/
+      - name: Mutate shard ${{ matrix.name }}
+        run: |
+          export MUTEST_SEARCH_PATH="$HOME/mutest-artifacts"
+          bun scripts/run-mutest.ts ${{ matrix.crates }}
