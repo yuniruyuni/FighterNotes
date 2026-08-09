@@ -163,7 +163,8 @@ pub(crate) fn nearest_palette(bgr: Bgr) -> (PaletteName, f32) {
 pub(crate) fn state_quality(state: &CellState, a_bgr: Bgr, b_bgr: Bgr) -> f32 {
     let mut min_dist = f32::MAX;
     for &name in PaletteName::all() {
-        if name.state_family().as_ref() == Some(state) {
+        let family = name.state_family();
+        if family.as_ref() == Some(state) {
             let color = name.color();
             min_dist = min_dist.min(l2_dist(a_bgr, color).min(l2_dist(b_bgr, color)));
         }

@@ -3,7 +3,10 @@ use crate::constants::{CELL_COUNT, EMPTY_V_MAX};
 use crate::model::{BrightClass, CellState};
 
 fn has_front_gap(v: &[f32], index: usize) -> bool {
-    let next: Vec<f32> = [index + 1, index + 2]
+    // 添字を先に束縛する。式の中に配列リテラルを置いたままだと、
+    // ソースを変換する解析ツールの下で一時値の寿命が足りなくなる。
+    let candidates = [index + 1, index + 2];
+    let next: Vec<f32> = candidates
         .iter()
         .filter(|&&candidate| candidate < CELL_COUNT)
         .map(|&candidate| v[candidate])

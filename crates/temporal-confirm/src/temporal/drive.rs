@@ -72,7 +72,9 @@ pub fn clean_drive_temporal(features: &mut Vec<FrameFeatures>) {
             start = end;
         }
 
-        let mut last_trusted = None;
+        // 直前に信用できた読み。型を明示しておく（推論だけに頼ると、
+        // ソースを変換する解析ツールの下で解決できなくなる）。
+        let mut last_trusted: Option<(f32, bool)> = None;
         for feature in features.iter_mut() {
             if !feature.is_match_screen {
                 last_trusted = None;
