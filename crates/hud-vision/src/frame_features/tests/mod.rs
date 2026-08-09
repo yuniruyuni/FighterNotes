@@ -1,7 +1,9 @@
 //! frame_features 全体のユニットテスト。
 
+mod drive_decode_boundaries;
 mod drive_run_segmentation_preserves_empty_single_and_transition_boundaries;
 mod empty_geometry_and_short_buffers_return_conservative_readings;
+mod hp_bar_presence_score;
 mod hp_column_colour_boundaries;
 mod hp_spike_correction;
 mod hp_zone_segmentation_preserves_empty_single_and_transition_boundaries;
