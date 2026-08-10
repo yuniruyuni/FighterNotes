@@ -9,6 +9,7 @@ mod backward_jump_hit_does_not_emit_approach_advice;
 mod committed_button_vs_di;
 mod low_punish_return_must_repeat_before_it_is_a_diagnosis;
 mod mashing_attributes_the_nearest_press;
+mod mashing_gates;
 mod mashing_requires_direct_input_and_reliable_linked_startup;
 mod one_early_hit_is_kept_as_an_observation;
 mod repeated_guard_direction_and_reversal_are_required_for_diagnosis;
