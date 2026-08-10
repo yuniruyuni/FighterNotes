@@ -181,3 +181,6 @@ fn detect_rounds_from_bounds(
     }
     rounds
 }
+
+#[cfg(test)]
+mod tests;

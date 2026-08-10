@@ -136,3 +136,6 @@ pub(crate) fn extend_rounds_through_freezes(
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -66,7 +66,7 @@ pub(crate) fn build_segments(
                     (Some(p), Some(c)) => c < p,
                     _ => false,
                 };
-                if same_key && !count_reset && i - last <= 2 {
+                if same_key && !count_reset {
                     cur = Some((a, i));
                 } else {
                     flush(&mut cur, &mut out, inputs, features);
@@ -78,3 +78,6 @@ pub(crate) fn build_segments(
     flush(&mut cur, &mut out, inputs, features);
     out
 }
+
+#[cfg(test)]
+mod tests;
