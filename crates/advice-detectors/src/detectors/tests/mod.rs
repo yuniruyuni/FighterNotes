@@ -4,6 +4,7 @@ mod boundaries;
 mod burnout_and_throw_loop;
 mod contracts;
 mod hp_lost;
+mod jumps;
 mod minus_frames;
 mod reversal_punished;
 mod support;
