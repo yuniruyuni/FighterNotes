@@ -5,6 +5,7 @@ mod burnout_and_throw_loop;
 mod contracts;
 mod hp_lost;
 mod minus_frames;
+mod reversal_punished;
 mod support;
 mod throw_whiff;
 mod whiff;
