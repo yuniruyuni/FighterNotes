@@ -45,7 +45,9 @@ impl Analyzer {
         }
     }
 
-    fn ensure_events(&mut self) -> Result<(), JsValue> {
+    /// 解析を組み立てる。断る理由は素の文字列で返す。`JsValue` は wasm の
+    /// 外では作れないため、呼び手が境界で包む。
+    fn ensure_events(&mut self) -> Result<(), String> {
         if self.events.is_some() {
             return Ok(());
         }
@@ -59,7 +61,7 @@ impl Analyzer {
             .expect("fight markers initialized");
         let marker_count_is_valid = marker_count_is_valid(fight_markers.len());
         if self.require_fight_markers && !marker_count_is_valid {
-            return Err(JsValue::from_str(&marker_count_error(fight_markers.len())));
+            return Err(marker_count_error(fight_markers.len()));
         }
         if marker_count_is_valid {
             video_analyzer::finalize_features_with_fight_markers(
@@ -176,7 +178,8 @@ impl Analyzer {
     }
 
     pub fn finish(&mut self) -> Result<String, JsValue> {
-        self.ensure_events()?;
+        self.ensure_events()
+            .map_err(|error| JsValue::from_str(&error))?;
         Ok(self.report_json())
     }
 
@@ -200,7 +203,8 @@ impl Analyzer {
     }
 
     pub fn get_spatial_windows_json(&mut self) -> Result<String, JsValue> {
-        self.ensure_events()?;
+        self.ensure_events()
+            .map_err(|error| JsValue::from_str(&error))?;
         Ok(
             serde_json::to_string(&video_analyzer::spatial_candidate_windows(
                 self.events.as_ref().expect("finalized events"),
@@ -214,7 +218,8 @@ impl Analyzer {
             serde_json::from_str(observations_json).map_err(|error| {
                 JsValue::from_str(&format!("invalid spatial observations: {error}"))
             })?;
-        self.ensure_events()?;
+        self.ensure_events()
+            .map_err(|error| JsValue::from_str(&error))?;
         video_analyzer::refine_match_events_with_spatial(
             self.events.as_mut().expect("finalized events"),
             &observations,
@@ -243,7 +248,8 @@ impl Analyzer {
     /// in their existing diagnostics; this payload contains only events that
     /// can be annotated and matched one-to-one.
     pub fn get_regression_events_json(&mut self) -> Result<String, JsValue> {
-        self.ensure_events()?;
+        self.ensure_events()
+            .map_err(|error| JsValue::from_str(&error))?;
         let events = self.events.as_ref().expect("finalized events");
         let attack_sequences: Vec<_> = events
             .attack_evidence
