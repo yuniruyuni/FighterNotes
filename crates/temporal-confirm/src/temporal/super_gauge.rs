@@ -156,14 +156,19 @@ mod tests {
     use crate::temporal::tests::support::feature;
 
     fn series(values: &[(f32, bool)]) -> Vec<FrameFeatures> {
+        series_for(0, values)
+    }
+
+    /// 指定した側のゲージだけを与える観測列。もう片方は読めていない
+    /// ままにして、側の取り違えを見えるようにする。
+    fn series_for(side: usize, values: &[(f32, bool)]) -> Vec<FrameFeatures> {
         values
             .iter()
             .enumerate()
             .map(|(index, &(value, uncertain))| {
                 let mut frame = feature(index as u32, 1.0);
                 frame.is_match_screen = true;
-                frame.left_super_value = value;
-                frame.left_super_uncertain = uncertain;
+                set(&mut frame, side, value, uncertain, false);
                 frame
             })
             .collect()
@@ -321,5 +326,178 @@ mod tests {
         clean_super_temporal(&mut features);
         assert_eq!(features[last].left_super_value, 0.995);
         assert!(features[last].left_super_uncertain);
+    }
+    // ── 左右 ─────────────────────────────────────────────────────────────
+
+    /// 同じ揺れは右側でも同じように均す。片側だけ手を入れた実装では、
+    /// 相手の SA だけが読めない解析になる。
+    #[test]
+    fn the_right_side_is_cleaned_the_same_way() {
+        let mut features = series_for(1, &[(2.6, false), (2.6, false), (0.6, false), (2.6, false)]);
+
+        clean_super_temporal(&mut features);
+
+        assert_eq!(features[2].right_super_value, 2.6);
+        assert!(features[2].right_super_uncertain);
+    }
+
+    /// 一度の走査で両側を均す。
+    #[test]
+    fn both_sides_are_cleaned_in_one_pass() {
+        let mut features = series(&[(2.6, false), (2.6, false), (0.6, false), (2.6, false)]);
+        for (index, frame) in features.iter_mut().enumerate() {
+            let value = if index == 2 { 0.4 } else { 1.8 };
+            set(frame, 1, value, false, false);
+        }
+
+        clean_super_temporal(&mut features);
+
+        assert_eq!(features[2].left_super_value, 2.6, "左を均していない");
+        assert_eq!(features[2].right_super_value, 1.8, "右を均していない");
+    }
+
+    /// 片側の読みがもう片側へ混ざらない。
+    #[test]
+    fn one_side_does_not_leak_into_the_other() {
+        let mut features = series_for(0, &[(3.0, false), (3.0, false), (3.0, false)]);
+
+        clean_super_temporal(&mut features);
+
+        assert_eq!(features[2].left_super_value, 3.0);
+        assert_eq!(features[2].right_super_value, 0.0, "右へ左の値が漏れている");
+    }
+
+    // ── 読めなかったフレーム ─────────────────────────────────────────────
+
+    /// 試合画面が映っていないフレームは、直前の確定値で埋める。ただし
+    /// 「読めた」とは言わない。
+    #[test]
+    fn a_frame_off_the_match_screen_borrows_the_last_confirmed_value() {
+        let mut features = series(&[(2.5, false), (2.5, false), (0.0, false), (2.5, false)]);
+        features[2].is_match_screen = false;
+
+        clean_super_temporal(&mut features);
+
+        assert_eq!(features[2].left_super_value, 2.5);
+        assert!(
+            features[2].left_super_uncertain,
+            "埋めた値を読めた扱いにしている"
+        );
+    }
+
+    /// 埋めるときは CA の点灯も直前のものを引き継ぐ。読めていない
+    /// フレームの点灯状態は信用できない。
+    #[test]
+    fn the_borrowed_value_carries_the_last_critical_art_flag() {
+        let mut features = series(&[(2.5, false), (2.5, false), (0.0, false)]);
+        for frame in &mut features[..2] {
+            frame.left_ca_ready = true;
+        }
+        features[2].is_match_screen = false;
+        features[2].left_ca_ready = false;
+
+        clean_super_temporal(&mut features);
+
+        assert!(features[2].left_ca_ready, "直前の点灯を引き継いでいない");
+    }
+
+    /// まだ一度も読めていないうちは、埋める値が無い。そのまま残す。
+    #[test]
+    fn nothing_is_borrowed_before_the_first_reliable_reading() {
+        let mut features = series(&[(1.5, true), (1.5, true), (2.5, false)]);
+
+        clean_super_temporal(&mut features);
+
+        assert_eq!(
+            features[0].left_super_value, 1.5,
+            "読めない先頭を書き換えている"
+        );
+        assert_eq!(features[2].left_super_value, 2.5);
+    }
+
+    /// 読めなかったフレームに当たっても、その先を均すのをやめない。
+    #[test]
+    fn an_unreadable_frame_does_not_stop_the_pass() {
+        let mut features = series(&[(2.5, false), (2.5, true), (2.5, false), (0.5, false)]);
+
+        clean_super_temporal(&mut features);
+
+        assert_eq!(
+            features[3].left_super_value, 2.5,
+            "途中で走査を打ち切っている"
+        );
+        assert!(features[3].left_super_uncertain);
+    }
+
+    // ── 増え方の上限 ─────────────────────────────────────────────────────
+
+    /// ゲージは一瞬では埋まらない。飛び抜けた増加は読み違い。
+    #[test]
+    fn a_jump_larger_than_the_gauge_can_fill_is_rejected() {
+        let mut features = series(&[(0.2, false), (0.6, false), (0.6, false)]);
+
+        clean_super_temporal(&mut features);
+
+        assert_eq!(features[1].left_super_value, 0.6, "普通の増加を弾いている");
+
+        let mut leaping = series(&[(0.2, false), (0.7, false), (0.7, false)]);
+        clean_super_temporal(&mut leaping);
+
+        assert_eq!(
+            leaping[1].left_super_value, 0.2,
+            "飛び抜けた増加を受けている"
+        );
+        assert!(leaping[1].left_super_uncertain);
+    }
+
+    /// 間が空いていれば、その分だけ増えていてよい。長い演出の後で
+    /// ゲージが伸びているのは普通のこと。
+    #[test]
+    fn a_long_gap_allows_a_larger_increase() {
+        let mut features = series(&[(0.2, false), (0.7, false), (0.7, false)]);
+        // 2 フレーム目までに 300 フレーム分の時間が経っている。
+        features[1].frame_index = 300;
+        features[2].frame_index = 301;
+
+        clean_super_temporal(&mut features);
+
+        assert_eq!(features[1].left_super_value, 0.7, "経った時間を見ていない");
+    }
+
+    // ── 上のストックの確認 ───────────────────────────────────────────────
+
+    /// 上のストックを確かめる間、読めないフレームは数にも入れず、
+    /// 打ち切りもしない。演出中の欠測でストック獲得を落とさない。
+    #[test]
+    fn unreadable_frames_neither_confirm_nor_break_the_higher_level() {
+        let mut values = vec![(1.9, false)];
+        for _ in 0..HIGHER_LEVEL_CONFIRM_FRAMES {
+            values.push((2.1, false));
+            values.push((0.0, true));
+        }
+        let mut features = series(&values);
+
+        clean_super_temporal(&mut features);
+
+        assert_eq!(
+            features[1].left_super_value, 2.1,
+            "欠測で確認を打ち切っている"
+        );
+    }
+
+    /// 確認の途中で別のストックが見えたら、そこで打ち切る。
+    #[test]
+    fn a_different_level_during_confirmation_breaks_it() {
+        let mut values = vec![(1.9, false), (2.1, false), (2.1, false), (1.9, false)];
+        values.extend(std::iter::repeat_n(
+            (2.1, false),
+            HIGHER_LEVEL_CONFIRM_FRAMES,
+        ));
+        let mut features = series(&values);
+
+        clean_super_temporal(&mut features);
+
+        assert_eq!(features[1].left_super_value, 1.9, "揺れた確認を通している");
+        assert!(features[1].left_super_uncertain);
     }
 }
