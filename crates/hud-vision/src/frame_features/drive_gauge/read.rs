@@ -32,15 +32,8 @@ pub(crate) fn drive_gauge_read_impl(
     } else {
         DRIVE_ROI_RIGHT
     };
+    // 潰れた ROI は列が一本も取れず、そのまま「読めなかった」に落ちる。
     let (x1u, x2u, y1u, y2u) = scale_roi(x1_base, x2_base, y1_base, y2_base, width, height);
-    if x1u >= x2u || y1u >= y2u {
-        return DriveGaugeRead {
-            value: 0.0,
-            burnout: false,
-            recovery: 0.0,
-            uncertain: true,
-        };
-    }
     let x1 = x1u as usize;
     let x2 = x2u as usize;
     let y1 = y1u as usize;

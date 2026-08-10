@@ -301,14 +301,29 @@ fn a_proportionally_steep_but_small_drop_is_real_damage() {
 /// 打ち切ると、ラウンド途中の暗転から先が補正されないまま残る。
 #[test]
 fn a_frame_outside_the_match_does_not_end_the_pass() {
-    let mut corrected = vec![0.80_f32, 0.30, 0.90, 0.90];
+    let mut corrected = vec![0.80_f32, 0.30, 0.75, 0.90];
     let in_match = vec![true, false, true, true];
-    let quiet = [false; 4];
+    let in_spike = vec![false, false, false, true];
 
-    spike_hold_forward_pass(&mut corrected, &in_match, &quiet, &quiet, 0, 4);
+    spike_hold_forward_pass(&mut corrected, &in_match, &in_spike, &[false; 4], 0, 4);
 
     assert_eq!(corrected[1], 0.30, "試合外を書き換えている");
-    assert_eq!(corrected[3], 0.90, "試合外の先で処理が止まっている");
+    assert_eq!(corrected[3], 0.75, "試合外の先でホールドが止まっている");
+}
+
+/// 絶対量の条件はちょうどでは足りない。0.5 だけ落ちた読みは、
+/// 大きくても実ダメージとして通す。
+#[test]
+fn a_collapse_of_exactly_the_limit_is_still_real_damage() {
+    let mut kept = vec![0.75_f32, 0.75, 0.25, 0.25];
+    let mut held = vec![0.75_f32, 0.75, 0.24, 0.24];
+    let quiet = [false; 4];
+
+    spike_hold_forward_pass(&mut kept, &[true; 4], &quiet, &quiet, 0, 4);
+    spike_hold_forward_pass(&mut held, &[true; 4], &quiet, &quiet, 0, 4);
+
+    assert_eq!(kept[2], 0.25, "ちょうどの落差を消している");
+    assert_eq!(held[2], 0.75, "落差を超えた読みを通している");
 }
 
 /// 範囲の頭が末尾を越えていても、範囲外を読まない。

@@ -189,3 +189,27 @@ fn each_pixel_is_read_from_its_own_four_bytes() {
         "隣の画素の成分を混ぜている: {score}"
     );
 }
+
+/// 明るさと彩度は青だけでも成り立つ。青成分を読み落とすと、青い HUD が
+/// 丸ごと「試合画面ではない」になる。
+#[test]
+fn a_bar_made_only_of_blue_still_scores() {
+    let score = hp_bar_score(&frame_with_roi((0, 0, 200)), WIDTH, HEIGHT, "p1");
+
+    assert_eq!(score, 1.0, "青成分を読み落としている");
+}
+
+/// 途中で切れたバッファでは、成分の揃わない画素を数えない。数えると
+/// バッファの外を読む。
+#[test]
+fn a_buffer_cut_inside_a_pixel_stops_before_it() {
+    let mut rgba = frame_with_roi((220, 20, 20));
+    // ROI 内のある画素の、青成分の手前でバッファを切る。
+    let last = (80 * WIDTH as usize + 500) * 4;
+    rgba.truncate(last + 2);
+
+    let score = hp_bar_score(&rgba, WIDTH, HEIGHT, "p1");
+
+    assert!(score > 0.0, "読めた画素まで捨てている");
+    assert!(score <= 1.0);
+}

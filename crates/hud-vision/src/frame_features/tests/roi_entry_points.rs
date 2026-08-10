@@ -83,6 +83,49 @@ fn the_drive_gauge_is_read_from_the_centre_outwards() {
     );
 }
 
+/// 右のゲージも同じく中央側から伸びる。ROI の中で数え始める端は
+/// 左とは逆になる。
+#[test]
+fn the_right_drive_gauge_counts_from_its_own_anchor() {
+    // 右ゲージ ROI（1036..1360）の左半分＝中央側だけを塗る。
+    let mut rgba = vec![0u8; WIDTH as usize * HEIGHT as usize * 4];
+    for gy in 114..132usize {
+        for gx in 1036..1198usize {
+            let index = (gy * WIDTH as usize + gx) * 4;
+            rgba[index..index + 4].copy_from_slice(&[240, 210, 40, 255]);
+        }
+    }
+
+    let from_the_centre = drive_gauge_read(&rgba, WIDTH, HEIGHT, "right");
+
+    assert!(
+        !from_the_centre.uncertain,
+        "中央側から伸びる光を読めていない"
+    );
+    assert!(
+        from_the_centre.value > 2.0,
+        "アンカーの向きが逆になっている: {}",
+        from_the_centre.value
+    );
+}
+
+/// 右ゲージの外側だけの光もゲージではない。
+#[test]
+fn light_at_the_far_end_of_the_right_drive_gauge_is_not_a_reading() {
+    let mut rgba = vec![0u8; WIDTH as usize * HEIGHT as usize * 4];
+    for gy in 114..132usize {
+        for gx in 1198..1360usize {
+            let index = (gy * WIDTH as usize + gx) * 4;
+            rgba[index..index + 4].copy_from_slice(&[240, 210, 40, 255]);
+        }
+    }
+
+    assert!(
+        drive_gauge_read(&rgba, WIDTH, HEIGHT, "right").uncertain,
+        "外側だけの光から値を出している"
+    );
+}
+
 /// 反対の端だけが光っているのはゲージではない。向きを取り違えると、
 /// 空のゲージが半分溜まって見える。
 #[test]

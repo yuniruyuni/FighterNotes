@@ -450,17 +450,59 @@ fn a_strip_of_another_width_is_refused() {
 
 /// ラベルとバーはどちらも収まっている必要がある。片方が切れた入力から
 /// 値を出すと、切れた側は既定値のまま確定してしまう。
+///
+/// 全画面ではラベルの方がバーより下まで伸びる。バーだけが収まる高さで
+/// 切れば、ラベル側の門だけを試せる。
 #[test]
 fn both_patches_have_to_fit() {
-    let mut full = vec![0u8; WIDTH * HEIGHT * 4];
-    paint_gauge(&mut full, "left", 2, 0.5);
-
-    // ラベルは収まるがバーの手前で切れた帯。
-    let mut label_only = full.clone();
-    label_only.truncate((PACKED_BAR_LEFT.1 + 1) * WIDTH * 4);
+    const FRAME_HEIGHT: usize = 1080;
+    let mut rgba = vec![0u8; WIDTH * FRAME_HEIGHT * 4];
+    paint_gauge_into(
+        &mut rgba,
+        (55, 955, 90, 75),
+        (145, 975, 265, 50),
+        true,
+        2,
+        0.5,
+    );
 
     assert!(
-        super_gauge_read_from_hud_strip(&label_only, WIDTH as u32, "left").uncertain,
-        "バーが切れた入力から値を出している"
+        !super_gauge_read(&rgba, WIDTH as u32, FRAME_HEIGHT as u32, "left").uncertain,
+        "揃った入力を読めていない"
+    );
+
+    // バー（1025 行まで）は収まるが、ラベル（1030 行まで）が切れる長さ。
+    let mut bar_only = rgba.clone();
+    bar_only.truncate(1027 * WIDTH * 4);
+
+    assert!(
+        super_gauge_read(&bar_only, WIDTH as u32, FRAME_HEIGHT as u32, "left").uncertain,
+        "ラベルが切れた入力から値を出している"
+    );
+}
+
+/// 右側のゲージも全画面から読める。左右で ROI が鏡像なので、片方だけを
+/// 通していると反対側が別の場所を見ていても気づけない。
+#[test]
+fn the_right_gauge_reads_from_a_whole_frame() {
+    const FRAME_HEIGHT: usize = 1080;
+    let mut rgba = vec![0u8; WIDTH * FRAME_HEIGHT * 4];
+    paint_gauge_into(
+        &mut rgba,
+        (1775, 955, 90, 75),
+        (1510, 975, 265, 50),
+        false,
+        1,
+        0.5,
+    );
+
+    let read = super_gauge_read(&rgba, WIDTH as u32, FRAME_HEIGHT as u32, "right");
+
+    assert_eq!(read.displayed_level, Some(1), "右のラベルを読めていない");
+    assert!(!read.uncertain);
+    assert!(
+        (read.value - 1.5).abs() < 0.08,
+        "右のバーを読めていない: {}",
+        read.value
     );
 }
