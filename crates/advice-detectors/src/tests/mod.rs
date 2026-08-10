@@ -7,6 +7,7 @@ mod support;
 mod a_single_jump_exchange_is_observed_but_not_called_a_habit;
 mod backward_jump_hit_does_not_emit_approach_advice;
 mod committed_button_vs_di;
+mod drive_impact_gates;
 mod low_punish_return_must_repeat_before_it_is_a_diagnosis;
 mod mashing_attributes_the_nearest_press;
 mod mashing_gates;
