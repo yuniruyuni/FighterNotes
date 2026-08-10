@@ -8,6 +8,7 @@ mod guard_break;
 mod hp_lost;
 mod jumps;
 mod minus_frames;
+mod punishment;
 mod reversal_punished;
 mod support;
 mod throw_whiff;
