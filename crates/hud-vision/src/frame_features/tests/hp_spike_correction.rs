@@ -336,3 +336,18 @@ fn a_range_at_the_very_end_reads_nothing() {
 
     assert_eq!(corrected, before);
 }
+
+/// 範囲の外は触らない。ラウンドごとに呼ぶので、前のラウンドの値を
+/// 書き換えてはいけない。
+#[test]
+fn frames_before_the_range_are_left_alone() {
+    let mut corrected = vec![0.90_f32, 0.20, 0.80, 0.90];
+    let in_match = vec![true; 4];
+    let in_spike = vec![true, true, false, true];
+
+    spike_hold_forward_pass(&mut corrected, &in_match, &in_spike, &[false; 4], 2, 4);
+
+    assert_eq!(corrected[0], 0.90, "範囲の手前を書き換えている");
+    assert_eq!(corrected[1], 0.20, "範囲の手前を書き換えている");
+    assert_eq!(corrected[3], 0.80, "範囲の中でホールドしていない");
+}

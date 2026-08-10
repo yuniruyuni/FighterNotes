@@ -99,3 +99,26 @@ fn a_component_wider_than_half_the_label_is_not_the_digit() {
 
     assert_eq!(picked.map(|c| c.x0), Some(70), "幅の広い帯を数字にしている");
 }
+
+/// 選ぶ位置は側で変わる。同じ二つの候補でも、左のゲージでは右寄りの
+/// 方を、右のゲージでは左寄りの方を数字として選ぶ。
+#[test]
+fn the_side_decides_which_candidate_is_the_digit() {
+    let near_the_left = WhiteComponent {
+        x0: 20,
+        x1: 32,
+        ..component(13, 60, 400)
+    };
+    let near_the_right = WhiteComponent {
+        x0: 60,
+        x1: 72,
+        ..component(13, 60, 400)
+    };
+    let candidates = [near_the_left, near_the_right];
+
+    let picked_for_the_left = digit_component(&candidates, 90, true);
+    let picked_for_the_right = digit_component(&candidates, 90, false);
+
+    assert_eq!(picked_for_the_left.map(|c| c.x0), Some(60), "左側の選び方");
+    assert_eq!(picked_for_the_right.map(|c| c.x0), Some(20), "右側の選び方");
+}

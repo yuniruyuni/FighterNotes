@@ -521,3 +521,44 @@ fn the_dark_stripe_inside_the_fill_has_an_exact_edge() {
     assert!(!stripe.uncertain, "描画の暗帯で読み取りを諦めている");
     assert!(boundary.uncertain, "空きの始まりを描画の暗帯と読んでいる");
 }
+
+/// 残量の中で一瞬暗くなった残像も残量のうち。コンボ中に起きる。
+/// 数え落とすと、そこで残量が途切れたことになる。
+#[test]
+fn a_dim_ghost_inside_the_fill_still_counts_as_fill() {
+    use HpColColor::*;
+    let decode = decode_hp_zones(
+        &zones(&[
+            (White, 3),
+            (Fill, 100),
+            (Ghost, 20),
+            (Dark, 400),
+            (White, 3),
+        ]),
+        COLUMNS,
+    );
+
+    assert!(
+        (decode.fill_ratio - 123.0 / COLUMNS as f32).abs() < 1e-6,
+        "残像の分を数え落としている: {}",
+        decode.fill_ratio
+    );
+}
+
+/// 残量の先が広い暗帯で終わったら、そこまでが残量。その先にまた残量色が
+/// あっても、充填端を乗り換えない。
+#[test]
+fn a_wide_dark_band_fixes_the_fill_edge_where_it_started() {
+    use HpColColor::*;
+    let decode = decode_hp_zones(
+        &zones(&[(White, 3), (Fill, 100), (Dark, 400), (Fill, 50), (White, 3)]),
+        COLUMNS,
+    );
+
+    assert!(decode.uncertain);
+    assert!(
+        (decode.fill_ratio - 103.0 / COLUMNS as f32).abs() < 1e-6,
+        "暗帯の先へ充填端が動いている: {}",
+        decode.fill_ratio
+    );
+}

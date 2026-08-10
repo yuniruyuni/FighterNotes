@@ -190,13 +190,19 @@ fn each_pixel_is_read_from_its_own_four_bytes() {
     );
 }
 
-/// 明るさと彩度は青だけでも成り立つ。青成分を読み落とすと、青い HUD が
-/// 丸ごと「試合画面ではない」になる。
+/// 明るさと彩度はどの channel だけでも成り立つ。一つでも読み落とすと、
+/// その色の HUD が丸ごと「試合画面ではない」になる。
 #[test]
-fn a_bar_made_only_of_blue_still_scores() {
-    let score = hp_bar_score(&frame_with_roi((0, 0, 200)), WIDTH, HEIGHT, "p1");
+fn a_bar_made_of_a_single_channel_still_scores() {
+    for (channel, rgb) in [
+        ("赤", (200u8, 0u8, 0u8)),
+        ("緑", (0, 200, 0)),
+        ("青", (0, 0, 200)),
+    ] {
+        let score = hp_bar_score(&frame_with_roi(rgb), WIDTH, HEIGHT, "p1");
 
-    assert_eq!(score, 1.0, "青成分を読み落としている");
+        assert_eq!(score, 1.0, "{channel}成分を読み落としている");
+    }
 }
 
 /// 途中で切れたバッファでは、成分の揃わない画素を数えない。数えると

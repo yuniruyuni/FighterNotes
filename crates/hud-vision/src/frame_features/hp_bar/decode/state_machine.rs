@@ -120,10 +120,10 @@ pub(crate) fn decode_hp_zones(zones: &[HpZone], roi_w: usize) -> HpZonesDecode {
                         if last_fill_zone.is_some() {
                             fill_edge_zone = last_fill_zone;
                             uncertain = true;
-                            break 'scan;
-                        } else {
-                            break 'scan; // HP≈0%: fill_edge_zone は None のまま
                         }
+                        // 残量を一度も見ていなければ HP≈0%。枠の直後が完全に
+                        // 空きなので迷う余地がなく、充填端は無いまま確定する。
+                        break 'scan;
                     } else {
                         Sm::FillScan
                     }
