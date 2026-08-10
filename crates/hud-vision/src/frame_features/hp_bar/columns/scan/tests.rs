@@ -34,10 +34,20 @@ fn the_column_count_matches_the_scaled_roi_width() {
 }
 
 /// 潰れた画面では走査を作らない。0 除算や範囲外参照の手前で止める。
+/// 片方の軸だけが潰れている場合も同じ。列が無い走査や高さの無い走査から
+/// 出した割合は、分母が空のまま値になる。
 #[test]
 fn a_degenerate_frame_has_no_scan() {
-    assert!(ColumnScan::new(0, 0, "p1", 0).is_none());
-    assert!(ColumnScan::new(1, 1, "p1", 0).is_none());
+    assert!(ColumnScan::new(0, 0, "p1", 0).is_none(), "潰れた画面");
+    assert!(ColumnScan::new(1, 1, "p1", 0).is_none(), "1 画素の画面");
+    assert!(
+        ColumnScan::new(1, 1080, "p1", 0).is_none(),
+        "横だけ潰れた画面"
+    );
+    assert!(
+        ColumnScan::new(1920, 1, "p1", 0).is_none(),
+        "縦だけ潰れた画面"
+    );
 }
 
 /// 塗った列だけが該当し、隣は該当しない。列の独立性が崩れていると、
@@ -113,6 +123,21 @@ fn the_ratio_counts_only_the_pixels_actually_read() {
     assert!(effective > 0, "読めた画素まで捨てている");
     assert!(effective < 22, "読めない画素まで分母に入れている");
     assert_eq!(matched, effective, "読めた画素はすべて塗られている");
+}
+
+/// HUD の帯が ROI の途中から始まっていても、届いた行は読む。届かない行で
+/// 打ち切ると、帯だけを渡す browser 側の読みが丸ごと空になる。
+#[test]
+fn rows_before_the_strip_are_skipped_but_the_rest_are_read() {
+    // 帯が ROI の途中（画面の 70 行目）から始まる。
+    let scan = ColumnScan::new(WIDTH, HEIGHT, "p1", 70).expect("ROI がある");
+    let filled = filled_frame();
+
+    let (matched, effective) = scan.count_in_column(&filled, 0, WANTED);
+
+    assert!(effective > 0, "届いている行まで捨てている");
+    assert!(effective < 22, "届いていない行まで読んでいる");
+    assert_eq!(matched, effective);
 }
 
 /// 一画素も読めない入力では、どの列も該当しない。0 除算を避ける。

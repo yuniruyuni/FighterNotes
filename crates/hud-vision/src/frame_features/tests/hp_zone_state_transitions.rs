@@ -469,3 +469,55 @@ fn a_blended_edge_also_ends_the_damage_zone() {
         "滲みの先まで帯を伸ばしている"
     );
 }
+
+/// アンカー側の枠が許される太さには境目がある。被弾の白フラッシュで
+/// 枠は 6 列まで膨らむが、それを超えるのは遮蔽。
+#[test]
+fn the_anchor_cap_width_has_an_exact_edge() {
+    use HpColColor::*;
+    let widened = decode_hp_zones(
+        &zones(&[(White, 6), (Fill, 200), (White, 3), (Dark, 400), (White, 3)]),
+        COLUMNS,
+    );
+    let occluded = decode_hp_zones(
+        &zones(&[(White, 7), (Fill, 200), (White, 3), (Dark, 400), (White, 3)]),
+        COLUMNS,
+    );
+
+    assert!(!widened.uncertain, "フラッシュで膨らんだ枠を捨てている");
+    assert!(occluded.uncertain, "遮蔽を枠と読んでいる");
+}
+
+/// 残量の中に許される暗帯の太さにも境目がある。フレームメーターの描画は
+/// 15 列まで。それを超えるのは空きの始まりか遮蔽。
+#[test]
+fn the_dark_stripe_inside_the_fill_has_an_exact_edge() {
+    use HpColColor::*;
+    let stripe = decode_hp_zones(
+        &zones(&[
+            (White, 3),
+            (Fill, 100),
+            (Dark, 15),
+            (Fill, 85),
+            (White, 3),
+            (Dark, 400),
+            (White, 3),
+        ]),
+        COLUMNS,
+    );
+    let boundary = decode_hp_zones(
+        &zones(&[
+            (White, 3),
+            (Fill, 100),
+            (Dark, 16),
+            (Fill, 84),
+            (White, 3),
+            (Dark, 400),
+            (White, 3),
+        ]),
+        COLUMNS,
+    );
+
+    assert!(!stripe.uncertain, "描画の暗帯で読み取りを諦めている");
+    assert!(boundary.uncertain, "空きの始まりを描画の暗帯と読んでいる");
+}

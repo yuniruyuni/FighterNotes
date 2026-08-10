@@ -155,6 +155,37 @@ fn one_real_cell_is_enough_to_read_a_value() {
     assert!(!read.uncertain && !read.burnout, "排出中の読みを捨てている");
 }
 
+/// 実セルと認める幅には境目がある。狭いストロークの集まりを実セルと
+/// 読むと、遮蔽から値が出る。
+#[test]
+fn the_real_cell_width_has_an_exact_edge() {
+    let cell = decode_drive_runs(&runs(&[(Lit, 35), (Rest, 40), (Lit, 10)]), COLUMNS);
+    let stroke = decode_drive_runs(&runs(&[(Lit, 34), (Rest, 40), (Lit, 10)]), COLUMNS);
+
+    assert!(!cell.uncertain && !cell.burnout, "実セルを捨てている");
+    assert!(stroke.uncertain, "狭いストロークを実セルと読んでいる");
+}
+
+/// 埋まり具合は、点いた列を連鎖の長さで割ったもの。長さを一つ取り違えると
+/// 境目のちょうどで判定が裏返る。
+#[test]
+fn the_coverage_is_measured_against_the_whole_chain() {
+    let read = decode_drive_runs(
+        &runs(&[
+            (Lit, 20),
+            (Rest, 11),
+            (Lit, 20),
+            (Rest, 10),
+            (Lit, 20),
+            (Rest, 10),
+            (Lit, 10),
+        ]),
+        COLUMNS,
+    );
+
+    assert!(read.burnout, "連鎖の長さを短く見て残量にしている");
+}
+
 /// EMPTY の文字が占める幅より狭い細切れは、文字ではなく遮蔽。
 #[test]
 fn strokes_narrower_than_the_burnout_text_are_an_occlusion() {
@@ -254,8 +285,9 @@ fn a_wide_grey_slab_beyond_the_chain_means_the_bar_was_split() {
 /// 回復バーとして認める最小の幅。これを下回る灰色は背景の透け。
 #[test]
 fn the_recovery_bar_has_a_minimum_width() {
-    let bar = decode_drive_runs(&runs(&[(Gray, 10)]), COLUMNS);
-    let bleed = decode_drive_runs(&runs(&[(Gray, 9)]), COLUMNS);
+    // アンカーの縁が欠けた位置から始めることで、幅の測り方も一緒に留める。
+    let bar = decode_drive_runs(&runs(&[(Rest, 8), (Gray, 10)]), COLUMNS);
+    let bleed = decode_drive_runs(&runs(&[(Rest, 8), (Gray, 9)]), COLUMNS);
 
     assert!(bar.burnout, "細い回復バーを見失っている");
     assert!(!bleed.burnout, "背景の透けを回復バーと読んでいる");

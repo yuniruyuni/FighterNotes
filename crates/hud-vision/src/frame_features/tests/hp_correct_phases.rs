@@ -47,15 +47,17 @@ fn frames_outside_the_match_are_kept_out_of_the_window() {
     assert_eq!(smoothed[2], 0.50, "試合外の 0 を窓に入れている");
 }
 
-/// 試合外のフレーム自身は書き換えない。
+/// 試合外のフレーム自身は書き換えない。その先のフレームは均し続ける。
+/// 打ち切ると、暗転より後ろが生の読みのまま残る。
 #[test]
 fn frames_outside_the_match_are_left_as_they_are() {
-    let raw = vec![0.77, 0.50, 0.50];
-    let in_match = vec![false, true, true];
+    let raw = vec![0.77, 0.90, 0.50, 0.50, 0.50];
+    let in_match = vec![false, true, true, true, true];
 
     let smoothed = median_smoothed(&raw, &in_match, 2);
 
-    assert_eq!(smoothed[0], 0.77);
+    assert_eq!(smoothed[0], 0.77, "試合外を書き換えている");
+    assert_eq!(smoothed[1], 0.50, "試合外の先で均しが止まっている");
 }
 
 /// 窓を広げるほど強く均される。幅が効いていなければ、揺れの大きさに
@@ -172,13 +174,13 @@ fn health_may_rise_across_a_round_boundary() {
 /// 0 が以降のフレームすべてへ伝わる。
 #[test]
 fn an_unreadable_zero_does_not_become_the_ceiling() {
-    let mut corrected = vec![0.80, 0.00, 0.75];
+    let mut corrected = vec![0.80, 0.00, 0.90];
     let in_match = vec![true; 3];
     let in_uncertain = vec![false, true, false];
 
     monotone_forward_pass(&mut corrected, &in_match, &in_uncertain, &[0, 3]);
 
-    assert_eq!(corrected[2], 0.75, "消えたバーの 0 が後ろへ伝わっている");
+    assert_eq!(corrected[2], 0.80, "消えたバーの 0 が後ろへ伝わっている");
 }
 
 /// 読めていれば 0 でも基準になる。KO の 0 まで無視すると、決着の
@@ -197,14 +199,14 @@ fn a_trusted_zero_is_still_the_ceiling() {
 /// 試合外のフレームは押し下げにも基準にも関わらない。
 #[test]
 fn frames_outside_the_match_take_no_part_in_the_ceiling() {
-    let mut corrected = vec![0.80, 0.30, 0.75];
+    let mut corrected = vec![0.80, 0.30, 0.90];
     let in_match = vec![true, false, true];
     let in_uncertain = vec![false; 3];
 
     monotone_forward_pass(&mut corrected, &in_match, &in_uncertain, &[0, 3]);
 
     assert_eq!(corrected[1], 0.30, "試合外を書き換えている");
-    assert_eq!(corrected[2], 0.75, "試合外を基準にしている");
+    assert_eq!(corrected[2], 0.80, "試合外を挟んで押し下げが止まっている");
 }
 
 // ── 読めなかったフレームを埋める ─────────────────────────────────────────
@@ -258,4 +260,36 @@ fn trusted_frames_are_left_as_they_are() {
     fill_unreadable_from_the_future(&mut corrected, &in_match, &in_uncertain);
 
     assert_eq!(corrected, vec![0.90, 0.70, 0.50]);
+}
+
+/// バーが消えたと見なすのは 0 を下回る読みだけ。ちょうど 0.01 は
+/// 読めた値として扱う。境目が緩むと、低残量の読みが押し下げの基準から
+/// 外れて、そこから残量が戻る。
+#[test]
+fn the_vanished_bar_threshold_has_an_exact_edge() {
+    let mut trusted = vec![0.80, 0.01, 0.90];
+    let mut vanished = vec![0.80, 0.009, 0.90];
+    let in_match = vec![true; 3];
+    let in_uncertain = vec![false, true, false];
+
+    monotone_forward_pass(&mut trusted, &in_match, &in_uncertain, &[0, 3]);
+    monotone_forward_pass(&mut vanished, &in_match, &in_uncertain, &[0, 3]);
+
+    assert_eq!(trusted[2], 0.01, "ちょうどの読みを捨てている");
+    assert_eq!(vanished[2], 0.80, "消えたバーを基準にしている");
+}
+
+/// 埋める対象を決める境目も同じ。
+#[test]
+fn the_fill_threshold_has_the_same_edge() {
+    let mut trusted = vec![0.60, 0.01, 0.55];
+    let mut vanished = vec![0.60, 0.009, 0.55];
+    let in_match = vec![true; 3];
+    let in_uncertain = vec![false, true, false];
+
+    fill_unreadable_from_the_future(&mut trusted, &in_match, &in_uncertain);
+    fill_unreadable_from_the_future(&mut vanished, &in_match, &in_uncertain);
+
+    assert_eq!(trusted[1], 0.01, "ちょうどの読みを埋めている");
+    assert_eq!(vanished[1], 0.55, "消えたバーを残している");
 }

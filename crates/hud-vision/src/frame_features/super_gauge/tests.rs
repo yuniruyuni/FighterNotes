@@ -321,3 +321,25 @@ fn fill_rect(rgba: &mut [u8], x: usize, y: usize, width: usize, height: usize, c
         }
     }
 }
+
+/// 読めなかったときの既定値は「まだ何も判っていない」。整数ラベルが
+/// 無い以上、値も CA 表示も名乗ってはいけない。
+#[test]
+fn the_default_reading_claims_nothing() {
+    let read = SuperGaugeRead::default();
+
+    assert!(read.uncertain, "読めていないのに確定を名乗っている");
+    assert!(!read.critical_art, "読めていないのに CA を名乗っている");
+    assert_eq!(read.displayed_level, None);
+    assert_eq!(read.value, 0.0);
+}
+
+/// 潰れた入力では既定値を返す。範囲外を読む手前で止める。
+#[test]
+fn a_frame_of_the_wrong_size_reads_nothing() {
+    let strip = vec![0u8; WIDTH * HEIGHT * 4];
+
+    assert!(super_gauge_read(&strip, 1280, 720, "left").uncertain);
+    assert!(super_gauge_read_from_hud_strip(&strip, 1280, "left").uncertain);
+    assert!(super_gauge_read_from_hud_strip(&[], WIDTH as u32, "left").uncertain);
+}

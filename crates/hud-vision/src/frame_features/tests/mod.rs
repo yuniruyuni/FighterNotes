@@ -10,6 +10,7 @@ mod hp_correct_phases;
 mod hp_spike_correction;
 mod hp_zone_segmentation_preserves_empty_single_and_transition_boundaries;
 mod hp_zone_state_transitions;
+mod roi_scaling;
 mod test_backward_fill_trusted_false_low_corrected;
 mod test_backward_fill_uncertain_dip_corrected;
 mod test_decode_drive_background_bleed_not_burnout;

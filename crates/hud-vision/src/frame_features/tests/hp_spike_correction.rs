@@ -83,6 +83,13 @@ fn frames_outside_the_match_take_no_part() {
         spikes.iter().all(|value| !value),
         "試合外の 0 を比較に含めて、周りをスパイクにしている"
     );
+
+    // 暗転の先にあるスパイクは、そこまで走査が届いて初めて見つかる。
+    let mut later = raw.clone();
+    later[150] = 0.80;
+    let found = compute_spike_frames(&later, &in_match, &segments);
+
+    assert!(found[150], "試合外のフレームで走査が止まっている");
 }
 
 /// 区間の端は片側の比較相手を持たないので、スパイクにしない。ラウンドの

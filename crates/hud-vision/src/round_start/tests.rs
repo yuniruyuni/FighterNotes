@@ -304,3 +304,14 @@ fn a_run_that_is_too_short_is_not_a_marker() {
     assert_eq!(enough.len(), 1);
     assert!(too_few.is_empty(), "二回の観測を表示と読んでいる");
 }
+
+/// 画素は 4 byte ずつ並ぶ。読む位置がずれると、隣の画素の成分から
+/// 明るさを作ることになる。
+#[test]
+fn a_patch_pixel_is_read_from_its_own_four_bytes() {
+    let mut strip = vec![0u8; STRIP_WIDTH * STRIP_HEIGHT * 4];
+    let index = (FIGHT_PATCH_Y * STRIP_WIDTH + FIGHT_PATCH_X) * 4;
+    strip[index..index + 4].copy_from_slice(&[10, 20, 30, 255]);
+
+    assert_eq!(patch_luma(&strip, STRIP_WIDTH, 0, 0), luma(10, 20, 30));
+}
