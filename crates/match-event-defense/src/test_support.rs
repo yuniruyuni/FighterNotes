@@ -64,6 +64,31 @@ pub fn extract_minus(
     )
 }
 
+/// メーターのエポックとゲームフレームまで指定して抽出する。
+///
+/// 動画のフレーム番号とゲーム内のフレーム番号は一致しない。ヒットストップ
+/// 中はメーターが止まるので、不利幅は動画側の差ではなくゲーム側の差で
+/// 決まる。エポックはメーターの読みが途切れた位置を表す。
+pub fn extract_minus_with(
+    meter_state: &[Vec<MeterState>; 2],
+    meter_epoch: &[Vec<i32>; 2],
+    meter_game_frame: &[Vec<i64>; 2],
+    contacts: &[ContactEvent],
+    damage: &[DamageEvent],
+    segments: &[Vec<InputSegment>; 2],
+    rounds: &[RoundInfo],
+) -> MinusEvents {
+    extract_minus_events(
+        meter_state,
+        meter_epoch,
+        meter_game_frame,
+        contacts,
+        damage,
+        segments,
+        rounds,
+    )
+}
+
 pub fn extract_minus_all(
     meter_state: &[Vec<MeterState>; 2],
     contacts: &[ContactEvent],
