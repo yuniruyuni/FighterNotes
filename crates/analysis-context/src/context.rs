@@ -179,4 +179,91 @@ mod tests {
         assert_eq!(context.p1.character, None);
         assert_eq!(context.battle_version, None);
     }
+
+    // ── 値の正規化 ───────────────────────────────────────────────────────
+
+    /// 空白だけの名前は、入っていないのと同じ。UI の空欄がそのまま
+    /// キャラクター名として下へ流れると、表引きが必ず外れる。
+    #[test]
+    fn blank_names_are_treated_as_absent() {
+        let mut context = AnalysisContext {
+            own_side: "p1".to_string(),
+            p1: PlayerContext {
+                character: Some("  ".to_string()),
+                control_type: Some(String::new()),
+            },
+            p2: PlayerContext {
+                character: Some("  KEN  ".to_string()),
+                control_type: Some(" modern ".to_string()),
+            },
+            battle_version: Some("   ".to_string()),
+        };
+
+        context.normalize_for_side("p1");
+
+        assert_eq!(context.p1.character, None, "空白を名前として残している");
+        assert_eq!(context.p1.control_type, None);
+        assert_eq!(
+            context.p2.character.as_deref(),
+            Some("KEN"),
+            "前後の空白を残している"
+        );
+        assert_eq!(context.p2.control_type.as_deref(), Some("modern"));
+        assert_eq!(context.battle_version, None);
+    }
+
+    /// 中身のある版数は残す。空白だけを落とす。
+    #[test]
+    fn a_real_battle_version_survives_normalization() {
+        let mut context = AnalysisContext::new("p1");
+        context.battle_version = Some("  2026-07  ".to_string());
+
+        context.normalize_for_side("p1");
+
+        assert_eq!(context.battle_version.as_deref(), Some("2026-07"));
+    }
+
+    /// 側の指定は解析器のものが優先する。JSON に入っていた値では
+    /// 上書きしない。
+    #[test]
+    fn the_analyzer_side_wins_over_whatever_the_json_carried() {
+        let mut context = AnalysisContext::new("p1");
+        context.own_side = "p9".to_string();
+
+        context.normalize_for_side("p2");
+
+        assert_eq!(context.own_side, "p2");
+    }
+
+    /// 側の綴りは大文字小文字を問わない。それ以外は P1 として扱う。
+    #[test]
+    fn the_side_spelling_is_forgiving_but_defaults_to_p1() {
+        for spelling in ["p2", "P2", "P2"] {
+            assert_eq!(AnalysisContext::new(spelling).own_side, "p2", "{spelling}");
+        }
+        for spelling in ["p1", "P1", "", "left", "2p"] {
+            assert_eq!(AnalysisContext::new(spelling).own_side, "p1", "{spelling}");
+        }
+    }
+
+    /// 名前だけを渡す入口でも、空白は落とす。
+    #[test]
+    fn a_player_built_from_a_blank_name_has_no_character() {
+        assert_eq!(PlayerContext::with_character("  ").character, None);
+        assert_eq!(
+            PlayerContext::with_character(" KEN ").character.as_deref(),
+            Some("KEN")
+        );
+    }
+
+    /// 既定の文脈は P1 視点。
+    #[test]
+    fn the_default_context_is_seen_from_p1() {
+        let context = AnalysisContext::default();
+
+        assert_eq!(context.own_side, "p1");
+        assert_eq!(context.p1, PlayerContext::default());
+        assert_eq!(context.p2, PlayerContext::default());
+        assert_eq!(context.battle_version, None);
+    }
 }
