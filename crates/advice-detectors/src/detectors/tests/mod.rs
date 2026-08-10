@@ -13,5 +13,6 @@ mod punishment;
 mod reversal_punished;
 mod rounds_and_supers;
 mod support;
+mod teleport_defense;
 mod throw_whiff;
 mod whiff;
