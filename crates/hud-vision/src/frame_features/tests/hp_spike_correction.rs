@@ -218,3 +218,99 @@ fn an_empty_range_changes_nothing() {
 
     assert_eq!(corrected, before);
 }
+
+// ── 閾値の境目 ───────────────────────────────────────────────────────────
+
+/// スパイクと認めるのは、前後より決まった幅を「超えて」高いとき。
+/// ちょうどの差は演出の揺らぎとして通す。
+#[test]
+fn the_rise_that_makes_a_spike_has_an_exact_edge() {
+    let at_the_edge = {
+        let mut raw = vec![0.50_f32; 200];
+        raw[100] = 0.53;
+        let (in_match, segments) = one_round(raw.len());
+        compute_spike_frames(&raw, &in_match, &segments)
+    };
+    let just_over = {
+        let mut raw = vec![0.50_f32; 200];
+        raw[100] = 0.531;
+        let (in_match, segments) = one_round(raw.len());
+        compute_spike_frames(&raw, &in_match, &segments)
+    };
+
+    assert!(!at_the_edge[100], "ちょうどの差をスパイクにしている");
+    assert!(just_over[100], "超えた差をスパイクにしていない");
+}
+
+/// 前を見る窓は決まった長さ。窓の外まで見ると、ラウンド終盤の低い値と
+/// 序盤の平常値を比べてスパイクにしてしまう。
+#[test]
+fn the_forward_window_has_a_fixed_reach() {
+    // 直前に一度落ちているので、後ろ側の条件は満たしている。あとは
+    // 先の低い値が窓に入るかどうかだけで結果が変わる。
+    let spikes_at = |distance: usize| {
+        let mut raw = vec![0.60_f32; 400];
+        raw[149] = 0.40;
+        raw[150] = 0.62;
+        raw[150 + distance] = 0.40;
+        let (in_match, segments) = one_round(raw.len());
+        compute_spike_frames(&raw, &in_match, &segments)[150]
+    };
+
+    assert!(spikes_at(90), "窓の中の低い値と比べていない");
+    assert!(!spikes_at(91), "窓の外の低い値と比べている");
+}
+
+/// 半分ちょうどまでの下降は実ダメージ。埋めると記録から消える。
+#[test]
+fn a_drop_to_exactly_half_is_real_damage() {
+    let mut kept = vec![1.20_f32, 1.20, 0.60, 0.60];
+    let mut held = vec![1.20_f32, 1.20, 0.59, 0.59];
+    let quiet = [false; 4];
+
+    spike_hold_forward_pass(&mut kept, &[true; 4], &quiet, &quiet, 0, 4);
+    spike_hold_forward_pass(&mut held, &[true; 4], &quiet, &quiet, 0, 4);
+
+    assert_eq!(kept[2], 0.60, "半分ちょうどの下降を消している");
+    assert_eq!(held[2], 1.20, "半分を割った下降を通している");
+}
+
+/// 割合で急でも、絶対量が小さければ実ダメージ。残量の少ないところからの
+/// 一撃を消さないため。
+#[test]
+fn a_proportionally_steep_but_small_drop_is_real_damage() {
+    let mut kept = vec![0.90_f32, 0.90, 0.40, 0.40];
+    let mut held = vec![0.90_f32, 0.90, 0.39, 0.39];
+    let quiet = [false; 4];
+
+    spike_hold_forward_pass(&mut kept, &[true; 4], &quiet, &quiet, 0, 4);
+    spike_hold_forward_pass(&mut held, &[true; 4], &quiet, &quiet, 0, 4);
+
+    assert_eq!(kept[2], 0.40, "絶対量の小さい下降を消している");
+    assert_eq!(held[2], 0.90, "絶対量の大きい下降を通している");
+}
+
+/// 試合外のフレームを挟んでも、その先のフレームは処理を続ける。
+/// 打ち切ると、ラウンド途中の暗転から先が補正されないまま残る。
+#[test]
+fn a_frame_outside_the_match_does_not_end_the_pass() {
+    let mut corrected = vec![0.80_f32, 0.30, 0.90, 0.90];
+    let in_match = vec![true, false, true, true];
+    let quiet = [false; 4];
+
+    spike_hold_forward_pass(&mut corrected, &in_match, &quiet, &quiet, 0, 4);
+
+    assert_eq!(corrected[1], 0.30, "試合外を書き換えている");
+    assert_eq!(corrected[3], 0.90, "試合外の先で処理が止まっている");
+}
+
+/// 範囲の頭が末尾を越えていても、範囲外を読まない。
+#[test]
+fn a_range_at_the_very_end_reads_nothing() {
+    let mut corrected = vec![0.5_f32; 4];
+    let before = corrected.clone();
+
+    spike_hold_forward_pass(&mut corrected, &[true; 4], &[true; 4], &[true; 4], 4, 4);
+
+    assert_eq!(corrected, before);
+}

@@ -3,16 +3,75 @@ use super::*;
 const STRIP_WIDTH: usize = 1920;
 const STRIP_HEIGHT: usize = 70;
 
+/// テンプレートそのものを置いたら一致度は 1。上へも外れないこと。
+/// 正規化を取り違えると 1 を超えた値が出て、閾値が意味を失う。
 #[test]
-fn template_patch_has_near_perfect_score() {
+fn template_patch_scores_exactly_one() {
     let strip = strip_with_template(0, 0);
-    assert!(fight_score_from_hud_strip(&strip, STRIP_WIDTH) > 0.99);
+    let score = fight_score_from_hud_strip(&strip, STRIP_WIDTH);
+
+    assert!(
+        (score - 1.0).abs() < 0.01,
+        "一致度が 1 から外れている: {score}"
+    );
 }
 
+/// browser の縮小で 1px 程度ずれても拾う。探索は上下左右の四方向とも。
 #[test]
-fn narrow_alignment_search_recovers_shifted_patch() {
-    let strip = strip_with_template(2, -1);
-    assert!(fight_score_from_hud_strip(&strip, STRIP_WIDTH) > 0.99);
+fn the_alignment_search_covers_every_direction() {
+    for (shift_x, shift_y) in [(2, -1), (-2, 1), (0, 1), (0, -1), (2, 1), (-2, -1)] {
+        let strip = strip_with_template(shift_x, shift_y);
+        let score = fight_score_from_hud_strip(&strip, STRIP_WIDTH);
+
+        assert!(
+            (score - 1.0).abs() < 0.01,
+            "({shift_x}, {shift_y}) のずれを拾えていない: {score}"
+        );
+    }
+}
+
+/// パッチがちょうど収まる幅なら読む。1 列足りない幅と取り違えると、
+/// 端に寄せた HUD 帯を丸ごと捨てる。
+#[test]
+fn a_strip_exactly_wide_enough_is_read() {
+    const EXACT: usize = FIGHT_PATCH_X + FIGHT_PATCH_WIDTH;
+    let mut strip = vec![0u8; EXACT * (FIGHT_PATCH_Y + FIGHT_PATCH_HEIGHT) * 4];
+    for y in 0..FIGHT_PATCH_HEIGHT {
+        for x in 0..FIGHT_PATCH_WIDTH {
+            let value = FIGHT_TEMPLATE[y * FIGHT_PATCH_WIDTH + x];
+            let index = ((FIGHT_PATCH_Y + y) * EXACT + FIGHT_PATCH_X + x) * 4;
+            strip[index..index + 3].fill(value);
+            strip[index + 3] = 255;
+        }
+    }
+
+    let score = fight_score_from_hud_strip(&strip, EXACT);
+
+    assert!(score > 0.9, "ちょうど収まる帯を捨てている: {score}");
+}
+
+/// 明るさは三つの channel から作る。どれか一つだけを見ていると、
+/// 色の付いた場面で輪郭が別物になる。
+///
+/// 赤にテンプレート、緑にその反転を置くと、明るさの勾配は反転する。
+/// 反転した輪郭は `FIGHT` ではない。
+#[test]
+fn the_match_reads_brightness_not_a_single_channel() {
+    let mut strip = vec![0u8; STRIP_WIDTH * STRIP_HEIGHT * 4];
+    for y in 0..FIGHT_PATCH_HEIGHT {
+        for x in 0..FIGHT_PATCH_WIDTH {
+            let value = FIGHT_TEMPLATE[y * FIGHT_PATCH_WIDTH + x];
+            let index = ((FIGHT_PATCH_Y + y) * STRIP_WIDTH + FIGHT_PATCH_X + x) * 4;
+            strip[index] = value;
+            strip[index + 1] = 255 - value;
+            strip[index + 2] = 0;
+            strip[index + 3] = 255;
+        }
+    }
+
+    let score = fight_score_from_hud_strip(&strip, STRIP_WIDTH);
+
+    assert_eq!(score, 0.0, "反転した輪郭を FIGHT と読んでいる");
 }
 
 #[test]

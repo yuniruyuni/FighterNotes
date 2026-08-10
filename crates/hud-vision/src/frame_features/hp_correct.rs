@@ -235,6 +235,14 @@ pub(crate) fn fill_unreadable_from_the_future(
     }
 }
 
+/// 範囲内の試合中フレームの最小値。試合中のフレームが無ければ None。
+fn window_min(raw: &[f32], in_match: &[bool], range: std::ops::Range<usize>) -> Option<f32> {
+    range
+        .filter(|index| in_match[*index])
+        .map(|index| raw[index])
+        .reduce(f32::min)
+}
+
 /// ラウンドセグメント内で「偽ハイ」フレームを特定する。
 ///
 /// **ローカル外れ値検出（前後ウィンドウ最小値との比較）**
@@ -265,11 +273,11 @@ pub(crate) fn compute_spike_frames(
         let (seg_start, seg_end) = (w[0], w[1]);
         let len = seg_end - seg_start;
 
-        // lookahead_min[li] = min(raw[i+1 .. i+W+1] の in-match フレーム)
-        // backward_min[li]  = min(raw[i-W .. i]     の in-match フレーム)
-        // 両方とも raw[i] 自身を含まない（自分自身と比較すると常に条件不成立になるため）
-        let mut lookahead_min = vec![f32::MAX; len];
-        let mut backward_min = vec![f32::MAX; len];
+        // 前後それぞれの窓の最小値。自分自身は入れない（入れると自分と
+        // 比べることになり、条件が常に成り立たなくなる）。窓に試合中の
+        // フレームが一つも無ければ比較相手が居ない。
+        let mut lookahead_min: Vec<Option<f32>> = vec![None; len];
+        let mut backward_min: Vec<Option<f32>> = vec![None; len];
 
         for li in 0..len {
             let i = seg_start + li;
@@ -283,23 +291,11 @@ pub(crate) fn compute_spike_frames(
             } else {
                 seg_start
             };
-            let mut bmin = f32::MAX;
-            for j in bw_start..i {
-                if in_match[j] {
-                    bmin = bmin.min(raw[j]);
-                }
-            }
-            backward_min[li] = bmin;
+            backward_min[li] = window_min(raw, in_match, bw_start..i);
 
             // 前方ウィンドウ: i の後 SPIKE_WINDOW フレームの最小値
             let fw_end = (i + SPIKE_WINDOW + 1).min(seg_end);
-            let mut fmin = f32::MAX;
-            for j in i + 1..fw_end {
-                if in_match[j] {
-                    fmin = fmin.min(raw[j]);
-                }
-            }
-            lookahead_min[li] = fmin;
+            lookahead_min[li] = window_min(raw, in_match, i + 1..fw_end);
         }
 
         for li in 0..len {
@@ -311,13 +307,10 @@ pub(crate) fn compute_spike_frames(
             let ahead = lookahead_min[li];
             let behind = backward_min[li];
 
-            // 前後ウィンドウの最小値より THRESHOLD 以上高い場合のみスパイク
-            // AND 条件: 一方だけ満たす場合は偽ロー前後フレームなので除外
-            if ahead != f32::MAX
-                && behind != f32::MAX
-                && raw[i] > ahead + RISE_THRESHOLD
-                && raw[i] > behind + RISE_THRESHOLD
-            {
+            // 前後どちらの窓の最小値より高い場合だけスパイク。片側だけだと、
+            // 偽ローの隣にいるだけの正常な読みまで拾ってしまう。
+            let above = |floor: Option<f32>| floor.is_some_and(|f| raw[i] > f + RISE_THRESHOLD);
+            if above(ahead) && above(behind) {
                 in_spike[i] = true;
             }
         }
@@ -352,10 +345,11 @@ pub(crate) fn spike_hold_forward_pass(
         if !in_match[i] {
             continue;
         }
-        let is_spike_or_uncertain = in_spike[i] || in_uncertain[i];
-        let is_false_low =
-            !is_spike_or_uncertain && corrected[i] < prev * 0.5 && prev - corrected[i] > 0.5;
-        if is_spike_or_uncertain || is_false_low {
+        // 直前から半分以下まで、しかも絶対量でも大きく落ちた読みは、
+        // 爆発などでバーが隠れた偽ロー。割合だけで判ずると、残量の少ない
+        // ところからのとどめの一撃が消える。
+        let collapsed = corrected[i] < prev * 0.5 && prev - corrected[i] > 0.5;
+        if in_spike[i] || in_uncertain[i] || collapsed {
             corrected[i] = prev;
         } else {
             prev = corrected[i];
