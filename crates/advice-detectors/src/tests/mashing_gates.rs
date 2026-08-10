@@ -510,3 +510,132 @@ fn without_any_input_record_nothing_is_reported() {
 
     assert!(detect_mashing(&[], &events, 1, 0).is_none());
 }
+
+// ── メーターによる裏付けの窓 ─────────────────────────────────────────────
+
+/// 技が出たと言えるのは、押した入力の前後わずかの間に発生表示が
+/// 始まっているとき。離れた発生は別の技。
+#[test]
+fn the_startup_must_sit_next_to_the_press() {
+    let with_startup_at = |frames: std::ops::RangeInclusive<usize>| {
+        let mut events = one_mash();
+        back_the_press_with_a_move(&mut events);
+        for frame in 0..2000 {
+            events.meter_state[0][frame] = MeterState::Free;
+        }
+        for frame in frames {
+            events.meter_state[0][frame] = MeterState::Startup;
+        }
+        // 被弾の瞬間はまだ技中。
+        for frame in 998..=1000 {
+            events.meter_state[0][frame] = MeterState::Active;
+        }
+        detect_mashing(&[], &events, 1, 0).is_some()
+    };
+
+    // 入力 990..995 の 2 フレーム前から 8 フレーム後まで。
+    assert!(with_startup_at(988..=988), "入力の直前の発生を見ていない");
+    assert!(
+        !with_startup_at(987..=987),
+        "離れすぎた発生を結び付けている"
+    );
+    assert!(with_startup_at(996..=996), "入力の直後の発生を見ていない");
+}
+
+/// 被弾の瞬間にまだ技中でなければ、その技で負けたとは言えない。
+#[test]
+fn the_move_must_still_be_running_when_the_hit_lands() {
+    let with_move_until = |last: usize| {
+        let mut events = one_mash();
+        back_the_press_with_a_move(&mut events);
+        for frame in 995..2000 {
+            events.meter_state[0][frame] = if frame <= last {
+                MeterState::Active
+            } else {
+                MeterState::Free
+            };
+        }
+        for frame in 993..=994 {
+            events.meter_state[0][frame] = MeterState::Startup;
+        }
+        detect_mashing(&[], &events, 1, 0).is_some()
+    };
+
+    assert!(with_move_until(997), "被弾の直前まで技中なら暴れ");
+    assert!(!with_move_until(996), "技が終わっていたのに暴れにしている");
+}
+
+/// メーターの読みが怪しいフレームは裏付けに使わない。
+#[test]
+fn an_unreliable_meter_reading_does_not_back_the_press() {
+    let mut events = one_mash();
+    back_the_press_with_a_move(&mut events);
+    for frame in 998..=1000 {
+        events.meter_state[0][frame] = MeterState::Active;
+    }
+    assert!(detect_mashing(&[], &events, 1, 0).is_some());
+
+    for value in events.meter_confidence[0].iter_mut() {
+        *value = 0.49;
+    }
+    assert!(
+        detect_mashing(&[], &events, 1, 0).is_none(),
+        "怪しい読みを裏付けにしている"
+    );
+}
+
+// ── 暴れではない場面 ─────────────────────────────────────────────────────
+
+/// 相手の後隙に押したなら、それは確定反撃。暴れではない。
+#[test]
+fn pressing_into_the_opponents_recovery_is_a_punish_not_a_mash() {
+    let mut events = one_mash();
+    back_the_press_with_a_move(&mut events);
+    for frame in 998..=1000 {
+        events.meter_state[0][frame] = MeterState::Active;
+    }
+    assert!(detect_mashing(&[], &events, 1, 0).is_some());
+
+    events.meter_state[1][990] = MeterState::Recovery;
+    assert!(
+        detect_mashing(&[], &events, 1, 0).is_none(),
+        "確定反撃を暴れにしている"
+    );
+}
+
+/// 自分が飛び道具を撃った直後なら、押したのは牽制。暴れではない。
+#[test]
+fn a_projectile_just_after_the_press_is_not_a_mash() {
+    let with_projectile_at = |frame: usize| {
+        let mut events = one_mash();
+        back_the_press_with_a_move(&mut events);
+        for f in 998..=1000 {
+            events.meter_state[0][f] = MeterState::Active;
+        }
+        events.meter_state[0][frame] = MeterState::ProjectileActive;
+        detect_mashing(&[], &events, 1, 0).is_none()
+    };
+
+    assert!(with_projectile_at(1_004), "撃った弾を無視している");
+    assert!(!with_projectile_at(1_005), "遠すぎる弾まで結び付けている");
+}
+
+/// 相手が無敵技を通してきたなら、押したから負けたのではない。
+#[test]
+fn losing_to_an_invincible_move_is_not_a_mash() {
+    let with_invincibility_at = |frame: usize| {
+        let mut events = one_mash();
+        back_the_press_with_a_move(&mut events);
+        for f in 998..=1000 {
+            events.meter_state[0][f] = MeterState::Active;
+        }
+        events.meter_state[1][frame] = MeterState::Invincible;
+        detect_mashing(&[], &events, 1, 0).is_none()
+    };
+
+    assert!(with_invincibility_at(980), "相手の無敵を無視している");
+    assert!(
+        !with_invincibility_at(979),
+        "遠すぎる無敵まで結び付けている"
+    );
+}
