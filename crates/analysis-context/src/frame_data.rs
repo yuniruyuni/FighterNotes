@@ -389,4 +389,161 @@ mod tests {
         assert!(!has_extended_airtime(Some("LUKE")));
         assert!(!has_extended_airtime(None));
     }
+
+    // ── 発生フレームによる絞り込み ───────────────────────────────────────
+
+    /// 観測した発生が表のどの技とも合わなければ、その入力からは
+    /// 何も決めない。
+    #[test]
+    fn an_observed_startup_far_from_the_table_matches_nothing() {
+        let low = ["弱".to_string()];
+
+        assert_eq!(
+            strike_kind_for_input("INGRID", "D", &low, false, false, Some(5)),
+            Some(StrikeKind::Low),
+            "表どおりの発生を落としている"
+        );
+        assert_eq!(
+            strike_kind_for_input("INGRID", "D", &low, false, false, Some(50)),
+            None,
+            "かけ離れた発生を受け入れている"
+        );
+    }
+
+    /// 発生が観測できていなければ、同じ入力に属性の違う技が並ぶ限り
+    /// 決められない。断定より分からないままの方がよい。
+    #[test]
+    fn without_an_observed_startup_an_ambiguous_input_stays_unknown() {
+        assert_eq!(
+            strike_kind_for_input("INGRID", "D", &["弱".to_string()], false, false, None),
+            None
+        );
+    }
+
+    /// ボタンの見えない入力からは技を決めない。
+    #[test]
+    fn an_input_without_buttons_decides_nothing() {
+        assert_eq!(
+            strike_kind_for_input("INGRID", "D", &[], false, false, Some(5)),
+            None
+        );
+    }
+
+    /// クラシックとモダンのバッジが混ざった入力は、どちらの表とも
+    /// 突き合わせない。読み取りが崩れている。
+    #[test]
+    fn a_mixture_of_classic_and_modern_badges_decides_nothing() {
+        let mixed = ["弱P".to_string(), "中".to_string()];
+
+        assert_eq!(
+            strike_kind_for_input("INGRID", "D", &mixed, false, false, Some(5)),
+            None
+        );
+    }
+
+    /// 地上と空中は別の表を見る。地上の入力を空中技にしない。
+    #[test]
+    fn the_ground_and_air_tables_are_kept_apart() {
+        let light = ["弱".to_string()];
+        let ground = strike_kind_for_input("INGRID", "N", &light, true, false, Some(4));
+        let air = strike_kind_for_input("INGRID", "N", &light, true, true, Some(6));
+
+        assert_eq!(ground, Some(StrikeKind::High));
+        assert_eq!(air, Some(StrikeKind::Air));
+    }
+
+    // ── 確定反撃の候補 ───────────────────────────────────────────────────
+
+    /// 有利フレームぴったりで出る技は候補に入れる。1F でも足りなければ
+    /// 入れない。
+    #[test]
+    fn a_move_that_fits_the_advantage_exactly_is_offered() {
+        let fastest = punish_options("KEN", 20, 100)
+            .iter()
+            .map(|move_data| move_data.startup)
+            .min()
+            .expect("候補がある");
+
+        assert!(
+            !punish_options("KEN", fastest, 100).is_empty(),
+            "ちょうどの技を外している"
+        );
+        assert!(
+            punish_options("KEN", fastest - 1, 100).is_empty(),
+            "間に合わない技を勧めている"
+        );
+    }
+
+    /// 件数の上限を守る。長い一覧は読めない。
+    #[test]
+    fn the_offered_list_is_capped() {
+        assert_eq!(punish_options("KEN", 60, 3).len(), 3);
+        assert!(punish_options("KEN", 60, 0).is_empty());
+    }
+
+    /// 同じ発生の技は、一番ダメージの高いものだけを残す。派生違いで
+    /// 同じ発生の技が並ぶと、一覧が埋まって読めない。
+    #[test]
+    fn only_the_strongest_move_of_each_startup_is_offered() {
+        let options = punish_options("KEN", 60, 100);
+
+        let mut startups: Vec<u32> = options.iter().map(|move_data| move_data.startup).collect();
+        startups.sort_unstable();
+        let unique = startups.len();
+        startups.dedup();
+
+        assert_eq!(startups.len(), unique, "同じ発生の技が並んでいる");
+    }
+
+    /// 同じ発生に技が並ぶなら、勧めるのはダメージの一番高いもの。
+    #[test]
+    fn the_offered_move_is_the_strongest_of_its_startup() {
+        let moves = table().get("KEN").expect("KEN の技表");
+        let offered = punish_options("KEN", 60, 100);
+
+        for move_data in &offered {
+            let strongest = moves
+                .iter()
+                .filter(|candidate| {
+                    candidate.startup == move_data.startup
+                        && candidate.category != "super"
+                        && candidate.damage > 0
+                })
+                .map(|candidate| candidate.damage)
+                .max()
+                .expect("同じ発生の技がある");
+            assert_eq!(
+                move_data.damage, strongest,
+                "発生 {}F で弱い方を勧めている",
+                move_data.startup
+            );
+        }
+    }
+
+    /// 使えない技が一つ混ざっても、その先の技まで諦めない。
+    #[test]
+    fn an_unusable_move_does_not_end_the_search() {
+        let moves = table().get("KEN").expect("KEN の技表");
+        let unusable = moves
+            .iter()
+            .position(|move_data| move_data.startup == 0 || move_data.damage == 0)
+            .expect("使えない技が表にある");
+        let usable_after = moves[unusable + 1..].iter().any(|move_data| {
+            move_data.startup > 0 && move_data.startup <= 60 && move_data.damage > 0
+        });
+
+        assert!(usable_after, "この表では確かめられない");
+        assert!(
+            punish_options("KEN", 60, 100).len() > 1,
+            "途中で探すのをやめている"
+        );
+    }
+
+    /// ダメージの分からない技は勧めない。
+    #[test]
+    fn moves_without_damage_are_not_offered() {
+        assert!(punish_options("KEN", 60, 100)
+            .iter()
+            .all(|move_data| move_data.damage > 0));
+    }
 }

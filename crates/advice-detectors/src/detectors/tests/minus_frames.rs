@@ -639,3 +639,142 @@ fn the_opponents_chances_do_not_dilute_the_share() {
         "相手の機会で分母が薄まっている"
     );
 }
+
+// ── 数え上げをそのまま文面へ ─────────────────────────────────────────────
+
+/// 説明に書く割合は、選んだ回数を機会の数で割ったもの。分母を取り違え
+/// ると、癖の強さがそのまま誤って伝わる。
+#[test]
+fn the_share_written_in_the_description_is_selections_over_chances() {
+    let events = events_with(
+        vec![
+            press(
+                100,
+                DefensiveActionKind::Throw,
+                MinusPressOutcome::CounterHit,
+                0.20,
+            ),
+            press(300, DefensiveActionKind::Throw, MinusPressOutcome::Won, 0.0),
+        ],
+        vec![
+            other_answer(500),
+            other_answer(700),
+            other_answer(900),
+            other_answer(1_100),
+        ],
+    );
+
+    let card = detect_throw_while_minus(&events, 1).expect("提示される");
+
+    assert!(
+        card.description.contains("4 回中、2 回（50%）"),
+        "割合の書き方がずれている: {}",
+        card.description
+    );
+}
+
+/// 投げの指摘は、負けた分の HP をそのまま重さにする。同じ HP なら、
+/// 通った回数が多いほど「その回答へ寄っている」度合いが強い。
+#[test]
+fn the_weight_follows_the_health_lost_then_how_often_it_was_chosen() {
+    let one_loss = events_with(
+        vec![press(
+            100,
+            DefensiveActionKind::Throw,
+            MinusPressOutcome::CounterHit,
+            0.20,
+        )],
+        vec![],
+    );
+    let same_loss_more_throws = events_with(
+        vec![
+            press(
+                100,
+                DefensiveActionKind::Throw,
+                MinusPressOutcome::CounterHit,
+                0.20,
+            ),
+            press(300, DefensiveActionKind::Throw, MinusPressOutcome::Won, 0.0),
+            press(500, DefensiveActionKind::Throw, MinusPressOutcome::Won, 0.0),
+        ],
+        vec![],
+    );
+    let bigger_loss = events_with(
+        vec![press(
+            100,
+            DefensiveActionKind::Throw,
+            MinusPressOutcome::CounterHit,
+            0.30,
+        )],
+        vec![],
+    );
+
+    let light = detect_throw_while_minus(&one_loss, 1).expect("提示される");
+    let repeated = detect_throw_while_minus(&same_loss_more_throws, 1).expect("提示される");
+    let heavy = detect_throw_while_minus(&bigger_loss, 1).expect("提示される");
+
+    assert!(
+        repeated.severity > light.severity,
+        "何度も選んでいる方が軽い: {} vs {}",
+        repeated.severity,
+        light.severity
+    );
+    assert!(
+        heavy.severity > repeated.severity,
+        "失った HP が多い方が軽い: {} vs {}",
+        heavy.severity,
+        repeated.severity
+    );
+    assert_eq!(light.hp_lost, Some(0.20));
+    assert_eq!(heavy.hp_lost, Some(0.30));
+}
+
+/// 偏りと単発では、見出しだけでなく次にやることも変わる。
+#[test]
+fn the_throw_practice_changes_when_it_becomes_a_bias() {
+    let once = events_with(
+        vec![press(
+            100,
+            DefensiveActionKind::Throw,
+            MinusPressOutcome::CounterHit,
+            0.20,
+        )],
+        vec![],
+    );
+    let biased = events_with(
+        vec![
+            press(
+                100,
+                DefensiveActionKind::Throw,
+                MinusPressOutcome::CounterHit,
+                0.20,
+            ),
+            press(
+                300,
+                DefensiveActionKind::Throw,
+                MinusPressOutcome::CounterHit,
+                0.15,
+            ),
+            press(500, DefensiveActionKind::Throw, MinusPressOutcome::Won, 0.0),
+            press(700, DefensiveActionKind::Throw, MinusPressOutcome::Won, 0.0),
+        ],
+        vec![],
+    );
+
+    let once = detect_throw_while_minus(&once, 1).expect("提示される");
+    let biased = detect_throw_while_minus(&biased, 1).expect("提示される");
+
+    assert_ne!(once.practice, biased.practice, "練習内容を書き分けていない");
+    assert_eq!(once.kind, AdviceKind::Observation);
+    assert_eq!(biased.kind, AdviceKind::Diagnosis);
+    assert!(
+        once.practice.contains("クリップ"),
+        "単発の確認を促していない: {}",
+        once.practice
+    );
+    assert!(
+        biased.practice.contains("散らし"),
+        "回答を散らす助言になっていない: {}",
+        biased.practice
+    );
+}

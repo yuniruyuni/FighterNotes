@@ -504,4 +504,184 @@ mod tests {
         assert_eq!(tracker.observations.len(), 2);
         assert_eq!(tracker.observations[1].frame_index, 13);
     }
+    // ── 表示の整合 ───────────────────────────────────────────────────────
+
+    /// 中央表示の一行分。
+    fn reading(
+        last_damage: u32,
+        scaling_percent: u32,
+        combo_damage: u32,
+        max_combo_damage: u32,
+    ) -> AttackInfoSide {
+        AttackInfoSide {
+            last_damage,
+            scaling_percent,
+            combo_damage,
+            max_combo_damage,
+            attribute: AttackAttribute::Upper,
+        }
+    }
+
+    /// 普通にコンボが伸びていく変化は受け入れる。
+    #[test]
+    fn a_combo_growing_normally_is_coherent() {
+        let previous = reading(800, 100, 800, 800);
+        let current = reading(600, 80, 1_400, 1_400);
+
+        assert!(is_coherent_change(&previous, &current));
+    }
+
+    /// 先頭の桁が背景へ溶けた読みは受け入れない。他の欄が全く同じまま
+    /// 累積値だけ減るのは、桁が欠けたときにしか起きない。
+    #[test]
+    fn a_combo_total_that_only_lost_its_leading_digit_is_rejected() {
+        let previous = reading(480, 80, 2_660, 2_660);
+
+        assert!(!is_coherent_change(
+            &previous,
+            &reading(480, 80, 660, 2_660)
+        ));
+    }
+
+    /// 累積値が「今回の一撃」と一致するなら、それは新しいコンボの
+    /// 始まり。桁欠落ではない。
+    #[test]
+    fn a_total_matching_the_latest_hit_is_a_new_combo_not_a_dropped_digit() {
+        let previous = reading(480, 80, 2_660, 2_660);
+
+        assert!(is_coherent_change(&previous, &reading(480, 80, 480, 2_660)));
+    }
+
+    /// 補正が下がりながら累積値だけ減ることはない。コンボが続いている
+    /// なら累積値は増える一方。
+    #[test]
+    fn a_total_shrinking_while_the_scaling_tightens_is_rejected() {
+        let previous = reading(500, 80, 2_000, 2_000);
+
+        assert!(!is_coherent_change(
+            &previous,
+            &reading(400, 70, 900, 2_000)
+        ));
+    }
+
+    /// 補正が緩んでいれば、それは新しいコンボ。累積値が減ってよい。
+    #[test]
+    fn a_total_shrinking_while_the_scaling_loosens_is_a_new_combo() {
+        let previous = reading(500, 80, 2_000, 2_000);
+
+        assert!(is_coherent_change(&previous, &reading(400, 90, 900, 2_000)));
+    }
+
+    /// 一撃の値だけが変わって他が動かない読みは受け入れない。新しい
+    /// 攻撃が当たれば累積値も動く。
+    #[test]
+    fn a_hit_value_changing_on_its_own_is_rejected() {
+        let previous = reading(800, 100, 800, 800);
+
+        assert!(!is_coherent_change(&previous, &reading(600, 100, 800, 800)));
+    }
+
+    /// 補正だけが変わって他が動かない読みも受け入れない。
+    #[test]
+    fn a_scaling_value_changing_on_its_own_is_rejected() {
+        let previous = reading(800, 100, 800, 800);
+
+        assert!(!is_coherent_change(&previous, &reading(800, 90, 800, 800)));
+    }
+
+    /// 攻撃属性が変われば、それは新しい攻撃。単独変化の門は通す。
+    #[test]
+    fn a_change_of_attribute_is_a_real_change() {
+        let previous = reading(800, 100, 800, 800);
+        let mut current = reading(800, 90, 800, 800);
+        current.attribute = AttackAttribute::Lower;
+
+        assert!(is_coherent_change(&previous, &current));
+    }
+
+    // ── 欠けた先頭桁の補い ───────────────────────────────────────────────
+
+    /// 十進の末尾として成り立つかを見る。
+    #[test]
+    fn a_suffix_must_line_up_with_the_decimal_places() {
+        assert!(is_strict_decimal_suffix(2_660, 660));
+        assert!(is_strict_decimal_suffix(2_660, 60));
+
+        assert!(!is_strict_decimal_suffix(2_660, 61), "桁が合っていない");
+        assert!(
+            !is_strict_decimal_suffix(2_660, 2_660),
+            "同じ値は末尾ではない"
+        );
+        assert!(
+            !is_strict_decimal_suffix(660, 2_660),
+            "長い方は末尾ではない"
+        );
+        assert!(!is_strict_decimal_suffix(2_660, 0), "0 は末尾に採らない");
+    }
+
+    /// コンボが続いているなら、今回の一撃の値は累積値の差で決まる。
+    /// 先頭桁が欠けた読みは、その差で補える。
+    #[test]
+    fn a_continuing_combo_repairs_the_hit_value_from_the_difference() {
+        let previous = reading(480, 80, 2_660, 2_660);
+        // 実際は 1152 だが先頭桁が読めず 152 に見えている。
+        let mut current = reading(152, 70, 3_812, 3_812);
+
+        repair_leading_damage_digits(&previous, &mut current);
+
+        assert_eq!(current.last_damage, 1_152, "差から補えていない");
+    }
+
+    /// 差と噛み合わない読みは触らない。勝手に書き換えると、正しい
+    /// 読みまで壊す。
+    #[test]
+    fn a_hit_value_that_does_not_line_up_is_left_alone() {
+        let previous = reading(480, 80, 2_660, 2_660);
+        let mut current = reading(153, 70, 3_812, 3_812);
+
+        repair_leading_damage_digits(&previous, &mut current);
+
+        assert_eq!(current.last_damage, 153);
+    }
+
+    /// コンボが切り替わった直後は、累積値そのものが今回の一撃。
+    #[test]
+    fn a_reset_combo_repairs_the_hit_value_from_the_total() {
+        let previous = reading(480, 70, 2_660, 2_660);
+        // 実際は 1200 だが先頭桁が読めず 200 に見えている。
+        let mut current = reading(200, 90, 1_200, 2_660);
+
+        repair_leading_damage_digits(&previous, &mut current);
+
+        assert_eq!(current.last_damage, 1_200);
+    }
+
+    /// 続きとも切り替わりともつかない変化では補わない。
+    #[test]
+    fn an_ambiguous_change_repairs_nothing() {
+        let previous = reading(480, 80, 2_660, 2_660);
+        let mut current = reading(152, 80, 2_660, 2_660);
+
+        repair_leading_damage_digits(&previous, &mut current);
+
+        assert_eq!(current.last_damage, 152);
+    }
+
+    // ── 確定までの回数 ───────────────────────────────────────────────────
+
+    /// 同じ値が続いても、既に確定している値と同じなら何も起きない。
+    #[test]
+    fn re_reading_the_confirmed_value_produces_no_update() {
+        let mut tracker = AttackInfoTracker::default();
+        for frame in 10..13 {
+            tracker.observe(frame, &inspection(100));
+        }
+        assert_eq!(tracker.observations.len(), 1);
+
+        for frame in 13..20 {
+            tracker.observe(frame, &inspection(100));
+        }
+
+        assert_eq!(tracker.observations.len(), 1, "同じ値を何度も記録している");
+    }
 }

@@ -127,3 +127,6 @@ pub(crate) fn build_compatibility_summary(
     };
     (weaknesses, practice_items, summary)
 }
+
+#[cfg(test)]
+mod tests;

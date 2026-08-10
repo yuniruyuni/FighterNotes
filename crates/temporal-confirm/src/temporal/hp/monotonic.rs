@@ -102,7 +102,7 @@ fn is_structural_full(
     let Some(feature) = features.get(index) else {
         return false;
     };
-    match_frames.get(index) == Some(&true)
+    match_frames.get(index).copied().unwrap_or(false)
         && own
             .get(index)
             .is_some_and(|value| *value >= STRUCTURAL_FULL_HP)
@@ -177,5 +177,295 @@ pub(super) fn enforce_monotonic(values: &mut [f32], reset_at: &[bool]) {
             *value = (*value).min(previous);
         }
         previous = Some(*value);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 両者が全快で映っているフレームの列。
+    fn full_run(length: usize, full: std::ops::Range<usize>) -> (Vec<f32>, Vec<f32>, Vec<bool>) {
+        let mut own = vec![0.5f32; length];
+        let mut opponent = vec![0.5f32; length];
+        for index in full {
+            own[index] = 1.0;
+            opponent[index] = 1.0;
+        }
+        (own, opponent, vec![true; length])
+    }
+
+    /// 両者が全快で並ぶ区間の頭が、ラウンドの切れ目。
+    #[test]
+    fn a_run_of_full_health_marks_a_round_boundary() {
+        let (own, opponent, match_frames) = full_run(100, 20..60);
+
+        let reset_at = round_reset_frames(&own, &opponent, &match_frames);
+
+        assert!(reset_at[20], "全快の並びの頭を切れ目にしていない");
+        assert_eq!(reset_at.iter().filter(|marked| **marked).count(), 1);
+    }
+
+    /// 全快が一瞬しか続かなければ切れ目ではない。
+    #[test]
+    fn a_flash_of_full_health_is_not_a_boundary() {
+        let (own, opponent, match_frames) = full_run(100, 20..20 + FULL_MIN_RUN - 1);
+
+        assert!(round_reset_frames(&own, &opponent, &match_frames)
+            .iter()
+            .all(|marked| !marked));
+    }
+
+    /// ちょうどの長さは切れ目に数える。
+    #[test]
+    fn a_run_of_exactly_the_minimum_is_a_boundary() {
+        let (own, opponent, match_frames) = full_run(100, 20..20 + FULL_MIN_RUN);
+
+        assert!(round_reset_frames(&own, &opponent, &match_frames)[20]);
+    }
+
+    /// 片方だけ全快でも切れ目ではない。ラウンドの頭は両者が全快。
+    #[test]
+    fn one_side_at_full_health_is_not_a_boundary() {
+        let (own, mut opponent, match_frames) = full_run(100, 20..60);
+        for value in &mut opponent[20..60] {
+            *value = 0.5;
+        }
+
+        assert!(round_reset_frames(&own, &opponent, &match_frames)
+            .iter()
+            .all(|marked| !marked));
+    }
+
+    /// 試合画面の外の全快は数えない。リザルト画面のバーはラウンドの
+    /// 頭ではない。
+    #[test]
+    fn full_health_outside_the_match_screen_is_not_a_boundary() {
+        let (own, opponent, mut match_frames) = full_run(100, 20..60);
+        for flag in &mut match_frames[20..60] {
+            *flag = false;
+        }
+
+        assert!(round_reset_frames(&own, &opponent, &match_frames)
+            .iter()
+            .all(|marked| !marked));
+    }
+
+    /// 列の末尾まで全快が続いた場合も切れ目に数える。
+    #[test]
+    fn a_run_reaching_the_end_of_the_video_is_still_a_boundary() {
+        let (own, opponent, match_frames) = full_run(100, 60..100);
+
+        assert!(round_reset_frames(&own, &opponent, &match_frames)[60]);
+    }
+
+    // ── ラウンド内の単調化 ───────────────────────────────────────────────
+
+    /// ラウンドの中で HP は増えない。
+    #[test]
+    fn health_never_climbs_inside_a_round() {
+        let mut values = vec![1.0, 0.8, 0.9, 0.7, 0.75];
+        let reset_at = vec![false; values.len()];
+
+        enforce_monotonic(&mut values, &reset_at);
+
+        assert_eq!(values, vec![1.0, 0.8, 0.8, 0.7, 0.7]);
+    }
+
+    /// ラウンドが変われば、そこから測り直す。
+    #[test]
+    fn a_round_boundary_starts_the_measurement_over() {
+        let mut values = vec![1.0, 0.5, 1.0, 0.9];
+        let mut reset_at = vec![false; values.len()];
+        reset_at[2] = true;
+
+        enforce_monotonic(&mut values, &reset_at);
+
+        assert_eq!(values, vec![1.0, 0.5, 1.0, 0.9]);
+    }
+
+    /// 読めなかったフレームは基準にも結果にもしない。
+    #[test]
+    fn unreadable_frames_are_skipped_without_becoming_the_baseline() {
+        let mut values = vec![1.0, 0.8, -1.0, 0.9];
+        let reset_at = vec![false; values.len()];
+
+        enforce_monotonic(&mut values, &reset_at);
+
+        assert_eq!(values, vec![1.0, 0.8, -1.0, 0.8]);
+    }
+    // ── 覆われた全快バーの復元 ───────────────────────────────────────────
+
+    use crate::temporal::tests::support::feature;
+
+    /// ラウンド開始の全快バーが背景に覆われ、9 割ほどに見えている映像。
+    struct Opening {
+        features: Vec<FrameFeatures>,
+        own: Vec<f32>,
+        opponent: Vec<f32>,
+        match_frames: Vec<bool>,
+    }
+
+    impl Opening {
+        /// 前のラウンド（50f）→ 画面切り替え（30f）→ 新しいラウンド（40f）。
+        fn new() -> Self {
+            let mut features = Vec::new();
+            let mut own = Vec::new();
+            let mut opponent = Vec::new();
+            let mut match_frames = Vec::new();
+            for index in 0..120u32 {
+                let mut frame = feature(index, 1.0);
+                frame.left_drive_ratio = 1.0;
+                frame.right_drive_ratio = 1.0;
+                let (in_match, hp) = match index {
+                    0..=49 => (true, 0.5),
+                    50..=79 => (false, 0.5),
+                    _ => (true, 0.92),
+                };
+                frame.is_match_screen = in_match;
+                features.push(frame);
+                own.push(hp);
+                opponent.push(hp);
+                match_frames.push(in_match);
+            }
+            Self {
+                features,
+                own,
+                opponent,
+                match_frames,
+            }
+        }
+
+        fn normalize(mut self) -> (Vec<f32>, Vec<f32>) {
+            normalize_structural_full_runs(
+                &self.features,
+                &mut self.own,
+                &mut self.opponent,
+                &self.match_frames,
+            );
+            (self.own, self.opponent)
+        }
+    }
+
+    /// 画面の切り替わりの後に続く、両者ほぼ満タン・ドライブも満タンの
+    /// 区間は、ラウンド開始の全快。覆われて欠けた分を戻す。
+    #[test]
+    fn a_covered_opening_bar_is_restored_to_full() {
+        let (own, opponent) = Opening::new().normalize();
+
+        assert_eq!(own[100], 1.0, "自分側を戻していない");
+        assert_eq!(opponent[100], 1.0, "相手側を戻していない");
+        assert_eq!(own[10], 0.5, "前のラウンドまで戻している");
+    }
+
+    /// 短い区間は戻さない。ラウンドの途中に 9 割の場面はいくらでもある。
+    #[test]
+    fn a_short_stretch_of_near_full_health_is_not_an_opening() {
+        let mut opening = Opening::new();
+        // 新しいラウンドの区間を最小の長さより 1 つ短くする。
+        for index in 80 + FULL_MIN_RUN - 1..120 {
+            opening.own[index] = 0.5;
+            opening.opponent[index] = 0.5;
+        }
+
+        let (own, _) = opening.normalize();
+
+        assert_eq!(own[100], 0.5);
+        assert_eq!(own[85], 0.92, "短い区間まで戻している");
+    }
+
+    /// 直前に画面の切り替わりが無ければ、ラウンドの頭ではない。
+    #[test]
+    fn without_a_screen_transition_it_is_not_an_opening() {
+        let mut opening = Opening::new();
+        for index in 50..80 {
+            opening.features[index].is_match_screen = true;
+            opening.match_frames[index] = true;
+        }
+
+        let (own, _) = opening.normalize();
+
+        assert_eq!(own[100], 0.92, "切り替わり無しで戻している");
+    }
+
+    /// 切り替わりが一瞬なら、ラウンドの区切りではない。
+    #[test]
+    fn a_brief_flicker_is_not_a_round_transition() {
+        let mut opening = Opening::new();
+        for index in 50..80 - ROUND_GAP_MIN + 1 {
+            opening.features[index].is_match_screen = true;
+            opening.match_frames[index] = true;
+        }
+
+        let (own, _) = opening.normalize();
+
+        assert_eq!(own[100], 0.92, "一瞬の途切れで戻している");
+    }
+
+    /// 切り替わりの前と HP がほとんど変わらないなら、ラウンドは
+    /// 変わっていない。
+    #[test]
+    fn without_a_real_recovery_it_is_not_a_new_round() {
+        let mut opening = Opening::new();
+        for index in 0..50 {
+            opening.own[index] = 0.9;
+            opening.opponent[index] = 0.9;
+        }
+
+        let (own, _) = opening.normalize();
+
+        assert_eq!(own[100], 0.92, "回復していないのに戻している");
+    }
+
+    /// ドライブゲージが満タンでなければ、ラウンドの頭ではない。
+    #[test]
+    fn a_drive_gauge_short_of_full_rules_out_an_opening() {
+        let mut opening = Opening::new();
+        for index in 80..120 {
+            opening.features[index].right_drive_ratio = 0.9;
+        }
+
+        let (own, _) = opening.normalize();
+
+        assert_eq!(own[100], 0.92);
+    }
+
+    /// バーンアウト中はラウンドの頭ではない。
+    #[test]
+    fn a_burnt_out_side_rules_out_an_opening() {
+        let mut opening = Opening::new();
+        for index in 80..120 {
+            opening.features[index].left_burnout = true;
+        }
+
+        let (own, _) = opening.normalize();
+
+        assert_eq!(own[100], 0.92);
+    }
+
+    /// ドライブの読みが怪しいフレームは根拠にしない。
+    #[test]
+    fn an_unreliable_drive_reading_rules_out_an_opening() {
+        let mut opening = Opening::new();
+        for index in 80..120 {
+            opening.features[index].right_drive_uncertain = true;
+        }
+
+        let (own, _) = opening.normalize();
+
+        assert_eq!(own[100], 0.92);
+    }
+
+    /// 片方だけ大きく削れていれば、ラウンドの頭ではない。
+    #[test]
+    fn one_side_far_from_full_rules_out_an_opening() {
+        let mut opening = Opening::new();
+        for index in 80..120 {
+            opening.opponent[index] = 0.6;
+        }
+
+        let (own, _) = opening.normalize();
+
+        assert_eq!(own[100], 0.92);
     }
 }

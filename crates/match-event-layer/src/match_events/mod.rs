@@ -190,16 +190,18 @@ fn build_match_events_with_optional_fight_markers(
     // 全快扱いにするだけ。ラウンド開始時の 1px cap ノイズは知覚層で補正し、
     // 両者満タンの持続帯を uncertain に落とさない。
     let own_is_p1 = own_side != "p2";
-    let mut hp: [Vec<f32>; 2] = [Vec::with_capacity(n), Vec::with_capacity(n)];
-    for f in features {
-        let (l, r) = if own_is_p1 {
-            (f.own_hp, f.opponent_hp)
+    let readable = |value: f32| if value < 0.0 { 1.0 } else { value };
+    let side_of = |f: &FrameFeatures, left: bool| {
+        readable(if own_is_p1 == left {
+            f.own_hp
         } else {
-            (f.opponent_hp, f.own_hp)
-        };
-        hp[0].push(if l < 0.0 { 1.0 } else { l });
-        hp[1].push(if r < 0.0 { 1.0 } else { r });
-    }
+            f.opponent_hp
+        })
+    };
+    let hp: [Vec<f32>; 2] = [
+        features.iter().map(|f| side_of(f, true)).collect(),
+        features.iter().map(|f| side_of(f, false)).collect(),
+    ];
 
     // SA 暗転・投げ・KO 演出の停止区間は、ダメージ集約とラウンド終端の
     // 両方で使うため先に確定する。
@@ -265,9 +267,8 @@ fn build_match_events_with_optional_fight_markers(
     for d in damage.iter_mut() {
         d.round_no = renum[&d.round_no];
     }
-    for d in contact_damage.iter_mut() {
-        d.round_no = renum[&d.round_no];
-    }
+    // contact_damage はコンタクトの hit/block を決めるためだけに使う。
+    // 見るのは被弾側とフレームだけなので、番号は振り直さない。
 
     // ── コンタクトイベント（メーター由来） ───────────────────────────────
     let contacts = match meter {

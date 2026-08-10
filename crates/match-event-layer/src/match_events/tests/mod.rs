@@ -6,6 +6,7 @@ mod contact_does_not_bridge_meter_reset_epochs;
 mod damage_sequence_uses_gameplay_gap_across_sa_freeze;
 mod drive_impact_invincible_start_is_confirmed;
 mod empty_input_produces_an_empty_event_model;
+mod health_bookkeeping;
 mod legacy_input_segment_defaults_to_direct_observation;
 mod punish_does_not_bridge_meter_reset_epochs;
 mod sustained_burnout_is_reported_and_clipped_to_its_round;
@@ -29,5 +30,6 @@ mod throw_action_links_delayed_damage_and_deduplicates_held_input;
 mod throw_input_without_matching_execution_is_unconfirmed;
 mod throw_loses_to_invincible_reversal;
 mod timeline_projections_clip_entries_and_apply_later_overlaps;
+mod whole_match_pipeline;
 
 pub(super) use crate::test_support as support;

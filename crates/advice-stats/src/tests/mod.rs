@@ -4,6 +4,7 @@ mod support;
 
 mod drive_spend_is_measured_not_assumed;
 mod every_new_tactic_counter_is_pinned;
+mod super_gauge_coverage;
 mod tactic_stats_count_every_drive_outcome;
 mod tactic_stats_count_every_pressure_variant;
 mod tactic_stats_count_every_super_art_variant;

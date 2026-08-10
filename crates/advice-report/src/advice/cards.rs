@@ -237,6 +237,9 @@ fn sort_cards(cards: &mut [AdviceCard]) {
 }
 
 #[cfg(test)]
+mod requirement_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

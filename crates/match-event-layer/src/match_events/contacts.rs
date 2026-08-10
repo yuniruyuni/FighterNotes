@@ -84,3 +84,6 @@ pub(crate) fn extract_contacts(
     out.dedup_by(|x, y| x.frame == y.frame && x.attacker == y.attacker && x.victim == y.victim);
     out
 }
+
+#[cfg(test)]
+mod tests;

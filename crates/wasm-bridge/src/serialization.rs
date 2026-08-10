@@ -29,3 +29,6 @@ pub(crate) fn tracked_to_json(tracked: &[video_analyzer::TrackedInput]) -> Strin
         .collect::<Vec<_>>()
         .join(",")
 }
+
+#[cfg(test)]
+mod tests;

@@ -705,3 +705,230 @@ mod tests {
         assert_eq!(evidence.super_arts[0].entry_scaling_percent, Some(40));
     }
 }
+
+#[cfg(test)]
+mod scale_tests {
+    //! ゲーム内表示のダメージと HP の目減りが噛み合うかの判定に対する
+    //! テスト。
+    //!
+    //! 表示は点数、HP バーは割合なので、そのままでは比べられない。
+    //! 何点で HP が何割減るかの比率を、試合の中の被弾から推定してから
+    //! 突き合わせる。
+    //!
+    //! 比率の推定を誤ると、正しい表示を「HP と食い違う」と切り捨てるか、
+    //! 逆に別のコンボの数字をそのまま信じることになる。
+
+    use super::*;
+
+    /// 表示を読み切れた被弾の記録。
+    fn evidence(combo_damage: u32) -> DamageAttackEvidence {
+        DamageAttackEvidence {
+            victim: 1,
+            attacker: 2,
+            damage_start_frame: 100,
+            sequence_start_frame: 100,
+            sequence_end_frame: 160,
+            combo_damage,
+            sequence_count: 1,
+            final_scaling_percent: 100,
+            starter_attribute: None,
+            final_attribute: crate::attack_info::AttackAttribute::Middle,
+            complete: true,
+            recovered_from_max: false,
+            confidence: EventConfidence::High,
+            hp_consistency: AttackDamageConsistency::Unverified,
+            sequence_indices: Vec::new(),
+        }
+    }
+
+    /// HP の目減り。
+    fn damage(drop: f32, hp_after: f32) -> DamageEvent {
+        DamageEvent {
+            victim: 1,
+            start_frame: 100,
+            pre_freeze_frame: 100,
+            end_frame: 160,
+            hp_before: hp_after + drop,
+            hp_after,
+            drop,
+            round_no: 1,
+        }
+    }
+
+    // ── 比率の推定 ───────────────────────────────────────────────────────
+
+    /// 二つ以上の被弾から比率を推定する。一つでは、その一つが外れ値
+    /// だったときに全部が狂う。
+    #[test]
+    fn a_single_sample_is_not_enough_to_estimate() {
+        let one = estimate_hp_scales(&[Some(evidence(1000))], &[damage(0.1, 0.9)]);
+        let two = estimate_hp_scales(
+            &[Some(evidence(1000)), Some(evidence(1000))],
+            &[damage(0.1, 0.9), damage(0.1, 0.8)],
+        );
+
+        assert_eq!(one[0], None, "一つの被弾から比率を決めている");
+        assert!(two[0].is_some(), "二つあるのに推定していない");
+    }
+
+    /// 推定は中央値。外れ値を一つ混ぜても引きずられない。
+    #[test]
+    fn the_estimate_is_the_middle_sample() {
+        let scales = estimate_hp_scales(
+            &[
+                Some(evidence(1000)),
+                Some(evidence(1200)),
+                Some(evidence(1400)),
+            ],
+            &[damage(0.1, 0.9), damage(0.1, 0.8), damage(0.1, 0.7)],
+        );
+
+        assert!(
+            (scales[0].expect("推定できる") - 12_000.0).abs() < 1.0,
+            "中央値になっていない: {:?}",
+            scales[0]
+        );
+    }
+
+    /// 読み切れていない表示は使わない。
+    #[test]
+    fn an_incomplete_reading_is_not_a_sample() {
+        let mut incomplete = evidence(1000);
+        incomplete.complete = false;
+
+        let scales = estimate_hp_scales(
+            &[Some(incomplete), Some(evidence(1000))],
+            &[damage(0.1, 0.9), damage(0.1, 0.8)],
+        );
+
+        assert_eq!(scales[0], None, "読み切れていない表示を使っている");
+    }
+
+    /// 上限から復帰した読みも使わない。表示が振り切れていた間の数字は
+    /// 分からない。
+    #[test]
+    fn a_reading_recovered_from_the_maximum_is_not_a_sample() {
+        let mut recovered = evidence(1000);
+        recovered.recovered_from_max = true;
+
+        let scales = estimate_hp_scales(
+            &[Some(recovered), Some(evidence(1000))],
+            &[damage(0.1, 0.9), damage(0.1, 0.8)],
+        );
+
+        assert_eq!(scales[0], None);
+    }
+
+    /// 小さすぎる被弾は使わない。割り算の分母が小さいと、比率が
+    /// 大きくぶれる。
+    #[test]
+    fn a_tiny_drop_is_not_a_sample() {
+        let usable = estimate_hp_scales(
+            &[Some(evidence(200)), Some(evidence(200))],
+            &[damage(0.02, 0.9), damage(0.02, 0.8)],
+        );
+        let too_small = estimate_hp_scales(
+            &[Some(evidence(200)), Some(evidence(200))],
+            &[damage(0.019, 0.9), damage(0.019, 0.8)],
+        );
+
+        assert!(usable[0].is_some(), "閾値ちょうどの被弾を捨てている");
+        assert_eq!(too_small[0], None, "小さすぎる被弾を使っている");
+    }
+
+    /// KO した被弾は使わない。残り体力より大きいダメージは、HP バーの
+    /// 上では途中で止まる。
+    #[test]
+    fn a_killing_blow_is_not_a_sample() {
+        let scales = estimate_hp_scales(
+            &[Some(evidence(1000)), Some(evidence(1000))],
+            &[damage(0.1, 0.05), damage(0.1, 0.8)],
+        );
+
+        assert_eq!(scales[0], None, "KO の被弾を比率に使っている");
+    }
+
+    /// あり得ない比率は捨てる。SF6 の体力はおよそ 10000 なので、
+    /// 桁が違えば読み違い。
+    #[test]
+    fn an_implausible_ratio_is_discarded() {
+        let scales = estimate_hp_scales(
+            &[Some(evidence(100)), Some(evidence(100))],
+            &[damage(0.1, 0.9), damage(0.1, 0.8)],
+        );
+
+        assert_eq!(scales[0], None, "あり得ない比率を採用している");
+    }
+
+    /// 二人分を別々に推定する。体力はキャラクターごとに違う。
+    #[test]
+    fn the_two_sides_are_estimated_separately() {
+        let mut theirs = evidence(1000);
+        theirs.victim = 2;
+        let mut their_damage = damage(0.1, 0.9);
+        their_damage.victim = 2;
+
+        let scales = estimate_hp_scales(
+            &[Some(evidence(1000)), Some(theirs)],
+            &[damage(0.1, 0.9), their_damage],
+        );
+
+        assert_eq!(scales[0], None, "片側の標本をもう片側に混ぜている");
+        assert_eq!(scales[1], None);
+    }
+
+    // ── 突き合わせ ───────────────────────────────────────────────────────
+
+    /// 比率から予想した点数と表示が近ければ、噛み合っている。
+    #[test]
+    fn a_reading_close_to_the_expected_points_is_consistent() {
+        let verdict = classify_consistency(&evidence(1000), &damage(0.1, 0.9), Some(10_000.0));
+
+        assert_eq!(verdict, AttackDamageConsistency::Consistent);
+    }
+
+    /// 大きく外れていれば食い違い。表示をそのまま信じない。
+    #[test]
+    fn a_reading_far_from_the_expected_points_is_a_mismatch() {
+        let verdict = classify_consistency(&evidence(3000), &damage(0.1, 0.9), Some(10_000.0));
+
+        assert_eq!(verdict, AttackDamageConsistency::Mismatch);
+    }
+
+    /// 許容差は割合で決める。大きい数字ほど、読み取りのずれも大きい。
+    #[test]
+    fn the_tolerance_grows_with_the_number() {
+        // 3000 点に対する 3% は 90 点。
+        let inside = classify_consistency(&evidence(3000), &damage(0.309, 0.6), Some(10_000.0));
+        let outside = classify_consistency(&evidence(3000), &damage(0.32, 0.6), Some(10_000.0));
+
+        assert_eq!(inside, AttackDamageConsistency::Consistent, "許容差の内側");
+        assert_eq!(outside, AttackDamageConsistency::Mismatch, "許容差の外側");
+    }
+
+    /// 小さい数字にも最低限の許容差を置く。割合だけだと、小技の表示が
+    /// 常に食い違いになる。
+    #[test]
+    fn small_numbers_keep_a_floor_on_the_tolerance() {
+        // 200 点に対する 3% は 6 点。最低 25 点まで許す。
+        let verdict = classify_consistency(&evidence(200), &damage(0.022, 0.9), Some(10_000.0));
+
+        assert_eq!(verdict, AttackDamageConsistency::Consistent);
+    }
+
+    /// 比率が推定できていなければ、突き合わせようがない。
+    #[test]
+    fn without_a_ratio_nothing_can_be_verified() {
+        let verdict = classify_consistency(&evidence(1000), &damage(0.1, 0.9), None);
+
+        assert_eq!(verdict, AttackDamageConsistency::Unverified);
+    }
+
+    /// KO した被弾も突き合わせない。HP バーが途中で止まる。
+    #[test]
+    fn a_killing_blow_cannot_be_verified() {
+        let verdict = classify_consistency(&evidence(1000), &damage(0.5, 0.05), Some(10_000.0));
+
+        assert_eq!(verdict, AttackDamageConsistency::Unverified);
+    }
+}

@@ -1,6 +1,8 @@
 use frame_meter::{CellState, RowObs, CELL_COUNT};
 
-use crate::calibration::{READ_DIM_CONF, READ_EARLY_CONF, READ_FADE_CONF, READ_FRESH_CONF};
+use crate::calibration::{
+    LABEL_DIGIT_MIN, READ_DIM_CONF, READ_EARLY_CONF, READ_FADE_CONF, READ_FRESH_CONF,
+};
 
 use super::{insert_read, shared_pair, MeterTracker};
 
@@ -115,4 +117,139 @@ fn record_finalizes_entries_older_than_read_window() {
 
     assert!(!tracker.reads["left"].contains_key(&5));
     assert_eq!(tracker.left.segments[0].entries[0].game_frame, 5);
+}
+
+/// 数字が重なって色が読めないセルの観測。
+fn covered_at(cell: usize) -> RowObs {
+    let mut observation = RowObs::empty();
+    let mut correlations = vec![[-1.0f32; 10]; CELL_COUNT];
+    correlations[cell][4] = LABEL_DIGIT_MIN as f32;
+    observation.digit_corr = Some(correlations);
+    observation
+}
+
+/// 数字に覆われたセルは、覆われていたことを記録に残す。後段はこれを
+/// 見て、色の読みをどこまで信じるか決める。
+#[test]
+fn a_cell_hidden_behind_a_number_is_recorded_as_covered() {
+    let mut tracker = MeterTracker::new();
+    tracker.open_segment(40);
+    let mut observation = covered_at(40);
+    observation.states[40] = CellState::Active;
+
+    tracker.record(10, &observation, &observation, true, false);
+
+    assert!(tracker.reads["left"][&40].2, "覆いを記録していない");
+    assert!(
+        !tracker.reads["left"][&39].2,
+        "覆われていないセルまで印を付けている"
+    );
+}
+
+/// 遡って埋めるセルにも、そのセルごとの覆いを記録する。
+#[test]
+fn the_backfilled_cells_carry_their_own_covering() {
+    let mut tracker = MeterTracker::new();
+    tracker.open_segment(40);
+    let mut observation = covered_at(37);
+    observation.states[37] = CellState::Counter;
+
+    tracker.record(10, &observation, &observation, true, false);
+
+    assert!(tracker.reads["left"][&37].2, "遡った先の覆いを落としている");
+    assert!(!tracker.reads["left"][&38].2);
+}
+
+/// 覆われたセルの色は、直前のフレームの並びから引き当てる。ただし
+/// メーターが進んだと分かっている場合だけ。止まっている間は引き当て
+/// ようがない。
+#[test]
+fn a_hidden_cell_is_only_resolved_when_the_meter_advanced() {
+    let build = |advanced: bool| {
+        let mut tracker = MeterTracker::new();
+        tracker.open_segment(5);
+        let mut observation = RowObs::empty();
+        observation.states[5] = CellState::Other;
+        observation.cols = Some(columns_with(|cell| cell as f32));
+        observation.cols_w = 1;
+        let mut previous = RowObs::empty();
+        previous.cols = Some(columns_with(|cell| (cell + 1) as f32));
+        previous.cols_w = 1;
+        tracker.previous = Some(shared_pair(previous.clone(), previous));
+        tracker.record(10, &observation, &observation, true, advanced);
+        tracker.reads["left"][&5].0.clone()
+    };
+
+    assert_eq!(build(false), "other", "止まっている間に引き当てている");
+    assert_ne!(build(true), "other", "進んだのに引き当てていない");
+}
+
+/// 票が割れたフレームは色を記録しない。時刻の対応だけ残す。
+#[test]
+fn a_frame_without_a_vote_records_only_the_timing() {
+    let mut tracker = MeterTracker::new();
+    tracker.open_segment(40);
+    let mut observation = RowObs::empty();
+    observation.states[40] = CellState::Active;
+
+    tracker.record(10, &observation, &observation, false, false);
+
+    assert_eq!(tracker.video_map[&10], (0, 40), "時刻の対応まで捨てている");
+    assert!(
+        !tracker.reads["left"].contains_key(&40),
+        "票の割れたフレームの色を採っている"
+    );
+}
+
+/// 遡って埋めるのは周回の先頭まで。前の周回のセルまで書き換えない。
+#[test]
+fn the_backfill_stops_at_the_start_of_the_lap() {
+    let mut tracker = MeterTracker::new();
+    // 2 周目の 6 セル目。遡れるのは周回の頭までの 5 セル。
+    tracker.open_segment(CELL_COUNT as i64 + 5);
+    let mut observation = RowObs::empty();
+    observation.states.fill(CellState::Active);
+    // 前の周回の読み直しが混ざらないよう、暗い位置は無表示にしておく。
+    observation.states[78] = CellState::Empty;
+    observation.states[79] = CellState::Empty;
+
+    tracker.record(10, &observation, &observation, true, false);
+
+    let lap_start = CELL_COUNT as i64;
+    assert!(tracker.reads["left"].contains_key(&lap_start));
+    assert!(
+        !tracker.reads["left"].contains_key(&(lap_start - 1)),
+        "前の周回まで遡って埋めている"
+    );
+}
+
+/// 最初の周回では、まだ前の周回が無い。暗い表示の読み直しをしない。
+#[test]
+fn the_first_lap_has_no_previous_lap_to_re_read() {
+    let mut tracker = MeterTracker::new();
+    tracker.open_segment(0);
+    let mut observation = RowObs::empty();
+    observation.states[78] = CellState::Counter;
+    observation.states[79] = CellState::Stun;
+
+    tracker.record(10, &observation, &observation, true, false);
+
+    assert!(tracker.reads["left"].keys().all(|absolute| *absolute >= 0));
+}
+
+/// 周回の頭を過ぎてしまえば、前の周回の暗い表示は読み直さない。既に
+/// 確定させた区間へ後から書き戻さないための線引き。
+#[test]
+fn the_dim_re_read_only_happens_near_the_start_of_a_lap() {
+    let reads_previous_lap = |cell: i64| {
+        let mut tracker = MeterTracker::new();
+        tracker.open_segment(CELL_COUNT as i64 + cell);
+        let mut observation = RowObs::empty();
+        observation.states[79] = CellState::Stun;
+        tracker.record(10, &observation, &observation, true, false);
+        tracker.reads["left"].contains_key(&79)
+    };
+
+    assert!(reads_previous_lap(11), "周回の頭で読み直していない");
+    assert!(!reads_previous_lap(12), "周回の頭を過ぎても読み直している");
 }
