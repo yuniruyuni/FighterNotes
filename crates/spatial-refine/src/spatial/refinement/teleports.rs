@@ -113,3 +113,6 @@ fn advancing_game_frames(game_frames: &[i64], start: u32, end: u32) -> u32 {
 fn is_down_direction(direction: &str) -> bool {
     matches!(direction, "D" | "DL" | "DR")
 }
+
+#[cfg(test)]
+mod tests;
