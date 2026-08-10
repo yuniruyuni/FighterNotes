@@ -101,6 +101,65 @@ fn the_fight_marker_entry_point_is_a_different_confirmation() {
     assert_eq!(plain.len(), marked.len(), "フレーム数は変えない");
 }
 
+/// ラウンドの区切りを渡すかどうかで、確定の仕方が変わる。渡した区切りを
+/// 捨てると、境界をまたいだ HP が単調に潰される。
+#[test]
+fn the_fight_markers_change_what_gets_confirmed() {
+    // 前半で削られ、後半のラウンドで全快へ戻る映像。
+    let source: Vec<FrameFeatures> = (0..240)
+        .map(|index| {
+            let own = if index < 100 {
+                1.0 - index as f32 / 200.0
+            } else {
+                1.0
+            };
+            feature(index, own, 1.0)
+        })
+        .collect();
+    let markers = [crate::round_start::FightMarker {
+        first_frame: 100,
+        last_frame: 110,
+        peak_frame: 105,
+        peak_score: 1.0,
+    }];
+
+    let mut without = source.clone();
+    finalize_features_with_fight_markers(&mut without, &[], "p1");
+    let mut with = source.clone();
+    finalize_features_with_fight_markers(&mut with, &markers, "p1");
+
+    assert_ne!(
+        without.iter().map(|f| f.own_hp).collect::<Vec<_>>(),
+        with.iter().map(|f| f.own_hp).collect::<Vec<_>>(),
+        "渡した区切りを捨てている"
+    );
+}
+
+/// どちらの側から見た映像かは、区切り付きの確定でも効く。
+#[test]
+fn the_own_side_reaches_the_fight_marker_confirmation() {
+    let source: Vec<FrameFeatures> = (0..240)
+        .map(|index| feature(index, 1.0 - index as f32 / 400.0, 1.0))
+        .collect();
+    let markers = [crate::round_start::FightMarker {
+        first_frame: 100,
+        last_frame: 110,
+        peak_frame: 105,
+        peak_score: 1.0,
+    }];
+
+    let mut as_p1 = source.clone();
+    finalize_features_with_fight_markers(&mut as_p1, &markers, "p1");
+    let mut as_p2 = source.clone();
+    finalize_features_with_fight_markers(&mut as_p2, &markers, "p2");
+
+    assert_ne!(
+        as_p1.iter().map(|f| f.own_hp).collect::<Vec<_>>(),
+        as_p2.iter().map(|f| f.own_hp).collect::<Vec<_>>(),
+        "側の指定が効いていない"
+    );
+}
+
 /// 渡したフレーム列が実際に使われている。引数を取り違えたり捨てたりしても
 /// 空の入力では気付けないので、長さの違う二本で結果が変わることを見る。
 #[test]
@@ -127,10 +186,102 @@ fn the_own_side_decides_whose_inputs_these_are() {
     let as_p2 = analyze_match(&features, &p1, &p2, None, "p2", None);
 
     let jumps = |report: &AdviceReport| report.input_stats.as_ref().map(|stats| stats.jumps);
-    assert_ne!(
-        jumps(&as_p1),
-        jumps(&as_p2),
-        "側を変えても自分のジャンプ数が同じなら、入力の帰属が効いていない"
+    assert_eq!(jumps(&as_p1), Some(2), "自分側の入力が届いていない");
+    assert_eq!(jumps(&as_p2), Some(0), "相手側の入力が届いていない");
+}
+
+/// フレームメーターを渡したかどうかが、そのまま「技の情報を使えるか」に
+/// 効く。渡したものを捨てると、接触も発生も見えない解析になる。
+#[test]
+fn the_meter_timelines_reach_the_report() {
+    use match_event_layer::test_support::{synth_run, synth_timeline};
+
+    let features = match_event_layer::test_support::synth_two_rounds();
+    let mut left = synth_run(0, "empty", 0, 199);
+    left.extend(synth_run(200, "active", 200, 209));
+    let mut right = synth_run(0, "empty", 0, 199);
+    right.extend(synth_run(200, "stun", 200, 209));
+    let left = synth_timeline(left);
+    let right = synth_timeline(right);
+
+    let without = analyze_match(&features, &[], &[], None, "p1", None);
+    let with = analyze_match(&features, &[], &[], Some((&left, &right)), "p1", None);
+
+    assert_eq!(without.coverage.own_meter_mapped_frames, 0);
+    assert_eq!(without.coverage.opponent_meter_mapped_frames, 0);
+    assert!(
+        with.coverage.own_meter_mapped_frames > 0,
+        "自分側のメーターを捨てている"
+    );
+    assert!(
+        with.coverage.opponent_meter_mapped_frames > 0,
+        "相手側のメーターを捨てている"
+    );
+}
+
+/// context 付きの入口も同じ結線。片方だけ引数を落とすと、browser と CLI で
+/// 見えるものが変わる。
+#[test]
+fn the_context_entry_point_carries_the_same_arguments() {
+    use match_event_layer::test_support::{synth_run, synth_timeline, up_inputs};
+
+    let features = match_event_layer::test_support::synth_two_rounds();
+    let p1 = up_inputs(features.len(), &[(30, 45), (90, 105)]);
+    let p2 = up_inputs(features.len(), &[]);
+    let mut left = synth_run(0, "empty", 0, 199);
+    left.extend(synth_run(200, "active", 200, 209));
+    let mut right = synth_run(0, "empty", 0, 199);
+    right.extend(synth_run(200, "stun", 200, 209));
+    let left = synth_timeline(left);
+    let right = synth_timeline(right);
+    let context = crate::context::AnalysisContext::from_characters("p1", None, None);
+
+    let jumps = |own: &[_], opponent: &[_]| {
+        analyze_match_with_context(&features, own, opponent, None, &context)
+            .input_stats
+            .as_ref()
+            .map(|stats| stats.jumps)
+    };
+    let with_meter =
+        analyze_match_with_context(&features, &[], &[], Some((&left, &right)), &context);
+
+    assert_eq!(jumps(&p1, &p2), Some(2), "自分側の入力が届いていない");
+    assert_eq!(jumps(&p2, &p1), Some(0), "相手側の入力が届いていない");
+    assert!(
+        with_meter.coverage.own_meter_mapped_frames > 0,
+        "メーターが届いていない"
+    );
+    assert!(
+        with_meter.coverage.opponent_meter_mapped_frames > 0,
+        "相手側のメーターが届いていない"
+    );
+}
+
+/// 引数の無い入口も、渡したフレーム列をそのまま解析する。
+///
+/// この入口は入力もメーターも渡さない。HP は自分と相手の視点で持つので、
+/// 側の指定は写像した先で打ち消し合い、結果には現れない。効くのは
+/// 入力かメーターを伴う入口だけ。
+#[test]
+fn the_plain_entry_points_use_the_frames_they_are_given() {
+    let features: Vec<FrameFeatures> = (0..600)
+        .map(|index| feature(index, if index < 300 { 1.0 } else { 0.4 }, 1.0))
+        .collect();
+    let context = crate::context::AnalysisContext::from_characters("p1", None, None);
+
+    let plain = analyze_features(&features, "p1");
+    let via_context = analyze_features_with_context(&features, &context);
+
+    assert_eq!(plain.total_frames, 600, "渡したフレーム列を使っていない");
+    assert_eq!(
+        via_context.total_frames, 600,
+        "context 側がフレーム列を使っていない"
+    );
+    assert_eq!(plain.rounds_detected, via_context.rounds_detected);
+    assert_eq!(
+        analyze_features(&features[..120], "p1").total_frames,
+        120,
+        "渡した長さと結果が噛み合っていない"
     );
 }
 
