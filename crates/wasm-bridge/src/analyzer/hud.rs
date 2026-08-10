@@ -114,3 +114,6 @@ fn normalized_drive(read: &video_analyzer::DriveGaugeRead) -> f32 {
 fn ca_ready(read: &video_analyzer::SuperGaugeRead, hp: f32) -> bool {
     read.critical_art || (!read.uncertain && read.value >= 2.95 && (0.0..=0.255).contains(&hp))
 }
+
+#[cfg(test)]
+mod tests;

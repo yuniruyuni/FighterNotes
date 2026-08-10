@@ -12,7 +12,31 @@ struct ImportedMeterTimeline {
     attack_info: Vec<video_analyzer::AttackInfoObservation>,
 }
 
+/// ラウンド開始演出の数として辻褄が合うか。
+///
+/// 1 試合は 2 本先取なので、`FIGHT` は 2 回か 3 回出る。それ以外の数は、
+/// 動画が途中から始まっているか、中央が隠れて読めていないか、別の何かを
+/// 誤検出している。どれにせよラウンド境界には使えない。
+fn marker_count_is_valid(count: usize) -> bool {
+    (2..=3).contains(&count)
+}
+
+/// ラウンド開始演出が見つからなかったときに、利用者へ返す説明。
+fn marker_count_error(count: usize) -> String {
+    format!(
+        "FIGHT のラウンド開始演出を 2〜3 回検出する必要があります（検出: {count} 回）。対戦開始前からの未編集動画で、中央画面が隠れていないことを確認してください。"
+    )
+}
+
 impl Analyzer {
+    /// 入力欄の読みを解析へ使えるか。
+    ///
+    /// フレームごとに 1 行ずつ揃っていなければ、どの入力がどのフレームの
+    /// ものか決まらない。数が合わないまま使うと、入力と場面が全部ずれる。
+    fn input_rows_are_usable(&self) -> bool {
+        self.input_rows.len() == self.features.len() && !self.input_rows.is_empty()
+    }
+
     fn ensure_fight_markers(&mut self) {
         if self.fight_markers.is_none() {
             self.fight_markers = Some(video_analyzer::detect_fight_markers(
@@ -33,12 +57,9 @@ impl Analyzer {
             .fight_markers
             .clone()
             .expect("fight markers initialized");
-        let marker_count_is_valid = (2..=3).contains(&fight_markers.len());
+        let marker_count_is_valid = marker_count_is_valid(fight_markers.len());
         if self.require_fight_markers && !marker_count_is_valid {
-            return Err(JsValue::from_str(&format!(
-                "FIGHT のラウンド開始演出を 2〜3 回検出する必要があります（検出: {} 回）。対戦開始前からの未編集動画で、中央画面が隠れていないことを確認してください。",
-                fight_markers.len()
-            )));
+            return Err(JsValue::from_str(&marker_count_error(fight_markers.len())));
         }
         if marker_count_is_valid {
             video_analyzer::finalize_features_with_fight_markers(
@@ -54,8 +75,7 @@ impl Analyzer {
             .as_deref()
             .unwrap_or(&self.attack_info_tracker.observations);
 
-        let events = if self.input_rows.len() == self.features.len() && !self.input_rows.is_empty()
-        {
+        let events = if self.input_rows_are_usable() {
             let p1_rows: Vec<_> = self.input_rows.iter().map(|(p1, _)| p1.clone()).collect();
             let p2_rows: Vec<_> = self.input_rows.iter().map(|(_, p2)| p2.clone()).collect();
             let p1_tracked = video_analyzer::repair_row0_sequence(&p1_rows);
@@ -261,3 +281,6 @@ impl Analyzer {
             .unwrap_or_else(|| self.tracker_timeline_json())
     }
 }
+
+#[cfg(test)]
+mod tests;
