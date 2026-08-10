@@ -829,3 +829,118 @@ fn an_automatic_input_still_gets_a_name() {
     assert_eq!(extracted.presses.len(), 1);
     assert_eq!(extracted.presses[0].pressed, "AUTO");
 }
+
+// ── 有利側の確度 ─────────────────────────────────────────────────────────
+
+/// 攻めなかった結果を見る窓の途中で読みが途切れていれば、有利側の
+/// 記録も確度を下げる。その先で攻め返されたかどうかが分からない。
+#[test]
+fn a_break_inside_the_advantage_window_lowers_its_confidence() {
+    let (ms, contacts, mut segs, rounds) = fixture();
+    segs[1] = vec![idle_input(110, 140)];
+    let length = ms[0].len();
+
+    let whole = extract_minus_with(
+        &ms,
+        &[vec![0; length], vec![0; length]],
+        &default_game_frames(length),
+        &contacts,
+        &[],
+        &segs,
+        &rounds,
+    );
+    assert_eq!(whole.advantages.len(), 1);
+    assert_eq!(whole.advantages[0].confidence, EventConfidence::High);
+
+    let mut broken = [vec![0; length], vec![0; length]];
+    for epoch in broken[1].iter_mut().skip(150) {
+        *epoch = 1;
+    }
+    let partial = extract_minus_with(
+        &ms,
+        &broken,
+        &default_game_frames(length),
+        &contacts,
+        &[],
+        &segs,
+        &rounds,
+    );
+
+    assert_eq!(partial.advantages.len(), 1, "途切れで場面ごと捨てている");
+    assert_eq!(
+        partial.advantages[0].confidence,
+        EventConfidence::Medium,
+        "途切れたのに確度を下げていない"
+    );
+}
+
+/// 守備側の読みが途切れた場合も、有利側の確度を下げる。攻め返された
+/// かどうかは両者の表示が要る。
+#[test]
+fn a_break_on_the_defending_side_lowers_the_advantage_confidence_too() {
+    let (ms, contacts, mut segs, rounds) = fixture();
+    segs[1] = vec![idle_input(110, 140)];
+    let length = ms[0].len();
+    let mut broken = [vec![0; length], vec![0; length]];
+    for epoch in broken[0].iter_mut().skip(150) {
+        *epoch = 1;
+    }
+
+    let extracted = extract_minus_with(
+        &ms,
+        &broken,
+        &default_game_frames(length),
+        &contacts,
+        &[],
+        &segs,
+        &rounds,
+    );
+
+    assert_eq!(extracted.advantages[0].confidence, EventConfidence::Medium);
+}
+
+/// 攻めを継続した場合は、結果を待つ必要がない。窓の先が途切れていても
+/// 確度は下げない。
+#[test]
+fn continuing_the_pressure_does_not_need_the_result_window() {
+    let (mut ms, contacts, mut segs, rounds) = fixture();
+    segs[1] = vec![idle_input(110, 140), minus_press(115)];
+    ms[1][116] = MeterState::Startup;
+    let length = ms[0].len();
+    let mut broken = [vec![0; length], vec![0; length]];
+    for epoch in broken[1].iter_mut().skip(150) {
+        *epoch = 1;
+    }
+
+    let extracted = extract_minus_with(
+        &ms,
+        &broken,
+        &default_game_frames(length),
+        &contacts,
+        &[],
+        &segs,
+        &rounds,
+    );
+
+    assert_eq!(extracted.advantages[0].outcome, AdvantageOutcome::Continued);
+    assert_eq!(extracted.advantages[0].confidence, EventConfidence::High);
+}
+
+/// 同じ機会を二度記録しない。接触が二つ重なっても、有利は一つ。
+#[test]
+fn one_advantage_is_recorded_once_per_moment() {
+    let (ms, mut contacts, mut segs, rounds) = fixture();
+    segs[1] = vec![idle_input(110, 140)];
+    contacts.push(ContactEvent {
+        frame: 101,
+        attacker: 2,
+        victim: 1,
+        hit: false,
+        projectile: false,
+        round_no: 1,
+    });
+
+    let extracted = extract_minus_all(&ms, &contacts, &[], &segs, &rounds);
+
+    assert_eq!(extracted.advantages.len(), 1, "同じ有利を二度数えている");
+}

@@ -394,3 +394,269 @@ fn your_own_invincible_move_is_not_a_punish() {
 
     assert!(punishes.is_empty());
 }
+
+// ── 接触の記録が立たなかったガード ───────────────────────────────────────
+//
+// ごく短い接触ではヒットストップの条件を満たさず、接触の記録が作れない
+// ことがある。そのとき、相手の攻撃判定と自分のガード硬直が同時に出て
+// いれば、ガードしていたと読める。ただし補助的な証拠なので、反撃を
+// 出さなかった見逃しの側には使わない。
+
+/// 接触の記録が無くても、メーターの重なりでガードを読み取れる。
+#[test]
+fn a_block_can_be_read_from_the_meters_when_no_contact_was_recorded() {
+    let (mut own, opponent, _) = blocked_then_recovery();
+    for state in own.iter_mut().take(24).skip(20) {
+        *state = MeterState::Startup;
+    }
+    for state in own.iter_mut().take(28).skip(24) {
+        *state = MeterState::Active;
+    }
+
+    let punishes = extract_synth_punishes(0, own, opponent, vec![]);
+
+    assert_eq!(punishes.len(), 1, "メーターのガードを読めていない");
+    assert_eq!(punishes[0].outcome, PunishOutcome::WhiffFail);
+    assert_eq!(punishes[0].origin, PunishOrigin::BlockedMove);
+}
+
+/// メーターの重なりだけでは、反撃を出さなかった見逃しは作らない。
+/// 誤検出のとき、行動の裏付けが何も無くなる。
+#[test]
+fn the_meter_reading_alone_does_not_create_a_missed_chance() {
+    let (own, opponent, _) = blocked_then_recovery();
+
+    let punishes = extract_synth_punishes(0, own, opponent, vec![]);
+
+    assert!(punishes.is_empty(), "裏付けの薄い見逃しを作っている");
+}
+
+/// 硬直の近くで HP が減っていれば、それはガードではなくコンボの途中。
+#[test]
+fn a_stun_with_damage_nearby_is_a_combo_not_a_block() {
+    let (mut own, opponent, _) = blocked_then_recovery();
+    for state in own.iter_mut().take(24).skip(20) {
+        *state = MeterState::Startup;
+    }
+    for state in own.iter_mut().take(28).skip(24) {
+        *state = MeterState::Active;
+    }
+    let length = own.len();
+    let features: Vec<_> = (0..length).map(|i| feat(i as u32, 1.0, 1.0)).collect();
+    let rounds = vec![RoundInfo {
+        round_no: 1,
+        start_frame: 0,
+        end_frame: length as u32 - 1,
+        winner: None,
+        p1_hp_end: 1.0,
+        p2_hp_end: 1.0,
+    }];
+    let damage = vec![DamageEvent {
+        victim: 1,
+        start_frame: 15,
+        pre_freeze_frame: 15,
+        end_frame: 19,
+        hp_before: 1.0,
+        hp_after: 0.9,
+        drop: 0.1,
+        round_no: 1,
+    }];
+
+    let punishes = crate::punishes::extract_punishes(crate::punishes::PunishInputs {
+        features: &features,
+        meter_state: &[own, opponent],
+        meter_epoch: &[vec![0; length], vec![0; length]],
+        meter_game_frame: &[
+            (0..length as i64).collect::<Vec<_>>(),
+            (0..length as i64).collect::<Vec<_>>(),
+        ],
+        contacts: &[],
+        damage: &damage,
+        segments: &[vec![], vec![]],
+        rounds: &rounds,
+    });
+
+    assert!(punishes.is_empty(), "コンボ中の硬直をガードと読んでいる");
+}
+
+// ── 反撃の後始末 ─────────────────────────────────────────────────────────
+
+/// 後隙が終わった直後に触れていれば、届いてはいる。空振りではない。
+#[test]
+fn a_contact_just_after_the_recovery_still_means_it_reached() {
+    let (mut own, opponent, mut contacts) = blocked_then_recovery();
+    for state in own.iter_mut().take(24).skip(20) {
+        *state = MeterState::Startup;
+    }
+    for state in own.iter_mut().take(28).skip(24) {
+        *state = MeterState::Active;
+    }
+    contacts.push(ContactEvent {
+        frame: 55,
+        attacker: 1,
+        victim: 2,
+        hit: false,
+        projectile: false,
+        round_no: 1,
+    });
+
+    let punishes = extract_synth_punishes(0, own, opponent, contacts);
+
+    assert!(punishes.is_empty(), "届いた反撃を空振りにしている");
+}
+
+/// ずっと後の接触は、その反撃の結果ではない。
+#[test]
+fn a_contact_long_after_the_recovery_is_a_separate_exchange() {
+    let (mut own, opponent, mut contacts) = blocked_then_recovery();
+    for state in own.iter_mut().take(24).skip(20) {
+        *state = MeterState::Startup;
+    }
+    for state in own.iter_mut().take(28).skip(24) {
+        *state = MeterState::Active;
+    }
+    contacts.push(ContactEvent {
+        frame: 61,
+        attacker: 1,
+        victim: 2,
+        hit: false,
+        projectile: false,
+        round_no: 1,
+    });
+
+    let punishes = extract_synth_punishes(0, own, opponent, contacts);
+
+    assert_eq!(punishes.len(), 1, "無関係な接触で機会を潰している");
+    assert_eq!(punishes[0].outcome, PunishOutcome::WhiffFail);
+}
+
+/// 空振りの後に被弾していれば、その分を記録する。
+#[test]
+fn health_lost_after_a_whiffed_punish_is_recorded() {
+    let (mut own, opponent, contacts) = blocked_then_recovery();
+    for state in own.iter_mut().take(24).skip(20) {
+        *state = MeterState::Startup;
+    }
+    for state in own.iter_mut().take(28).skip(24) {
+        *state = MeterState::Active;
+    }
+    let length = own.len();
+    let features: Vec<_> = (0..length).map(|i| feat(i as u32, 1.0, 1.0)).collect();
+    let rounds = vec![RoundInfo {
+        round_no: 1,
+        start_frame: 0,
+        end_frame: length as u32 - 1,
+        winner: None,
+        p1_hp_end: 1.0,
+        p2_hp_end: 1.0,
+    }];
+    let damage = vec![DamageEvent {
+        victim: 1,
+        start_frame: 50,
+        pre_freeze_frame: 50,
+        end_frame: 70,
+        hp_before: 1.0,
+        hp_after: 0.82,
+        drop: 0.18,
+        round_no: 1,
+    }];
+
+    let punishes = crate::punishes::extract_punishes(crate::punishes::PunishInputs {
+        features: &features,
+        meter_state: &[own, opponent],
+        meter_epoch: &[vec![0; length], vec![0; length]],
+        meter_game_frame: &[
+            (0..length as i64).collect::<Vec<_>>(),
+            (0..length as i64).collect::<Vec<_>>(),
+        ],
+        contacts: &contacts,
+        damage: &damage,
+        segments: &[vec![], vec![]],
+        rounds: &rounds,
+    });
+
+    assert_eq!(punishes.len(), 1);
+    assert!((punishes[0].punished_drop - 0.18).abs() < 1e-6);
+}
+
+/// 反撃に使った入力を記録する。何で取ろうとしたのかが分からないと、
+/// 代わりの技を選べない。
+#[test]
+fn the_button_used_for_the_punish_is_recorded() {
+    let (mut own, opponent, contacts) = blocked_then_recovery();
+    for state in own.iter_mut().take(24).skip(20) {
+        *state = MeterState::Startup;
+    }
+    for state in own.iter_mut().take(28).skip(24) {
+        *state = MeterState::Active;
+    }
+    let length = own.len();
+    let features: Vec<_> = (0..length).map(|i| feat(i as u32, 1.0, 1.0)).collect();
+    let rounds = vec![RoundInfo {
+        round_no: 1,
+        start_frame: 0,
+        end_frame: length as u32 - 1,
+        winner: None,
+        p1_hp_end: 1.0,
+        p2_hp_end: 1.0,
+    }];
+    let mut press = idle_input(19, 23);
+    press.badges = vec!["強P".to_string()];
+
+    let punishes = crate::punishes::extract_punishes(crate::punishes::PunishInputs {
+        features: &features,
+        meter_state: &[own, opponent],
+        meter_epoch: &[vec![0; length], vec![0; length]],
+        meter_game_frame: &[
+            (0..length as i64).collect::<Vec<_>>(),
+            (0..length as i64).collect::<Vec<_>>(),
+        ],
+        contacts: &contacts,
+        damage: &[],
+        segments: &[vec![press], vec![]],
+        rounds: &rounds,
+    });
+
+    assert_eq!(punishes.len(), 1);
+    assert_eq!(punishes[0].pressed, "強P");
+}
+
+// ── ゲーム内の時間で有利を測る ───────────────────────────────────────────
+
+/// 有利フレームはゲーム内の時間で数える。演出でメーターが止まっている
+/// 間も動画のフレームは進むので、動画の差では過大になる。
+#[test]
+fn the_advantage_is_counted_in_game_frames() {
+    let (own, opponent, contacts) = blocked_then_recovery();
+    let length = own.len();
+    let features: Vec<_> = (0..length).map(|i| feat(i as u32, 1.0, 1.0)).collect();
+    let rounds = vec![RoundInfo {
+        round_no: 1,
+        start_frame: 0,
+        end_frame: length as u32 - 1,
+        winner: None,
+        p1_hp_end: 1.0,
+        p2_hp_end: 1.0,
+    }];
+    // 相手のメーターが f25 以降 8 フレーム止まっていた。
+    let stalled: Vec<i64> = (0..length as i64)
+        .map(|frame| if frame >= 25 { frame - 8 } else { frame })
+        .collect();
+
+    let punishes = crate::punishes::extract_punishes(crate::punishes::PunishInputs {
+        features: &features,
+        meter_state: &[own, opponent],
+        meter_epoch: &[vec![0; length], vec![0; length]],
+        meter_game_frame: &[(0..length as i64).collect::<Vec<_>>(), stalled],
+        contacts: &contacts,
+        damage: &[],
+        segments: &[vec![], vec![]],
+        rounds: &rounds,
+    });
+
+    assert_eq!(punishes.len(), 1);
+    assert_eq!(
+        punishes[0].advantage, 12,
+        "動画の差をそのまま有利フレームにしている"
+    );
+}
