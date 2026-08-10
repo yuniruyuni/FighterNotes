@@ -4,4 +4,5 @@ mod boundaries;
 mod contracts;
 mod hp_lost;
 mod support;
+mod throw_whiff;
 mod whiff;
