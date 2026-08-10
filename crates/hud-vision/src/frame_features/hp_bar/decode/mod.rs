@@ -20,16 +20,8 @@ pub(crate) fn hp_bar_decode(
     y_strip_start: usize,
 ) -> HpBarDecode {
     let (x1_base, x2_base, y1_base, y2_base) = hp_roi_base(side);
+    // 潰れた ROI はゾーンが一つも取れず、そのまま「読めなかった」に落ちる。
     let (x1u, x2u, y1u, y2u) = scale_roi(x1_base, x2_base, y1_base, y2_base, width, height);
-    if x1u >= x2u || y1u >= y2u {
-        return HpBarDecode {
-            fill_ratio: 0.0,
-            orange_fill: 0.0,
-            uncertain: true,
-            fill_edge_cy: None,
-            damage_left_cy: None,
-        };
-    }
     let x1 = x1u as usize;
     let x2 = x2u as usize;
     let y1 = y1u as usize;

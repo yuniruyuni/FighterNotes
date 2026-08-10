@@ -2,7 +2,8 @@ use super::*;
 
 /// RGBA バッファから HP バーの存在スコアを返す（0.0–1.0）。
 ///
-/// `sat > 45 && val > 80` を満たす画素の割合を返す（色相は問わない）。
+/// 鮮やかで明るい画素の割合。色相は問わない。試合画面かどうかの判定に
+/// 使うので、どの色のバーでも同じように反応する必要がある。
 pub fn hp_bar_score(rgba: &[u8], width: u32, height: u32, side: &str) -> f32 {
     hp_bar_score_impl(rgba, width, height, side, 0)
 }
@@ -26,9 +27,6 @@ pub(crate) fn hp_bar_score_impl(
 ) -> f32 {
     let (x1_base, x2_base, y1_base, y2_base) = hp_roi_base(side);
     let (x1, x2, y1, y2) = scale_roi(x1_base, x2_base, y1_base, y2_base, width, height);
-    if x1 >= x2 || y1 >= y2 {
-        return 0.0;
-    }
 
     let mut match_count = 0u32;
     let mut total = 0u32;

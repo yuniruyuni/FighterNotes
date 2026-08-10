@@ -8,6 +8,34 @@
 
 use pixel_color::rgb_to_hsv;
 
+/// 走査が探している色。
+///
+/// 述語をそのまま渡すのではなく名前で渡す。走査の実体が探す色ごとに
+/// 分かれず一つで済むので、添字計算の誤りがどの色の読み取りにも同じように
+/// 現れる。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BarColour {
+    /// ダメージ直後の橙。
+    DamageOrange,
+    /// 危険域の黄。
+    LowHealthYellow,
+    /// 残っている HP。側で色相帯が変わる。
+    RemainingHealth { first_player: bool },
+}
+
+impl BarColour {
+    /// この画素が探している色か。
+    pub(crate) fn matches(self, r: f32, g: f32, b: f32) -> bool {
+        match self {
+            Self::DamageOrange => is_damage_orange(r, g, b),
+            Self::LowHealthYellow => is_low_health_yellow(r, g, b),
+            Self::RemainingHealth { first_player } => {
+                is_remaining_health(if first_player { "p1" } else { "p2" }, r, g, b)
+            }
+        }
+    }
+}
+
 /// ダメージ直後の橙。
 ///
 /// 明度に上限を置かない。低 HP の黄色バーは色相で外れるため、上限を

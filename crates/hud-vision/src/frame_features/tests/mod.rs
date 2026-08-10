@@ -1,12 +1,20 @@
 //! frame_features 全体のユニットテスト。
 
+mod drive_chain_boundaries;
 mod drive_decode_boundaries;
 mod drive_run_segmentation_preserves_empty_single_and_transition_boundaries;
 mod empty_geometry_and_short_buffers_return_conservative_readings;
+mod hp_bar_mirrors_between_sides;
 mod hp_bar_presence_score;
 mod hp_column_colour_boundaries;
+mod hp_correct_phases;
 mod hp_spike_correction;
 mod hp_zone_segmentation_preserves_empty_single_and_transition_boundaries;
+mod hp_zone_state_transitions;
+mod hud_debug_json;
+mod roi_entry_points;
+mod roi_scaling;
+mod slanted_roi;
 mod test_backward_fill_trusted_false_low_corrected;
 mod test_backward_fill_uncertain_dip_corrected;
 mod test_decode_drive_background_bleed_not_burnout;

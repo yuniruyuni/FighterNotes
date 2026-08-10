@@ -144,7 +144,6 @@ pub fn hp_col_pixel_detail_json(
         slope,
     };
 
-    let w_px = width as usize;
     let row_start = HP_COL_ROW_SKIP_TOP.min(roi_h);
     let row_end = roi_h.saturating_sub(HP_COL_ROW_SKIP_BOTTOM).max(row_start);
 
@@ -168,58 +167,43 @@ pub fn hp_col_pixel_detail_json(
         let mut total = 0usize;
 
         for ry in row_start..row_end {
-            let x_off = ((ry - row_start) as f32 * slope).round() as i32;
-            let gx_i = x1 as i32 + cy as i32 + x_off;
-            // classify_hp_col と同じ境界チェック（ROI [x1, x2) でクリップ）
-            if gx_i < x1 as i32 || gx_i as usize >= x2 {
+            // 座標も画素も、解析が使う ROI に訊く。ここで別に計算すると、
+            // 表示が本体とは違う場所を指しうる。
+            let (Some(gx), Some([r, g, b])) = (
+                roi.column_x(cy, ry, row_start),
+                roi.rgb_at(cy, ry, row_start),
+            ) else {
                 continue;
-            }
-            let gx = gx_i as usize;
-            let idx = ((y1 + ry - y_strip_start) * w_px + gx) * 4;
-            if idx + 2 >= rgba.len() {
-                continue;
-            }
+            };
             total += 1;
-            let r = rgba[idx] as f32;
-            let g = rgba[idx + 1] as f32;
-            let b = rgba[idx + 2] as f32;
             let [h, s, v] = rgb_to_hsv(r, g, b);
 
-            let px_class = if r > 180.0 && g > 180.0 && b > 180.0 {
-                n_w += 1;
-                "W"
-            } else {
-                let primary = match hue {
-                    HpFillHue::Red => (h <= 20.0 || h >= 145.0) && s > 100.0 && v > 60.0,
-                    HpFillHue::Blue => (88.0..=160.0).contains(&h) && s > 45.0 && v > 60.0,
-                };
-                let fill = primary
-                    || ((22.0..=35.0).contains(&h) && s > 120.0 && v > 200.0 && g > r * 0.80);
-                let ghost = (20.0..=30.0).contains(&h)
-                    && s > 150.0
-                    && (100.0..200.0).contains(&v)
-                    && g > r * 0.82;
-                if fill {
+            // 表示は解析と同じ判定を使う。ここで別に書くと、表示が
+            // 正しく見えるのに解析は違うものを読んでいる状態になる。
+            let px_class = match classify_hp_pixel(r, g, b, hue) {
+                HpColColor::White => {
+                    n_w += 1;
+                    "W"
+                }
+                HpColColor::Fill => {
                     n_f += 1;
                     "F"
-                } else if ghost {
-                    "G"
-                } else if r > 165.0 && g > 150.0 && b > 100.0 {
+                }
+                HpColColor::Ghost => "G",
+                HpColColor::YellowWhite => {
                     n_y += 1;
                     "Y"
-                } else if (10.0..=27.0).contains(&h) && s > 60.0 && v > 80.0 {
+                }
+                HpColColor::Orange => {
                     n_o += 1;
                     "O"
-                } else {
-                    "D"
                 }
+                HpColColor::Dark => "D",
             };
 
             rows_json.push(format!(
                 r#"{{"ry":{},"gx":{},"r":{},"g":{},"b":{},"h":{:.0},"s":{:.0},"v":{:.0},"cls":"{}"}}"#,
-                ry, gx,
-                rgba[idx], rgba[idx+1], rgba[idx+2],
-                h, s, v, px_class
+                ry, gx, r as u8, g as u8, b as u8, h, s, v, px_class
             ));
         }
 

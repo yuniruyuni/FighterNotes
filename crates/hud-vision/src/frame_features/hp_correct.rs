@@ -55,52 +55,20 @@ pub(crate) fn correct_hp_side(
     // シグネチャは維持する
     _stun: &[bool],
 ) {
-    let n = features.len();
-
     // 試合画面フレームのみを対象とするマスク（非試合フレームは補正対象外）
     let in_match: Vec<bool> = features.iter().map(|f| f.is_match_screen).collect();
 
-    // raw HP を抽出し、時系列中央値フィルターでフレーム間ノイズを除去する。
-    //
-    // 黄色 HP 域（≤25%）では raw 検出が ±5% 程度揺れ、Phase 3 の単調制約と
-    // backward_fill の EPSILON 閾値の組み合わせにより「ラチェット効果」が生じる:
-    //   小さな下振れフレームが補正されず、それ以降のフレームが低い値に固定される。
-    //
-    // 5 フレーム中央値フィルター（前後 MEDIAN_HALF フレーム）で 1〜2 フレームの
-    // ノイズスパイクを除去する。本物のダメージは複数フレーム持続するため保持される。
-    // raw_orig は left_hp_raw / right_hp_raw としてデバッグ表示用に保持される。
-    const MEDIAN_HALF: usize = 2; // 前後 2 フレーム = 計 5 フレームウィンドウ
-    let raw: Vec<f32> = {
-        let raw_orig: Vec<f32> = features
-            .iter()
-            .map(|f| {
-                if hp_side == "left" {
-                    f.left_hp_raw
-                } else {
-                    f.right_hp_raw
-                }
-            })
-            .collect();
-        let mut smoothed = raw_orig.clone();
-        let mut buf = Vec::with_capacity(MEDIAN_HALF * 2 + 1);
-        for i in 0..n {
-            if !in_match[i] {
-                continue;
+    let raw_orig: Vec<f32> = features
+        .iter()
+        .map(|f| {
+            if hp_side == "left" {
+                f.left_hp_raw
+            } else {
+                f.right_hp_raw
             }
-            let lo = i.saturating_sub(MEDIAN_HALF);
-            let hi = (i + MEDIAN_HALF + 1).min(n);
-            buf.clear();
-            for j in lo..hi {
-                if in_match[j] {
-                    buf.push(raw_orig[j]);
-                }
-            }
-            // buf は常に 1 要素以上（自フレームが in_match のため）
-            buf.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-            smoothed[i] = buf[buf.len() / 2];
-        }
-        smoothed
-    };
+        })
+        .collect();
+    let raw = median_smoothed(&raw_orig, &in_match, MEDIAN_HALF);
 
     let mut corrected = raw.clone();
 
@@ -117,44 +85,8 @@ pub(crate) fn correct_hp_side(
         })
         .collect();
 
-    // ラウンド境界: 非試合画面 → 試合画面 の遷移 = 新ラウンド開始
-    //
-    // HP ジャンプで境界を検出する旧実装には 2 つの問題があった:
-    //   (1) body overlap（偽ロー回復）でも +0.5 超の HP ジャンプが発生し偽境界が生じる
-    //   (2) ラウンド開始 HP アニメの途中フレーム（~0.85）が閾値を超えず境界を取りこぼす
-    //
-    // ラウンド間には必ず「YOU WIN」/VS 画面（is_match_screen=false の期間）が挟まるため、
-    // false → true の遷移を境界とすれば (1)(2) 両方を解決できる。
-    // body overlap 中は is_match_screen が true のまま変わらないため偽境界は生じない。
-    let mut seg_starts = vec![0usize];
-    for i in 1..n {
-        if in_match[i] && !in_match[i - 1] {
-            seg_starts.push(i);
-        }
-    }
-    seg_starts.push(n);
-
-    // ─── Phase 1 前処理: ラウンド開始フレームを 1.0 に強制リセット ──────────
-    // ラウンド開始時は HP が必ず満タン（1.0）になる。しかし「ROUND!/FIGHT!」
-    // オーバーレイ中の最初の in_match フレームでは HP バーが読み取れず、raw が
-    // 0.99 前後の低い値になることがある（例: 0.9914）。
-    // この値が backward_fill の内部前方単調パスで prev として固定されると、
-    // セグメント全体の HP が 0.9914 以下に制約され、実ダメージ（6〜7%）が
-    // Phase 3 で反映されなくなる（own_hp が 0.9914 から下がらない）。
-    //
-    // backward_fill より前に corrected を 1.0 にリセットすることで、
-    // backward_fill の内部前方単調パスが prev=1.0 から正しく開始できる。
-    //
-    // 「ラウンド開始」= 非試合フレームの直後（is_match[seg_start-1]=false）。
-    // 動画先頭から試合が始まる場合（seg_start=0）はラウンド途中から録画の可能性があり
-    // HP=1.0 が保証されないためリセットしない。
-    for w in seg_starts.windows(2) {
-        let seg_start = w[0];
-        let is_round_start = seg_start > 0 && !in_match[seg_start - 1];
-        if is_round_start && seg_start < n && in_match[seg_start] {
-            corrected[seg_start] = 1.0;
-        }
-    }
+    let seg_starts = round_segments(&in_match);
+    reset_round_starts(&mut corrected, &in_match);
 
     // ─── Phase 1: スパイクホールド前方パス ──────────────────────────────────
     // 以下の 3 種を「直前の確認済みHP」でホールドする:
@@ -180,60 +112,8 @@ pub(crate) fn correct_hp_side(
         );
     }
 
-    // ─── Phase 3: 前方単調パス（ラウンドセグメントごと・in-match フレームのみ）───────
-    // セグメント単位で実行することでラウンドリセット例外が不要になる。
-    // ラウンド間の HP ジャンプはセグメント境界で prev がリセットされるため自然に許容される。
-    //
-    // 旧実装（全体 1 パス＋ p+0.4 例外）では backward_fill が誤って引き上げたフレームが
-    // 0.4 超の前後差を生んだとき「ラウンドリセット」と誤判定して HP が増加できていた。
-    // セグメント内では HP は絶対に増加しないためラウンドリセット例外は不要。
-    //
-    // uncertain かつ corrected ≈ 0 のフレームは HP バーが演出や遮蔽で消えた偽ロー。
-    // このフレームで prev を更新すると 0 が後続フレームへ伝播するため除外する。
-    for w in seg_starts.windows(2) {
-        let (seg_start, seg_end) = (w[0], w[1]);
-        let mut prev: Option<f32> = None;
-        for i in seg_start..seg_end {
-            if !in_match[i] {
-                continue;
-            }
-            if in_uncertain[i] && corrected[i] < 0.01 {
-                continue;
-            }
-            match prev {
-                None => {
-                    prev = Some(corrected[i]);
-                }
-                Some(p) => {
-                    corrected[i] = corrected[i].min(p);
-                    prev = Some(corrected[i]);
-                }
-            }
-        }
-    }
-
-    // ─── Phase 4: 非試合フレーム（+ uncertain かつ HP≈0 の偽非試合フレーム）を次セグメント開始 HP で埋める ─────────────────
-    // ラウンド開始アニメーション（ROUND/FIGHT! オーバーレイ）中や YOU WIN 画面などの
-    // 非試合フレームは HP バーが視認できず raw 値が不安定。
-    // これらを補正せずに own_hp へ書き込むと、グラフ表示上に偽の急落が現れる。
-    //
-    // 後方パスで「直後に来る試合フレームの HP」を非試合フレームに伝播することで
-    // ラウンド開始アニメーション中の偽降下を除去する。
-    // HP はラウンド開始時に 100% にリセットされるため、次セグメント開始 HP を使う。
-    //
-    // uncertain かつ corrected ≈ 0 のフレームは HP バー消失演出（演出・体重なりによる
-    // 完全遮蔽）による偽ロー。is_match=True でも非試合扱いとして次 HP に補完する。
-    {
-        let mut next_hp = 1.0f32;
-        for i in (0..n).rev() {
-            let is_reliable = in_match[i] && !(in_uncertain[i] && corrected[i] < 0.01);
-            if is_reliable {
-                next_hp = corrected[i];
-            } else {
-                corrected[i] = next_hp;
-            }
-        }
-    }
+    monotone_forward_pass(&mut corrected, &in_match, &in_uncertain, &seg_starts);
+    fill_unreadable_from_the_future(&mut corrected, &in_match, &in_uncertain);
 
     // own_hp / opponent_hp に書き戻す
     let is_left = hp_side == "left";
@@ -245,6 +125,122 @@ pub(crate) fn correct_hp_side(
             feat.opponent_hp = corrected[i];
         }
     }
+}
+
+/// 中央値をとる窓の片側の長さ。前後 2 フレームで計 5 フレーム。
+const MEDIAN_HALF: usize = 2;
+
+/// 前後 `half` フレームの中央値で読みを均す。
+///
+/// 残量が黄色域（25% 以下）に入ると 1 フレームの読みが ±5% 程度揺れる。
+/// 揺れを残したまま単調制約をかけると、下振れした 1 フレームに以降が
+/// 引きずられて残量が張り付く。
+///
+/// 本物のダメージは複数フレーム続くので、中央値では消えない。
+/// 試合外のフレームは比較にも結果にも入れない。
+pub(crate) fn median_smoothed(raw: &[f32], in_match: &[bool], half: usize) -> Vec<f32> {
+    let mut smoothed = raw.to_vec();
+    for index in 0..raw.len() {
+        if !in_match[index] {
+            continue;
+        }
+        let lo = index.saturating_sub(half);
+        let hi = (index + half + 1).min(raw.len());
+        let mut window: Vec<f32> = (lo..hi)
+            .filter(|near| in_match[*near])
+            .map(|near| raw[near])
+            .collect();
+        window.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        // 自フレームが試合中なので、窓は必ず 1 要素以上ある。
+        smoothed[index] = window[window.len() / 2];
+    }
+    smoothed
+}
+
+/// ラウンドの切れ目。返す並びは各ラウンドの開始位置に、終端を足したもの。
+///
+/// ラウンドの間には必ず勝敗表示や VS 画面が挟まるので、試合外から試合内へ
+/// 変わったところが新しいラウンドの頭になる。残量の跳ね上がりで境目を
+/// 探すと、体の重なりから戻った瞬間を新ラウンドと読んでしまう。
+pub(crate) fn round_segments(in_match: &[bool]) -> Vec<usize> {
+    let mut starts = vec![0usize];
+    starts.extend((1..in_match.len()).filter(|index| in_match[*index] && !in_match[index - 1]));
+    starts.push(in_match.len());
+    starts
+}
+
+/// ラウンドの頭の残量を満タンに戻す。
+///
+/// ROUND!/FIGHT! の演出中はバーが読めず、頭のフレームが 0.99 前後になる。
+/// この値を起点にすると、以降の残量がそこで頭打ちになって実ダメージが
+/// 反映されない。
+///
+/// 動画の先頭から試合が映っている場合は、ラウンド途中からの録画かも
+/// しれないので触らない。
+pub(crate) fn reset_round_starts(corrected: &mut [f32], in_match: &[bool]) {
+    for index in 1..in_match.len() {
+        if in_match[index] && !in_match[index - 1] {
+            corrected[index] = 1.0;
+        }
+    }
+}
+
+/// ラウンドの中で残量は増えない。増えている読みは直前の値まで押し下げる。
+///
+/// 読めなかった上にほぼ 0 のフレームは、演出でバーが消えただけ。基準に
+/// 使うと 0 が以降のフレームすべてへ伝わる。
+pub(crate) fn monotone_forward_pass(
+    corrected: &mut [f32],
+    in_match: &[bool],
+    in_uncertain: &[bool],
+    seg_starts: &[usize],
+) {
+    for w in seg_starts.windows(2) {
+        let mut prev: Option<f32> = None;
+        for index in w[0]..w[1] {
+            if !in_match[index] {
+                continue;
+            }
+            if in_uncertain[index] && corrected[index] < 0.01 {
+                continue;
+            }
+            let value = prev.map_or(corrected[index], |p| corrected[index].min(p));
+            corrected[index] = value;
+            prev = Some(value);
+        }
+    }
+}
+
+/// 読めなかったフレームを、その先で最初に読めた残量で埋める。
+///
+/// ラウンド開始演出や勝敗画面ではバーが映らず、そのまま出すとグラフに
+/// 偽の急落が現れる。残量はラウンドの頭で満タンに戻るので、後ろから
+/// 遡って次の確かな値を引いてくる。末尾は満タンから始める。
+///
+/// 読めなかった上にほぼ 0 のフレームは、試合画面でもバーが消えている。
+/// 同じく埋める対象にする。
+pub(crate) fn fill_unreadable_from_the_future(
+    corrected: &mut [f32],
+    in_match: &[bool],
+    in_uncertain: &[bool],
+) {
+    let mut next_hp = 1.0f32;
+    for index in (0..corrected.len()).rev() {
+        let is_reliable = in_match[index] && !(in_uncertain[index] && corrected[index] < 0.01);
+        if is_reliable {
+            next_hp = corrected[index];
+        } else {
+            corrected[index] = next_hp;
+        }
+    }
+}
+
+/// 範囲内の試合中フレームの最小値。試合中のフレームが無ければ None。
+fn window_min(raw: &[f32], in_match: &[bool], range: std::ops::Range<usize>) -> Option<f32> {
+    range
+        .filter(|index| in_match[*index])
+        .map(|index| raw[index])
+        .reduce(f32::min)
 }
 
 /// ラウンドセグメント内で「偽ハイ」フレームを特定する。
@@ -277,11 +273,11 @@ pub(crate) fn compute_spike_frames(
         let (seg_start, seg_end) = (w[0], w[1]);
         let len = seg_end - seg_start;
 
-        // lookahead_min[li] = min(raw[i+1 .. i+W+1] の in-match フレーム)
-        // backward_min[li]  = min(raw[i-W .. i]     の in-match フレーム)
-        // 両方とも raw[i] 自身を含まない（自分自身と比較すると常に条件不成立になるため）
-        let mut lookahead_min = vec![f32::MAX; len];
-        let mut backward_min = vec![f32::MAX; len];
+        // 前後それぞれの窓の最小値。自分自身は入れない（入れると自分と
+        // 比べることになり、条件が常に成り立たなくなる）。窓に試合中の
+        // フレームが一つも無ければ比較相手が居ない。
+        let mut lookahead_min: Vec<Option<f32>> = vec![None; len];
+        let mut backward_min: Vec<Option<f32>> = vec![None; len];
 
         for li in 0..len {
             let i = seg_start + li;
@@ -295,23 +291,11 @@ pub(crate) fn compute_spike_frames(
             } else {
                 seg_start
             };
-            let mut bmin = f32::MAX;
-            for j in bw_start..i {
-                if in_match[j] {
-                    bmin = bmin.min(raw[j]);
-                }
-            }
-            backward_min[li] = bmin;
+            backward_min[li] = window_min(raw, in_match, bw_start..i);
 
             // 前方ウィンドウ: i の後 SPIKE_WINDOW フレームの最小値
             let fw_end = (i + SPIKE_WINDOW + 1).min(seg_end);
-            let mut fmin = f32::MAX;
-            for j in i + 1..fw_end {
-                if in_match[j] {
-                    fmin = fmin.min(raw[j]);
-                }
-            }
-            lookahead_min[li] = fmin;
+            lookahead_min[li] = window_min(raw, in_match, i + 1..fw_end);
         }
 
         for li in 0..len {
@@ -323,13 +307,10 @@ pub(crate) fn compute_spike_frames(
             let ahead = lookahead_min[li];
             let behind = backward_min[li];
 
-            // 前後ウィンドウの最小値より THRESHOLD 以上高い場合のみスパイク
-            // AND 条件: 一方だけ満たす場合は偽ロー前後フレームなので除外
-            if ahead != f32::MAX
-                && behind != f32::MAX
-                && raw[i] > ahead + RISE_THRESHOLD
-                && raw[i] > behind + RISE_THRESHOLD
-            {
+            // 前後どちらの窓の最小値より高い場合だけスパイク。片側だけだと、
+            // 偽ローの隣にいるだけの正常な読みまで拾ってしまう。
+            let above = |floor: Option<f32>| floor.is_some_and(|f| raw[i] > f + RISE_THRESHOLD);
+            if above(ahead) && above(behind) {
                 in_spike[i] = true;
             }
         }
@@ -364,10 +345,11 @@ pub(crate) fn spike_hold_forward_pass(
         if !in_match[i] {
             continue;
         }
-        let is_spike_or_uncertain = in_spike[i] || in_uncertain[i];
-        let is_false_low =
-            !is_spike_or_uncertain && corrected[i] < prev * 0.5 && prev - corrected[i] > 0.5;
-        if is_spike_or_uncertain || is_false_low {
+        // 直前から半分以下まで、しかも絶対量でも大きく落ちた読みは、
+        // 爆発などでバーが隠れた偽ロー。割合だけで判ずると、残量の少ない
+        // ところからのとどめの一撃が消える。
+        let collapsed = corrected[i] < prev * 0.5 && prev - corrected[i] > 0.5;
+        if in_spike[i] || in_uncertain[i] || collapsed {
             corrected[i] = prev;
         } else {
             prev = corrected[i];

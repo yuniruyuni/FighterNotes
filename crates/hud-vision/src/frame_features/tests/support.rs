@@ -457,3 +457,24 @@ pub(super) fn drive_runs_from(
     }
     runs
 }
+
+/// P1 用に描いたフレームを P2 用へ写す。
+///
+/// 二つの ROI は画面の中心について鏡像で、バーの傾きも色も左右で反転
+/// する。左右に別の描画関数を置くと片方だけ間違えても気づけないので、
+/// 同じ絵を映して比べる。
+pub(super) fn mirror_frame_for_p2(rgba: &[u8]) -> Vec<u8> {
+    let mut mirrored = vec![0u8; rgba.len()];
+    for y in 0..1080usize {
+        for x in 0..1920usize {
+            let from = (y * 1920 + x) * 4;
+            let to = (y * 1920 + (1919 - x)) * 4;
+            // 赤と青を入れ替えて、P1 の赤いバーを P2 の青いバーにする。
+            mirrored[to] = rgba[from + 2];
+            mirrored[to + 1] = rgba[from + 1];
+            mirrored[to + 2] = rgba[from];
+            mirrored[to + 3] = rgba[from + 3];
+        }
+    }
+    mirrored
+}

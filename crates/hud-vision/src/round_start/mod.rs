@@ -181,133 +181,23 @@ fn fight_template_model() -> Option<&'static FightTemplateModel> {
         .as_ref()
 }
 
+/// 画素の明るさ。テンプレートは輝度の勾配だけを持つので、照合の前に
+/// 色を明るさへ落とす。
+///
+/// 重みは目の感度に合わせてあり、緑が最も、青が最も効かない。等しく
+/// 混ぜると、色の違う場面で `FIGHT` の輪郭が出たり消えたりする。
+/// 三つの重みは 256 を成すので、無彩色はそのままの値で通る。
+fn luma(red: u8, green: u8, blue: u8) -> i16 {
+    let weighted = 77 * u32::from(red) + 150 * u32::from(green) + 29 * u32::from(blue);
+    ((weighted + 128) >> 8) as i16
+}
+
 fn patch_luma(hud_strip: &[u8], strip_width: usize, x: i16, y: i16) -> i16 {
     let source_x = FIGHT_PATCH_X + x as usize;
     let source_y = FIGHT_PATCH_Y + y as usize;
     let index = (source_y * strip_width + source_x) * 4;
-    let red = u32::from(hud_strip[index]);
-    let green = u32::from(hud_strip[index + 1]);
-    let blue = u32::from(hud_strip[index + 2]);
-    ((77 * red + 150 * green + 29 * blue + 128) >> 8) as i16
+    luma(hud_strip[index], hud_strip[index + 1], hud_strip[index + 2])
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    const STRIP_WIDTH: usize = 1920;
-    const STRIP_HEIGHT: usize = 70;
-
-    #[test]
-    fn template_patch_has_near_perfect_score() {
-        let strip = strip_with_template(0, 0);
-        assert!(fight_score_from_hud_strip(&strip, STRIP_WIDTH) > 0.99);
-    }
-
-    #[test]
-    fn narrow_alignment_search_recovers_shifted_patch() {
-        let strip = strip_with_template(2, -1);
-        assert!(fight_score_from_hud_strip(&strip, STRIP_WIDTH) > 0.99);
-    }
-
-    #[test]
-    fn flat_patch_does_not_match() {
-        let strip = vec![128; STRIP_WIDTH * STRIP_HEIGHT * 4];
-        assert_eq!(fight_score_from_hud_strip(&strip, STRIP_WIDTH), 0.0);
-    }
-
-    #[test]
-    fn temporal_hits_become_one_marker_per_fight_animation() {
-        let observations = [
-            FightObservation {
-                frame: 100,
-                score: 0.7,
-            },
-            FightObservation {
-                frame: 104,
-                score: 0.8,
-            },
-            FightObservation {
-                frame: 108,
-                score: 0.75,
-            },
-            FightObservation {
-                frame: 800,
-                score: 0.72,
-            },
-            FightObservation {
-                frame: 804,
-                score: 0.88,
-            },
-            FightObservation {
-                frame: 808,
-                score: 0.73,
-            },
-        ];
-        assert_eq!(
-            detect_fight_markers(&observations),
-            vec![
-                FightMarker {
-                    first_frame: 100,
-                    last_frame: 108,
-                    peak_frame: 104,
-                    peak_score: 0.8,
-                },
-                FightMarker {
-                    first_frame: 800,
-                    last_frame: 808,
-                    peak_frame: 804,
-                    peak_score: 0.88,
-                },
-            ]
-        );
-    }
-
-    #[test]
-    fn isolated_or_weak_hits_are_rejected() {
-        let observations = [
-            FightObservation {
-                frame: 100,
-                score: 0.9,
-            },
-            FightObservation {
-                frame: 200,
-                score: 0.5,
-            },
-            FightObservation {
-                frame: 204,
-                score: 0.51,
-            },
-            FightObservation {
-                frame: 208,
-                score: 0.52,
-            },
-        ];
-        assert!(detect_fight_markers(&observations).is_empty());
-    }
-
-    fn strip_with_template(shift_x: i16, shift_y: i16) -> Vec<u8> {
-        let mut strip = vec![0; STRIP_WIDTH * STRIP_HEIGHT * 4];
-        for y in 0..FIGHT_PATCH_HEIGHT {
-            for x in 0..FIGHT_PATCH_WIDTH {
-                let target_x = x as i16 + shift_x;
-                let target_y = y as i16 + shift_y;
-                if target_x < 0
-                    || target_x >= FIGHT_PATCH_WIDTH as i16
-                    || target_y < 0
-                    || target_y >= FIGHT_PATCH_HEIGHT as i16
-                {
-                    continue;
-                }
-                let value = FIGHT_TEMPLATE[y * FIGHT_PATCH_WIDTH + x];
-                let index = ((FIGHT_PATCH_Y + target_y as usize) * STRIP_WIDTH
-                    + FIGHT_PATCH_X
-                    + target_x as usize)
-                    * 4;
-                strip[index..index + 3].fill(value);
-                strip[index + 3] = 255;
-            }
-        }
-        strip
-    }
-}
+mod tests;
