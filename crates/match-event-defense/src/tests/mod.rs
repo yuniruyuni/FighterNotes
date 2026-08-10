@@ -9,6 +9,7 @@ mod advantage_situation_tracks_pressure_continuation;
 mod drive_impact_is_not_reported_as_a_failed_reversal;
 mod fragmented_invincible_run_is_one_reversal;
 mod guard_break_counts_one_release_per_damage_sequence;
+mod guard_break_gates;
 mod knockdown_needs_a_free_attacker;
 mod minus_situation_gates;
 mod minus_situation_keeps_observed_non_fastest_response_as_denominator;
