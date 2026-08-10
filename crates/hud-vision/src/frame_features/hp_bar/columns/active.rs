@@ -1,4 +1,4 @@
-use super::palette::{is_low_health_yellow, is_remaining_health, ratio};
+use super::palette::{ratio, BarColour};
 use super::scan::ColumnScan;
 
 /// HP ROI 内の各列が HP 色かどうかを返す（デバッグ・充填率計算の共通ヘルパー）。
@@ -25,10 +25,14 @@ fn hp_col_active_impl(
     } else {
         ratio::REMAINING_P2
     };
-    let by_colour = scan.columns_where(rgba, remaining_ratio, |r, g, b| {
-        is_remaining_health(side, r, g, b)
-    });
-    let by_yellow = scan.columns_where(rgba, ratio::REMAINING_YELLOW, is_low_health_yellow);
+    let by_colour = scan.columns_where(
+        rgba,
+        remaining_ratio,
+        BarColour::RemainingHealth {
+            first_player: side == "p1",
+        },
+    );
+    let by_yellow = scan.columns_where(rgba, ratio::REMAINING_YELLOW, BarColour::LowHealthYellow);
     by_colour
         .into_iter()
         .zip(by_yellow)

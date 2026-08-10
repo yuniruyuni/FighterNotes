@@ -206,3 +206,266 @@ fn an_empty_zone_list_reads_nothing() {
     assert_eq!(decode.fill_ratio, 0.0);
     assert_eq!(decode.orange_fill, 0.0);
 }
+
+// ── 走査を打ち切る位置 ───────────────────────────────────────────────────
+//
+// 読み取りは、答えが出た時点でも諦めた時点でも、そこで打ち切る。打ち切り
+// 損ねると、その先にある別のゲージや演出の断片が読みに混ざる。
+// 以下はどれも「打ち切った先に、続けたら結果を変えるゾーンがある」形。
+
+/// 太い白帯で諦めたあと、その先に正しい枠が並んでいても読み直さない。
+#[test]
+fn a_reading_abandoned_at_a_wide_white_band_does_not_resume() {
+    use HpColColor::*;
+    let decode = decode_hp_zones(
+        &zones(&[
+            (White, 7),
+            (White, 3),
+            (Fill, 200),
+            (White, 3),
+            (Dark, 400),
+            (White, 3),
+        ]),
+        COLUMNS,
+    );
+
+    assert!(decode.uncertain, "諦めたはずの走査が先で読み直している");
+    assert_eq!(decode.fill_ratio, 0.0);
+}
+
+/// 枠より先に残量が出るのは枠が塞がれているということ。その先に
+/// 正しい枠があっても読み直さない。
+#[test]
+fn a_blocked_cap_is_not_recovered_by_a_later_cap() {
+    use HpColColor::*;
+    let decode = decode_hp_zones(
+        &zones(&[
+            (Fill, 50),
+            (White, 3),
+            (Fill, 200),
+            (White, 3),
+            (Dark, 400),
+            (White, 3),
+        ]),
+        COLUMNS,
+    );
+
+    assert!(decode.uncertain, "塞がれた枠を無視して読んでいる");
+}
+
+/// 残量ゼロと読んだら、その先に残量の色があっても数えない。別のゲージが
+/// 重なっている場面。
+#[test]
+fn an_empty_bar_does_not_pick_up_fill_from_further_along() {
+    use HpColColor::*;
+    let decode = decode_hp_zones(
+        &zones(&[
+            (White, 3),
+            (Dark, 200),
+            (Fill, 100),
+            (White, 3),
+            (Dark, 372),
+            (White, 3),
+        ]),
+        COLUMNS,
+    );
+
+    assert_eq!(decode.fill_ratio, 0.0, "先の残量を拾っている");
+}
+
+/// 残量の途中の太い白帯で諦めたあと、その先の枠を充填端にしない。
+#[test]
+fn a_white_band_inside_the_fill_does_not_defer_to_a_later_edge() {
+    use HpColColor::*;
+    let decode = decode_hp_zones(
+        &zones(&[
+            (White, 3),
+            (Fill, 100),
+            (White, 10),
+            (Fill, 50),
+            (White, 3),
+            (Dark, 512),
+            (White, 3),
+        ]),
+        COLUMNS,
+    );
+
+    assert!(decode.uncertain);
+    assert_eq!(decode.fill_ratio, 0.0, "遮蔽の先を充填端にしている");
+}
+
+/// 残量の中に橙が出るのは順序が壊れている。その先の枠を充填端にしない。
+#[test]
+fn orange_inside_the_fill_does_not_defer_to_a_later_edge() {
+    use HpColColor::*;
+    let decode = decode_hp_zones(
+        &zones(&[
+            (White, 3),
+            (Fill, 100),
+            (Orange, 50),
+            (White, 3),
+            (Dark, 522),
+            (White, 3),
+        ]),
+        COLUMNS,
+    );
+
+    assert!(decode.uncertain);
+    assert_eq!(decode.fill_ratio, 0.0, "壊れた並びから充填端を出している");
+}
+
+/// 充填端の先の太い白帯で諦めたあと、その先の橙をダメージにしない。
+#[test]
+fn a_white_band_past_the_fill_edge_does_not_yield_a_damage_zone() {
+    use HpColColor::*;
+    let decode = decode_hp_zones(
+        &zones(&[
+            (White, 3),
+            (Fill, 100),
+            (White, 3),
+            (Dark, 20),
+            (White, 10),
+            (Orange, 30),
+            (White, 3),
+            (Dark, 509),
+            (White, 3),
+        ]),
+        COLUMNS,
+    );
+
+    assert!(decode.uncertain);
+    assert!(
+        decode.damage_left_a.is_none(),
+        "遮蔽の先の橙をダメージと読んでいる"
+    );
+}
+
+/// 左端の枠まで読んで終えたら、その先の橙はダメージではない。
+#[test]
+fn the_reading_ends_at_the_left_cap() {
+    use HpColColor::*;
+    let decode = decode_hp_zones(
+        &zones(&[
+            (White, 3),
+            (Fill, 100),
+            (White, 3),
+            (Dark, 20),
+            (White, 3),
+            (Orange, 30),
+            (White, 3),
+            (Dark, 516),
+            (White, 3),
+        ]),
+        COLUMNS,
+    );
+
+    assert!(!decode.uncertain);
+    assert!(
+        decode.damage_left_a.is_none(),
+        "枠の先の橙をダメージと読んでいる"
+    );
+}
+
+/// ダメージ帯が空きに変わって終えたら、その先の橙は別物。
+#[test]
+fn the_damage_zone_does_not_resume_after_the_empty_part() {
+    use HpColColor::*;
+    let decode = decode_hp_zones(
+        &zones(&[
+            (White, 3),
+            (Fill, 100),
+            (White, 3),
+            (Orange, 30),
+            (Dark, 20),
+            (Orange, 30),
+            (White, 3),
+            (Dark, 489),
+            (White, 3),
+        ]),
+        COLUMNS,
+    );
+
+    assert!(
+        decode.damage_left_a.is_none(),
+        "空きを跨いだ先の橙を繋いでいる"
+    );
+}
+
+/// ダメージ帯の中の太い白帯で諦めたあと、その先の枠を帯の左端にしない。
+#[test]
+fn a_white_band_inside_the_damage_zone_does_not_yield_a_boundary() {
+    use HpColColor::*;
+    let decode = decode_hp_zones(
+        &zones(&[
+            (White, 3),
+            (Fill, 100),
+            (White, 3),
+            (Orange, 30),
+            (White, 10),
+            (Orange, 20),
+            (White, 3),
+            (Dark, 509),
+            (White, 3),
+        ]),
+        COLUMNS,
+    );
+
+    assert!(decode.uncertain);
+    assert!(
+        decode.damage_left_a.is_none(),
+        "遮蔽の先を帯の左端にしている"
+    );
+}
+
+/// ダメージ帯の左端は最初に見つけた枠。その先にもう一つ枠があっても
+/// 乗り換えない。
+#[test]
+fn the_damage_boundary_is_the_first_cap_found() {
+    use HpColColor::*;
+    let decode = decode_hp_zones(
+        &zones(&[
+            (White, 3),
+            (Fill, 100),
+            (White, 3),
+            (Orange, 30),
+            (White, 3),
+            (Orange, 20),
+            (White, 3),
+            (Dark, 516),
+            (White, 3),
+        ]),
+        COLUMNS,
+    );
+
+    assert_eq!(
+        decode.damage_left_a,
+        Some(138),
+        "先の枠に乗り換えて帯を広げている"
+    );
+}
+
+/// 滲みで帯が終わった場合も、そこが左端。
+#[test]
+fn a_blended_edge_also_ends_the_damage_zone() {
+    use HpColColor::*;
+    let decode = decode_hp_zones(
+        &zones(&[
+            (White, 3),
+            (Fill, 100),
+            (White, 3),
+            (Orange, 30),
+            (YellowWhite, 3),
+            (Orange, 20),
+            (White, 3),
+            (Dark, 516),
+            (White, 3),
+        ]),
+        COLUMNS,
+    );
+
+    assert_eq!(
+        decode.damage_left_a,
+        Some(138),
+        "滲みの先まで帯を伸ばしている"
+    );
+}

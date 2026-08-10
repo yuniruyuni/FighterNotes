@@ -1,4 +1,4 @@
-use super::palette::{is_damage_orange, is_low_health_yellow, ratio};
+use super::palette::{ratio, BarColour};
 use super::scan::ColumnScan;
 use crate::frame_features::HUD_STRIP_Y;
 
@@ -33,7 +33,7 @@ fn hp_col_orange_impl(
     y_strip_start: usize,
 ) -> Vec<bool> {
     match ColumnScan::new(width, height, side, y_strip_start) {
-        Some(scan) => scan.columns_where(rgba, ratio::DAMAGE_ORANGE, is_damage_orange),
+        Some(scan) => scan.columns_where(rgba, ratio::DAMAGE_ORANGE, BarColour::DamageOrange),
         None => Vec::new(),
     }
 }
@@ -68,7 +68,9 @@ fn hp_col_yellow_impl(
     y_strip_start: usize,
 ) -> Vec<bool> {
     match ColumnScan::new(width, height, side, y_strip_start) {
-        Some(scan) => scan.columns_where(rgba, ratio::LOW_HEALTH_YELLOW, is_low_health_yellow),
+        Some(scan) => {
+            scan.columns_where(rgba, ratio::LOW_HEALTH_YELLOW, BarColour::LowHealthYellow)
+        }
         None => Vec::new(),
     }
 }

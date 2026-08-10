@@ -84,3 +84,47 @@ fn the_ratios_stay_where_they_are() {
     assert_eq!(ratio::DAMAGE_ORANGE, 0.15);
     assert_eq!(ratio::LOW_HEALTH_YELLOW, 0.15);
 }
+
+// ── 名前から判定へ ───────────────────────────────────────────────────────
+//
+// 走査には探す色を名前で渡す。名前と判定の対応が入れ替わると、橙を
+// 探したつもりで黄を数える。
+
+/// 橙の名前は橙の判定に繋がる。
+#[test]
+fn the_damage_orange_name_selects_the_orange_test() {
+    let orange = BarColour::DamageOrange;
+
+    assert!(orange.matches(220.0, 110.0, 0.0), "帯の中の橙");
+    assert!(!orange.matches(255.0, 238.0, 0.0), "危険域の黄");
+    assert!(!orange.matches(220.0, 0.0, 0.0), "残 HP の赤");
+}
+
+/// 黄の名前は黄の判定に繋がる。
+#[test]
+fn the_low_health_yellow_name_selects_the_yellow_test() {
+    let yellow = BarColour::LowHealthYellow;
+
+    assert!(yellow.matches(255.0, 238.0, 0.0), "危険域の黄");
+    assert!(!yellow.matches(220.0, 110.0, 0.0), "ダメージの橙");
+}
+
+/// 残量の名前は側ごとの判定に繋がる。左右で色相帯が違うので、
+/// 取り違えると相手の残量を自分のものとして読む。
+#[test]
+fn the_remaining_health_name_carries_the_side() {
+    let first = BarColour::RemainingHealth { first_player: true };
+    let second = BarColour::RemainingHealth {
+        first_player: false,
+    };
+    let red = (220.0, 30.0, 30.0);
+    let blue = (30.0, 140.0, 220.0);
+
+    assert!(first.matches(red.0, red.1, red.2), "P1 の赤");
+    assert!(
+        !first.matches(blue.0, blue.1, blue.2),
+        "P1 が青を拾っている"
+    );
+    assert!(second.matches(blue.0, blue.1, blue.2), "P2 の青");
+    assert!(!second.matches(red.0, red.1, red.2), "P2 が赤を拾っている");
+}

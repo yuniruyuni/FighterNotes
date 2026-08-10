@@ -59,7 +59,8 @@ pub(crate) fn decode_hp_zones(zones: &[HpZone], roi_w: usize) -> HpZonesDecode {
             Sm::SeekCap => match zone.color {
                 HpColColor::White => {
                     if zone.width() > MAX_CAP_WHITE_WIDTH {
-                        uncertain = true;
+                        // 太い白は cap ではなく遮蔽。cap を見つけないまま
+                        // 終わるので、走査後に uncertain が立つ。
                         break 'scan;
                     }
                     Sm::FillScan
@@ -78,10 +79,9 @@ pub(crate) fn decode_hp_zones(zones: &[HpZone], roi_w: usize) -> HpZonesDecode {
                 {
                     Sm::SeekCap
                 }
-                HpColColor::Fill | HpColColor::Ghost => {
-                    uncertain = true;
-                    break 'scan;
-                }
+                // cap より先に fill や残像が出るのは、cap が塞がれている。
+                // これも cap を見ないまま終わる。
+                HpColColor::Fill | HpColColor::Ghost => break 'scan,
                 HpColColor::Dark | HpColColor::YellowWhite | HpColColor::Orange => Sm::SeekCap,
             },
 

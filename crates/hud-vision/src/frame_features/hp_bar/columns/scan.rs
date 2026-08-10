@@ -8,6 +8,7 @@
 //! 散らばりうる状態だった。走査はここ一箇所に置く。
 
 use super::super::{hp_roi_base, HP_BAR_SLOPE, HP_COL_ROW_SKIP_BOTTOM, HP_COL_ROW_SKIP_TOP};
+use super::palette::BarColour;
 use crate::frame_features::scale_roi;
 
 /// 走査する平行四辺形の位置と傾き。
@@ -57,8 +58,8 @@ impl ColumnScan {
         self.x2 - self.x1
     }
 
-    /// 列 `cx` の各画素を訪ね、ROI 内に収まった画素数と、`is_wanted` が
-    /// 真を返した画素数を返す `(該当数, 有効数)`。
+    /// 列 `cx` の各画素を訪ね、ROI 内に収まった画素数と、`wanted` の色
+    /// だった画素数を返す `(該当数, 有効数)`。
     ///
     /// バッファの外へ出る画素は有効数にも入れない。切り詰められた入力で
     /// 割合が歪まないようにするため。
@@ -66,7 +67,7 @@ impl ColumnScan {
         &self,
         rgba: &[u8],
         cx: usize,
-        mut is_wanted: impl FnMut(f32, f32, f32) -> bool,
+        wanted: BarColour,
     ) -> (usize, usize) {
         let mut matched = 0usize;
         let mut effective = 0usize;
@@ -85,23 +86,18 @@ impl ColumnScan {
                 continue;
             };
             effective += 1;
-            if is_wanted(pixel[0] as f32, pixel[1] as f32, pixel[2] as f32) {
+            if wanted.matches(pixel[0] as f32, pixel[1] as f32, pixel[2] as f32) {
                 matched += 1;
             }
         }
         (matched, effective)
     }
 
-    /// 各列について、`is_wanted` に当たった画素が `ratio` を超えるかを返す。
-    pub(crate) fn columns_where(
-        &self,
-        rgba: &[u8],
-        ratio: f32,
-        mut is_wanted: impl FnMut(f32, f32, f32) -> bool,
-    ) -> Vec<bool> {
+    /// 各列について、`wanted` の色だった画素が `ratio` を超えるかを返す。
+    pub(crate) fn columns_where(&self, rgba: &[u8], ratio: f32, wanted: BarColour) -> Vec<bool> {
         (0..self.columns())
             .map(|cx| {
-                let (matched, effective) = self.count_in_column(rgba, cx, &mut is_wanted);
+                let (matched, effective) = self.count_in_column(rgba, cx, wanted);
                 effective > 0 && (matched as f32 / effective as f32) > ratio
             })
             .collect()
