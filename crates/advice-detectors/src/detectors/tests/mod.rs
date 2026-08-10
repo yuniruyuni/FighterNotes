@@ -11,6 +11,7 @@ mod layered_and_lead;
 mod minus_frames;
 mod punishment;
 mod reversal_punished;
+mod rounds_and_supers;
 mod support;
 mod throw_whiff;
 mod whiff;
