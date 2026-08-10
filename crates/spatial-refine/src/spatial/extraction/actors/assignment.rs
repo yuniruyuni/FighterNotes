@@ -125,3 +125,6 @@ fn best_pair(
     }
     best
 }
+
+#[cfg(test)]
+mod tests;
