@@ -125,30 +125,30 @@ pub(crate) struct SlantedRoi<'a> {
 }
 
 impl SlantedRoi<'_> {
+    /// 列 `column` の行 `row` が、画面のどの x に当たるか。
+    ///
+    /// バーは平行四辺形なので、行が下がるごとに横へずれる。ずれた先が
+    /// ROI の外へ出る行は、その列には属さない。
+    pub(crate) fn column_x(&self, column: usize, row: usize, slope_origin: usize) -> Option<usize> {
+        let relative_row = row.checked_sub(slope_origin)?;
+        let x_offset = (relative_row as f32 * self.slope).round() as i32;
+        let x = self.x.start as i32 + column as i32 + x_offset;
+        (x >= self.x.start as i32 && (x as usize) < self.x.end).then_some(x as usize)
+    }
+
+    /// 列 `column` の行 `row` の画素。ROI の外へ出た行と、バッファの
+    /// 終わりを越える行は None。
     pub(crate) fn rgb_at(
         &self,
         column: usize,
         row: usize,
         slope_origin: usize,
     ) -> Option<[f32; 3]> {
-        let relative_row = row.checked_sub(slope_origin)?;
-        let x_offset = (relative_row as f32 * self.slope).round() as i32;
-        let x = self.x.start as i32 + column as i32 + x_offset;
-        if x < self.x.start as i32 || x as usize >= self.x.end {
-            return None;
-        }
-
+        let x = self.column_x(column, row, slope_origin)?;
         let y = self.y_start.checked_add(row)?.checked_sub(self.strip_y)?;
-        let index = (y * self.frame_width + x as usize) * 4;
-        if index + 2 >= self.rgba.len() {
-            return None;
-        }
-
-        Some([
-            self.rgba[index] as f32,
-            self.rgba[index + 1] as f32,
-            self.rgba[index + 2] as f32,
-        ])
+        let index = (y * self.frame_width + x) * 4;
+        let pixel = self.rgba.get(index..index + 3)?;
+        Some([pixel[0] as f32, pixel[1] as f32, pixel[2] as f32])
     }
 }
 

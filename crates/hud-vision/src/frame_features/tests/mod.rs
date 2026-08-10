@@ -14,6 +14,7 @@ mod hp_zone_state_transitions;
 mod hud_debug_json;
 mod roi_entry_points;
 mod roi_scaling;
+mod slanted_roi;
 mod test_backward_fill_trusted_false_low_corrected;
 mod test_backward_fill_uncertain_dip_corrected;
 mod test_decode_drive_background_bleed_not_burnout;

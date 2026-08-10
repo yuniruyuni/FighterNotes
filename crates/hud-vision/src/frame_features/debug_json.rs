@@ -144,7 +144,6 @@ pub fn hp_col_pixel_detail_json(
         slope,
     };
 
-    let w_px = width as usize;
     let row_start = HP_COL_ROW_SKIP_TOP.min(roi_h);
     let row_end = roi_h.saturating_sub(HP_COL_ROW_SKIP_BOTTOM).max(row_start);
 
@@ -168,21 +167,15 @@ pub fn hp_col_pixel_detail_json(
         let mut total = 0usize;
 
         for ry in row_start..row_end {
-            let x_off = ((ry - row_start) as f32 * slope).round() as i32;
-            let gx_i = x1 as i32 + cy as i32 + x_off;
-            // classify_hp_col と同じ境界チェック（ROI [x1, x2) でクリップ）
-            if gx_i < x1 as i32 || gx_i as usize >= x2 {
+            // 座標も画素も、解析が使う ROI に訊く。ここで別に計算すると、
+            // 表示が本体とは違う場所を指しうる。
+            let (Some(gx), Some([r, g, b])) = (
+                roi.column_x(cy, ry, row_start),
+                roi.rgb_at(cy, ry, row_start),
+            ) else {
                 continue;
-            }
-            let gx = gx_i as usize;
-            let idx = ((y1 + ry - y_strip_start) * w_px + gx) * 4;
-            if idx + 2 >= rgba.len() {
-                continue;
-            }
+            };
             total += 1;
-            let r = rgba[idx] as f32;
-            let g = rgba[idx + 1] as f32;
-            let b = rgba[idx + 2] as f32;
             let [h, s, v] = rgb_to_hsv(r, g, b);
 
             // 表示は解析と同じ判定を使う。ここで別に書くと、表示が
@@ -210,9 +203,7 @@ pub fn hp_col_pixel_detail_json(
 
             rows_json.push(format!(
                 r#"{{"ry":{},"gx":{},"r":{},"g":{},"b":{},"h":{:.0},"s":{:.0},"v":{:.0},"cls":"{}"}}"#,
-                ry, gx,
-                rgba[idx], rgba[idx+1], rgba[idx+2],
-                h, s, v, px_class
+                ry, gx, r as u8, g as u8, b as u8, h, s, v, px_class
             ));
         }
 
