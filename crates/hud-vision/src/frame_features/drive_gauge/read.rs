@@ -5,6 +5,20 @@ use super::{
     scale_roi, SlantedRoi, DRIVE_BAR_SLOPE, DRIVE_ROI_LEFT, DRIVE_ROI_RIGHT,
 };
 
+/// 1080p での ROI の幅。他の解像度は、この幅を基準に比例で扱う。
+const ROI_REFERENCE_WIDTH: usize = 324;
+/// ROI の外縁にあるリム装飾の幅（1080p 換算）。満タン時のグローや
+/// バーンアウト枠がここに乗って不定に読めるので、読み取りから外す。
+const RIM_WIDTH: usize = 10;
+
+/// 6 セルの実体が収まる範囲の列数。リム装飾を除いた分。
+///
+/// 潰れた ROI でも 1 列は残す。空の列並びを読むと、決められない状態と
+/// 空のゲージが区別できなくなる。
+fn cells_span(roi_w: usize) -> usize {
+    (roi_w * (ROI_REFERENCE_WIDTH - RIM_WIDTH) / ROI_REFERENCE_WIDTH).max(1)
+}
+
 pub(crate) fn drive_gauge_read_impl(
     rgba: &[u8],
     width: u32,
@@ -56,11 +70,11 @@ pub(crate) fn drive_gauge_read_impl(
         (0..roi_w).map(classify).collect()
     };
 
-    // 外縁リム装飾（ROI 末尾 ≈10px @1080p）は満タン時グロー/バーンアウト枠が
-    // 不定に読めるため除外。6 セル実体は先頭 ≈314px に収まる。
-    let span = roi_w * (324 - 10) / 324;
-    cols.truncate(span.max(1));
+    cols.truncate(cells_span(roi_w));
 
     let runs = segment_drive_runs(&cols);
     decode_drive_runs(&runs, cols.len())
 }
+
+#[cfg(test)]
+mod tests;

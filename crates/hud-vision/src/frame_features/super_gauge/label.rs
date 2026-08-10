@@ -33,6 +33,38 @@ impl WhiteComponent {
     fn center_x(self) -> usize {
         (self.x0 + self.x1) / 2
     }
+
+    /// 文字らしい大きさか。細かい点や背の低い破片は、ステージの明るい
+    /// 部分がラベルに掛かっただけ。文字として扱うと、数字の位置に
+    /// 一番近いという理由でそれが選ばれる。
+    fn looks_like_a_glyph(self, patch_height: usize) -> bool {
+        /// これ未満の画素数は文字ではない。
+        const MIN_AREA: usize = 45;
+        /// ラベルの高さのうち、文字が占める最小の割合。
+        const MIN_HEIGHT_NUMERATOR: usize = 2;
+        const MIN_HEIGHT_DENOMINATOR: usize = 5;
+        self.area >= MIN_AREA
+            && self.height() >= patch_height * MIN_HEIGHT_NUMERATOR / MIN_HEIGHT_DENOMINATOR
+    }
+}
+
+/// 数字が出るはずの位置。ラベルの中で左右対称に置かれる。
+///
+/// ここがずれると、数字ではなくステージの明るい破片の方が「近い」ことに
+/// なって選ばれる。
+fn expected_digit_centre(label_width: usize, is_left: bool) -> usize {
+    /// 位置を決めるときの基準にするラベル幅。
+    const REFERENCE_WIDTH: usize = 90;
+    /// 基準幅の中での位置。左側のゲージは右寄り、右側は左寄り。
+    const CENTRE_ON_THE_LEFT: usize = 72;
+    const CENTRE_ON_THE_RIGHT: usize = 26;
+
+    let at = if is_left {
+        CENTRE_ON_THE_LEFT
+    } else {
+        CENTRE_ON_THE_RIGHT
+    };
+    label_width * at / REFERENCE_WIDTH
 }
 
 /// ラベル内の白のかたまりを拾う。小さすぎるものと背の低いものは
@@ -86,7 +118,7 @@ pub(super) fn white_components(
             seed_x: seed % patch.width,
             seed_y: seed / patch.width,
         };
-        if component.area >= 45 && component.height() >= patch.height * 2 / 5 {
+        if component.looks_like_a_glyph(patch.height) {
             components.push(component);
         }
     }
@@ -125,11 +157,7 @@ pub(super) fn digit_component(
     label_width: usize,
     is_left: bool,
 ) -> Option<WhiteComponent> {
-    let expected_center = if is_left {
-        label_width * 72 / 90
-    } else {
-        label_width * 26 / 90
-    };
+    let expected_center = expected_digit_centre(label_width, is_left);
     components
         .iter()
         .copied()
@@ -321,3 +349,6 @@ fn region_fill(
         white as f32 / total as f32
     }
 }
+
+#[cfg(test)]
+mod tests;

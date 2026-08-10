@@ -116,3 +116,76 @@ fn the_hud_strip_scores_the_same_as_the_whole_frame() {
         "全画面 {from_full} と帯 {from_strip} が食い違う"
     );
 }
+
+/// ROI の外は見ない。一行でも余分に見れば、満たした ROI でも 1 に
+/// 届かなくなる。
+#[test]
+fn a_fully_painted_roi_scores_exactly_one() {
+    let score = hp_bar_score(&frame_with_roi((220, 20, 20)), WIDTH, HEIGHT, "p1");
+
+    assert_eq!(score, 1.0, "ROI の外まで数えている");
+}
+
+/// ROI の一行が欠けていれば、その分だけ下がる。ROI が狭すぎれば
+/// 欠けに気づけない。
+#[test]
+fn a_missing_row_lowers_the_score() {
+    let mut rgba = frame_with_roi((220, 20, 20));
+    for gx in 172..853usize {
+        let index = (94 * WIDTH as usize + gx) * 4;
+        rgba[index..index + 3].fill(0);
+    }
+
+    let score = hp_bar_score(&rgba, WIDTH, HEIGHT, "p1");
+
+    assert!(score < 1.0, "ROI の最終行を見ていない");
+    assert!(score > 0.9, "一行の欠けで大きく落ちすぎている");
+}
+
+/// 彩度の閾値はちょうどでは足りない。仕様そのものなので、両側から留める。
+#[test]
+fn the_saturation_threshold_needs_to_be_exceeded() {
+    let at_the_edge = hp_bar_score(&frame_with_roi((255, 210, 210)), WIDTH, HEIGHT, "p1");
+    let just_over = hp_bar_score(&frame_with_roi((255, 209, 209)), WIDTH, HEIGHT, "p1");
+
+    assert_eq!(at_the_edge, 0.0, "ちょうどの彩度を数えている");
+    assert_eq!(just_over, 1.0, "超えた彩度を数えていない");
+}
+
+/// 明度の閾値も同じ。
+#[test]
+fn the_brightness_threshold_needs_to_be_exceeded() {
+    let at_the_edge = hp_bar_score(&frame_with_roi((80, 0, 0)), WIDTH, HEIGHT, "p1");
+    let just_over = hp_bar_score(&frame_with_roi((81, 0, 0)), WIDTH, HEIGHT, "p1");
+
+    assert_eq!(at_the_edge, 0.0, "ちょうどの明度を数えている");
+    assert_eq!(just_over, 1.0, "超えた明度を数えていない");
+}
+
+/// 画素は 4 byte ずつ並ぶ。読む位置がずれると、隣の画素の成分を
+/// 混ぜて色を作ることになる。
+#[test]
+fn each_pixel_is_read_from_its_own_four_bytes() {
+    // 1 列おきに「鮮やかな赤」と「暗い緑」を並べる。位置がずれると
+    // 二つが混ざり、割合が半分から動く。
+    let mut rgba = vec![0u8; WIDTH as usize * HEIGHT as usize * 4];
+    for gy in 64..95usize {
+        for gx in 172..853usize {
+            let index = (gy * WIDTH as usize + gx) * 4;
+            let colour = if gx % 2 == 0 {
+                [220u8, 20, 20]
+            } else {
+                [0, 40, 0]
+            };
+            rgba[index..index + 3].copy_from_slice(&colour);
+            rgba[index + 3] = 255;
+        }
+    }
+
+    let score = hp_bar_score(&rgba, WIDTH, HEIGHT, "p1");
+
+    assert!(
+        (score - 0.5).abs() < 0.01,
+        "隣の画素の成分を混ぜている: {score}"
+    );
+}
