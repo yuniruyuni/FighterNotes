@@ -1,6 +1,7 @@
 mod advantage;
 mod attack_evidence;
 mod boundaries;
+mod burnout_and_throw_loop;
 mod contracts;
 mod hp_lost;
 mod minus_frames;
