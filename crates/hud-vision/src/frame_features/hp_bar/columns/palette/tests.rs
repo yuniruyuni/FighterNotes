@@ -211,3 +211,15 @@ fn the_second_players_brightness_must_be_exceeded() {
     assert!(!is_remaining_health("p2", 0.0, 0.0, 60.0), "ちょうど");
     assert!(is_remaining_health("p2", 0.0, 0.0, 61.0), "超えた明度");
 }
+
+/// 危険域の黄も、彩度はちょうどでは足りない。
+#[test]
+fn low_health_yellow_saturation_at_the_exact_edge_is_not_enough() {
+    assert!(!is_low_health_yellow(204.0, 177.0, 108.0), "ちょうどの彩度");
+}
+
+/// P1 の残量も同じ。
+#[test]
+fn the_first_players_saturation_at_the_exact_edge_is_not_enough() {
+    assert!(!is_remaining_health("p1", 204.0, 164.0, 124.0), "ちょうど");
+}

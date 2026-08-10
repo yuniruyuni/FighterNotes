@@ -243,19 +243,34 @@ fn a_fill_that_does_not_start_at_the_near_end_is_rejected() {
 
 fn paint_gauge(rgba: &mut [u8], side: &str, level: u8, fraction: f32) {
     let is_left = side == "left";
-    let (lx, ly, lw, lh) = if is_left {
+    let label = if is_left {
         PACKED_LABEL_LEFT
     } else {
         PACKED_LABEL_RIGHT
     };
-    let digit_x = if is_left { lx + 50 } else { lx + 11 };
-    paint_digit(rgba, digit_x, ly + 8, 30, lh - 12, level);
-
-    let (bx, by, bw, bh) = if is_left {
+    let bar = if is_left {
         PACKED_BAR_LEFT
     } else {
         PACKED_BAR_RIGHT
     };
+    paint_gauge_into(rgba, label, bar, is_left, level, fraction);
+}
+
+/// 指定したパッチ位置へゲージを描く。帯へ詰めた絵と全画面の絵で同じ
+/// 描き方を使う。
+fn paint_gauge_into(
+    rgba: &mut [u8],
+    label: (usize, usize, usize, usize),
+    bar: (usize, usize, usize, usize),
+    is_left: bool,
+    level: u8,
+    fraction: f32,
+) {
+    let (lx, ly, lw, lh) = label;
+    let digit_x = if is_left { lx + 50 } else { lx + 11 };
+    paint_digit(rgba, digit_x, ly + 8, 30, lh - 12, level);
+
+    let (bx, by, bw, bh) = bar;
     let pad = 8;
     let usable = bw - 18;
     let lit_width = (usable as f32 * fraction) as usize;
@@ -313,11 +328,14 @@ fn paint_digit(rgba: &mut [u8], x: usize, y: usize, w: usize, h: usize, digit: u
 }
 
 fn fill_rect(rgba: &mut [u8], x: usize, y: usize, width: usize, height: usize, color: [u8; 3]) {
-    for py in y..(y + height).min(HEIGHT) {
+    for py in y..y + height {
         for px in x..(x + width).min(WIDTH) {
             let index = (py * WIDTH + px) * 4;
-            rgba[index..index + 3].copy_from_slice(&color);
-            rgba[index + 3] = 255;
+            let Some(pixel) = rgba.get_mut(index..index + 4) else {
+                continue;
+            };
+            pixel[..3].copy_from_slice(color.as_slice());
+            pixel[3] = 255;
         }
     }
 }
@@ -342,4 +360,107 @@ fn a_frame_of_the_wrong_size_reads_nothing() {
     assert!(super_gauge_read(&strip, 1280, 720, "left").uncertain);
     assert!(super_gauge_read_from_hud_strip(&strip, 1280, "left").uncertain);
     assert!(super_gauge_read_from_hud_strip(&[], WIDTH as u32, "left").uncertain);
+}
+
+/// 全画面のフレームからも読める。browser は帯だけを渡すが、デバッグ表示や
+/// 動画からの直接読み取りは全画面を渡す。
+#[test]
+fn a_whole_frame_reads_the_same_gauge_as_the_strip() {
+    const FRAME_HEIGHT: usize = 1080;
+    let mut rgba = vec![0u8; WIDTH * FRAME_HEIGHT * 4];
+    paint_gauge_into(
+        &mut rgba,
+        (55, 955, 90, 75),
+        (145, 975, 265, 50),
+        true,
+        2,
+        0.5,
+    );
+
+    let read = super_gauge_read(&rgba, WIDTH as u32, FRAME_HEIGHT as u32, "left");
+
+    assert_eq!(read.displayed_level, Some(2));
+    assert!(!read.uncertain);
+    assert!(
+        (read.value - 2.5).abs() < 0.08,
+        "値が合わない: {}",
+        read.value
+    );
+}
+
+/// 左右のゲージは別の場所にある。片側に描いた絵で反対側が読めては
+/// いけない。
+#[test]
+fn the_two_sides_read_different_places() {
+    const FRAME_HEIGHT: usize = 1080;
+    let mut rgba = vec![0u8; WIDTH * FRAME_HEIGHT * 4];
+    paint_gauge_into(
+        &mut rgba,
+        (55, 955, 90, 75),
+        (145, 975, 265, 50),
+        true,
+        2,
+        0.5,
+    );
+
+    let left = super_gauge_read(&rgba, WIDTH as u32, FRAME_HEIGHT as u32, "left");
+    let right = super_gauge_read(&rgba, WIDTH as u32, FRAME_HEIGHT as u32, "right");
+
+    assert_eq!(left.displayed_level, Some(2));
+    assert!(right.uncertain, "左に描いた絵を右側が読んでいる");
+}
+
+/// 解像度がどちらか一方でも違えば読まない。ROI の位置は 1920x1080 を
+/// 前提に決めてあるので、別の解像度では別の場所を見ることになる。
+#[test]
+fn a_frame_of_another_resolution_is_refused() {
+    const FRAME_HEIGHT: usize = 1080;
+    let mut rgba = vec![0u8; WIDTH * FRAME_HEIGHT * 4];
+    paint_gauge_into(
+        &mut rgba,
+        (55, 955, 90, 75),
+        (145, 975, 265, 50),
+        true,
+        2,
+        0.5,
+    );
+
+    assert!(
+        super_gauge_read(&rgba, WIDTH as u32, 720, "left").uncertain,
+        "高さが違うフレームを読んでいる"
+    );
+    assert!(
+        super_gauge_read(&rgba, 1280, FRAME_HEIGHT as u32, "left").uncertain,
+        "幅が違うフレームを読んでいる"
+    );
+}
+
+/// 帯だけを渡す入口も同じ。幅が違えば読まない。
+#[test]
+fn a_strip_of_another_width_is_refused() {
+    let mut rgba = vec![0u8; WIDTH * HEIGHT * 4];
+    paint_gauge(&mut rgba, "left", 2, 0.5);
+
+    assert!(!super_gauge_read_from_hud_strip(&rgba, WIDTH as u32, "left").uncertain);
+    assert!(
+        super_gauge_read_from_hud_strip(&rgba, 1280, "left").uncertain,
+        "幅が違う帯を読んでいる"
+    );
+}
+
+/// ラベルとバーはどちらも収まっている必要がある。片方が切れた入力から
+/// 値を出すと、切れた側は既定値のまま確定してしまう。
+#[test]
+fn both_patches_have_to_fit() {
+    let mut full = vec![0u8; WIDTH * HEIGHT * 4];
+    paint_gauge(&mut full, "left", 2, 0.5);
+
+    // ラベルは収まるがバーの手前で切れた帯。
+    let mut label_only = full.clone();
+    label_only.truncate((PACKED_BAR_LEFT.1 + 1) * WIDTH * 4);
+
+    assert!(
+        super_gauge_read_from_hud_strip(&label_only, WIDTH as u32, "left").uncertain,
+        "バーが切れた入力から値を出している"
+    );
 }
