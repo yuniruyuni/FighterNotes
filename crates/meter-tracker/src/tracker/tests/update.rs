@@ -231,3 +231,101 @@ fn update_closes_on_black_frames_or_freeze_timeout() {
     assert_eq!(frozen.absolute_frame, None);
     assert_eq!(frozen.still_frames, FREEZE_TIMEOUT);
 }
+
+/// 周回の先頭のセルから始まるメーターも読み始められる。境目を
+/// 取り違えると、ラウンドの頭の 1 周分がまるごと落ちる。
+#[test]
+fn a_segment_can_open_at_the_very_first_cell() {
+    let mut tracker = MeterTracker::new();
+    tracker.update(0, lit_observation(0), RowObs::empty());
+    tracker.update(1, lit_observation(0), RowObs::empty());
+
+    assert_eq!(tracker.absolute_frame, Some(0), "先頭のセルで開けていない");
+}
+
+/// 開いた瞬間には、その 1 つ前のフレームも同じ区間として記録する。
+/// メーターは既にそこから動いている。
+#[test]
+fn opening_a_segment_also_records_the_frame_before_it() {
+    let mut tracker = MeterTracker::new();
+    tracker.update(7, lit_observation(8), RowObs::empty());
+    tracker.update(8, lit_observation(8), RowObs::empty());
+
+    assert_eq!(tracker.video_map[&7], (0, 8), "直前のフレームを捨てている");
+    assert_eq!(tracker.video_map[&8], (0, 8));
+}
+
+/// 直前のフレームの票が割れていたなら、そのフレームの色は採らない。
+/// 開き直したからといって、読めていなかったものが読めた扱いにならない。
+#[test]
+fn the_recorded_previous_frame_keeps_its_own_vote() {
+    let mut tracker = MeterTracker::new();
+    let mut lit = lit_observation(8);
+    lit.states[8] = CellState::Active;
+    // 直前のフレームで大量のセルが黒へ落ち、票が割れる。
+    let mut wiped = lit_observation(8);
+    wiped.states[8] = CellState::Active;
+    for value in wiped.v.iter_mut().take(WIPE_GUARD_MIN_CELLS as usize) {
+        *value = 0.0;
+    }
+    tracker.previous = Some(shared_pair(lit_observation(-1), lit_observation(-1)));
+
+    tracker.update(7, wiped.clone(), wiped);
+    tracker.update(8, lit.clone(), lit);
+
+    assert_eq!(tracker.video_map[&7], (0, 8), "時刻の対応まで捨てている");
+    assert_eq!(
+        tracker.dwell[&8],
+        [7, 8],
+        "直前のフレームを区間に含めていない"
+    );
+}
+
+/// 画面が真っ黒になれば、そこで区間は終わり。演出やリプレイの
+/// 切り替わりでメーター自体が消える。
+#[test]
+fn an_all_black_frame_closes_the_segment() {
+    let mut tracker = MeterTracker::new();
+    tracker.update(0, lit_observation(8), lit_observation(8));
+    tracker.update(1, lit_observation(9), lit_observation(9));
+    assert!(tracker.absolute_frame.is_some());
+
+    tracker.update(2, RowObs::empty(), RowObs::empty());
+
+    assert_eq!(tracker.absolute_frame, None, "真っ黒でも続けている");
+}
+
+/// 片側だけ黒いのは、演出でその側が隠れているだけ。区間は続く。
+#[test]
+fn one_black_row_does_not_close_the_segment() {
+    let mut tracker = MeterTracker::new();
+    tracker.update(0, lit_observation(8), lit_observation(8));
+    tracker.update(1, lit_observation(9), lit_observation(9));
+
+    tracker.update(2, RowObs::empty(), lit_observation(10));
+
+    assert!(tracker.absolute_frame.is_some(), "片側の黒で閉じている");
+}
+
+/// メーターが止まったまま長く続けば、そこで区間を切る。ポーズや
+/// リプレイの停止でメーターが固まる。
+#[test]
+fn a_meter_frozen_for_too_long_closes_the_segment() {
+    let mut tracker = MeterTracker::new();
+    tracker.update(0, lit_observation(8), lit_observation(8));
+    tracker.update(1, lit_observation(9), lit_observation(9));
+
+    let mut still = lit_observation(9);
+    still.states.fill(CellState::Active);
+    for video_frame in 2..FREEZE_TIMEOUT + 1 {
+        tracker.update(video_frame, still.clone(), still.clone());
+        assert!(
+            tracker.absolute_frame.is_some(),
+            "{video_frame} で早く閉じている"
+        );
+    }
+
+    tracker.update(FREEZE_TIMEOUT + 1, still.clone(), still);
+
+    assert_eq!(tracker.absolute_frame, None, "止まったまま続けている");
+}

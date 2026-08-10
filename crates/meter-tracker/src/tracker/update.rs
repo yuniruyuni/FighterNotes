@@ -6,6 +6,8 @@ use frame_meter::RowObs;
 use super::{MeterTracker, Shared, WinEntry};
 
 impl MeterTracker {
+    /// 区間を閉じる道では `previous` を書き戻さない。`close_segment` が
+    /// 直前フレームを捨てるので、次に開き直すときの参照は残らない。
     pub fn update(&mut self, video_frame: i64, left: RowObs, right: RowObs) {
         let left = Shared::new(left);
         let right = Shared::new(right);
@@ -83,7 +85,6 @@ impl MeterTracker {
                     false
                 }
             } else if Self::all_blackish(&left) && Self::all_blackish(&right) {
-                self.previous = Some((left, right));
                 self.close_segment();
                 return;
             } else if delta < 0 {
@@ -103,7 +104,6 @@ impl MeterTracker {
                 false
             }
         } else if Self::all_blackish(&left) && Self::all_blackish(&right) {
-            self.previous = Some((left, right));
             self.close_segment();
             return;
         } else {
@@ -115,7 +115,6 @@ impl MeterTracker {
         };
 
         if reset {
-            self.previous = Some((Shared::clone(&left), Shared::clone(&right)));
             self.reset_replay(edge);
             return;
         }
@@ -123,7 +122,6 @@ impl MeterTracker {
         if next_absolute == absolute {
             self.still_frames += 1;
             if self.still_frames >= FREEZE_TIMEOUT {
-                self.previous = Some((left, right));
                 self.close_segment();
                 return;
             }
