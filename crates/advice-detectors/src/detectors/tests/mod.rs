@@ -3,6 +3,7 @@ mod attack_evidence;
 mod boundaries;
 mod burnout_and_throw_loop;
 mod contracts;
+mod guard_break;
 mod hp_lost;
 mod jumps;
 mod minus_frames;
