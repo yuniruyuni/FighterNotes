@@ -82,6 +82,34 @@ pub(crate) fn extract(pixels: RowPixels) -> RowObs {
     extract_parts(pixels, &mut QuantizedModeScratch::new()).finish_full()
 }
 
+/// 1 セル分の読み取り。
+struct CellReading {
+    value: f32,
+    white_fraction: f32,
+    color: [f32; 3],
+    stripe: bool,
+    state: CellState,
+    bright: BrightClass,
+    rescued: bool,
+    quality: f32,
+}
+
+impl CellReading {
+    /// 画面の外にはみ出したセル。何も読めていないので空として扱う。
+    fn unreadable() -> Self {
+        Self {
+            value: 0.0,
+            white_fraction: 0.0,
+            color: [0.0; 3],
+            stripe: false,
+            state: CellState::Empty,
+            bright: BrightClass::None_,
+            rescued: false,
+            quality: 0.0,
+        }
+    }
+}
+
 pub(crate) fn extract_parts(
     pixels: RowPixels,
     color_scratch: &mut QuantizedModeScratch,
@@ -91,33 +119,16 @@ pub(crate) fn extract_parts(
     let mut region1 = Vec::new();
     let mut region2 = Vec::new();
 
-    let mut values = Vec::with_capacity(CELL_COUNT);
-    let mut white_fractions = Vec::with_capacity(CELL_COUNT);
-    let mut colors = Vec::with_capacity(CELL_COUNT);
-    let mut stripes = Vec::with_capacity(CELL_COUNT);
-    let mut states = Vec::with_capacity(CELL_COUNT);
-    let mut brightness = Vec::with_capacity(CELL_COUNT);
-    let mut rescued = Vec::with_capacity(CELL_COUNT);
-    let mut quality = Vec::with_capacity(CELL_COUNT);
-
+    let mut readings = Vec::with_capacity(CELL_COUNT);
     for index in 0..CELL_COUNT {
         let Some(bounds) = cell_bounds(pixels.width, index) else {
-            values.push(0.0);
-            white_fractions.push(0.0);
-            colors.push([0.0; 3]);
-            stripes.push(false);
-            states.push(CellState::Empty);
-            brightness.push(BrightClass::None_);
-            rescued.push(false);
-            quality.push(0.0);
+            readings.push(CellReading::unreadable());
             continue;
         };
 
         let value = mean_value(&pixels, bounds);
-        values.push(value);
         let start = index * column_width;
         write_column_means(&mut columns[start..start + column_width], &pixels, bounds);
-        white_fractions.push(white_row_fraction(&pixels, bounds));
 
         let classified = cell::classify(
             &pixels,
@@ -127,13 +138,31 @@ pub(crate) fn extract_parts(
             &mut region2,
             color_scratch,
         );
-        stripes.push(classified.state.is_stripe());
-        colors.push(classified.bgr);
-        brightness.push(classified.bright);
-        rescued.push(classified.rescued);
-        quality.push(classified.quality);
-        states.push(classified.state);
+        readings.push(CellReading {
+            value,
+            white_fraction: white_row_fraction(&pixels, bounds),
+            color: classified.bgr,
+            stripe: classified.state.is_stripe(),
+            state: classified.state,
+            bright: classified.bright,
+            rescued: classified.rescued,
+            quality: classified.quality,
+        });
     }
+
+    let values: Vec<f32> = readings.iter().map(|reading| reading.value).collect();
+    let white_fractions: Vec<f32> = readings
+        .iter()
+        .map(|reading| reading.white_fraction)
+        .collect();
+    let states: Vec<CellState> = readings
+        .iter()
+        .map(|reading| reading.state.clone())
+        .collect();
+    let brightness: Vec<BrightClass> = readings
+        .iter()
+        .map(|reading| reading.bright.clone())
+        .collect();
 
     let slab_pos = states
         .iter()
@@ -149,12 +178,12 @@ pub(crate) fn extract_parts(
             states,
             bright: brightness,
             fresh_edge,
-            bgr: colors,
-            stripe: stripes,
+            bgr: readings.iter().map(|reading| reading.color).collect(),
+            stripe: readings.iter().map(|reading| reading.stripe).collect(),
             cols: (column_width > 0).then_some(columns),
             cols_w: column_width,
-            rescued,
-            quality,
+            rescued: readings.iter().map(|reading| reading.rescued).collect(),
+            quality: readings.iter().map(|reading| reading.quality).collect(),
             digit_corr: None,
             slab_pos,
             slab_state: None,
