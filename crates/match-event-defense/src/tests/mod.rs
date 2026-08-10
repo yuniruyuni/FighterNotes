@@ -14,6 +14,7 @@ mod minus_situation_gates;
 mod minus_situation_keeps_observed_non_fastest_response_as_denominator;
 mod minus_situation_links_confirmed_fastest_action_and_outcome;
 mod punish_chance_gates;
+mod reversal_gates;
 mod test_blocked_close_strike_whiff_stays_spatial_candidate;
 mod test_late_strike_and_unconfirmed_projectile_are_not_whiff_fails;
 mod test_minus_press_caps_and_dp_exclusion;
