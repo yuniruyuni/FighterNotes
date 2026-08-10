@@ -5,17 +5,8 @@ use super::scan::ColumnScan;
 ///
 /// 戻り値の長さ = ROI 幅（スケール済み列数）。空 ROI は空 Vec を返す。
 pub fn hp_col_active(rgba: &[u8], width: u32, height: u32, side: &str) -> Vec<bool> {
-    hp_col_active_impl(rgba, width, height, side, 0)
-}
-
-fn hp_col_active_impl(
-    rgba: &[u8],
-    width: u32,
-    height: u32,
-    side: &str,
-    y_strip_start: usize,
-) -> Vec<bool> {
-    let Some(scan) = ColumnScan::new(width, height, side, y_strip_start) else {
+    // 帯だけを渡す入口は無い。列の判定は全画面からしか呼ばれない。
+    let Some(scan) = ColumnScan::new(width, height, side, 0) else {
         return Vec::new();
     };
     // 残量は本来の色でも、危険域の黄でも成立する。黄は髪などのテクスチャと

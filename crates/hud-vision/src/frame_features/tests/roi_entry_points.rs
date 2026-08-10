@@ -77,8 +77,8 @@ fn the_drive_gauge_is_read_from_the_centre_outwards() {
         "中央側から伸びる光を読めていない"
     );
     assert!(
-        from_the_centre.value > 2.0,
-        "アンカーの向きが逆になっている: {}",
+        (2.5..=3.5).contains(&from_the_centre.value),
+        "ROI の半分を塗ったのに {} 本",
         from_the_centre.value
     );
 }
@@ -103,8 +103,8 @@ fn the_right_drive_gauge_counts_from_its_own_anchor() {
         "中央側から伸びる光を読めていない"
     );
     assert!(
-        from_the_centre.value > 2.0,
-        "アンカーの向きが逆になっている: {}",
+        (2.5..=3.5).contains(&from_the_centre.value),
+        "ROI の半分を塗ったのに {} 本",
         from_the_centre.value
     );
 }
@@ -177,4 +177,34 @@ fn the_two_sides_need_different_amounts_of_a_column() {
     // 判定の緩さそのものを見たいので、中ほどの列で比べる。
     assert!(first[340], "P1 側の緩い下限が効いていない");
     assert!(!second[340], "P2 側に P1 の緩い下限を使っている");
+}
+
+// ── 帯だけを渡す入口 ─────────────────────────────────────────────────────
+
+/// 帯だけを渡しても、全画面と同じ列が黄色と判定される。browser は帯だけを
+/// 送るので、ここがずれると解析と手元のデバッグ表示が食い違う。
+#[test]
+fn the_strip_finds_the_same_yellow_columns_as_the_whole_frame() {
+    let full = make_rgba_p1_bar_yellow(0.2);
+    let strip = hud_strip_from_frame(&full);
+
+    let from_full = hp_col_yellow(&full, WIDTH, HEIGHT, "p1");
+    let from_strip =
+        crate::frame_features::hp_col_yellow_from_hud_strip(&strip, WIDTH, HEIGHT, "p1");
+
+    assert!(from_full.iter().any(|value| *value), "黄色を拾えていない");
+    assert_eq!(from_full, from_strip, "全画面と帯で判定が食い違う");
+}
+
+/// 充填端の位置も返す。デバッグ表示と、どこで減ったかの照合に使う。
+#[test]
+fn the_decode_reports_where_the_fill_ends() {
+    let json =
+        crate::frame_features::hp_bar_debug_json(&make_rgba_p1_bar(0.5), WIDTH, HEIGHT, "p1");
+    let value: serde_json::Value = serde_json::from_str(&json).expect("JSON である");
+
+    assert!(
+        value["fill_edge_cy"].is_number(),
+        "充填端の位置を返していない: {json}"
+    );
 }

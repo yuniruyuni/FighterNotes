@@ -11,7 +11,7 @@ mod geometry;
 mod model;
 mod score;
 
-pub(crate) use classification::{classify_hp_col, segment_zones};
+pub(crate) use classification::{classify_hp_col, classify_hp_pixel, segment_zones};
 pub use columns::*;
 #[cfg(test)]
 pub(crate) use decode::decode_hp_zones;
