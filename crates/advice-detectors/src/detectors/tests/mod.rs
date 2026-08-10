@@ -3,6 +3,7 @@ mod attack_evidence;
 mod boundaries;
 mod contracts;
 mod hp_lost;
+mod minus_frames;
 mod support;
 mod throw_whiff;
 mod whiff;

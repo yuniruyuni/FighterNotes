@@ -91,7 +91,11 @@ fn repeated_punished_whiffs_become_a_diagnosis() {
     let card = detect_throw_whiff_punished(&events, 1).expect("提示される");
 
     assert_usable(&card);
-    assert_eq!(card.kind, AdviceKind::Diagnosis, "繰り返しを診断にしていない");
+    assert_eq!(
+        card.kind,
+        AdviceKind::Diagnosis,
+        "繰り返しを診断にしていない"
+    );
     assert_eq!(card.evidence.len(), 2);
     assert!((card.hp_lost.expect("損失がある") - 0.35).abs() < 1e-6);
 }
@@ -394,7 +398,10 @@ fn the_wording_changes_between_one_time_and_a_habit() {
 
     assert_eq!(once.id, habit.id, "同じ指摘に別の id を振っている");
     assert_ne!(once.title, habit.title, "見出しを書き分けていない");
-    assert_ne!(once.description, habit.description, "説明を書き分けていない");
+    assert_ne!(
+        once.description, habit.description,
+        "説明を書き分けていない"
+    );
     assert_ne!(once.practice, habit.practice, "練習方法を書き分けていない");
 }
 
@@ -418,7 +425,10 @@ fn the_invincible_wording_changes_with_repetition() {
 
     assert_eq!(once.id, habit.id);
     assert_ne!(once.title, habit.title, "見出しを書き分けていない");
-    assert_ne!(once.description, habit.description, "説明を書き分けていない");
+    assert_ne!(
+        once.description, habit.description,
+        "説明を書き分けていない"
+    );
 }
 
 /// 同じ損失でも、空振りを重ねた分だけ重く扱う。回数を重みに入れないと、
