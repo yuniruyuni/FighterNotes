@@ -69,3 +69,6 @@ fn reachability(outcome: PunishOutcome, bands: &[DistanceBand]) -> PunishReachab
 fn count(bands: &[DistanceBand], target: DistanceBand) -> usize {
     bands.iter().filter(|&&band| band == target).count()
 }
+
+#[cfg(test)]
+mod tests;
