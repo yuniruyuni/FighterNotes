@@ -8,8 +8,6 @@
 
 use super::*;
 
-/// ROI の高さ。走査されるのは上下のふちどりを除いた 22 行。
-const ROI_HEIGHT: usize = 31;
 /// 走査が始まる行。
 const FIRST_SCANNED_ROW: usize = HP_COL_ROW_SKIP_TOP;
 /// 走査される行数。
@@ -131,7 +129,7 @@ fn the_frame_wins_over_every_other_colour() {
 
 /// 指定した色を上から順に並べた 1 列分のフレーム。
 fn column_of(pixels: &[[u8; 3]]) -> Vec<u8> {
-    let mut rgba = vec![0u8; ROI_HEIGHT * 4];
+    let mut rgba = vec![0u8; (FIRST_SCANNED_ROW + pixels.len() + HP_COL_ROW_SKIP_BOTTOM) * 4];
     for (offset, colour) in pixels.iter().enumerate() {
         let row = FIRST_SCANNED_ROW + offset;
         rgba[row * 4..row * 4 + 3].copy_from_slice(colour);
@@ -153,11 +151,18 @@ fn classify(rgba: &[u8]) -> HpColColor {
         frame_width: 1,
         x: 0..1,
         y_start: 0,
-        height: ROI_HEIGHT,
+        height: rgba.len() / 4,
         strip_y: 0,
         slope: 0.0,
     };
     classify_hp_col(&roi, 0, HpFillHue::Red)
+}
+
+/// 走査行を 20 行にした列。割合の閾値がちょうどの値で作れる。
+fn twenty_rows_with(count: usize, colour: [u8; 3]) -> Vec<u8> {
+    let mut pixels = vec![[20u8, 20, 30]; 20];
+    pixels[..count].fill(colour);
+    column_of(&pixels)
 }
 
 const WHITE: [u8; 3] = [200, 200, 200];
@@ -245,8 +250,194 @@ fn a_column_with_any_fill_is_not_a_yellowed_frame() {
     assert_ne!(classify(&column_of(&pixels)), HpColColor::White);
 }
 
+/// 割合はちょうどで足りる。ここを「超える」に読み替えると、境目の
+/// 一画素で列の色が変わる。
+#[test]
+fn the_column_shares_are_met_exactly_at_their_edge() {
+    // 走査 20 行のうち、枠は 10 行（半分）、残量は 2 行（一割）、
+    // 残像と黄白は 8 行（四割）、橙は 3 行（15%）。
+    assert_eq!(classify(&twenty_rows_with(10, WHITE)), HpColColor::White);
+    assert_eq!(classify(&twenty_rows_with(2, RED)), HpColColor::Fill);
+    assert_eq!(classify(&twenty_rows_with(8, GHOST)), HpColColor::Ghost);
+    assert_eq!(
+        classify(&twenty_rows_with(8, BLEND)),
+        HpColColor::YellowWhite
+    );
+    assert_eq!(classify(&twenty_rows_with(3, ORANGE)), HpColColor::Orange);
+}
+
+/// 黄みがかった枠の条件もちょうどで足りる。白が二割、白と黄白で八割。
+#[test]
+fn the_yellowed_frame_shares_are_met_exactly_at_their_edge() {
+    let mut pixels = vec![[20u8, 20, 30]; 20];
+    pixels[..2].fill(WHITE);
+    pixels[2..16].fill(BLEND);
+
+    assert_eq!(classify(&column_of(&pixels)), HpColColor::White);
+}
+
 /// 一画素も読めない列は空き扱い。0 除算の手前で止める。
 #[test]
 fn a_column_that_reads_nothing_is_empty() {
     assert_eq!(classify(&[]), HpColColor::Dark);
+}
+
+// ── 画素の判定の境目 ─────────────────────────────────────────────────────
+//
+// 閾値そのものが仕様。三つの channel も、色相・彩度・明度も、
+// ちょうどの値とその一つ先の両方を置く。
+
+/// 枠は三色とも明るさを「超えて」いること。一つでも届かなければ枠ではない。
+#[test]
+fn the_frame_needs_every_channel_past_the_edge() {
+    assert_eq!(
+        classify_hp_pixel(181.0, 181.0, 181.0, HpFillHue::Red),
+        HpColColor::White
+    );
+    for (channel, rgb) in [
+        ("赤", (180.0, 181.0, 181.0)),
+        ("緑", (181.0, 180.0, 181.0)),
+        ("青", (181.0, 181.0, 180.0)),
+    ] {
+        assert_ne!(
+            classify_hp_pixel(rgb.0, rgb.1, rgb.2, HpFillHue::Red),
+            HpColColor::White,
+            "{channel}がちょうどでも枠と読んでいる"
+        );
+    }
+}
+
+/// P1 の残量は赤側の色相帯の中だけ。帯の端は含む。
+#[test]
+fn the_first_players_fill_hue_band_includes_its_edges() {
+    assert_eq!(
+        classify_hp_pixel(255.0, 170.0, 0.0, HpFillHue::Red),
+        HpColColor::Fill,
+        "帯の上端"
+    );
+    assert_ne!(
+        classify_hp_pixel(255.0, 178.0, 0.0, HpFillHue::Red),
+        HpColColor::Fill,
+        "上端の外を残量と読んでいる"
+    );
+    assert_eq!(
+        classify_hp_pixel(213.0, 0.0, 255.0, HpFillHue::Red),
+        HpColColor::Fill,
+        "巻き戻った側の端"
+    );
+    assert_ne!(
+        classify_hp_pixel(204.0, 0.0, 255.0, HpFillHue::Red),
+        HpColColor::Fill,
+        "その端の外を残量と読んでいる"
+    );
+}
+
+/// P1 の残量は彩度と明度を「超えて」いること。ちょうどはスプライトの暗赤。
+#[test]
+fn the_first_players_fill_needs_saturation_and_brightness_past_the_edge() {
+    assert_ne!(
+        classify_hp_pixel(204.0, 164.0, 124.0, HpFillHue::Red),
+        HpColColor::Fill,
+        "ちょうどの彩度を残量と読んでいる"
+    );
+    assert_ne!(
+        classify_hp_pixel(60.0, 0.0, 0.0, HpFillHue::Red),
+        HpColColor::Fill,
+        "ちょうどの明度を残量と読んでいる"
+    );
+    assert_eq!(
+        classify_hp_pixel(61.0, 0.0, 0.0, HpFillHue::Red),
+        HpColColor::Fill,
+        "超えた明度を残量と読めていない"
+    );
+}
+
+/// P2 の残量も同じ。色相帯は青側で、彩度の下限は緩い。
+#[test]
+fn the_second_players_fill_has_its_own_edges() {
+    assert_eq!(
+        classify_hp_pixel(0.0, 255.0, 238.0, HpFillHue::Blue),
+        HpColColor::Fill,
+        "帯の下端"
+    );
+    assert_ne!(
+        classify_hp_pixel(0.0, 255.0, 230.0, HpFillHue::Blue),
+        HpColColor::Fill,
+        "下端の外"
+    );
+    assert_eq!(
+        classify_hp_pixel(255.0, 0.0, 170.0, HpFillHue::Blue),
+        HpColColor::Fill,
+        "帯の上端"
+    );
+    assert_ne!(
+        classify_hp_pixel(255.0, 0.0, 162.0, HpFillHue::Blue),
+        HpColColor::Fill,
+        "上端の外"
+    );
+    assert_ne!(
+        classify_hp_pixel(210.0, 210.0, 255.0, HpFillHue::Blue),
+        HpColColor::Fill,
+        "ちょうどの彩度"
+    );
+    assert_ne!(
+        classify_hp_pixel(0.0, 0.0, 60.0, HpFillHue::Blue),
+        HpColColor::Fill,
+        "ちょうどの明度"
+    );
+}
+
+/// 危険域の黄も、彩度と明度はちょうどでは足りない。
+#[test]
+fn the_pinch_yellow_needs_saturation_and_brightness_past_the_edge() {
+    assert_eq!(
+        classify_hp_pixel(255.0, 214.0, 100.0, HpFillHue::Red),
+        HpColColor::Fill,
+        "危険域の黄を読めていない"
+    );
+    assert_ne!(
+        classify_hp_pixel(204.0, 177.0, 108.0, HpFillHue::Red),
+        HpColColor::Fill,
+        "ちょうどの彩度を残量と読んでいる"
+    );
+    assert_ne!(
+        classify_hp_pixel(200.0, 168.0, 80.0, HpFillHue::Red),
+        HpColColor::Fill,
+        "ちょうどの明度を残量と読んでいる"
+    );
+}
+
+/// 残像は明度の帯の中だけ。明るければ残量、暗ければ空き。
+#[test]
+fn the_ghost_lives_inside_a_band_of_brightness() {
+    assert_eq!(
+        classify_hp_pixel(100.0, 89.0, 28.0, HpFillHue::Red),
+        HpColColor::Ghost,
+        "帯の下端"
+    );
+    assert_ne!(
+        classify_hp_pixel(200.0, 178.0, 56.0, HpFillHue::Red),
+        HpColColor::Ghost,
+        "帯の上端の外を残像と読んでいる"
+    );
+}
+
+/// 境目の黄白は三色それぞれの下限を「超えて」いること。
+#[test]
+fn the_blend_needs_every_channel_past_its_edge() {
+    assert_eq!(
+        classify_hp_pixel(166.0, 151.0, 101.0, HpFillHue::Red),
+        HpColColor::YellowWhite
+    );
+    for (channel, rgb) in [
+        ("赤", (165.0, 151.0, 101.0)),
+        ("緑", (166.0, 150.0, 101.0)),
+        ("青", (166.0, 151.0, 100.0)),
+    ] {
+        assert_ne!(
+            classify_hp_pixel(rgb.0, rgb.1, rgb.2, HpFillHue::Red),
+            HpColColor::YellowWhite,
+            "{channel}がちょうどでも境目と読んでいる"
+        );
+    }
 }
