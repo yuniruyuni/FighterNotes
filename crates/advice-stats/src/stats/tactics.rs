@@ -489,7 +489,7 @@ fn observed_drive_spend(
             )
         })
         .filter_map(reliable)
-        .fold(f32::MIN, f32::max);
+        .reduce(f32::max)?;
     let after = features
         .iter()
         .filter(|feature| {
@@ -500,10 +500,7 @@ fn observed_drive_spend(
             )
         })
         .filter_map(reliable)
-        .fold(f32::MAX, f32::min);
-    if before == f32::MIN || after == f32::MAX {
-        return None;
-    }
+        .reduce(f32::min)?;
 
     let spent = before - after;
     (DRIVE_SPEND_MIN..=DRIVE_SPEND_MAX)

@@ -72,6 +72,25 @@ fn label_decision_requires_correlations_valid_run_length_and_evidence() {
 }
 
 #[test]
+fn label_decision_requires_all_three_wrapped_positions() {
+    let cell = 10;
+    let tracker = tracker_with_run(20, 3);
+    let mut observation = RowObs::empty();
+    let mut correlations = digit_correlations();
+    correlations[cell as usize][4] = 0.6;
+    // The correct window is 8..=10. Position zero and the positions on the
+    // other side of `cell` deliberately remain unread.
+    correlations[0] = [-2.0; 10];
+    correlations[11] = [-2.0; 10];
+    observation.digit_corr = Some(correlations);
+
+    assert_eq!(
+        tracker.resolve_slab(&observation, None, cell, "left"),
+        "stun"
+    );
+}
+
+#[test]
 fn digit_layout_wraps_multi_digit_positions() {
     assert_eq!(
         digit_layout("10", 0),

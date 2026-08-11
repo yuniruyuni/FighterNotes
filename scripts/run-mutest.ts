@@ -3,8 +3,9 @@
  *
  * mutest はテストからの呼び出しグラフを起点に変異を作るので、テストが
  * 一つも無い crate では変異が生成されず `mutations: none` と出て成功して
- * しまう。守られていない状態が緑に見えるのは、門番として最悪の失敗様式
- * なので、変異が 0 個なら失敗として扱う。
+ * しまう。守られていない状態や未検出の変異が緑に見えるのは、門番として
+ * 最悪の失敗様式なので、変異が 0 個、未検出が 1 個以上、時間切れまたは
+ * ハーネス異常終了が 1 個以上なら失敗として扱う。
  *
  * 使い方: bun scripts/run-mutest.ts <crate> [<crate>...]
  */
@@ -20,6 +21,7 @@ type Result = {
   detected: number;
   undetected: number;
   timedOut: number;
+  crashed: number;
   seconds: number;
   failure?: string;
 };
@@ -71,7 +73,7 @@ async function runOne(crate: string): Promise<Result> {
   // 最後の集計行だけを見る。crate が複数のテスト対象を持つと複数出る。
   const summaries = [
     ...text.matchAll(
-      /^mutations: .*?\. (\d+) detected \((\d+) timed out; \d+ crashed\); (\d+) undetected; (\d+) total/gm,
+      /^mutations: .*?\. (\d+) detected \((\d+) timed out; (\d+) crashed\); (\d+) undetected; (\d+) total/gm,
     ),
   ];
   if (summaries.length === 0) {
@@ -82,6 +84,7 @@ async function runOne(crate: string): Promise<Result> {
       detected: 0,
       undetected: 0,
       timedOut: 0,
+      crashed: 0,
       seconds,
       failure: compileError ? compileError[0] : "集計行が見つからない",
     };
@@ -90,10 +93,11 @@ async function runOne(crate: string): Promise<Result> {
     (acc, m) => ({
       detected: acc.detected + Number(m[1]),
       timedOut: acc.timedOut + Number(m[2]),
-      undetected: acc.undetected + Number(m[3]),
-      total: acc.total + Number(m[4]),
+      crashed: acc.crashed + Number(m[3]),
+      undetected: acc.undetected + Number(m[4]),
+      total: acc.total + Number(m[5]),
     }),
-    { detected: 0, timedOut: 0, undetected: 0, total: 0 },
+    { detected: 0, timedOut: 0, crashed: 0, undetected: 0, total: 0 },
   );
   return { crate, seconds, ...totals };
 }
@@ -119,8 +123,18 @@ for (const r of results) {
   const score = ((r.detected / r.total) * 100).toFixed(1);
   console.log(
     `${head}  ${String(r.total).padStart(5)} 変異  検出 ${score}%  ` +
-      `未検出 ${r.undetected}${r.timedOut > 0 ? ` / 時間切れ ${r.timedOut}` : ""}`,
+      `未検出 ${r.undetected}${r.timedOut > 0 ? ` / 時間切れ ${r.timedOut}` : ""}` +
+      `${r.crashed > 0 ? ` / 異常終了 ${r.crashed}` : ""}`,
   );
+  if (r.undetected > 0) {
+    problems.push(`${r.crate}: ${r.undetected} 変異が未検出`);
+  }
+  if (r.timedOut > 0) {
+    problems.push(`${r.crate}: ${r.timedOut} 変異が時間切れ`);
+  }
+  if (r.crashed > 0) {
+    problems.push(`${r.crate}: ${r.crashed} 変異でハーネスが異常終了`);
+  }
 }
 
 const total = results.reduce((n, r) => n + r.total, 0);
@@ -132,7 +146,7 @@ console.log(
 );
 
 if (problems.length > 0) {
-  console.error("\n走査が成立しなかった crate があります:");
+  console.error("\n変異検査に問題がある crate があります:");
   for (const p of problems) console.error(`  - ${p}`);
   process.exit(1);
 }

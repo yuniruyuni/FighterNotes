@@ -242,8 +242,9 @@ mod requirement_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use advice_detectors::test_support::card_fixtures;
 
-    fn available_coverage_with_opponent_input_missing() -> AnalysisCoverage {
+    fn everything_available() -> AnalysisCoverage {
         let available = EvidenceAvailability::Available;
         AnalysisCoverage {
             availability: Some(AnalysisAvailability {
@@ -254,7 +255,7 @@ mod tests {
                 own_super: available,
                 opponent_super: available,
                 own_input: available,
-                opponent_input: EvidenceAvailability::Unavailable,
+                opponent_input: available,
                 own_meter: available,
                 opponent_meter: available,
                 contacts: available,
@@ -265,6 +266,14 @@ mod tests {
             }),
             ..AnalysisCoverage::default()
         }
+    }
+
+    fn available_coverage_with_opponent_input_missing() -> AnalysisCoverage {
+        let mut coverage = everything_available();
+        if let Some(availability) = coverage.availability.as_mut() {
+            availability.opponent_input = EvidenceAvailability::Unavailable;
+        }
+        coverage
     }
 
     fn card(id: &str) -> AdviceCard {
@@ -278,6 +287,52 @@ mod tests {
             description: String::new(),
             practice: String::new(),
             evidence: Vec::new(),
+        }
+    }
+
+    /// 個々の検出器ではなく、それらを束ねるこの関数の配線を固定する。
+    /// 呼び出しを一つ削除した場合は、対応する id が必ず表から欠ける。
+    #[test]
+    fn every_detector_fixture_reaches_its_card_slot() {
+        let coverage = everything_available();
+
+        for fixture in card_fixtures() {
+            let (cards, suppressed) = build_advice_cards(
+                &fixture.features,
+                &fixture.events,
+                fixture.own,
+                fixture.own_index,
+                fixture.own_character,
+                &fixture.round_summaries,
+                &coverage,
+            );
+
+            assert!(
+                suppressed.is_empty(),
+                "{} は全証拠が利用可能でも抑制された: {suppressed:?}",
+                fixture.id
+            );
+            let card = cards
+                .iter()
+                .find(|card| card.id == fixture.id)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{} の検出器が配線されていない。実際の id: {:?}",
+                        fixture.id,
+                        cards
+                            .iter()
+                            .map(|card| card.id.as_str())
+                            .collect::<Vec<_>>()
+                    )
+                });
+            if let Some(expected) = fixture.description_contains {
+                assert!(
+                    card.description.contains(expected),
+                    "{} に引数由来の文言 {expected:?} が無い: {}",
+                    fixture.id,
+                    card.description
+                );
+            }
         }
     }
 

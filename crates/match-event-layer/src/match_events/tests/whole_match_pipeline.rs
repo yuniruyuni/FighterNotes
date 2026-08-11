@@ -9,7 +9,7 @@
 
 use super::support::*;
 use crate::attack_info::{AttackAttribute, AttackInfoObservation, AttackInfoSide};
-use crate::input_history::{BadgeColor, BadgeMark};
+use crate::input_history::{BadgeColor, BadgeMark, BtnGlyph};
 use crate::round_start::FightMarker;
 
 /// 片側のフレームメーターを、時間を進めながら組み立てる。
@@ -88,6 +88,14 @@ fn boxed(color: BadgeColor) -> BadgeMark {
         color,
         boxed: true,
         glyph: None,
+    }
+}
+
+fn classic_punch(color: BadgeColor) -> BadgeMark {
+    BadgeMark {
+        color,
+        boxed: false,
+        glyph: Some(BtnGlyph::Punch),
     }
 }
 
@@ -589,6 +597,21 @@ fn the_attack_info_entry_point_attaches_evidence_to_the_damage() {
         &context,
         &attack_info,
     );
+    let fight_markers = [FightMarker {
+        first_frame: 0,
+        last_frame: 0,
+        peak_frame: 0,
+        peak_score: 1.0,
+    }];
+    let with_fight_info = build_match_events_with_context_and_fight_markers_and_attack_info(
+        &m.features,
+        &m.inputs[0],
+        &m.inputs[1],
+        Some((&left, &right)),
+        &context,
+        &fight_markers,
+        &attack_info,
+    );
 
     assert!(
         !with_info.attack_evidence.sequences.is_empty(),
@@ -598,9 +621,162 @@ fn the_attack_info_entry_point_attaches_evidence_to_the_damage() {
         !with_info.attack_evidence.damage.is_empty(),
         "被弾に技の情報を結び付けていない"
     );
+    assert!(!with_info.segments[0].is_empty(), "P1 入力が渡っていない");
+    assert!(!with_info.segments[1].is_empty(), "P2 入力が渡っていない");
+    assert!(!with_info.contacts.is_empty(), "メーターが渡っていない");
+    assert!(
+        !with_fight_info.segments[0].is_empty(),
+        "FIGHT+攻撃情報の入口に P1 入力が渡っていない"
+    );
+    assert!(
+        !with_fight_info.segments[1].is_empty(),
+        "FIGHT+攻撃情報の入口に P2 入力が渡っていない"
+    );
+    assert!(
+        !with_fight_info.contacts.is_empty(),
+        "FIGHT+攻撃情報の入口にメーターが渡っていない"
+    );
     assert!(
         m.build().attack_evidence.damage.is_empty(),
         "中央表示が無いのに裏付けが付いている"
+    );
+}
+
+/// 中央表示が別コンボへのリセットを示し、HP 側にも二つの
+/// 明確な下降があるときは、入口から返す被弾と証拠の両方を分ける。
+#[test]
+fn confirmed_panel_resets_split_merged_damage_and_rebuild_its_evidence() {
+    let features: Vec<FrameFeatures> = (0..100)
+        .map(|frame| {
+            let p2_hp = if frame < 10 {
+                1.0
+            } else if frame < 35 {
+                0.90
+            } else {
+                0.82
+            };
+            feat(frame, 1.0, p2_hp)
+        })
+        .collect();
+    let idle = || AttackInfoSide {
+        last_damage: 0,
+        scaling_percent: 100,
+        combo_damage: 0,
+        max_combo_damage: 1_000,
+        attribute: AttackAttribute::Middle,
+    };
+    let attack = |damage| AttackInfoSide {
+        last_damage: damage,
+        scaling_percent: 100,
+        combo_damage: damage,
+        max_combo_damage: 1_000,
+        attribute: AttackAttribute::Middle,
+    };
+    let attack_info: Vec<AttackInfoObservation> = [
+        (10, attack(1_000)),
+        (20, idle()),
+        (35, attack(800)),
+        (45, idle()),
+    ]
+    .into_iter()
+    .map(|(frame_index, p1)| AttackInfoObservation {
+        frame_index,
+        p1,
+        p2: idle(),
+    })
+    .collect();
+    let context = crate::context::AnalysisContext::new("p1");
+    let markers = [FightMarker {
+        first_frame: 0,
+        last_frame: 0,
+        peak_frame: 0,
+        peak_score: 1.0,
+    }];
+
+    let events = build_match_events_with_context_and_fight_markers_and_attack_info(
+        &features,
+        &[],
+        &[],
+        None,
+        &context,
+        &markers,
+        &attack_info,
+    );
+
+    assert_eq!(
+        events
+            .damage
+            .iter()
+            .map(|damage| (damage.start_frame, damage.end_frame))
+            .collect::<Vec<_>>(),
+        vec![(10, 10), (35, 35)],
+        "{:#?}",
+        events.damage
+    );
+    assert!((events.damage[0].drop - 0.10).abs() < 0.0001);
+    assert!((events.damage[1].drop - 0.08).abs() < 0.0001);
+    assert_eq!(events.attack_evidence.damage.len(), 2);
+    assert!(
+        events
+            .attack_evidence
+            .damage
+            .iter()
+            .all(|evidence| evidence.sequence_count == 1),
+        "分割前の証拠を残している: {:#?}",
+        events.attack_evidence.damage
+    );
+}
+
+/// キャラクター情報は P1/P2 のスロットごとに脅威抽出へ渡す。
+#[test]
+fn character_metadata_reaches_both_player_slots() {
+    let run = |side: usize| {
+        let mut m = synth_match();
+        let (from, to) = if side == 0 { (636, 640) } else { (716, 720) };
+        m.press(
+            side,
+            from,
+            to,
+            InputDir::Neutral,
+            vec![
+                classic_punch(BadgeColor::Green),
+                classic_punch(BadgeColor::Yellow),
+            ],
+            false,
+        );
+        let left = m.left.build();
+        let right = m.right.build();
+        let context = if side == 0 {
+            crate::context::AnalysisContext::from_characters("p1", Some("DHALSIM"), None)
+        } else {
+            crate::context::AnalysisContext::from_characters("p1", None, Some("DHALSIM"))
+        };
+
+        build_match_events_with_context(
+            &m.features,
+            &m.inputs[0],
+            &m.inputs[1],
+            Some((&left, &right)),
+            &context,
+        )
+    };
+
+    let p1 = run(0);
+    assert!(
+        p1.teleports
+            .iter()
+            .any(|teleport| teleport.attacker == 1 && teleport.input_frame == 636),
+        "P1 のキャラクター情報が渡っていない: {:#?}",
+        p1.teleports
+    );
+
+    let p2 = run(1);
+    assert!(
+        p2.teleports
+            .iter()
+            .any(|teleport| teleport.attacker == 2 && teleport.input_frame == 716),
+        "P2 のキャラクター情報が渡っていない: {:#?}",
+        p2.teleports
     );
 }
 

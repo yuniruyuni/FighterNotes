@@ -5,33 +5,37 @@ use crate::match_events::{PunishChance, PunishOutcome, PunishReachability};
 
 pub(super) fn refine(punishes: &mut [PunishChance], observations: &[SpatialObservation]) {
     for punish in punishes {
-        if !matches!(
-            punish.outcome,
-            PunishOutcome::Missed | PunishOutcome::WhiffFail
-        ) {
-            continue;
-        }
-        let sample_start = punish
-            .source_contact_frame
-            .unwrap_or(punish.frame)
-            .saturating_sub(PUNISH_SPATIAL_SAMPLE_PADDING);
-        let sample_end = punish
-            .attack_active_frame
-            .unwrap_or(punish.frame)
-            .max(punish.frame)
-            .saturating_add(PUNISH_SPATIAL_SAMPLE_PADDING);
-        let bands: Vec<DistanceBand> = observations
-            .iter()
-            .filter(|observation| {
-                observation.frame_index >= sample_start && observation.frame_index <= sample_end
-            })
-            .filter_map(|observation| {
-                reliable_actor_pair(observation)?;
-                observation.distance_band
-            })
-            .collect();
-        punish.reachability = reachability(punish.outcome, &bands);
+        refine_one(punish, observations);
     }
+}
+
+fn refine_one(punish: &mut PunishChance, observations: &[SpatialObservation]) {
+    if !matches!(
+        punish.outcome,
+        PunishOutcome::Missed | PunishOutcome::WhiffFail
+    ) {
+        return;
+    }
+    let sample_start = punish
+        .source_contact_frame
+        .unwrap_or(punish.frame)
+        .saturating_sub(PUNISH_SPATIAL_SAMPLE_PADDING);
+    let sample_end = punish
+        .attack_active_frame
+        .unwrap_or(punish.frame)
+        .max(punish.frame)
+        .saturating_add(PUNISH_SPATIAL_SAMPLE_PADDING);
+    let bands: Vec<DistanceBand> = observations
+        .iter()
+        .filter(|observation| {
+            observation.frame_index >= sample_start && observation.frame_index <= sample_end
+        })
+        .filter_map(|observation| {
+            reliable_actor_pair(observation)?;
+            observation.distance_band
+        })
+        .collect();
+    punish.reachability = reachability(punish.outcome, &bands);
 }
 
 fn reachability(outcome: PunishOutcome, bands: &[DistanceBand]) -> PunishReachability {

@@ -34,6 +34,15 @@ fn dominant_family_fraction_threshold_is_inclusive() {
 }
 
 #[test]
+fn palette_assignment_distance_is_inclusive() {
+    assert_eq!(
+        dominant_color_family(&[[191, 201, 19]; 3]),
+        Some((CellState::Counter, [191.0, 201.0, 19.0]))
+    );
+    assert_eq!(dominant_color_family(&[[192, 201, 19]; 3]), None);
+}
+
+#[test]
 fn dominant_family_keeps_first_palette_entry_when_distances_tie() {
     assert_eq!(
         dominant_color_family(&[[141, 123, 32]; 3]),

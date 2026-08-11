@@ -19,4 +19,5 @@ serde = { workspace = true }
 temporal-confirm = { path = "../temporal-confirm" }
 
 [dev-dependencies]
+match-event-model = { path = "../match-event-model", features = ["test-support"] }
 match-event-offense = { path = "../match-event-offense" }

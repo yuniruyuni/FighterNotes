@@ -15,43 +15,58 @@ pub(super) fn refine(
     context: &AnalysisContext,
 ) {
     for teleport in teleports {
-        if teleport.context != TeleportContext::NakedAttack {
-            continue;
-        }
-        let defender_character = context.player(teleport.defender).character.as_deref();
-        let Some(reversal_kind) = defender_character.and_then(frame_data::rising_reversal_kind)
-        else {
-            continue;
-        };
-        if !rising_reversal_available(
+        refine_one(
+            teleport,
             input_segments,
             meter_game_frame,
-            teleport.defender,
-            teleport.input_frame,
-            reversal_kind,
-        ) {
-            continue;
-        }
-        let Some(target_frame) = teleport
-            .followup_contact_frame
-            .or(teleport.followup_attack_frame)
-        else {
-            continue;
-        };
-        let best = observations
-            .iter()
-            .filter(|observation| observation.frame_index.abs_diff(target_frame) <= 4)
-            .filter_map(|observation| {
-                let (p1, p2) = reliable_actor_pair(observation)?;
-                Some((observation, p1.confidence + p2.confidence))
-            })
-            .max_by(|a, b| a.1.total_cmp(&b.1))
-            .map(|(observation, _)| observation);
-        teleport.dp_reachability = match best.and_then(|observation| observation.distance_band) {
-            Some(DistanceBand::Overlap) => DpReachability::Confirmed,
-            Some(DistanceBand::Far) => DpReachability::OutOfRange,
-            _ => DpReachability::Unknown,
-        };
+            observations,
+            context,
+        );
+    }
+}
+
+fn refine_one(
+    teleport: &mut TeleportEvent,
+    input_segments: &[Vec<InputSegment>; 2],
+    meter_game_frame: &[Vec<i64>; 2],
+    observations: &[SpatialObservation],
+    context: &AnalysisContext,
+) {
+    if teleport.context != TeleportContext::NakedAttack {
+        return;
+    }
+    let defender_character = context.player(teleport.defender).character.as_deref();
+    let Some(reversal_kind) = defender_character.and_then(frame_data::rising_reversal_kind) else {
+        return;
+    };
+    if !rising_reversal_available(
+        input_segments,
+        meter_game_frame,
+        teleport.defender,
+        teleport.input_frame,
+        reversal_kind,
+    ) {
+        return;
+    }
+    let Some(target_frame) = teleport
+        .followup_contact_frame
+        .or(teleport.followup_attack_frame)
+    else {
+        return;
+    };
+    let best = observations
+        .iter()
+        .filter(|observation| observation.frame_index.abs_diff(target_frame) <= 4)
+        .filter_map(|observation| {
+            let (p1, p2) = reliable_actor_pair(observation)?;
+            Some((observation, p1.confidence + p2.confidence))
+        })
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(observation, _)| observation);
+    teleport.dp_reachability = match best.and_then(|observation| observation.distance_band) {
+        Some(DistanceBand::Overlap) => DpReachability::Confirmed,
+        Some(DistanceBand::Far) => DpReachability::OutOfRange,
+        _ => DpReachability::Unknown,
     }
 }
 
@@ -65,7 +80,10 @@ fn rising_reversal_available(
     if kind == RisingReversalKind::Motion {
         return true;
     }
-    let segments = &input_segments[defender.saturating_sub(1) as usize];
+    let Some(defender_index) = player_index(defender) else {
+        return false;
+    };
+    let segments = &input_segments[defender_index];
     let Some((latest_index, latest)) = segments
         .iter()
         .enumerate()
@@ -79,17 +97,26 @@ fn rising_reversal_available(
         return false;
     };
     let mut run_start = latest.start_frame;
-    for previous in segments[..latest_index].iter().rev() {
+    let (previous_segments, _) = segments.split_at(latest_index);
+    for previous in previous_segments.iter().rev() {
         if previous.end_frame.saturating_add(2) < run_start || !is_down_direction(&previous.dir) {
             break;
         }
         run_start = previous.start_frame;
     }
     advancing_game_frames(
-        &meter_game_frame[defender.saturating_sub(1) as usize],
+        &meter_game_frame[defender_index],
         run_start,
         latest.end_frame.min(frame),
     ) >= CHARGE_MIN_FRAMES
+}
+
+fn player_index(side: u8) -> Option<usize> {
+    match side {
+        1 => Some(0),
+        2 => Some(1),
+        _ => None,
+    }
 }
 
 fn advancing_game_frames(game_frames: &[i64], start: u32, end: u32) -> u32 {

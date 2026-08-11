@@ -13,7 +13,7 @@ const MAX_STEP: f32 = 0.25 / 6.0;
 #[allow(clippy::ptr_arg)]
 pub fn clean_drive_temporal(features: &mut Vec<FrameFeatures>) {
     let frame_count = features.len();
-    for side in 0..2 {
+    for side in [0, 1] {
         let get = |feature: &FrameFeatures| -> (f32, bool, bool) {
             if side == 0 {
                 (
@@ -41,35 +41,36 @@ pub fn clean_drive_temporal(features: &mut Vec<FrameFeatures>) {
             }
         };
 
-        let mut start = 0;
-        while start < frame_count {
-            let (first_ratio, first_burnout, first_uncertain) = get(&features[start]);
-            if first_uncertain || !features[start].is_match_screen {
-                start = start.saturating_add(1);
-                continue;
-            }
-
-            let mut end = frame_count;
-            let mut previous_ratio = first_ratio;
-            for (candidate, feature) in features.iter().enumerate().skip(start.saturating_add(1)) {
-                let (ratio, burnout, uncertain) = get(feature);
-                if uncertain
-                    || !feature.is_match_screen
-                    || burnout != first_burnout
-                    || (ratio - previous_ratio).abs() > MAX_STEP
-                {
-                    end = candidate;
-                    break;
+        let mut short_runs = Vec::new();
+        let mut run: Option<(usize, bool, f32)> = None;
+        for (candidate, feature) in features.iter().enumerate() {
+            let (ratio, burnout, uncertain) = get(feature);
+            let continues_run = run.is_some_and(|(_, run_burnout, previous_ratio)| {
+                !uncertain
+                    && feature.is_match_screen
+                    && burnout == run_burnout
+                    && (ratio - previous_ratio).abs() <= MAX_STEP
+            });
+            if let Some((start, run_burnout, _)) = run {
+                if continues_run {
+                    run = Some((start, run_burnout, ratio));
+                    continue;
                 }
-                previous_ratio = ratio;
-            }
-            if end - start < MIN_STABLE {
-                for feature in &mut features[start..end] {
-                    let (ratio, burnout, _) = get(feature);
-                    set(feature, ratio, burnout, true);
+                if candidate - start < MIN_STABLE {
+                    short_runs.push((start, candidate));
                 }
             }
-            start = end;
+            run = (!uncertain && feature.is_match_screen).then_some((candidate, burnout, ratio));
+        }
+        if let Some((start, _, _)) = run {
+            if frame_count - start < MIN_STABLE {
+                short_runs.push((start, frame_count));
+            }
+        }
+        for (start, end) in short_runs {
+            for feature in &mut features[start..end] {
+                mark_uncertain(feature, side);
+            }
         }
 
         // 直前に信用できた読み。型を明示しておく（推論だけに頼ると、
@@ -78,16 +79,24 @@ pub fn clean_drive_temporal(features: &mut Vec<FrameFeatures>) {
         for feature in features.iter_mut() {
             if !feature.is_match_screen {
                 last_trusted = None;
-                continue;
-            }
-            let (ratio, burnout, uncertain) = get(feature);
-            if uncertain {
-                if let Some((trusted_ratio, trusted_burnout)) = last_trusted {
-                    set(feature, trusted_ratio, trusted_burnout, true);
-                }
             } else {
-                last_trusted = Some((ratio, burnout));
+                let (ratio, burnout, uncertain) = get(feature);
+                if uncertain {
+                    if let Some((trusted_ratio, trusted_burnout)) = last_trusted {
+                        set(feature, trusted_ratio, trusted_burnout, true);
+                    }
+                } else {
+                    last_trusted = Some((ratio, burnout));
+                }
             }
         }
+    }
+}
+
+fn mark_uncertain(feature: &mut FrameFeatures, side: usize) {
+    if side == 0 {
+        feature.left_drive_uncertain = true;
+    } else {
+        feature.right_drive_uncertain = true;
     }
 }

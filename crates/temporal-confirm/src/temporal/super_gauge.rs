@@ -7,6 +7,22 @@ const HIGHER_LEVEL_LOOKAHEAD: usize = 45;
 const MAX_GAIN_BASE: f32 = 0.45;
 const MAX_GAIN_PER_VIDEO_FRAME: f32 = 0.003;
 
+#[derive(Clone, Copy)]
+enum GaugeSide {
+    Left,
+    Right,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct StockLevel(u8);
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct GaugeReading {
+    value: f32,
+    uncertain: bool,
+    ca_ready: bool,
+}
+
 /// SA ゲージの単フレーム遮蔽と一時的な整数ラベル誤読を補正する。
 ///
 /// 同じ整数ストック内でゲージが減ることはないため、少数部だけの逆行は
@@ -16,63 +32,65 @@ const MAX_GAIN_PER_VIDEO_FRAME: f32 = 0.003;
 /// 受理しない。
 #[allow(clippy::ptr_arg)]
 pub fn clean_super_temporal(features: &mut Vec<FrameFeatures>) {
-    for side in 0..2 {
+    for side in [GaugeSide::Left, GaugeSide::Right] {
         clean_side(features, side);
     }
 }
 
-fn clean_side(features: &mut [FrameFeatures], side: usize) {
-    let mut accepted: Option<(f32, bool, u32)> = None;
+fn clean_side(features: &mut [FrameFeatures], side: GaugeSide) {
+    let mut accepted: Option<(GaugeReading, u32)> = None;
     for index in 0..features.len() {
-        let (value, uncertain, ca_ready) = get(&features[index], side);
-        let reliable = features[index].is_match_screen && !uncertain;
+        let reading = get(&features[index], side);
+        let value = reading.value;
+        let reliable = features[index].is_match_screen && !reading.uncertain;
         if !reliable {
-            if let Some((last_value, last_ca, _)) = accepted {
-                set(&mut features[index], side, last_value, true, last_ca);
+            if let Some((last, _)) = accepted {
+                reject_with_ca(&mut features[index], side, last.value, last.ca_ready);
             }
             continue;
         }
 
         let frame = features[index].frame_index;
-        let Some((previous, _, previous_frame)) = accepted else {
-            accepted = Some((value, ca_ready, frame));
+        let Some((previous_reading, previous_frame)) = accepted else {
+            accepted = Some((reading, frame));
             continue;
         };
+        let previous = previous_reading.value;
         let previous_level = stock_level(previous);
         let level = stock_level(value);
 
         let elapsed = frame.saturating_sub(previous_frame);
         let max_gain = MAX_GAIN_BASE + elapsed as f32 * MAX_GAIN_PER_VIDEO_FRAME;
         if value > previous + max_gain {
-            set(&mut features[index], side, previous, true, ca_ready);
+            reject_current(&mut features[index], side, previous, reading);
             continue;
         }
         if level > previous_level && !higher_level_is_stable(features, side, index, level) {
-            set(&mut features[index], side, previous, true, ca_ready);
+            reject_current(&mut features[index], side, previous, reading);
             continue;
         }
         if level == previous_level && value + 0.02 < previous {
-            set(&mut features[index], side, previous, true, ca_ready);
+            reject_current(&mut features[index], side, previous, reading);
             continue;
         }
         if level < previous_level && previous - value < MIN_SUPER_SPEND_DROP {
-            set(&mut features[index], side, previous, true, ca_ready);
+            reject_current(&mut features[index], side, previous, reading);
             continue;
         }
         if level < previous_level && !lower_level_is_stable(features, side, index, level) {
-            set(&mut features[index], side, previous, true, ca_ready);
+            reject_current(&mut features[index], side, previous, reading);
             continue;
         }
 
-        accepted = Some((value, ca_ready, frame));
+        accepted = Some((reading, frame));
     }
 }
 
 fn lower_level_is_stable(
     features: &[FrameFeatures],
-    side: usize,
+    side: GaugeSide,
     start: usize,
-    expected_level: u8,
+    expected_level: StockLevel,
 ) -> bool {
     let mut confirmed = 0;
     for feature in features
@@ -80,11 +98,11 @@ fn lower_level_is_stable(
         .skip(start)
         .take(SUPER_SPEND_CONFIRM_LOOKAHEAD)
     {
-        let (value, uncertain, _) = get(feature, side);
-        if !feature.is_match_screen || uncertain {
+        let reading = get(feature, side);
+        if !feature.is_match_screen || reading.uncertain {
             continue;
         }
-        if stock_level(value) != expected_level {
+        if stock_level(reading.value) != expected_level {
             return false;
         }
         confirmed += 1;
@@ -97,17 +115,17 @@ fn lower_level_is_stable(
 
 fn higher_level_is_stable(
     features: &[FrameFeatures],
-    side: usize,
+    side: GaugeSide,
     start: usize,
-    expected_level: u8,
+    expected_level: StockLevel,
 ) -> bool {
     let mut confirmed = 0;
     for feature in features.iter().skip(start).take(HIGHER_LEVEL_LOOKAHEAD) {
-        let (value, uncertain, _) = get(feature, side);
-        if !feature.is_match_screen || uncertain {
+        let reading = get(feature, side);
+        if !feature.is_match_screen || reading.uncertain {
             continue;
         }
-        if stock_level(value) != expected_level {
+        if stock_level(reading.value) != expected_level {
             return false;
         }
         confirmed += 1;
@@ -118,36 +136,54 @@ fn higher_level_is_stable(
     false
 }
 
-fn stock_level(value: f32) -> u8 {
-    value.clamp(0.0, 3.0).floor() as u8
+fn stock_level(value: f32) -> StockLevel {
+    StockLevel(value.clamp(0.0, 3.0).floor() as u8)
 }
 
-fn get(feature: &FrameFeatures, side: usize) -> (f32, bool, bool) {
-    if side == 0 {
-        (
-            feature.left_super_value,
-            feature.left_super_uncertain,
-            feature.left_ca_ready,
-        )
-    } else {
-        (
-            feature.right_super_value,
-            feature.right_super_uncertain,
-            feature.right_ca_ready,
-        )
+fn get(feature: &FrameFeatures, side: GaugeSide) -> GaugeReading {
+    match side {
+        GaugeSide::Left => GaugeReading {
+            value: feature.left_super_value,
+            uncertain: feature.left_super_uncertain,
+            ca_ready: feature.left_ca_ready,
+        },
+        GaugeSide::Right => GaugeReading {
+            value: feature.right_super_value,
+            uncertain: feature.right_super_uncertain,
+            ca_ready: feature.right_ca_ready,
+        },
     }
 }
 
-fn set(feature: &mut FrameFeatures, side: usize, value: f32, uncertain: bool, ca_ready: bool) {
-    if side == 0 {
-        feature.left_super_value = value;
-        feature.left_super_uncertain = uncertain;
-        feature.left_ca_ready = ca_ready;
-    } else {
-        feature.right_super_value = value;
-        feature.right_super_uncertain = uncertain;
-        feature.right_ca_ready = ca_ready;
+fn set(feature: &mut FrameFeatures, side: GaugeSide, reading: GaugeReading) {
+    match side {
+        GaugeSide::Left => {
+            feature.left_super_value = reading.value;
+            feature.left_super_uncertain = reading.uncertain;
+            feature.left_ca_ready = reading.ca_ready;
+        }
+        GaugeSide::Right => {
+            feature.right_super_value = reading.value;
+            feature.right_super_uncertain = reading.uncertain;
+            feature.right_ca_ready = reading.ca_ready;
+        }
     }
+}
+
+fn reject_current(feature: &mut FrameFeatures, side: GaugeSide, value: f32, source: GaugeReading) {
+    reject_with_ca(feature, side, value, source.ca_ready);
+}
+
+fn reject_with_ca(feature: &mut FrameFeatures, side: GaugeSide, value: f32, ca_ready: bool) {
+    set(
+        feature,
+        side,
+        GaugeReading {
+            value,
+            uncertain: true,
+            ca_ready,
+        },
+    );
 }
 
 #[cfg(test)]
@@ -162,16 +198,166 @@ mod tests {
     /// 指定した側のゲージだけを与える観測列。もう片方は読めていない
     /// ままにして、側の取り違えを見えるようにする。
     fn series_for(side: usize, values: &[(f32, bool)]) -> Vec<FrameFeatures> {
+        let side = match side {
+            0 => GaugeSide::Left,
+            1 => GaugeSide::Right,
+            _ => panic!("side must be 0 or 1"),
+        };
         values
             .iter()
             .enumerate()
             .map(|(index, &(value, uncertain))| {
                 let mut frame = feature(index as u32, 1.0);
                 frame.is_match_screen = true;
-                set(&mut frame, side, value, uncertain, false);
+                set(
+                    &mut frame,
+                    side,
+                    GaugeReading {
+                        value,
+                        uncertain,
+                        ca_ready: false,
+                    },
+                );
                 frame
             })
             .collect()
+    }
+
+    #[test]
+    fn readings_round_trip_on_each_side_including_the_ca_flag() {
+        let mut frame = feature(0, 1.0);
+        let reading = GaugeReading {
+            value: 1.25,
+            uncertain: true,
+            ca_ready: true,
+        };
+
+        set(&mut frame, GaugeSide::Left, reading);
+        set(&mut frame, GaugeSide::Right, reading);
+
+        assert_eq!(get(&frame, GaugeSide::Left), reading);
+        assert_eq!(get(&frame, GaugeSide::Right), reading);
+    }
+
+    #[test]
+    fn confirmation_counts_only_reliable_match_frames() {
+        let expected = StockLevel(1);
+        let twelve = series(&[(1.2, false); HIGHER_LEVEL_CONFIRM_FRAMES]);
+        let eleven = series(&[(1.2, false); HIGHER_LEVEL_CONFIRM_FRAMES - 1]);
+        assert!(higher_level_is_stable(
+            &twelve,
+            GaugeSide::Left,
+            0,
+            expected
+        ));
+        assert!(!higher_level_is_stable(
+            &eleven,
+            GaugeSide::Left,
+            0,
+            expected
+        ));
+
+        let mut with_non_match = twelve.clone();
+        with_non_match[0].is_match_screen = false;
+        assert!(!higher_level_is_stable(
+            &with_non_match,
+            GaugeSide::Left,
+            0,
+            expected
+        ));
+
+        let mut with_uncertain = twelve;
+        with_uncertain[0].left_super_uncertain = true;
+        assert!(!higher_level_is_stable(
+            &with_uncertain,
+            GaugeSide::Left,
+            0,
+            expected
+        ));
+
+        let twelve_lower = series(&[(0.2, false); SUPER_SPEND_CONFIRM_SAMPLES]);
+        assert!(lower_level_is_stable(
+            &twelve_lower,
+            GaugeSide::Left,
+            0,
+            StockLevel(0)
+        ));
+        let mut lower_non_match = twelve_lower.clone();
+        lower_non_match[0].is_match_screen = false;
+        assert!(!lower_level_is_stable(
+            &lower_non_match,
+            GaugeSide::Left,
+            0,
+            StockLevel(0)
+        ));
+        let mut lower_uncertain = twelve_lower;
+        lower_uncertain[0].left_super_uncertain = true;
+        assert!(!lower_level_is_stable(
+            &lower_uncertain,
+            GaugeSide::Left,
+            0,
+            StockLevel(0)
+        ));
+    }
+
+    #[test]
+    fn gain_and_spend_boundaries_are_exact() {
+        let allowed_gain = MAX_GAIN_BASE + MAX_GAIN_PER_VIDEO_FRAME;
+        let mut at_gain = series(&[(0.20, false), (0.20 + allowed_gain, false)]);
+        clean_side(&mut at_gain, GaugeSide::Left);
+        assert!(!at_gain[1].left_super_uncertain);
+
+        let mut over_gain = series(&[(0.20, false), (0.201 + allowed_gain, false)]);
+        clean_side(&mut over_gain, GaugeSide::Left);
+        assert!(over_gain[1].left_super_uncertain);
+
+        let exact_spend = 2.50 - MIN_SUPER_SPEND_DROP;
+        let mut exact = series(&[(2.50, false)]);
+        exact.extend(series(&[(exact_spend, false); SUPER_SPEND_CONFIRM_SAMPLES]));
+        for (index, frame) in exact.iter_mut().enumerate() {
+            frame.frame_index = index as u32;
+        }
+        clean_side(&mut exact, GaugeSide::Left);
+        assert!(!exact[1].left_super_uncertain);
+
+        let mut too_small = series(&[(1.10, false)]);
+        too_small.extend(series(&[(0.90, false); SUPER_SPEND_CONFIRM_SAMPLES]));
+        for (index, frame) in too_small.iter_mut().enumerate() {
+            frame.frame_index = index as u32;
+        }
+        clean_side(&mut too_small, GaugeSide::Left);
+        assert!(too_small[1].left_super_uncertain);
+        assert_eq!(too_small[1].left_super_value, 1.10);
+
+        let previous = 0.80;
+        let mut exact_fraction = series(&[(previous, false), (previous - 0.02, false)]);
+        clean_side(&mut exact_fraction, GaugeSide::Left);
+        assert!(!exact_fraction[1].left_super_uncertain);
+
+        let mut backwards = series(&[(previous, false), (previous - 0.021, false)]);
+        clean_side(&mut backwards, GaugeSide::Left);
+        assert!(backwards[1].left_super_uncertain);
+    }
+
+    #[test]
+    fn a_rejected_reliable_read_keeps_its_current_ca_flag() {
+        let mut features = series(&[(2.6, false), (0.6, false)]);
+        features[1].left_ca_ready = true;
+
+        clean_side(&mut features, GaugeSide::Left);
+
+        assert!(features[1].left_super_uncertain);
+        assert!(features[1].left_ca_ready);
+    }
+
+    #[test]
+    fn scanning_continues_after_rejecting_an_unstable_spend() {
+        let mut features = series(&[(2.6, false), (0.6, false), (3.5, false)]);
+
+        clean_side(&mut features, GaugeSide::Left);
+
+        assert_eq!(features[2].left_super_value, 2.6);
+        assert!(features[2].left_super_uncertain);
     }
 
     #[test]
@@ -347,7 +533,15 @@ mod tests {
         let mut features = series(&[(2.6, false), (2.6, false), (0.6, false), (2.6, false)]);
         for (index, frame) in features.iter_mut().enumerate() {
             let value = if index == 2 { 0.4 } else { 1.8 };
-            set(frame, 1, value, false, false);
+            set(
+                frame,
+                GaugeSide::Right,
+                GaugeReading {
+                    value,
+                    uncertain: false,
+                    ca_ready: false,
+                },
+            );
         }
 
         clean_super_temporal(&mut features);

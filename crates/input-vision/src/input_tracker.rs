@@ -36,6 +36,18 @@ const MIN_SUPPORT_COUNT: u32 = 4;
 /// 同士が一致していれば当てはめてよい）
 const MIN_SUPPORT_RATIO: f32 = 0.7;
 
+fn starts_new_window(previous: u32, current: u32) -> bool {
+    i64::from(previous) - i64::from(current) > 3
+}
+
+fn window_is_long_enough(start: usize, end: usize) -> bool {
+    end.saturating_sub(start) >= MIN_WINDOW
+}
+
+fn has_enough_support(support: u32, certain: u32) -> bool {
+    support >= MIN_SUPPORT_COUNT && (support as f32) >= (certain as f32) * MIN_SUPPORT_RATIO
+}
+
 /// row0 の時系列（連続フレーム）を補修する。
 pub fn repair_row0_sequence(frames: &[InputRow]) -> Vec<TrackedInput> {
     let n = frames.len();
@@ -60,7 +72,7 @@ pub fn repair_row0_sequence(frames: &[InputRow]) -> Vec<TrackedInput> {
         for (i, frame) in frames.iter().enumerate() {
             if let (false, Some(c)) = (frame.uncertain, frame.count) {
                 if let Some((_, pc)) = prev_certain {
-                    if (c as i64) < pc as i64 - 3 {
+                    if starts_new_window(pc, c) {
                         windows.push((start, i));
                         start = i;
                     }
@@ -72,70 +84,69 @@ pub fn repair_row0_sequence(frames: &[InputRow]) -> Vec<TrackedInput> {
     }
 
     for &(ws, we) in &windows {
-        let len = we - ws;
-        if len < MIN_WINDOW {
-            continue;
+        repair_window(frames, &mut out, ws, we);
+    }
+
+    out
+}
+
+fn repair_window(frames: &[InputRow], out: &mut [TrackedInput], ws: usize, we: usize) {
+    if !window_is_long_enough(ws, we) {
+        return;
+    }
+    // base = mode(count_i - i) を確か読みから推定
+    let mut offs: std::collections::HashMap<i64, u32> = std::collections::HashMap::new();
+    let mut n_certain = 0u32;
+    for (offset, frame) in frames[ws..we].iter().enumerate() {
+        let i = ws + offset;
+        if !frame.uncertain {
+            if let Some(c) = frame.count {
+                *offs.entry(c as i64 - i as i64).or_insert(0) += 1;
+                n_certain += 1;
+            }
         }
-        // base = mode(count_i - i) を確か読みから推定
-        let mut offs: std::collections::HashMap<i64, u32> = std::collections::HashMap::new();
-        let mut n_certain = 0u32;
-        for (offset, frame) in frames[ws..we].iter().enumerate() {
-            let i = ws + offset;
-            if !frame.uncertain {
-                if let Some(c) = frame.count {
-                    *offs.entry(c as i64 - i as i64).or_insert(0) += 1;
-                    n_certain += 1;
+    }
+    let Some((&base, &support)) = offs.iter().max_by_key(|(_, &value)| value) else {
+        return;
+    };
+    if !has_enough_support(support, n_certain) {
+        return;
+    }
+
+    // dir / バッジ類の最頻値（確か読みのみ）
+    let mode_dir = mode_by(frames, ws, we, |row| {
+        (!row.uncertain && row.dir != InputDir::Unknown).then_some(row.dir)
+    });
+    let mode_marks = mode_by(frames, ws, we, |row| {
+        (!row.uncertain).then(|| (row.badges.clone(), row.auto, row.throw))
+    });
+
+    for (offset, tracked) in out[ws..we].iter_mut().enumerate() {
+        let index = ws + offset;
+        let expected = base + index as i64;
+        if expected >= 1 {
+            let expected = expected as u32;
+            if tracked.count != Some(expected) || tracked.uncertain {
+                tracked.count = Some(expected);
+                tracked.repaired = true;
+            }
+            tracked.uncertain = false;
+            if let Some(direction) = mode_dir {
+                if tracked.dir != direction {
+                    tracked.dir = direction;
+                    tracked.repaired = true;
                 }
             }
-        }
-        let Some((&base, &support)) = offs.iter().max_by_key(|(_, &v)| v) else {
-            continue;
-        };
-        let _ = len;
-        if support < MIN_SUPPORT_COUNT || (support as f32) < (n_certain as f32) * MIN_SUPPORT_RATIO
-        {
-            continue;
-        }
-
-        // dir / バッジ類の最頻値（確か読みのみ）
-        let mode_dir = mode_by(frames, ws, we, |r| {
-            (!r.uncertain && r.dir != InputDir::Unknown).then_some(r.dir)
-        });
-        let mode_marks = mode_by(frames, ws, we, |r| {
-            (!r.uncertain).then(|| (r.badges.clone(), r.auto, r.throw))
-        });
-
-        for (offset, t) in out[ws..we].iter_mut().enumerate() {
-            let i = ws + offset;
-            let expect = base + i as i64;
-            if expect < 1 {
-                continue;
-            }
-            let expect = expect as u32;
-            let mismatch = t.count != Some(expect);
-            if mismatch || t.uncertain {
-                t.count = Some(expect);
-                t.repaired = true;
-            }
-            t.uncertain = false;
-            if let Some(d) = mode_dir {
-                if t.dir != d {
-                    t.dir = d;
-                    t.repaired = true;
-                }
-            }
-            if let Some((ref b, a, th)) = mode_marks {
-                if t.badges != *b || t.auto != a || t.throw != th {
-                    t.badges = b.clone();
-                    t.auto = a;
-                    t.throw = th;
-                    t.repaired = true;
+            if let Some((ref badges, auto, throw)) = mode_marks {
+                if tracked.badges != *badges || tracked.auto != auto || tracked.throw != throw {
+                    tracked.badges = badges.clone();
+                    tracked.auto = auto;
+                    tracked.throw = throw;
+                    tracked.repaired = true;
                 }
             }
         }
     }
-
-    out
 }
 
 /// 窓内の最頻値（確か読みのみ対象）。
@@ -148,10 +159,9 @@ fn mode_by<T: Clone + PartialEq>(
     let mut items: Vec<(T, u32)> = Vec::new();
     for r in &frames[ws..we] {
         if let Some(v) = f(r) {
-            if let Some(e) = items.iter_mut().find(|(x, _)| *x == v) {
-                e.1 += 1;
-            } else {
-                items.push((v, 1));
+            match items.iter().position(|(item, _)| *item == v) {
+                Some(index) => items[index].1 += 1,
+                None => items.push((v, 1)),
             }
         }
     }
@@ -164,6 +174,7 @@ fn mode_by<T: Clone + PartialEq>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::input_history::BadgeColor;
 
     fn row(count: Option<u32>, dir: InputDir, unc: bool) -> InputRow {
         InputRow {
@@ -244,5 +255,111 @@ mod tests {
         let t = repair_row0_sequence(&fs);
         assert_eq!(t[4].dir, InputDir::Down);
         assert!(t[4].repaired);
+    }
+
+    #[test]
+    fn window_and_support_boundaries_are_exact() {
+        assert!(!starts_new_window(10, 7));
+        assert!(starts_new_window(10, 6));
+        assert!(!window_is_long_enough(10, 14));
+        assert!(window_is_long_enough(10, 15));
+        assert!(has_enough_support(4, 5));
+        assert!(has_enough_support(7, 10));
+        assert!(!has_enough_support(6, 10));
+        assert!(!has_enough_support(3, 3));
+    }
+
+    #[test]
+    fn an_expected_count_of_one_is_repaired() {
+        let mut frames: Vec<_> = (1..=5)
+            .map(|count| row(Some(count), InputDir::Down, false))
+            .collect();
+        frames[0] = row(None, InputDir::Unknown, true);
+
+        let tracked = repair_row0_sequence(&frames);
+
+        assert_eq!(tracked[0].count, Some(1));
+        assert!(tracked[0].repaired);
+        assert!(!tracked[0].uncertain);
+    }
+
+    #[test]
+    fn negative_early_expectations_do_not_stop_later_repairs() {
+        let mut frames = vec![row(None, InputDir::Unknown, true); 7];
+        for (index, count) in (1..=4).enumerate() {
+            frames[index + 2] = row(Some(count), InputDir::Down, false);
+        }
+
+        let tracked = repair_row0_sequence(&frames);
+
+        assert_eq!(tracked[6].count, Some(5));
+        assert!(tracked[6].repaired);
+    }
+
+    #[test]
+    fn support_ratio_counts_every_certain_observation() {
+        let mut frames: Vec<_> = [10, 11, 12, 13, 100, 200]
+            .into_iter()
+            .map(|count| row(Some(count), InputDir::Down, false))
+            .collect();
+        frames.push(row(None, InputDir::Unknown, true));
+
+        let tracked = repair_row0_sequence(&frames);
+
+        assert_eq!(tracked[6].count, None);
+        assert!(tracked[6].uncertain);
+        assert!(!tracked[6].repaired);
+    }
+
+    #[test]
+    fn every_mark_field_is_stabilized_independently() {
+        let common_badges = vec![BadgeMark {
+            color: BadgeColor::Green,
+            boxed: false,
+            glyph: None,
+        }];
+        let mut frames: Vec<_> = (1..=8)
+            .map(|count| {
+                let mut input = row(Some(count), InputDir::Down, false);
+                input.badges = common_badges.clone();
+                input.auto = true;
+                input.throw = true;
+                input
+            })
+            .collect();
+        frames[0].badges.clear();
+        frames[1].auto = false;
+        frames[2].throw = false;
+
+        let tracked = repair_row0_sequence(&frames);
+
+        for input in tracked.iter().take(3) {
+            assert_eq!(input.badges, common_badges);
+            assert!(input.auto);
+            assert!(input.throw);
+            assert!(input.repaired);
+        }
+    }
+
+    #[test]
+    fn mode_uses_only_the_requested_window_and_counts_duplicates() {
+        let directions = [
+            InputDir::Right,
+            InputDir::Right,
+            InputDir::Right,
+            InputDir::Right,
+            InputDir::Left,
+            InputDir::Left,
+            InputDir::Right,
+        ];
+        let frames: Vec<_> = directions
+            .into_iter()
+            .map(|direction| row(Some(1), direction, false))
+            .collect();
+
+        assert_eq!(
+            mode_by(&frames, 4, 7, |input| Some(input.dir)),
+            Some(InputDir::Left)
+        );
     }
 }

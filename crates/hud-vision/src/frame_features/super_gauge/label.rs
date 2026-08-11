@@ -94,18 +94,22 @@ pub(super) fn white_components(
         let (mut x0, mut x1) = (patch.width, 0);
         let (mut y0, mut y1) = (patch.height, 0);
         let mut area = 0;
-        while let Some(index) = queue.pop_front() {
-            let x = index % patch.width;
-            let y = index / patch.width;
-            x0 = x0.min(x);
-            x1 = x1.max(x);
-            y0 = y0.min(y);
-            y1 = y1.max(y);
-            area += 1;
-            for neighbor in neighbors(x, y, patch.width, patch.height) {
-                if !seen[neighbor] && white[neighbor] {
-                    seen[neighbor] = true;
-                    queue.push_back(neighbor);
+        // Each component has at most `len` distinct pixels. Keep that bound
+        // explicit so bad visit bookkeeping cannot make the queue cycle.
+        for _ in &white {
+            if let Some(index) = queue.pop_front() {
+                let x = index % patch.width;
+                let y = index / patch.width;
+                x0 = x0.min(x);
+                x1 = x1.max(x);
+                y0 = y0.min(y);
+                y1 = y1.max(y);
+                area += 1;
+                for neighbor in neighbors(x, y, patch.width, patch.height) {
+                    if !seen[neighbor] && white[neighbor] {
+                        seen[neighbor] = true;
+                        queue.push_back(neighbor);
+                    }
                 }
             }
         }

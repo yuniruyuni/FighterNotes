@@ -1,7 +1,6 @@
 pub(crate) type Bgr = [f32; 3];
 
 const QUANTIZED_CHANNEL_BITS: usize = 5;
-const QUANTIZED_CHANNEL_MASK: usize = (1 << QUANTIZED_CHANNEL_BITS) - 1;
 const QUANTIZED_BUCKET_COUNT: usize = 1 << (QUANTIZED_CHANNEL_BITS * 3);
 
 pub(crate) struct QuantizedModeScratch {
@@ -27,11 +26,9 @@ impl QuantizedModeScratch {
         for px in pixels {
             let bucket = quantized_bucket(px);
             let count = &mut self.counts[bucket];
-            if *count == 0 {
-                self.touched.push(bucket as u16);
-            }
+            self.touched.push(bucket as u16);
             *count += 1;
-            if *count > best_count || (*count == best_count && bucket < best_bucket) {
+            if *count > best_count || (*count == best_count && bucket.cmp(&best_bucket).is_lt()) {
                 best_bucket = bucket;
                 best_count = *count;
             }
@@ -57,10 +54,11 @@ impl QuantizedModeScratch {
     }
 }
 
-fn quantized_bucket(px: &[u8; 3]) -> usize {
-    ((px[0] as usize >> 3) << (QUANTIZED_CHANNEL_BITS * 2))
-        | ((px[1] as usize >> 3) << QUANTIZED_CHANNEL_BITS)
-        | (px[2] as usize >> 3) & QUANTIZED_CHANNEL_MASK
+pub(crate) fn quantized_bucket(px: &[u8; 3]) -> usize {
+    let blue = usize::from(px[0] >> 3);
+    let green = usize::from(px[1] >> 3);
+    let red = usize::from(px[2] >> 3);
+    (blue * 32 + green) * 32 + red
 }
 
 pub(crate) fn dim_anchor(bgr: Bgr) -> Bgr {

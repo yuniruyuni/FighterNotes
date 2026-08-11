@@ -200,15 +200,17 @@ fn is_self_authenticating_record(
 }
 
 fn repair_leading_damage_digits(previous: &AttackInfoSide, current: &mut AttackInfoSide) {
-    let continued_combo_damage = (previous.combo_damage > 0
-        && current.combo_damage > previous.combo_damage
-        && current.scaling_percent <= previous.scaling_percent)
-        .then(|| current.combo_damage - previous.combo_damage);
-    let reset_damage = (current.combo_damage < previous.combo_damage
-        && current.scaling_percent > previous.scaling_percent)
-        .then_some(current.combo_damage);
-    let Some(expected) = continued_combo_damage.or(reset_damage) else {
-        return;
+    let expected = match current.combo_damage.cmp(&previous.combo_damage) {
+        std::cmp::Ordering::Greater
+            if previous.combo_damage != 0
+                && current.scaling_percent <= previous.scaling_percent =>
+        {
+            current.combo_damage - previous.combo_damage
+        }
+        std::cmp::Ordering::Less if current.scaling_percent > previous.scaling_percent => {
+            current.combo_damage
+        }
+        _ => return,
     };
     if is_strict_decimal_suffix(expected, current.last_damage) {
         current.last_damage = expected;
@@ -219,18 +221,26 @@ fn is_strict_decimal_suffix(value: u32, suffix: u32) -> bool {
     if suffix == 0 || suffix >= value {
         return false;
     }
-    let mut magnitude = 10u32;
-    while magnitude <= suffix {
-        magnitude = magnitude.saturating_mul(10);
-    }
+    let Some(magnitude) = 10u32.checked_pow(suffix.ilog10() + 1) else {
+        // A ten-digit suffix needs 10^10 as its modulus, which is outside
+        // u32. Since `suffix < value`, it cannot be the suffix of `value`.
+        return false;
+    };
     value % magnitude == suffix
 }
 
 fn is_coherent_change(previous: &AttackInfoSide, current: &AttackInfoSide) -> bool {
-    let same_hit_metadata = current.last_damage == previous.last_damage
-        && current.scaling_percent == previous.scaling_percent
-        && current.max_combo_damage == previous.max_combo_damage
-        && current.attribute == previous.attribute;
+    let same_hit_metadata = (
+        current.last_damage,
+        current.scaling_percent,
+        current.max_combo_damage,
+        current.attribute,
+    ) == (
+        previous.last_damage,
+        previous.scaling_percent,
+        previous.max_combo_damage,
+        previous.attribute,
+    );
     if same_hit_metadata
         && current.combo_damage < previous.combo_damage
         && current.combo_damage != current.last_damage
@@ -238,30 +248,40 @@ fn is_coherent_change(previous: &AttackInfoSide, current: &AttackInfoSide) -> bo
         // 先頭桁だけが背景へ溶けた "2660 -> 660" 型の誤読を棄却する。
         return false;
     }
-    if previous.combo_damage > 0
-        && current.combo_damage > 0
-        && current.combo_damage < previous.combo_damage
+    if current.combo_damage < previous.combo_damage
         && current.scaling_percent <= previous.scaling_percent
         && current.combo_damage != current.last_damage
     {
         // 継続中に補正率が下がりながら累積値だけ減ることはない。
         return false;
     }
-    if current.last_damage != previous.last_damage
-        && current.combo_damage == previous.combo_damage
-        && current.scaling_percent == previous.scaling_percent
-        && current.max_combo_damage == previous.max_combo_damage
-        && current.attribute == previous.attribute
-    {
+    let same_except_last_damage = (
+        current.combo_damage,
+        current.scaling_percent,
+        current.max_combo_damage,
+        current.attribute,
+    ) == (
+        previous.combo_damage,
+        previous.scaling_percent,
+        previous.max_combo_damage,
+        previous.attribute,
+    );
+    if current.last_damage != previous.last_damage && same_except_last_damage {
         // 新しい攻撃なら累積値も更新される。単独変化は桁欠落か描画途中。
         return false;
     }
-    if current.scaling_percent != previous.scaling_percent
-        && current.last_damage == previous.last_damage
-        && current.combo_damage == previous.combo_damage
-        && current.max_combo_damage == previous.max_combo_damage
-        && current.attribute == previous.attribute
-    {
+    let same_except_scaling = (
+        current.last_damage,
+        current.combo_damage,
+        current.max_combo_damage,
+        current.attribute,
+    ) == (
+        previous.last_damage,
+        previous.combo_damage,
+        previous.max_combo_damage,
+        previous.attribute,
+    );
+    if current.scaling_percent != previous.scaling_percent && same_except_scaling {
         return false;
     }
     true
@@ -606,6 +626,7 @@ mod tests {
     fn a_suffix_must_line_up_with_the_decimal_places() {
         assert!(is_strict_decimal_suffix(2_660, 660));
         assert!(is_strict_decimal_suffix(2_660, 60));
+        assert!(is_strict_decimal_suffix(110, 10));
 
         assert!(!is_strict_decimal_suffix(2_660, 61), "桁が合っていない");
         assert!(
@@ -617,6 +638,10 @@ mod tests {
             "長い方は末尾ではない"
         );
         assert!(!is_strict_decimal_suffix(2_660, 0), "0 は末尾に採らない");
+        assert!(
+            !is_strict_decimal_suffix(u32::MAX, 3_000_000_000),
+            "10 桁の候補で桁倍率をオーバーフローさせない"
+        );
     }
 
     /// コンボが続いているなら、今回の一撃の値は累積値の差で決まる。
@@ -665,6 +690,50 @@ mod tests {
         repair_leading_damage_digits(&previous, &mut current);
 
         assert_eq!(current.last_damage, 152);
+    }
+
+    #[test]
+    fn repair_requires_a_real_continuation_or_a_strict_reset() {
+        let mut first_hit = reading(10, 100, 110, 110);
+        repair_leading_damage_digits(&reading(0, 100, 0, 0), &mut first_hit);
+        assert_eq!(first_hit.last_damage, 10, "未確定の初段を補っている");
+
+        let previous = reading(80, 80, 200, 200);
+        let mut equal_total = reading(10, 90, 200, 200);
+        repair_leading_damage_digits(&previous, &mut equal_total);
+        assert_eq!(
+            equal_total.last_damage, 10,
+            "同じ累積値をリセット扱いしている"
+        );
+
+        let mut equal_scaling = reading(10, 80, 110, 200);
+        repair_leading_damage_digits(&previous, &mut equal_scaling);
+        assert_eq!(
+            equal_scaling.last_damage, 10,
+            "同じ補正率で減った累積値をリセット扱いしている"
+        );
+    }
+
+    #[test]
+    fn coherence_boundaries_distinguish_stale_zero_and_unchanged_values() {
+        let previous = reading(100, 80, 200, 300);
+
+        assert!(
+            is_coherent_change(&previous, &previous),
+            "同じ複数ヒット表示は整合している"
+        );
+
+        let stale_zero = reading(100, 80, 0, 300);
+        assert!(
+            !is_coherent_change(&previous, &stale_zero),
+            "一撃値だけ残ったゼロ表示をリセットとして採っている"
+        );
+
+        let equal_scaling_shrink = reading(50, 80, 150, 300);
+        assert!(
+            !is_coherent_change(&previous, &equal_scaling_shrink),
+            "補正率が同じまま減った累積値を採っている"
+        );
     }
 
     // ── 確定までの回数 ───────────────────────────────────────────────────

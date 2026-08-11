@@ -7,7 +7,7 @@ use frame_meter::{
     STRIPE_MIN_CONTRAST, STRIPE_MIN_TRANSITIONS, STRIPE_WF_MIN,
 };
 
-type FreshColorEdgeFn = fn(&[f32], &[f32], &[CellState], &[BrightClass]) -> i32;
+type FreshColorEdgeFn = fn(&[f32], &[CellState], &[BrightClass]) -> i32;
 type HintedStripExtractionFn = fn(&[u8], u32, u32, Option<(usize, usize)>) -> (RowObs, RowObs);
 
 #[test]

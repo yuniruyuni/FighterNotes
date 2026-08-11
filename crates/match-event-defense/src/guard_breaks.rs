@@ -69,110 +69,194 @@ pub fn extract_guard_breaks(
     reversals: &[ReversalEvent],
     rounds: &[RoundInfo],
 ) -> Vec<GuardBreakEvent> {
-    if meter_state[0].is_empty() {
+    let Some(last_index) = meter_state[0].len().checked_sub(1) else {
         return Vec::new();
-    }
-    let n = meter_state[0].len();
+    };
     let mut out = Vec::new();
     for d in damage.iter().filter(|d| d.drop >= GUARD_BREAK_MIN_DROP) {
-        let victim = d.victim;
-        let vi = victim as usize - 1;
-        let fh = d.start_frame;
-        let fhi = (fh as usize).min(n - 1);
-        let own = &meter_state[vi];
-        let hpv = &hp[vi];
+        #[allow(clippy::too_many_arguments)]
+        fn event_from_damage(
+            d: &DamageEvent,
+            last_index: usize,
+            meter_state: &[Vec<MeterState>; 2],
+            hp: &[Vec<f32>; 2],
+            inputs: [&[TrackedInput]; 2],
+            jumps: &[JumpEvent],
+            throws: &[ThrowEvent],
+            reversals: &[ReversalEvent],
+            rounds: &[RoundInfo],
+        ) -> Option<GuardBreakEvent> {
+            let victim = d.victim;
+            let vi = victim as usize - 1;
+            let fh = d.start_frame;
+            let fhi = (fh as usize).min(last_index);
+            let own = &meter_state[vi];
+            let hpv = &hp[vi];
 
-        // ── 被弾直前に HP が平坦だったか（被コンボの継続ヒットを除外） ──
-        // ブロック硬直中は HP が減らない。被弾中（コンボ）は減っている
-        let lo = fhi.saturating_sub(GB_LOOKBACK);
-        let (mut hmin, mut hmax) = (f32::MAX, f32::MIN);
-        for &v in &hpv[lo..fhi] {
-            hmin = hmin.min(v);
-            hmax = hmax.max(v);
-        }
-        if hmax - hmin > 0.01 {
-            continue; // 被弾中だった＝ブロックではない
-        }
-
-        // ── ブロック硬直（stun + ガード方向保持）だった区間を確認 ──────
-        let mut block_frames = 0usize;
-        let mut gset: Option<[&str; 2]> = None;
-        let mut guard_dir = String::new();
-        for f in (lo..fhi).rev() {
-            if own[f] != MeterState::Stun {
-                continue;
+            // ── 被弾直前に HP が平坦だったか（被コンボの継続ヒットを除外） ──
+            // ブロック硬直中は HP が減らない。被弾中（コンボ）は減っている
+            let (lo, hp_flat) = pre_hit_hp_is_flat(hpv, fhi);
+            if !hp_flat {
+                return None;
             }
-            if let Some(gd) = observed_dir(inputs[vi], f as u32) {
-                if let Some(gs) = guard_side_set(gd) {
-                    block_frames += 1;
-                    if gset.is_none() {
-                        gset = Some(gs);
-                        guard_dir = gd.to_string();
-                    }
-                }
+
+            // ── ブロック硬直（stun + ガード方向保持）だった区間を確認 ──────
+            let (gset, guard_dir) = guard_observation(own, inputs[vi], lo, fhi)?;
+
+            // ── ブロック〜被弾の間に自分が攻撃していないこと ──────────────
+            // Startup/Active/Recovery/Invincible = 技を振った（暴れ・確反負け）。
+            // motion_recovery（ジャンプ・移動）は許容（崩れの本体）
+            if attacked_in_window(own, lo, fhi) {
+                return None;
             }
-        }
-        let (Some(gset), true) = (gset, block_frames >= GB_MIN_BLOCK) else {
-            continue;
-        };
 
-        // ── ブロック〜被弾の間に自分が攻撃していないこと ──────────────
-        // Startup/Active/Recovery/Invincible = 技を振った（暴れ・確反負け）。
-        // motion_recovery（ジャンプ・移動）は許容（崩れの本体）
-        let acted = (lo..=fhi).any(|k| {
-            matches!(
-                own.get(k),
-                Some(MeterState::Startup)
-                    | Some(MeterState::Active)
-                    | Some(MeterState::ProjectileActive)
-                    | Some(MeterState::Invincible)
-                    | Some(MeterState::Recovery)
-            )
-        });
-        if acted {
-            continue;
-        }
+            // ── 被弾直前に「意図的に」ガードから外れた入力（観測値のみ） ──
+            // 上（ジャンプ）or 前（歩き）。被弾の 3F 前〜被弾フレームで探す
+            let broke_to = (fh.saturating_sub(3)..=fh)
+                .rev()
+                .find_map(|f| observed_dir(inputs[vi], f).filter(|hd| broke_direction(gset, hd)))?;
 
-        // ── 被弾直前に「意図的に」ガードから外れた入力（観測値のみ） ──
-        // 上（ジャンプ）or 前（歩き）。被弾の 3F 前〜被弾フレームで探す
-        let broke_to = (fh.saturating_sub(3)..=fh)
-            .rev()
-            .find_map(|f| observed_dir(inputs[vi], f).filter(|hd| broke_direction(gset, hd)));
-        let Some(broke_to) = broke_to else { continue };
+            // ── 帰属排他 ──────────────────────────────────────────────────
+            // 対空された空中ジャンプ（GotHit）は own_jumps の領分。ただし
+            // PreJumpClipped（地上の予備動作狩られ = 崩れ本体）は除外しない
+            let jump_attributed = jumps.iter().any(|j| {
+                j.side == victim
+                    && j.takeoff_confirmed
+                    && j.outcome == JumpOutcome::GotHit
+                    && fh >= j.frame
+                    && fh <= j.frame + JUMP_SELF_HIT_WINDOW
+            });
+            let reversal_attributed = reversals.iter().any(|r| {
+                r.side == victim
+                    && fh + 5 >= r.frame
+                    && fh <= r.frame + REVERSAL_WINDOW + REVERSAL_PUNISH_WINDOW
+            });
+            let throw_attributed = throws.iter().any(|t| {
+                t.thrower == 3 - victim && t.connected && fh + 5 >= t.frame && fh <= t.frame + 40
+            });
+            if jump_attributed || reversal_attributed || throw_attributed {
+                return None;
+            }
 
-        // ── 帰属排他 ──────────────────────────────────────────────────
-        // 対空された空中ジャンプ（GotHit）は own_jumps の領分。ただし
-        // PreJumpClipped（地上の予備動作狩られ = 崩れ本体）は除外しない
-        let jump_attributed = jumps.iter().any(|j| {
-            j.side == victim
-                && j.takeoff_confirmed
-                && j.outcome == JumpOutcome::GotHit
-                && fh >= j.frame
-                && fh <= j.frame + JUMP_SELF_HIT_WINDOW
-        });
-        let reversal_attributed = reversals.iter().any(|r| {
-            r.side == victim
-                && fh + 5 >= r.frame
-                && fh <= r.frame + REVERSAL_WINDOW + REVERSAL_PUNISH_WINDOW
-        });
-        let throw_attributed = throws.iter().any(|t| {
-            t.thrower == 3 - victim && t.connected && fh + 5 >= t.frame && fh <= t.frame + 40
-        });
-        if jump_attributed || reversal_attributed || throw_attributed {
-            continue;
-        }
-
-        if let Some(round_no) = round_of(rounds, fh) {
-            out.push(GuardBreakEvent {
+            let round_no = round_of(rounds, fh)?;
+            Some(GuardBreakEvent {
                 side: victim,
                 frame: fh,
                 drop: d.drop,
                 guard_dir,
                 broke_to: broke_to.to_string(),
                 round_no,
-            });
+            })
+        }
+        let event = event_from_damage(
+            d,
+            last_index,
+            meter_state,
+            hp,
+            inputs,
+            jumps,
+            throws,
+            reversals,
+            rounds,
+        );
+        if let Some(event) = event {
+            out.push(event);
         }
     }
     out.sort_by_key(|g| g.frame);
     out
+}
+
+fn pre_hit_hp_is_flat(hp: &[f32], hit_index: usize) -> (usize, bool) {
+    let start = hit_index.saturating_sub(GB_LOOKBACK);
+    let (mut minimum, mut maximum) = (f32::MAX, f32::MIN);
+    for &value in &hp[start..hit_index] {
+        minimum = minimum.min(value);
+        maximum = maximum.max(value);
+    }
+    (start, maximum - minimum <= 0.01)
+}
+
+fn guard_observation(
+    meter: &[MeterState],
+    inputs: &[TrackedInput],
+    start: usize,
+    hit_index: usize,
+) -> Option<([&'static str; 2], String)> {
+    let mut block_frames = 0usize;
+    let mut guard_set = None;
+    let mut guard_direction = String::new();
+    for frame in (start..hit_index).rev() {
+        if meter[frame] != MeterState::Stun {
+            continue;
+        }
+        if let Some(direction) = observed_dir(inputs, frame as u32) {
+            if let Some(candidate_set) = guard_side_set(direction) {
+                block_frames += 1;
+                if guard_set.is_none() {
+                    guard_set = Some(candidate_set);
+                    guard_direction = direction.to_string();
+                }
+            }
+        }
+    }
+    if block_frames >= GB_MIN_BLOCK {
+        Some((guard_set?, guard_direction))
+    } else {
+        None
+    }
+}
+
+fn attacked_in_window(meter: &[MeterState], start: usize, hit_index: usize) -> bool {
+    (start..=hit_index).any(|index| {
+        matches!(
+            meter.get(index),
+            Some(MeterState::Startup)
+                | Some(MeterState::Active)
+                | Some(MeterState::ProjectileActive)
+                | Some(MeterState::Invincible)
+                | Some(MeterState::Recovery)
+        )
+    })
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+    use crate::test_support::tracked;
+
+    fn guard_input() -> TrackedInput {
+        tracked(1, InputDir::DownRight, vec![], false, false)
+    }
+
+    #[test]
+    fn hp_window_uses_the_exact_lookback_excludes_the_hit_and_accepts_exact_tolerance() {
+        let mut hp = vec![0.01; 41];
+        hp[0] = 0.5;
+        hp[10] = 0.0;
+        hp[40] = 0.5;
+        assert_eq!(pre_hit_hp_is_flat(&hp, 40), (10, true));
+    }
+
+    #[test]
+    fn guard_frames_exclude_the_hit_but_attack_detection_includes_it() {
+        let mut meter = vec![MeterState::Free; 5];
+        meter[1..=4].fill(MeterState::Stun);
+        let inputs = vec![guard_input(); 5];
+        assert!(guard_observation(&meter, &inputs, 0, 4).is_none());
+
+        meter[4] = MeterState::Active;
+        assert!(attacked_in_window(&meter, 0, 4));
+    }
+
+    #[test]
+    fn guard_and_attack_windows_exclude_evidence_before_their_start() {
+        let mut meter = vec![MeterState::Stun; 6];
+        let inputs = vec![guard_input(); 6];
+        assert!(guard_observation(&meter, &inputs, 2, 5).is_none());
+
+        meter.fill(MeterState::Free);
+        meter[0] = MeterState::Active;
+        assert!(!attacked_in_window(&meter, 1, 5));
+    }
 }

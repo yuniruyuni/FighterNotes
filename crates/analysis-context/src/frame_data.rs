@@ -107,10 +107,6 @@ pub fn strike_kind_for_input(
                 })
         })
         .collect();
-    if candidates.is_empty() {
-        return None;
-    }
-
     if observed_startup.is_some() {
         let best_error = candidates.iter().map(|(_, error)| *error).min()?;
         const STARTUP_TOLERANCE: u32 = 3;
@@ -192,7 +188,7 @@ pub fn punish_options(character: &str, advantage: u32, limit: usize) -> Vec<&'st
             continue;
         }
         let e = best_by_startup.entry(m.startup).or_insert(m);
-        if m.damage > e.damage {
+        if m.damage.cmp(&e.damage) == std::cmp::Ordering::Greater {
             *e = m;
         }
     }
@@ -297,6 +293,11 @@ mod tests {
         assert_eq!(
             strike_kind_for_input("YASMINE", "D", &["弱K".to_string()], false, false, Some(5),),
             Some(StrikeKind::Low)
+        );
+        assert_eq!(
+            strike_kind_for_input("A_K_I", "N", &["弱".to_string()], true, false, Some(5)),
+            Some(StrikeKind::Low),
+            "AUTO の有無で異なる技を取り違えている"
         );
     }
 
@@ -408,6 +409,16 @@ mod tests {
             None,
             "かけ離れた発生を受け入れている"
         );
+        assert_eq!(
+            strike_kind_for_input("YASMINE", "D", &["弱K".to_string()], false, false, Some(8),),
+            Some(StrikeKind::Low),
+            "許容差ちょうどの発生を落としている"
+        );
+        assert_eq!(
+            strike_kind_for_input("YASMINE", "D", &["弱K".to_string()], false, false, Some(9),),
+            None,
+            "許容差を超えた発生を受け入れている"
+        );
     }
 
     /// 発生が観測できていなければ、同じ入力に属性の違う技が並ぶ限り
@@ -437,6 +448,20 @@ mod tests {
 
         assert_eq!(
             strike_kind_for_input("INGRID", "D", &mixed, false, false, Some(5)),
+            None
+        );
+    }
+
+    /// 入力方式そのものの判定。空集合を Classic とする全称判定や、未知の
+    /// バッジを Modern とする全称判定を先へ流さない。
+    #[test]
+    fn input_style_requires_a_nonempty_known_badge_set() {
+        assert_eq!(input_is_classic(&[]), None);
+        assert_eq!(input_is_classic(&["弱P".to_string()]), Some(true));
+        assert_eq!(input_is_classic(&["弱".to_string()]), Some(false));
+        assert_eq!(input_is_classic(&["DI".to_string()]), None);
+        assert_eq!(
+            input_is_classic(&["弱P".to_string(), "中".to_string()]),
             None
         );
     }

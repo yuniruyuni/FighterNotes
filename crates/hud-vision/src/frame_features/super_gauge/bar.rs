@@ -52,10 +52,7 @@ pub(super) fn fraction_from_lit(lit: &[bool]) -> f32 {
     let start_pad = (columns * 8 / 265).min(columns.saturating_sub(1));
     let end_pad = columns * 10 / 265;
     let usable_end = columns.saturating_sub(end_pad);
-    if start_pad >= usable_end {
-        return 0.0;
-    }
-    let usable = &lit[start_pad..usable_end];
+    let usable = lit.get(start_pad..usable_end).unwrap_or_default();
 
     let Some(first) = usable.iter().position(|value| *value) else {
         return 0.0;
@@ -72,10 +69,10 @@ pub(super) fn fraction_from_lit(lit: &[bool]) -> f32 {
     let max_gap = (columns * 5 / 265).max(2);
     let mut far = first;
     let mut gap = 0usize;
-    for (index, value) in usable.iter().copied().enumerate().skip(first + 1) {
+    for (index, value) in usable.iter().copied().enumerate().skip(first) {
         if value {
             if gap > max_gap {
-                break;
+                return ((far + 1) as f32 / usable.len() as f32).clamp(0.0, 1.0);
             }
             far = index;
             gap = 0;

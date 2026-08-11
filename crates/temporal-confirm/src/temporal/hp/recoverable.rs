@@ -16,56 +16,61 @@ const MIN_UPWARD_STEP: f32 = 0.001;
 const RECOVERY_CONFIRM_RUN: usize = 8;
 const MAX_UNOBSERVED_EXTENSION: usize = 10;
 
+#[derive(Clone, Copy)]
+enum Baseline {
+    Missing,
+    Value(f32),
+}
+
 pub(super) fn restore_confirmed_recoveries(
     values: &mut [f32],
     source: &[f32],
     match_frames: &[bool],
     reset_at: &[bool],
 ) {
-    if values.is_empty()
-        || source.len() != values.len()
-        || match_frames.len() != values.len()
-        || reset_at.len() != values.len()
-    {
+    if source.len() != values.len() {
+        return;
+    }
+    if match_frames.len() != values.len() {
+        return;
+    }
+    if reset_at.len() != values.len() {
         return;
     }
 
-    let mut previous = None;
-    let mut index = 0;
-    while index < values.len() {
+    let mut previous = Baseline::Missing;
+    for index in 0..values.len() {
         if reset_at[index] {
-            previous = None;
+            previous = Baseline::Missing;
         }
         let value = values[index];
-        if value < 0.0 || !match_frames[index] {
-            index += 1;
-            continue;
-        }
-        let Some(baseline) = previous else {
-            previous = Some(value);
-            index += 1;
-            continue;
-        };
-
-        if baseline - value < MIN_DROP {
-            previous = Some(baseline.min(value));
-            index += 1;
-            continue;
-        }
-
-        if let Some(end) =
-            confirmed_recovery_end(values, source, match_frames, reset_at, index, baseline)
-        {
-            for value in &mut values[index..=end] {
-                if *value >= 0.0 {
-                    *value = baseline;
+        if is_reliable(value, match_frames[index]) {
+            match previous {
+                Baseline::Missing => previous = Baseline::Value(value),
+                Baseline::Value(baseline) if !is_material_drop(baseline, value) => {
+                    previous = Baseline::Value(baseline.min(value));
+                }
+                Baseline::Value(baseline) => {
+                    if let Some(end) = confirmed_recovery_end(
+                        values,
+                        source,
+                        match_frames,
+                        reset_at,
+                        index,
+                        baseline,
+                    ) {
+                        for value in values[index..=end]
+                            .iter_mut()
+                            .filter(|value| is_nonnegative(**value))
+                        {
+                            *value = baseline;
+                        }
+                        previous = Baseline::Value(baseline);
+                    } else {
+                        previous = Baseline::Value(value);
+                    }
                 }
             }
-            previous = Some(baseline);
-            index = end + 1;
-        } else {
-            previous = Some(value);
-            index += 1;
         }
     }
 }
@@ -81,7 +86,11 @@ fn confirmed_recovery_end(
     let hard_end = drop_start
         .saturating_add(MAX_RECOVERY_WINDOW)
         .min(values.len().saturating_sub(1));
-    let mut low = reliable_source(source, drop_start).unwrap_or(values[drop_start]);
+    let mut low = if is_nonnegative(source[drop_start]) {
+        source[drop_start]
+    } else {
+        values[drop_start]
+    };
     let mut previous_observed = None;
     let mut upward_steps = 0;
     let mut return_run = 0;
@@ -101,15 +110,7 @@ fn confirmed_recovery_end(
         }
         previous_observed = Some(value);
 
-        let drop = baseline - low;
-        let returned = value - low;
-        let near_baseline = baseline - value <= RETURN_TOLERANCE;
-        let enough_return = drop >= MIN_DROP && returned >= drop * MIN_RETURN_RATIO;
-        if index - drop_start >= MIN_RECOVERY_DELAY
-            && near_baseline
-            && enough_return
-            && upward_steps >= MIN_UPWARD_STEPS
-        {
+        if recovery_sample_qualifies(index - drop_start, baseline, value, low, upward_steps) {
             return_run += 1;
             if return_run >= RECOVERY_CONFIRM_RUN {
                 return Some(extend_recovered_level(
@@ -160,7 +161,38 @@ fn extend_recovered_level(
 }
 
 fn reliable_source(source: &[f32], index: usize) -> Option<f32> {
-    source.get(index).copied().filter(|value| *value >= 0.0)
+    source
+        .get(index)
+        .copied()
+        .filter(|value| is_nonnegative(*value))
+}
+
+fn recovery_sample_qualifies(
+    age: usize,
+    baseline: f32,
+    value: f32,
+    low: f32,
+    upward_steps: usize,
+) -> bool {
+    let drop = baseline - low;
+    let returned = value - low;
+    age >= MIN_RECOVERY_DELAY
+        && baseline - value <= RETURN_TOLERANCE
+        && drop >= MIN_DROP
+        && returned >= drop * MIN_RETURN_RATIO
+        && upward_steps >= MIN_UPWARD_STEPS
+}
+
+fn is_nonnegative(value: f32) -> bool {
+    value >= 0.0
+}
+
+fn is_reliable(value: f32, is_match: bool) -> bool {
+    is_match && is_nonnegative(value)
+}
+
+fn is_material_drop(baseline: f32, value: f32) -> bool {
+    baseline - value >= MIN_DROP
 }
 
 #[cfg(test)]
@@ -187,6 +219,218 @@ mod tests {
         let mut restored = values.to_vec();
         restore_confirmed_recoveries(&mut restored, values, &match_frames, &reset_at);
         restored
+    }
+
+    #[test]
+    fn reliability_and_drop_predicates_include_their_exact_edges() {
+        assert!(is_nonnegative(0.0));
+        assert!(!is_nonnegative(-0.001));
+        assert!(is_reliable(0.0, true));
+        assert!(!is_reliable(-0.001, true));
+        assert!(!is_reliable(0.5, false));
+
+        assert!(is_material_drop(MIN_DROP, 0.0));
+        assert!(!is_material_drop(MIN_DROP / 2.0, 0.0));
+        assert!(!is_material_drop(0.5, 0.49));
+
+        assert_eq!(reliable_source(&[0.0, -1.0], 0), Some(0.0));
+        assert_eq!(reliable_source(&[0.0, -1.0], 1), None);
+        assert_eq!(reliable_source(&[0.0, -1.0], 2), None);
+    }
+
+    #[test]
+    fn every_recovery_evidence_threshold_is_required_at_its_edge() {
+        let qualifies = |age, baseline, value, low, steps| {
+            recovery_sample_qualifies(age, baseline, value, low, steps)
+        };
+
+        assert!(qualifies(
+            MIN_RECOVERY_DELAY,
+            MIN_DROP,
+            MIN_DROP,
+            0.0,
+            MIN_UPWARD_STEPS,
+        ));
+        assert!(!qualifies(
+            MIN_RECOVERY_DELAY - 1,
+            MIN_DROP,
+            MIN_DROP,
+            0.0,
+            MIN_UPWARD_STEPS,
+        ));
+        assert!(!qualifies(
+            MIN_RECOVERY_DELAY,
+            1.0,
+            1.0 - RETURN_TOLERANCE - 0.001,
+            0.8,
+            MIN_UPWARD_STEPS,
+        ));
+        assert!(qualifies(
+            MIN_RECOVERY_DELAY,
+            1.0,
+            1.0 - RETURN_TOLERANCE,
+            0.8,
+            MIN_UPWARD_STEPS,
+        ));
+        assert!(qualifies(
+            MIN_RECOVERY_DELAY,
+            RETURN_TOLERANCE,
+            0.0,
+            -0.04,
+            MIN_UPWARD_STEPS,
+        ));
+        assert!(!qualifies(
+            MIN_RECOVERY_DELAY,
+            MIN_DROP - 0.001,
+            MIN_DROP - 0.001,
+            0.0,
+            MIN_UPWARD_STEPS,
+        ));
+
+        let exact_return = MIN_DROP * MIN_RETURN_RATIO;
+        assert!(qualifies(
+            MIN_RECOVERY_DELAY,
+            MIN_DROP,
+            exact_return,
+            0.0,
+            MIN_UPWARD_STEPS,
+        ));
+        assert!(!qualifies(
+            MIN_RECOVERY_DELAY,
+            MIN_DROP,
+            exact_return - 0.001,
+            0.0,
+            MIN_UPWARD_STEPS,
+        ));
+        assert!(!qualifies(
+            MIN_RECOVERY_DELAY,
+            MIN_DROP,
+            MIN_DROP,
+            0.0,
+            MIN_UPWARD_STEPS - 1,
+        ));
+    }
+
+    #[test]
+    fn recovered_extension_stops_at_each_hard_boundary() {
+        let values = vec![1.0; 16];
+        let source = values.clone();
+        let matches = vec![true; values.len()];
+        let reset = vec![false; values.len()];
+        assert_eq!(
+            extend_recovered_level(&values, &source, &matches, &reset, 0, 1.0),
+            values.len() - 1
+        );
+
+        let mut stopped_by_reset = reset.clone();
+        stopped_by_reset[2] = true;
+        assert_eq!(
+            extend_recovered_level(&values, &source, &matches, &stopped_by_reset, 0, 1.0),
+            1
+        );
+
+        let mut reset_on_confirmation = reset.clone();
+        reset_on_confirmation[0] = true;
+        assert_eq!(
+            extend_recovered_level(&values, &source, &matches, &reset_on_confirmation, 0, 1.0,),
+            values.len() - 1
+        );
+
+        let mut stopped_by_screen = matches.clone();
+        stopped_by_screen[2] = false;
+        assert_eq!(
+            extend_recovered_level(&values, &source, &stopped_by_screen, &reset, 0, 1.0),
+            1
+        );
+
+        let mut short_blind = source.clone();
+        short_blind[1..=MAX_UNOBSERVED_EXTENSION].fill(-1.0);
+        assert_eq!(
+            extend_recovered_level(&values, &short_blind, &matches, &reset, 0, 1.0),
+            values.len() - 1
+        );
+
+        let mut long_blind = source.clone();
+        long_blind[1..=MAX_UNOBSERVED_EXTENSION + 1].fill(-1.0);
+        assert_eq!(
+            extend_recovered_level(&values, &long_blind, &matches, &reset, 0, 1.0),
+            MAX_UNOBSERVED_EXTENSION
+        );
+
+        let mut later_fall = source;
+        later_fall[2] = 0.5;
+        assert_eq!(
+            extend_recovered_level(&values, &later_fall, &matches, &reset, 0, 1.0),
+            1
+        );
+
+        let mut exact_edge = values.clone();
+        exact_edge[1] = 1.0 - RETURN_TOLERANCE;
+        assert_eq!(
+            extend_recovered_level(&values, &exact_edge, &matches, &reset, 0, 1.0),
+            values.len() - 1
+        );
+    }
+
+    #[test]
+    fn recovery_scan_uses_the_raw_drop_and_includes_its_hard_end() {
+        let mut values = vec![0.8; MAX_RECOVERY_WINDOW + 1];
+        values[MAX_RECOVERY_WINDOW - 10] = 0.85;
+        values[MAX_RECOVERY_WINDOW - 9] = 0.90;
+        values[MAX_RECOVERY_WINDOW - 8] = 0.95;
+        values[MAX_RECOVERY_WINDOW - 7..].fill(1.0);
+        let matches = vec![true; values.len()];
+        let reset = vec![false; values.len()];
+
+        assert_eq!(
+            confirmed_recovery_end(&values, &values, &matches, &reset, 0, 1.0),
+            Some(MAX_RECOVERY_WINDOW)
+        );
+
+        let recovery = armour_recovery();
+        let (recovery_matches, mut recovery_reset) = flags(recovery.len());
+        recovery_reset[10] = true;
+        assert!(confirmed_recovery_end(
+            &recovery,
+            &recovery,
+            &recovery_matches,
+            &recovery_reset,
+            10,
+            1.0,
+        )
+        .is_some());
+
+        let mut corrected = vec![0.8; 48];
+        let mut raw = vec![0.96; corrected.len()];
+        raw[1] = 0.965;
+        raw[2] = 0.975;
+        raw[3..].fill(0.985);
+        corrected[1..].copy_from_slice(&raw[1..]);
+        assert_eq!(
+            confirmed_recovery_end(
+                &corrected,
+                &raw,
+                &vec![true; corrected.len()],
+                &vec![false; corrected.len()],
+                0,
+                1.0,
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn a_small_baseline_dip_is_not_restored_to_the_older_higher_value() {
+        let mut values = vec![1.0];
+        values.extend(vec![0.99; 9]);
+        for step in 0..35 {
+            values.push(0.79 + 0.20 * step as f32 / 34.0);
+        }
+        values.extend(vec![0.99; 20]);
+
+        let restored = restore(&values);
+
+        assert!((restored[12] - 0.99).abs() < 1e-5);
     }
 
     /// 削られてから数秒かけて元の高さへ戻る動きは、アーマーの回復。

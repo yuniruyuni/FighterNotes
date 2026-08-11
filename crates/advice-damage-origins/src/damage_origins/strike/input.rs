@@ -7,11 +7,12 @@ use crate::match_events::{ContactEvent, EventConfidence, InputSegment, MatchEven
 const INPUT_START_LINK_WINDOW: u32 = 6;
 
 pub fn segment_distance(segment: &InputSegment, target: u32) -> u32 {
-    if target < segment.start_frame {
-        segment.start_frame - target
-    } else {
-        target.saturating_sub(segment.end_frame)
-    }
+    // 区間内なら両方 0、手前なら左側、後ろなら右側だけが正になる。
+    // 境界で分岐する必要がなく、start/end のどちらからの距離かも対称になる。
+    segment
+        .start_frame
+        .saturating_sub(target)
+        .max(target.saturating_sub(segment.end_frame))
 }
 
 fn attacker_is_airborne(events: &MatchEvents, attacker: u8, contact_frame: u32) -> bool {

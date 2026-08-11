@@ -114,6 +114,27 @@ fn required_evidence() -> Vec<(&'static str, Vec<EvidenceRequirement>)> {
     ]
 }
 
+/// 発火 fixture を持つ全カードに、証拠要件が明示されている。
+/// 検出器を追加して配線だけ行い、要件表への登録を忘れる事故を防ぐ。
+#[test]
+fn every_emittable_card_has_an_explicit_requirement_entry() {
+    let requirements = required_evidence();
+    let fixtures = advice_detectors::test_support::card_fixtures();
+
+    assert_eq!(
+        fixtures.len(),
+        requirements.len(),
+        "カード表の件数が一致しない"
+    );
+    for fixture in fixtures {
+        assert!(
+            requirements.iter().any(|(id, _)| *id == fixture.id),
+            "{} の証拠要件が定義されていない",
+            fixture.id
+        );
+    }
+}
+
 /// 何もかも読めていれば、どのカードも黙らない。
 #[test]
 fn nothing_is_suppressed_when_everything_was_read() {
@@ -391,13 +412,13 @@ fn the_frame_meter_needs_both_sides() {
 #[test]
 fn contacts_depend_on_the_meter_and_both_health_bars() {
     let mut coverage = legacy_coverage(60, 100);
-    coverage.opponent_hp_reliable_frames = 10;
+    coverage.opponent_meter_mapped_frames = 10;
 
     let missing = card_missing_requirements(&card("whiff_punished"), &coverage);
 
     assert!(
         missing.contains(&EvidenceRequirement::Contacts),
-        "相手の HP 無しで接触を作っている"
+        "片側のメーター無しで接触を作っている"
     );
 }
 
@@ -405,13 +426,13 @@ fn contacts_depend_on_the_meter_and_both_health_bars() {
 #[test]
 fn punishes_depend_on_contacts_and_both_inputs() {
     let mut coverage = legacy_coverage(60, 100);
-    coverage.opponent_input_observed_frames = 10;
+    coverage.own_input_observed_frames = 10;
 
     let missing = card_missing_requirements(&card("reversal_punished"), &coverage);
 
     assert!(
         missing.contains(&EvidenceRequirement::Punishes),
-        "相手の入力無しで確定反撃を作っている"
+        "自分の入力無しで確定反撃を作っている"
     );
 }
 

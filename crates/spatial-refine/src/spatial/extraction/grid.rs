@@ -17,7 +17,7 @@ impl CellGrid {
     pub(super) fn from_rgba(rgba: &[u8], width: u32, height: u32, cell_size: u32) -> Self {
         let grid_width = width.div_ceil(cell_size) as usize;
         let grid_height = height.div_ceil(cell_size) as usize;
-        let mut cells = Vec::with_capacity(grid_width * grid_height);
+        let mut cells = Vec::new();
         for grid_y in 0..grid_height {
             let y0 = grid_y as u32 * cell_size;
             let y1 = (y0 + cell_size).min(height);
@@ -65,4 +65,51 @@ pub(super) fn validate_rgba(rgba: &[u8], width: u32, height: u32) -> Result<(), 
         });
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cell_grid_averages_every_channel_and_partial_edge_cell() {
+        let mut rgba = Vec::new();
+        for y in 0..3u8 {
+            for x in 0..3u8 {
+                let red = x + y * 10;
+                rgba.extend_from_slice(&[red, red + 50, red + 100, 255]);
+            }
+        }
+
+        let grid = CellGrid::from_rgba(&rgba, 3, 3, 2);
+
+        assert_eq!((grid.width, grid.height), (2, 2));
+        assert_eq!(
+            grid.cells
+                .iter()
+                .map(|cell| (cell.r, cell.g, cell.b))
+                .collect::<Vec<_>>(),
+            [(5, 55, 105), (7, 57, 107), (20, 70, 120), (22, 72, 122)]
+        );
+    }
+
+    #[test]
+    fn rgba_validation_checks_each_dimension_and_the_exact_buffer_length() {
+        assert!(matches!(
+            validate_rgba(&[0; 4], 0, 1),
+            Err(SpatialError::InvalidDimensions)
+        ));
+        assert!(matches!(
+            validate_rgba(&[0; 4], 1, 0),
+            Err(SpatialError::InvalidDimensions)
+        ));
+        assert!(validate_rgba(&[0; 8], 2, 1).is_ok());
+        assert!(matches!(
+            validate_rgba(&[0; 7], 2, 1),
+            Err(SpatialError::BufferTooSmall {
+                expected: 8,
+                actual: 7
+            })
+        ));
+    }
 }

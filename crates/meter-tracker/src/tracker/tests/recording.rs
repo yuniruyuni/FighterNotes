@@ -44,6 +44,9 @@ fn advanced_record_resolves_other_or_rescued_state_with_matching_previous_side()
     tracker.open_segment(5);
     let mut current_left = RowObs::empty();
     current_left.states[5] = CellState::Other;
+    let mut correlations = vec![[-1.0f32; 10]; CELL_COUNT];
+    correlations[5][4] = LABEL_DIGIT_MIN as f32;
+    current_left.digit_corr = Some(correlations);
     current_left.cols = Some(columns_with(|cell| cell as f32));
     current_left.cols_w = 1;
     let mut previous_left = RowObs::empty();
@@ -63,6 +66,10 @@ fn advanced_record_resolves_other_or_rescued_state_with_matching_previous_side()
     tracker.record(10, &current_left, &current_right, true, true);
 
     assert_eq!(tracker.reads["left"][&5].0, "empty");
+    assert!(
+        !tracker.reads["left"][&5].2,
+        "解決後のセルは数字覆いにしない"
+    );
     assert_eq!(tracker.reads["right"][&5].0, "other");
 }
 
@@ -80,7 +87,32 @@ fn record_reads_previous_lap_dim_cells_only_within_window() {
     assert_eq!(tracker.reads["left"][&80].0, "active");
     assert_eq!(tracker.reads["left"][&78].1, READ_DIM_CONF);
     assert_eq!(tracker.reads["left"][&79].1, READ_DIM_CONF);
+    assert!(!tracker.reads["left"][&79].2);
     assert!(!tracker.reads["left"].contains_key(&77));
+}
+
+#[test]
+fn backfill_includes_the_farthest_cell_and_frame_zero() {
+    let mut tracker = MeterTracker::new();
+    tracker.open_segment(12);
+    let mut observation = RowObs::empty();
+    observation.states[0] = CellState::PunishCounter;
+
+    tracker.record(10, &observation, &observation, true, false);
+
+    assert_eq!(tracker.reads["left"][&0].0, "punish_counter");
+}
+
+#[test]
+fn store_read_keeps_a_clear_existing_read_over_a_covered_replacement() {
+    let mut tracker = MeterTracker::new();
+    tracker.store_read("left", 5, "active".to_string(), 0.8, false);
+    tracker.store_read("left", 5, "stun".to_string(), 1.0, true);
+
+    assert_eq!(
+        tracker.reads["left"][&5],
+        ("active".to_string(), 0.8, false)
+    );
 }
 
 #[test]

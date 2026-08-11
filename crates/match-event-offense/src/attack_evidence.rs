@@ -39,14 +39,6 @@ pub fn build_attack_evidence(
     rounds: &[RoundInfo],
 ) -> AttackEvidence {
     let sequences = build_attack_sequences(observations);
-    if sequences.is_empty() || damage.is_empty() {
-        return AttackEvidence {
-            sequences,
-            damage: Vec::new(),
-            super_arts: Vec::new(),
-        };
-    }
-
     let mut builders: Vec<EvidenceBuilder> = (0..damage.len())
         .map(|damage_index| EvidenceBuilder {
             damage_index,
@@ -216,12 +208,8 @@ pub fn refine_damage_with_attack_evidence(
     damage: &mut Vec<DamageEvent>,
     evidence: &AttackEvidence,
 ) -> bool {
-    if features.is_empty() {
-        return false;
-    }
-
     let mut changed = false;
-    let mut refined = Vec::with_capacity(damage.len());
+    let mut refined = Vec::new();
     for event in damage.drain(..) {
         let linked = evidence.damage.iter().find(|candidate| {
             candidate.victim == event.victim
@@ -571,6 +559,43 @@ mod tests {
         (features, [vec![1.0; 61], p2_hp], observations, damage)
     }
 
+    fn super_fixture() -> (AttackEvidence, Vec<DamageEvent>, SuperArtEvent) {
+        let mut before = side(600, 600, 600);
+        before.scaling_percent = 100;
+        let mut after = side(2000, 2600, 2600);
+        after.scaling_percent = 40;
+        let mut reset = side(0, 0, 2600);
+        reset.scaling_percent = 40;
+        let observations = vec![
+            observation(100, before),
+            observation(160, after),
+            observation(220, reset),
+        ];
+        let mut damage = vec![damage(100, 0.26, 0.74)];
+        damage[0].end_frame = 180;
+        damage[0].pre_freeze_frame = 150;
+        let evidence = build_attack_evidence(&observations, &damage, &rounds());
+        let super_art = SuperArtEvent {
+            side: 1,
+            frame: 150,
+            gauge_drop_frame: 155,
+            level: 3,
+            critical_art: false,
+            gauge_before: 3.0,
+            gauge_after: 0.0,
+            context: SuperArtContext::Combo,
+            outcome: SuperArtOutcome::Hit,
+            contact_frame: Some(160),
+            damage: 0.0,
+            ko: false,
+            punished: false,
+            punished_damage: 0.0,
+            confidence: EventConfidence::High,
+            round_no: 1,
+        };
+        (evidence, damage, super_art)
+    }
+
     #[test]
     fn links_exact_damage_and_detects_an_hp_outlier_from_the_video_scale() {
         let observations = vec![
@@ -628,6 +653,61 @@ mod tests {
     }
 
     #[test]
+    fn a_sequence_outside_the_round_does_not_end_assignment() {
+        let observations = vec![
+            observation(10, side(600, 600, 600)),
+            observation(20, side(0, 0, 600)),
+            observation(100, side(800, 800, 800)),
+            observation(120, side(0, 0, 800)),
+        ];
+        let damage = vec![damage(100, 0.08, 0.92)];
+        let mut bounded_rounds = rounds();
+        bounded_rounds[0].start_frame = 50;
+
+        let evidence = build_attack_evidence(&observations, &damage, &bounded_rounds);
+
+        assert_eq!(evidence.damage.len(), 1);
+        assert_eq!(evidence.damage[0].sequence_start_frame, 100);
+    }
+
+    #[test]
+    fn an_unassigned_damage_event_does_not_end_consistency_checks() {
+        let observations = vec![
+            observation(300, side(1000, 1000, 1000)),
+            observation(320, side(0, 0, 1000)),
+            observation(500, side(1000, 1000, 1000)),
+            observation(520, side(0, 0, 1000)),
+        ];
+        let damage = vec![
+            damage(10, 0.1, 0.9),
+            damage(300, 0.1, 0.8),
+            damage(500, 0.1, 0.7),
+        ];
+
+        let evidence = build_attack_evidence(&observations, &damage, &rounds());
+
+        assert_eq!(evidence.damage.len(), 2);
+        assert!(evidence
+            .damage
+            .iter()
+            .all(|value| value.hp_consistency == AttackDamageConsistency::Consistent));
+    }
+
+    #[test]
+    fn an_unverified_sequence_exactly_at_the_delay_limit_is_kept() {
+        let observations = vec![
+            observation(250, side(1000, 1000, 1000)),
+            observation(270, side(0, 0, 1000)),
+        ];
+        let damage = vec![damage(100, 0.1, 0.9)];
+
+        let evidence = build_attack_evidence(&observations, &damage, &rounds());
+
+        assert_eq!(evidence.damage.len(), 1);
+        assert_eq!(evidence.damage[0].confidence, EventConfidence::Medium);
+    }
+
+    #[test]
     fn splits_a_merged_hp_event_only_at_a_confirmed_material_hp_boundary() {
         let (features, hp, observations, mut damage) = split_fixture(0.08, 800);
         let evidence = build_attack_evidence(&observations, &damage, &rounds());
@@ -662,47 +742,102 @@ mod tests {
     }
 
     #[test]
-    fn attributes_the_damage_added_after_a_super_was_inserted() {
-        let mut before = side(600, 600, 600);
-        before.scaling_percent = 100;
-        let mut after = side(2000, 2600, 2600);
-        after.scaling_percent = 40;
-        let mut reset = side(0, 0, 2600);
-        reset.scaling_percent = 40;
-        let observations = vec![
-            observation(100, before),
-            observation(160, after),
-            observation(220, reset),
-        ];
-        let mut damage = vec![damage(100, 0.26, 0.74)];
-        damage[0].end_frame = 180;
-        damage[0].pre_freeze_frame = 150;
-        let mut evidence = build_attack_evidence(&observations, &damage, &rounds());
-        let super_arts = vec![SuperArtEvent {
-            side: 1,
-            frame: 150,
-            gauge_drop_frame: 155,
-            level: 3,
-            critical_art: false,
-            gauge_before: 3.0,
-            gauge_after: 0.0,
-            context: SuperArtContext::Combo,
-            outcome: SuperArtOutcome::Hit,
-            contact_frame: Some(160),
-            damage: 0.0,
-            ko: false,
-            punished: false,
-            punished_damage: 0.0,
-            confidence: EventConfidence::High,
-            round_no: 1,
-        }];
+    fn empty_features_cannot_refine_a_damage_event() {
+        let (features, hp, observations, mut damage) = split_fixture(0.08, 800);
+        let evidence = build_attack_evidence(&observations, &damage, &rounds());
+        let empty_hp = [Vec::new(), Vec::new()];
 
-        attach_super_art_evidence(&mut evidence, &super_arts, &damage);
+        assert!(!refine_damage_with_attack_evidence(
+            &[],
+            &empty_hp,
+            &mut damage,
+            &evidence
+        ));
+        assert_eq!(damage.len(), 1);
+        assert_eq!(damage[0].start_frame, 10);
+        assert_eq!(damage[0].end_frame, 35);
+        assert!(!features.is_empty());
+        assert!(!hp[1].is_empty());
+    }
+
+    #[test]
+    fn attributes_the_damage_added_after_a_super_was_inserted() {
+        let (mut evidence, damage, super_art) = super_fixture();
+
+        attach_super_art_evidence(&mut evidence, &[super_art], &damage);
 
         assert_eq!(evidence.super_arts.len(), 1);
         assert_eq!(evidence.super_arts[0].combo_damage, 2600);
         assert_eq!(evidence.super_arts[0].marginal_damage, Some(2000));
         assert_eq!(evidence.super_arts[0].entry_scaling_percent, Some(40));
+        assert_eq!(evidence.super_arts[0].confidence, EventConfidence::High);
+    }
+
+    #[test]
+    fn an_unlinked_super_does_not_end_attachment() {
+        let (mut evidence, damage, valid) = super_fixture();
+        let mut unlinked = valid.clone();
+        unlinked.side = 2;
+        unlinked.frame = 50;
+
+        attach_super_art_evidence(&mut evidence, &[unlinked, valid], &damage);
+
+        assert_eq!(evidence.super_arts.len(), 1);
+        assert_eq!(evidence.super_arts[0].side, 1);
+    }
+
+    #[test]
+    fn a_link_without_a_sequence_does_not_end_attachment() {
+        let (mut evidence, mut damage_events, valid) = super_fixture();
+        let mut unsequenced = evidence.damage[0].clone();
+        unsequenced.damage_start_frame = 50;
+        unsequenced.sequence_indices.clear();
+        evidence.damage.insert(0, unsequenced);
+        damage_events.insert(0, damage(50, 0.1, 0.9));
+        let mut first = valid.clone();
+        first.frame = 50;
+
+        attach_super_art_evidence(&mut evidence, &[first, valid], &damage_events);
+
+        assert_eq!(evidence.super_arts.len(), 1);
+        assert_eq!(evidence.super_arts[0].super_frame, 150);
+    }
+
+    #[test]
+    fn incomplete_or_recovered_sequences_are_not_exact_super_damage() {
+        let (mut incomplete, damage, super_art) = super_fixture();
+        incomplete.sequences[0].complete = false;
+        attach_super_art_evidence(&mut incomplete, std::slice::from_ref(&super_art), &damage);
+        assert_eq!(incomplete.super_arts[0].marginal_damage, None);
+        assert_eq!(incomplete.super_arts[0].confidence, EventConfidence::Medium);
+
+        let (mut recovered, damage, super_art) = super_fixture();
+        recovered.sequences[0].recovered_from_max = true;
+        attach_super_art_evidence(&mut recovered, &[super_art], &damage);
+        assert_eq!(recovered.super_arts[0].marginal_damage, None);
+        assert_eq!(recovered.super_arts[0].confidence, EventConfidence::Medium);
+    }
+
+    #[test]
+    fn medium_damage_evidence_keeps_super_evidence_medium() {
+        let (mut evidence, damage, super_art) = super_fixture();
+        evidence.damage[0].confidence = EventConfidence::Medium;
+
+        attach_super_art_evidence(&mut evidence, &[super_art], &damage);
+
+        assert_eq!(evidence.super_arts[0].marginal_damage, Some(2000));
+        assert_eq!(evidence.super_arts[0].confidence, EventConfidence::Medium);
+    }
+
+    #[test]
+    fn a_super_after_the_final_combo_step_has_no_marginal_damage() {
+        let (mut evidence, damage, mut super_art) = super_fixture();
+        super_art.frame = 161;
+
+        attach_super_art_evidence(&mut evidence, &[super_art], &damage);
+
+        assert_eq!(evidence.super_arts[0].combo_damage, 2600);
+        assert_eq!(evidence.super_arts[0].marginal_damage, None);
     }
 }
 
@@ -769,6 +904,28 @@ mod scale_tests {
 
         assert_eq!(one[0], None, "一つの被弾から比率を決めている");
         assert!(two[0].is_some(), "二つあるのに推定していない");
+    }
+
+    #[test]
+    fn a_missing_early_assignment_does_not_end_scale_estimation() {
+        let scales = estimate_hp_scales(
+            &[None, Some(evidence(1000)), Some(evidence(1000))],
+            &[damage(0.1, 0.9), damage(0.1, 0.8), damage(0.1, 0.7)],
+        );
+
+        assert!(scales[0].is_some());
+    }
+
+    #[test]
+    fn an_invalid_early_sample_does_not_end_scale_estimation() {
+        let mut incomplete = evidence(1000);
+        incomplete.complete = false;
+        let scales = estimate_hp_scales(
+            &[Some(incomplete), Some(evidence(1000)), Some(evidence(1000))],
+            &[damage(0.1, 0.9), damage(0.1, 0.8), damage(0.1, 0.7)],
+        );
+
+        assert!(scales[0].is_some());
     }
 
     /// 推定は中央値。外れ値を一つ混ぜても引きずられない。
@@ -893,6 +1050,13 @@ mod scale_tests {
         let verdict = classify_consistency(&evidence(3000), &damage(0.1, 0.9), Some(10_000.0));
 
         assert_eq!(verdict, AttackDamageConsistency::Mismatch);
+    }
+
+    #[test]
+    fn a_reading_exactly_at_the_absolute_tolerance_is_consistent() {
+        let verdict = classify_consistency(&evidence(0), &damage(25.0 / 1024.0, 0.9), Some(1024.0));
+
+        assert_eq!(verdict, AttackDamageConsistency::Consistent);
     }
 
     /// 許容差は割合で決める。大きい数字ほど、読み取りのずれも大きい。

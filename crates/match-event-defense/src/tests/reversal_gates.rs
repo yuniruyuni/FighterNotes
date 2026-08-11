@@ -126,6 +126,37 @@ fn a_briefly_interrupted_invincibility_is_still_one_move() {
     assert_eq!(reversals[0].frame, 100);
 }
 
+#[test]
+fn invincibility_at_the_exact_merge_gap_edge_is_one_move() {
+    let length = 180;
+    let mut own = vec![MeterState::Free; length];
+    own[100..102].fill(MeterState::Invincible);
+    own[107..110].fill(MeterState::Invincible);
+    own[110..112].fill(MeterState::Active);
+    let damage = vec![DamageEvent {
+        victim: 1,
+        start_frame: 130,
+        pre_freeze_frame: 130,
+        end_frame: 145,
+        hp_before: 1.0,
+        hp_after: 0.76,
+        drop: 0.24,
+        round_no: 1,
+    }];
+
+    let reversals = extract(
+        own,
+        vec![MeterState::Free; length],
+        vec![],
+        damage,
+        vec![],
+        vec![],
+    );
+
+    assert_eq!(reversals.len(), 1);
+    assert_eq!(reversals[0].frame, 100);
+}
+
 /// 大きく離れた無敵は別の技。繋ぐと、二度撃ったことが一度になる。
 #[test]
 fn two_invincible_runs_far_apart_are_two_moves() {

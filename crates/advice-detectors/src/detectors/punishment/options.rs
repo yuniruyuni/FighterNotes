@@ -41,3 +41,32 @@ pub fn failed_option_text(character: Option<&str>, advantage: u32) -> String {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{failed_option_text, missed_option_text};
+
+    #[test]
+    fn unknown_characters_get_each_complete_general_fallback() {
+        assert_eq!(
+            missed_option_text(None, 12),
+            "この近距離で、発生が有利フレーム以下の技を反撃候補にします。まずは発生の速い技で確実に取る癖をつけましょう。"
+        );
+        assert_eq!(
+            failed_option_text(None, 12),
+            "この有利フレーム内に発生し、実戦と同じ距離に届く技があるかをトレモで確認しましょう。"
+        );
+    }
+
+    #[test]
+    fn known_character_options_use_the_character_and_advantage() {
+        let missed = missed_option_text(Some("LUKE"), 12);
+        let failed = failed_option_text(Some("LUKE"), 12);
+
+        assert!(missed.contains("有利 12F"));
+        assert!(missed.contains("威力"));
+        assert!(failed.contains("有利 12F"));
+        assert!(failed.contains("威力"));
+        assert_ne!(failed_option_text(Some("LUKE"), 0), failed);
+    }
+}

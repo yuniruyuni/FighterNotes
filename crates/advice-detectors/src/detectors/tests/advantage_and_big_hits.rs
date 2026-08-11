@@ -122,21 +122,30 @@ fn continuing_more_often_than_stopping_is_not_a_habit() {
 /// 分からないと、届く距離だったのかも判断できない。
 #[test]
 fn the_share_and_the_average_advantage_are_reported() {
-    let mut situations = vec![advantage(100, AdvantageOutcome::TurnLost, 0.15)];
-    situations[0].plus_frames = 6;
-    situations.push(continued(600));
+    let mut situations = vec![
+        advantage(100, AdvantageOutcome::TurnLost, 0.15),
+        advantage(400, AdvantageOutcome::Reset, 0.0),
+        continued(600),
+    ];
+    situations[0].plus_frames = 4;
+    situations[1].plus_frames = 8;
 
     let card =
         detect_advantage_abandoned(&events_with_advantage(situations), 1).expect("提示される");
 
     assert!(
-        card.description.contains("50%"),
+        card.description.contains("66%"),
         "止めた割合が出ていない: {}",
         card.description
     );
     assert!(
         card.description.contains("+6F"),
         "平均の有利幅が出ていない: {}",
+        card.description
+    );
+    assert!(
+        card.description.contains("継続できたのは 1 回"),
+        "継続できた回数が違う: {}",
         card.description
     );
 }

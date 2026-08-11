@@ -60,6 +60,31 @@ fn run_back_len_combines_reads_and_emitted_until_state_changes() {
 }
 
 #[test]
+fn run_back_len_stops_at_a_missing_frame() {
+    let mut tracker = tracker_at(5);
+    insert_read(&mut tracker, "left", 4, "active", 1.0, false);
+    insert_read(&mut tracker, "left", 2, "active", 1.0, false);
+
+    assert_eq!(
+        tracker.run_back_len("left"),
+        (Some("active".to_string()), 1)
+    );
+}
+
+#[test]
+fn run_back_len_does_not_resume_after_a_different_state() {
+    let mut tracker = tracker_at(6);
+    insert_read(&mut tracker, "left", 5, "active", 1.0, false);
+    insert_read(&mut tracker, "left", 4, "counter", 1.0, false);
+    insert_read(&mut tracker, "left", 3, "active", 1.0, false);
+
+    assert_eq!(
+        tracker.run_back_len("left"),
+        (Some("active".to_string()), 1)
+    );
+}
+
+#[test]
 fn digit_covered_handles_missing_wrapped_and_threshold_scores() {
     let mut observation = RowObs::empty();
     assert!(!MeterTracker::digit_covered(&observation, 0));

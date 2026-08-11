@@ -147,7 +147,7 @@ impl SlantedRoi<'_> {
         let x = self.column_x(column, row, slope_origin)?;
         let y = self.y_start.checked_add(row)?.checked_sub(self.strip_y)?;
         let index = (y * self.frame_width + x) * 4;
-        let pixel = self.rgba.get(index..index + 3)?;
+        let pixel = self.rgba.get(index..)?.first_chunk::<3>()?;
         Some([pixel[0] as f32, pixel[1] as f32, pixel[2] as f32])
     }
 }

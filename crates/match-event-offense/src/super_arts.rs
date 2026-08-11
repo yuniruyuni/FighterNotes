@@ -33,14 +33,14 @@ pub fn extract_super_arts(inputs: SuperArtInputs<'_>) -> Vec<SuperArtEvent> {
     } = inputs;
     let mut events = Vec::new();
     for side_index in 0..2 {
-        let mut previous: Option<(usize, f32, bool)> = None;
+        let mut previous: Option<(usize, f32)> = None;
         for (index, feature) in features.iter().enumerate() {
-            let (value, uncertain, ca_ready) = gauge(feature, side_index);
+            let (value, uncertain, _) = gauge(feature, side_index);
             if !feature.is_match_screen || uncertain {
                 continue;
             }
-            let Some((previous_index, previous_value, previous_ca)) = previous else {
-                previous = Some((index, value, ca_ready));
+            let Some((previous_index, previous_value)) = previous else {
+                previous = Some((index, value));
                 continue;
             };
             let before_level = stock_level(previous_value);
@@ -48,11 +48,12 @@ pub fn extract_super_arts(inputs: SuperArtInputs<'_>) -> Vec<SuperArtEvent> {
             if after_level >= before_level
                 || previous_value - value < crate::frame_features::MIN_SUPER_SPEND_DROP
             {
-                previous = Some((index, value, ca_ready));
+                previous = Some((index, value));
                 continue;
             }
 
             let level = (before_level - after_level).clamp(1, 3);
+            let previous_ca = gauge(&features[previous_index], side_index).2;
             let anchor = action_anchor(
                 features,
                 meter_state.get(side_index).map_or(&[], Vec::as_slice),
@@ -80,7 +81,7 @@ pub fn extract_super_arts(inputs: SuperArtInputs<'_>) -> Vec<SuperArtEvent> {
                     features,
                 ));
             }
-            previous = Some((index, value, ca_ready));
+            previous = Some((index, value));
         }
     }
     events.sort_by_key(|event| event.frame);
@@ -106,14 +107,14 @@ fn build_event(
 ) -> SuperArtEvent {
     let side = side_index as u8 + 1;
     let opponent = 3 - side;
-    let result_window_end = rounds
+    // `round_no` は直前に同じ `rounds` から得ている。存在しない場合の
+    // フォールバックは到達不能で、終端バウンドを曖昧にするだけになる。
+    let round_end = rounds
         .iter()
         .find(|round| round.round_no == round_no)
-        .map_or(anchor.frame.saturating_add(RESULT_WINDOW), |round| {
-            round
-                .end_frame
-                .min(anchor.frame.saturating_add(RESULT_WINDOW))
-        });
+        .expect("round number was selected from this round list")
+        .end_frame;
+    let result_window_end = round_end.min(anchor.frame.saturating_add(RESULT_WINDOW));
     let contact_window_end = result_window_end.min(anchor.frame.saturating_add(CONTACT_WINDOW));
     let contact = contacts
         .iter()

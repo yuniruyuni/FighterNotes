@@ -82,6 +82,7 @@ fn a_single_punished_reversal_stays_an_observation() {
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Observation, "一度で診断にしている");
     assert_eq!(card.hp_lost, Some(0.25));
+    assert!((card.severity - 0.27).abs() < 1e-6);
 }
 
 /// 繰り返していれば、同じ防御回答に偏っている疑いとして診断にする。
@@ -94,6 +95,7 @@ fn repeated_punished_reversals_become_a_diagnosis() {
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Diagnosis);
     assert!((card.hp_lost.expect("損失がある") - 0.45).abs() < 1e-6);
+    assert!((card.severity - 0.49).abs() < 1e-6);
     assert_eq!(card.evidence.len(), 2);
 }
 

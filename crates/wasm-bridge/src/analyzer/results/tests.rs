@@ -48,7 +48,10 @@ fn no_input_rows_at_all_cannot_be_used() {
 
 // ── 解析を組み立てる道筋 ─────────────────────────────────────────────────
 
-use video_analyzer::{FightMarker, FrameFeatures, InputDir, InputRow};
+use video_analyzer::{
+    AttackAttribute, AttackInfoObservation, AttackInfoSide, FightMarker, FightObservation,
+    FrameFeatures, InputDir, InputRow,
+};
 
 /// 1 フレーム分の観測。
 fn feature(frame_index: u32, own_hp: f32) -> FrameFeatures {
@@ -99,6 +102,16 @@ fn marker(first_frame: u32) -> FightMarker {
         last_frame: first_frame + 10,
         peak_frame: first_frame + 5,
         peak_score: 1.0,
+    }
+}
+
+fn attack_info_side(last_damage: u32, combo_damage: u32) -> AttackInfoSide {
+    AttackInfoSide {
+        last_damage,
+        scaling_percent: 100,
+        combo_damage,
+        max_combo_damage: combo_damage,
+        attribute: AttackAttribute::Middle,
     }
 }
 
@@ -237,10 +250,78 @@ fn the_analysis_is_only_built_once() {
 #[test]
 fn the_fight_markers_are_detected_when_they_are_still_unknown() {
     let mut analyzer = analyzer_with_features("p1");
+    analyzer.fight_observations = vec![
+        FightObservation {
+            frame: 100,
+            score: 0.7,
+        },
+        FightObservation {
+            frame: 104,
+            score: 0.8,
+        },
+        FightObservation {
+            frame: 108,
+            score: 0.75,
+        },
+    ];
+
+    analyzer.ensure_fight_markers();
+
+    assert_eq!(
+        analyzer.fight_markers,
+        Some(vec![FightMarker {
+            first_frame: 100,
+            last_frame: 108,
+            peak_frame: 104,
+            peak_score: 0.8,
+        }]),
+        "観測から演出区間を組み立てていない"
+    );
+}
+
+/// ローカル tracker の開いた区間は、解析直前に閉じてからイベント層へ渡す。
+/// さらに marker 無しの互換経路でも、その timeline を `Some` で渡す。
+#[test]
+fn the_local_meter_is_finished_and_used_on_the_fallback_path() {
+    use frame_meter::{BrightClass, CellState, RowObs};
+
+    let row = |edge: i32, state: CellState| {
+        let mut observation = RowObs::empty();
+        observation.v.fill(100.0);
+        observation.bright.fill(BrightClass::Fresh);
+        observation.states.fill(state);
+        observation.fresh_edge = edge;
+        observation
+    };
+
+    let mut analyzer = analyzer_with_features("p1");
+    analyzer.fight_markers = Some(vec![marker(50)]);
+    analyzer.input_rows = (0..analyzer.features.len())
+        .map(|_| (readable_row(), readable_row()))
+        .collect();
+    for video_frame in 200..=211 {
+        analyzer.tracker.update(
+            video_frame,
+            row(5, CellState::Active),
+            row(5, CellState::Stun),
+        );
+    }
 
     analyzer.ensure_events().expect("進む");
 
-    assert!(analyzer.fight_markers.is_some(), "演出を探していない");
+    assert_eq!(
+        analyzer.tracker.left.segments[0].entries[0].state, "active",
+        "開いた tracker 区間を確定していない"
+    );
+    assert!(
+        !analyzer
+            .events
+            .as_ref()
+            .expect("解析がある")
+            .contacts
+            .is_empty(),
+        "fallback 経路で確定済み timeline を渡していない"
+    );
 }
 
 /// 外から渡されたフレームメーターを使う。分割セッションでは、メーターを
@@ -305,11 +386,69 @@ fn an_imported_meter_is_used_instead_of_the_local_tracker() {
 fn an_imported_attack_info_replaces_the_tracked_one() {
     let mut analyzer = analyzer_with_features("p1");
     analyzer.fight_markers = Some(vec![marker(50), marker(250)]);
-    analyzer.imported_attack_info = Some(Vec::new());
+    let idle = attack_info_side(0, 0);
+    analyzer.imported_attack_info = Some(vec![
+        AttackInfoObservation {
+            frame_index: 198,
+            p1: idle.clone(),
+            p2: idle.clone(),
+        },
+        AttackInfoObservation {
+            frame_index: 202,
+            p1: idle.clone(),
+            p2: attack_info_side(800, 800),
+        },
+        AttackInfoObservation {
+            frame_index: 212,
+            p1: idle.clone(),
+            p2: attack_info_side(600, 1_400),
+        },
+        AttackInfoObservation {
+            frame_index: 260,
+            p1: idle.clone(),
+            p2: idle,
+        },
+    ]);
 
     analyzer.ensure_events().expect("進む");
 
-    assert!(analyzer.events.is_some());
+    assert!(
+        !analyzer
+            .events
+            .as_ref()
+            .expect("解析がある")
+            .attack_evidence
+            .sequences
+            .is_empty(),
+        "持ち込んだ中央攻撃表示をイベント層へ渡していない"
+    );
+}
+
+/// FIGHT 直後の raw HP は画面左右の値なので、P2 視点では右側を自分の
+/// 開始 HP として使う。空文字（P1 fallback）へ落ちても同じにならない列で固定する。
+#[test]
+fn the_context_side_selects_the_raw_health_at_a_fight_opening() {
+    let mut analyzer = Analyzer::new("p2");
+    analyzer.features = (0..120)
+        .map(|frame_index| {
+            let mut observed = feature(frame_index, if frame_index < 20 { 0.4 } else { 0.75 });
+            observed.left_hp_raw = 0.4;
+            observed.right_hp_raw = if (20..40).contains(&frame_index) {
+                1.0
+            } else {
+                0.75
+            };
+            observed
+        })
+        .collect();
+    analyzer.fight_markers = Some(vec![marker(20), marker(80)]);
+
+    analyzer.ensure_events().expect("進む");
+
+    assert_eq!(
+        analyzer.features[45].own_hp, 0.75,
+        "P2 の自 HP に左側 raw HP を使っている"
+    );
 }
 
 /// 入力の補修結果をそのまま持ち出す。ブラウザ側の表示はこの JSON を読む。

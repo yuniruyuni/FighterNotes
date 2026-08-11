@@ -114,3 +114,57 @@ impl SpatialExtractor {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{blank_frame, hints, rect, test_config, HEIGHT, WIDTH};
+
+    #[test]
+    fn dimension_validation_stores_both_axes_and_reports_each_change() {
+        let mut extractor = SpatialExtractor::new(SpatialConfig::default());
+        assert!(extractor.validate_dimensions(320, 180).is_ok());
+        assert_eq!(extractor.dimensions, Some((320, 180)));
+        assert!(matches!(
+            extractor.validate_dimensions(321, 180),
+            Err(SpatialError::DimensionsChanged {
+                expected_width: 320,
+                expected_height: 180,
+                actual_width: 321,
+                actual_height: 180,
+            })
+        ));
+        assert!(matches!(
+            extractor.validate_dimensions(320, 181),
+            Err(SpatialError::DimensionsChanged {
+                expected_width: 320,
+                expected_height: 180,
+                actual_width: 320,
+                actual_height: 181,
+            })
+        ));
+    }
+
+    #[test]
+    fn public_extraction_excludes_small_motion_near_either_tracked_actor() {
+        for x in [76, 244] {
+            let mut extractor = SpatialExtractor::new(test_config());
+            let first = blank_frame();
+            extractor
+                .observe_rgba(10, &first, WIDTH, HEIGHT, hints())
+                .unwrap();
+
+            let mut second = first.clone();
+            rect(&mut second, x, 88, 8, 8, [240, 90, 20]);
+            let observed = extractor
+                .observe_rgba(11, &second, WIDTH, HEIGHT, SpatialHints::default())
+                .unwrap();
+
+            assert!(
+                observed.projectile_candidates.is_empty(),
+                "motion beside the actor at x={x} was treated as a projectile: {:?}",
+                observed.projectile_candidates
+            );
+        }
+    }
+}

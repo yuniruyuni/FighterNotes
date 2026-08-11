@@ -3,14 +3,18 @@ use crate::match_events::EventConfidence;
 use crate::{AdviceCard, AdviceKind, EvidenceClip, OBSERVATION_REVIEW_CAVEAT};
 
 pub fn build(summary: &Summary<'_>, option_text: &str) -> AdviceCard {
+    let kind = if summary.repeated {
+        AdviceKind::Diagnosis
+    } else {
+        AdviceKind::Observation
+    };
     AdviceCard {
         id: "punish_fail".to_string(),
-        kind: if summary.repeated { AdviceKind::Diagnosis } else { AdviceKind::Observation },
+        kind,
         confidence: EventConfidence::High,
-        title: if summary.repeated {
-            "同じ反撃入力が繰り返し届いていない"
-        } else {
-            "ガード後の反撃が届かなかった場面"
+        title: match kind {
+            AdviceKind::Diagnosis => "同じ反撃入力が繰り返し届いていない",
+            _ => "ガード後の反撃が届かなかった場面",
         }.to_string(),
         severity: summary.hp_lost + 0.03 * summary.failures.len() as f32,
         hp_lost: Some(summary.hp_lost),
@@ -26,10 +30,9 @@ pub fn build(summary: &Summary<'_>, option_text: &str) -> AdviceCard {
                 summary.failures.len(), summary.success_count, summary.hp_lost * 100.0, option_text
             )
         },
-        practice: if summary.repeated {
-            "相手の後隙が大きい技を実戦と同じ距離で記録し、密着と先端で使う反撃を分けます。繰り返し届かなかった入力の代わりに、確実に届く技を10回連続で決めましょう。"
-        } else {
-            "クリップと同じ距離をトレーニングモードで再現し、実際に確定して届く技を確認します。距離依存の単発空振りなら、癖ではなく場面固有の技選択として扱います。"
+        practice: match kind {
+            AdviceKind::Diagnosis => "相手の後隙が大きい技を実戦と同じ距離で記録し、密着と先端で使う反撃を分けます。繰り返し届かなかった入力の代わりに、確実に届く技を10回連続で決めましょう。",
+            _ => "クリップと同じ距離をトレーニングモードで再現し、実際に確定して届く技を確認します。距離依存の単発空振りなら、癖ではなく場面固有の技選択として扱います。",
         }.to_string(),
         evidence: summary.failures.iter().map(|punish| {
             let tail = if punish.punished_drop > 0.0 {

@@ -7,7 +7,10 @@
 //! 画面暗転中はグリフ全体が沈む。明るい芯が見えるかどうかで、
 //! 「読めなかった」と「そもそも桁が無い」を分ける。
 
-use super::super::digits::{match_digit_gray, read_count};
+use super::super::digits::{
+    digit_box_has_trace, digit_evidence, digit_match_is_accepted, match_digit_gray,
+    rank_digit_candidate, read_count, shifted_coordinate, variances_are_positive,
+};
 use super::super::*;
 
 const WHITE_THRESHOLD: u8 = 210;
@@ -97,6 +100,43 @@ impl Panel {
 
 // ── 1 桁を見分ける ───────────────────────────────────────────────────────
 
+#[test]
+fn digit_helpers_preserve_coordinates_rankings_and_exact_thresholds() {
+    assert_eq!(shifted_coordinate(10, 3, 2), 15);
+    assert_eq!(shifted_coordinate(1, 1, -5), 0);
+    assert!(variances_are_positive(1, 1));
+    assert!(!variances_are_positive(0, 1));
+    assert!(!variances_are_positive(1, 0));
+
+    let best = (2, 5);
+    let second = (3, 9);
+    assert_eq!(rank_digit_candidate(best, second, (4, 4)), ((4, 4), best));
+    assert_eq!(rank_digit_candidate(best, second, (4, 5)), (best, (4, 5)));
+    assert_eq!(rank_digit_candidate(best, second, (4, 7)), (best, (4, 7)));
+    assert_eq!(rank_digit_candidate(best, second, (4, 9)), (best, second));
+
+    assert!(!digit_box_has_trace(false, 11));
+    assert!(digit_box_has_trace(false, 12));
+    assert!(digit_box_has_trace(true, 0));
+    assert!(digit_match_is_accepted(28, 0));
+    assert!(digit_match_is_accepted(40, 15));
+    assert!(!digit_match_is_accepted(29, 14));
+    assert!(!digit_match_is_accepted(41, 15));
+}
+
+#[test]
+fn digit_evidence_uses_strict_brightness_and_box_boundaries() {
+    let mut panel = Panel::new();
+    panel.shade(ONES_X, 0, 231);
+    panel.shade(ONES_X + 1, 0, 230);
+    panel.shade(ONES_X + 2, 0, 181);
+    panel.shade(ONES_X + 3, 0, 180);
+    panel.shade(ONES_X + DIGIT_W, 0, 255);
+    panel.shade(ONES_X, DIGIT_H, 255);
+
+    assert_eq!(digit_evidence(&panel.frame(), ONES_X, 0), (1, 3));
+}
+
 /// 手本そのものを描けば、その数字として読める。
 #[test]
 fn every_digit_reads_back_from_its_own_glyph() {
@@ -125,6 +165,18 @@ fn a_digit_shifted_by_one_pixel_still_reads() {
             "{offset} ピクセルのずれで読めていない"
         );
     }
+}
+
+#[test]
+fn a_digit_shifted_down_by_one_pixel_still_reads() {
+    let mut panel = Panel::new();
+    for y in 0..DIGIT_H {
+        for x in 0..DIGIT_W {
+            panel.shade(ONES_X + x, y + 1, DIGIT_NCC[7].1[y][x]);
+        }
+    }
+
+    assert_eq!(match_digit_gray(&panel.frame(), ONES_X, 0).0, 7);
 }
 
 /// 濃淡の無い箱は、どの数字とも言えない。
@@ -231,6 +283,53 @@ fn the_search_stops_at_the_left_edge_of_the_panel() {
 
     assert_eq!(count, Some(6));
     assert!(!uncertain);
+}
+
+#[test]
+fn a_digit_whose_ones_column_is_at_zero_is_read() {
+    let mut panel = Panel::new();
+    panel.draw_digit(6, 0);
+
+    assert_eq!(read_count(&panel.frame(), 0, 0).0, Some(6));
+}
+
+#[test]
+fn a_rejected_weak_box_stops_before_a_later_digit() {
+    let mut panel = Panel::new();
+    panel.draw_at_position(4, 0);
+    let x0 = ONES_X - DIGIT_W;
+    for y in 0..DIGIT_H {
+        for x in 0..DIGIT_W {
+            panel.shade(x0 + x, y, if (x + y) % 2 == 0 { 200 } else { 190 });
+        }
+    }
+    panel.draw_at_position(3, 2);
+
+    assert_eq!(panel.read().0, Some(4));
+}
+
+#[test]
+fn count_score_is_the_sum_of_the_accepted_digit_scores() {
+    let mut panel = Panel::new();
+    panel.draw_digit(8, ONES_X);
+    let mut changed = 0;
+    for y in 0..DIGIT_H {
+        for x in 0..DIGIT_W {
+            if DIGIT_NCC[8].0[y] & (1 << x) != 0 && changed < 4 {
+                let original = DIGIT_NCC[8].1[y][x];
+                panel.shade(ONES_X + x, y, 255 - original);
+                changed += 1;
+            }
+        }
+    }
+    let (digit, score, _) = match_digit_gray(&panel.frame(), ONES_X, 0);
+    assert_eq!(digit, 8);
+    assert!(score > 0);
+
+    let (count, uncertain, total_score) = panel.read();
+    assert_eq!(count, Some(8));
+    assert!(!uncertain);
+    assert_eq!(total_score, score);
 }
 
 // ── 桁があるかどうかの見分け ─────────────────────────────────────────────

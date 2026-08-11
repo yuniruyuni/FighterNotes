@@ -1,6 +1,9 @@
 use frame_meter::{CellState, RowObs, CELL_COUNT};
 
-use crate::tracker::reading::slab::{compare_columns, mean_absolute_difference};
+use crate::{
+    calibration::{SLAB_SLIDE_MAD_MAX, SLAB_STATIC_MAD_MAX},
+    tracker::reading::slab::{compare_columns, mean_absolute_difference},
+};
 
 use super::{insert_read, tracker_at};
 
@@ -46,6 +49,14 @@ fn compare_columns_selects_requested_wrapped_cells_and_common_width() {
         compare_columns(&current, 2, &previous, 0, 5, &[0], &[0]),
         f64::MAX
     );
+
+    let mut current = vec![0.0; CELL_COUNT];
+    let previous = vec![0.0; CELL_COUNT];
+    current[5] = 7.0;
+    assert_eq!(
+        compare_columns(&current, 1, &previous, 1, 5, &[0], &[0]),
+        7.0
+    );
 }
 
 #[test]
@@ -65,6 +76,29 @@ fn resolve_slab_detects_sliding_and_static_columns() {
     let previous = observation_with_columns(static_columns, 1);
     assert_eq!(
         tracker.resolve_slab(&current, Some(&previous), 20, "left"),
+        "empty"
+    );
+}
+
+#[test]
+fn resolve_slab_includes_exact_slide_and_static_thresholds() {
+    let tracker = tracker_at(20);
+    let current = observation_with_columns(vec![0.0; CELL_COUNT], 1);
+
+    let mut slide_previous = vec![0.0; CELL_COUNT];
+    slide_previous[17..20].fill(SLAB_SLIDE_MAD_MAX as f32);
+    let slide_previous = observation_with_columns(slide_previous, 1);
+    assert_eq!(
+        tracker.resolve_slab(&current, Some(&slide_previous), 20, "left"),
+        "empty"
+    );
+
+    let mut static_previous = vec![0.0; CELL_COUNT];
+    static_previous[17] = 30.0;
+    static_previous[18..20].fill(SLAB_STATIC_MAD_MAX as f32);
+    let static_previous = observation_with_columns(static_previous, 1);
+    assert_eq!(
+        tracker.resolve_slab(&current, Some(&static_previous), 20, "left"),
         "empty"
     );
 }
@@ -95,4 +129,20 @@ fn resolve_slab_falls_back_to_run_then_previous_cell_state() {
         "other"
     );
     assert_eq!(tracker.resolve_slab(&current, None, 20, "left"), "other");
+}
+
+#[test]
+fn resolve_slab_returns_other_when_either_column_sample_is_missing() {
+    let tracker = tracker_at(20);
+    let with_columns = observation_with_columns(vec![0.0; CELL_COUNT], 1);
+    let without_columns = RowObs::empty();
+
+    assert_eq!(
+        tracker.resolve_slab(&with_columns, Some(&without_columns), 20, "left"),
+        "other"
+    );
+    assert_eq!(
+        tracker.resolve_slab(&without_columns, Some(&with_columns), 20, "left"),
+        "other"
+    );
 }

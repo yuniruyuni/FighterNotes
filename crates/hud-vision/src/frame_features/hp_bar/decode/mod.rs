@@ -36,7 +36,7 @@ pub(crate) fn hp_bar_decode(
     let roi = SlantedRoi {
         rgba,
         frame_width: width as usize,
-        x: x1..x2,
+        x: std::ops::Range { start: x1, end: x2 },
         y_start: y1,
         height: roi_h,
         strip_y: y_strip_start,
@@ -51,24 +51,35 @@ pub(crate) fn hp_bar_decode(
     } else {
         HpFillHue::Blue
     };
-    let classify = |column: usize| classify_hp_col(&roi, column, hue);
-    let col_colors: Vec<HpColColor> = if is_p1 {
-        (0..roi_w).rev().map(classify).collect()
-    } else {
-        (0..roi_w).map(classify).collect()
-    };
+    let mut column = 0usize;
+    let mut col_colors = Vec::new();
+    col_colors.resize_with(roi_w, || {
+        let color = classify_hp_col(&roi, column, hue);
+        column += 1;
+        color
+    });
+    if is_p1 {
+        col_colors.reverse();
+    }
 
     let zones = segment_zones(&col_colors);
     let d = decode_hp_zones(&zones, roi_w);
 
-    // アンカー相対 index → 画面 cy 逆変換（デバッグ出力互換）
-    let to_cy = |a: usize| if is_p1 { roi_w - 1 - a } else { a };
+    let [fill_edge_cy, damage_left_cy] =
+        anchors_to_cy([d.fill_edge_a, d.damage_left_a], roi_w, hue);
     HpBarDecode {
         fill_ratio: d.fill_ratio,
         orange_fill: d.orange_fill,
         uncertain: d.uncertain,
-        fill_edge_cy: d.fill_edge_a.map(to_cy),
-        damage_left_cy: d.damage_left_a.map(to_cy),
+        fill_edge_cy,
+        damage_left_cy,
+    }
+}
+
+fn anchors_to_cy(anchors: [Option<usize>; 2], roi_w: usize, hue: HpFillHue) -> [Option<usize>; 2] {
+    match hue {
+        HpFillHue::Red => anchors.map(|anchor| anchor.map(|anchor| roi_w - 1 - anchor)),
+        HpFillHue::Blue => anchors,
     }
 }
 
@@ -83,4 +94,21 @@ pub(crate) fn hp_fill_ratio_impl(
     // fill_ratio / uncertain ともに decode から取得する。
     let decode = hp_bar_decode(rgba, width, height, side, y_strip_start);
     (decode.fill_ratio, decode.uncertain)
+}
+
+#[cfg(test)]
+mod coordinate_tests {
+    use super::{anchors_to_cy, HpFillHue};
+
+    #[test]
+    fn anchor_coordinates_mirror_only_for_player_one() {
+        assert_eq!(
+            anchors_to_cy([Some(20), Some(30)], 100, HpFillHue::Red),
+            [Some(79), Some(69)]
+        );
+        assert_eq!(
+            anchors_to_cy([Some(20), None], 100, HpFillHue::Blue),
+            [Some(20), None]
+        );
+    }
 }

@@ -34,10 +34,9 @@ pub fn detect_teleport_defense(events: &MatchEvents, own: u8) -> Option<AdviceCa
         id: "teleport_defense".to_string(),
         kind: AdviceKind::Diagnosis,
         confidence: EventConfidence::High,
-        title: if missed.len() == 1 {
-            "裸テレポートを迎撃できなかった場面"
-        } else {
-            "裸テレポートへの迎撃が遅れている"
+        title: match missed.len() {
+            1 => "裸テレポートを迎撃できなかった場面",
+            _ => "裸テレポートへの迎撃が遅れている",
         }
         .to_string(),
         severity: hp_lost + 0.02 * missed.len() as f32,

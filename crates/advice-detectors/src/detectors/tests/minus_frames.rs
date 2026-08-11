@@ -115,6 +115,7 @@ fn a_single_counter_hit_stays_an_observation() {
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Observation, "一度で偏りと呼んでいる");
     assert_eq!(card.hp_lost, Some(0.12));
+    assert!((card.severity - 0.12).abs() < 1e-6);
 }
 
 /// 機会の大半で同じ回答を選び、何度も狩られていれば偏り。
@@ -155,6 +156,7 @@ fn choosing_the_same_answer_almost_every_time_is_a_bias() {
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Diagnosis, "偏りと呼べていない");
     assert!((card.hp_lost.expect("損失がある") - 0.22).abs() < 1e-6);
+    assert!((card.severity - 0.24).abs() < 1e-6);
 }
 
 /// 同じ回数押していても、機会の方が多ければ偏りではない。分母を
@@ -463,6 +465,7 @@ fn a_single_countered_throw_stays_an_observation() {
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Observation);
     assert_eq!(card.hp_lost, Some(0.20));
+    assert!((card.severity - 0.20).abs() < 1e-6);
 }
 
 /// 投げ側も、機会の大半で選んで何度も狩られていれば偏り。
@@ -492,6 +495,7 @@ fn choosing_the_throw_almost_every_time_is_a_bias() {
 
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Diagnosis);
+    assert!((card.severity - 0.37).abs() < 1e-6);
 }
 
 /// 投げ側も、一度きりと偏りで文面を書き分ける。
@@ -562,6 +566,32 @@ fn without_recorded_chances_the_presses_are_the_denominator() {
     );
 }
 
+/// 機会イベントが無い場合は、別の回答を含む観測済みの押下を分母にする。
+#[test]
+fn every_observed_press_is_used_by_the_fallback_denominator() {
+    let events = events_with(
+        vec![
+            press(
+                100,
+                DefensiveActionKind::Strike,
+                MinusPressOutcome::CounterHit,
+                0.12,
+            ),
+            press(300, DefensiveActionKind::Throw, MinusPressOutcome::Won, 0.0),
+            press(500, DefensiveActionKind::Throw, MinusPressOutcome::Won, 0.0),
+        ],
+        vec![],
+    );
+
+    let card = detect_press_while_minus(&events, 1).expect("提示される");
+
+    assert!(
+        card.description.contains("判断 3 回中、1 回（33%）"),
+        "観測済みの押下を分母にしていない: {}",
+        card.description
+    );
+}
+
 /// 記録された機会が選んだ回数より少ない場合でも、選択率が 100% を
 /// 超えてはいけない。
 #[test]
@@ -587,6 +617,29 @@ fn the_share_never_exceeds_all_the_chances() {
     assert!(
         !card.description.contains("200%"),
         "選択率が 100% を超えている: {}",
+        card.description
+    );
+}
+
+/// 投げカードでも、選んだ件数より機会の分母を小さくしない。
+#[test]
+fn throw_selections_set_the_minimum_opportunity_count() {
+    let presses = vec![
+        press(
+            100,
+            DefensiveActionKind::Throw,
+            MinusPressOutcome::CounterHit,
+            0.12,
+        ),
+        press(300, DefensiveActionKind::Throw, MinusPressOutcome::Won, 0.0),
+    ];
+
+    let card = detect_throw_while_minus(&events_with(presses, vec![other_answer(100)]), 1)
+        .expect("提示される");
+
+    assert!(
+        card.description.contains("判断 2 回中、2 回（100%）"),
+        "選択数より小さい分母を使っている: {}",
         card.description
     );
 }
@@ -727,6 +780,9 @@ fn the_weight_follows_the_health_lost_then_how_often_it_was_chosen() {
     );
     assert_eq!(light.hp_lost, Some(0.20));
     assert_eq!(heavy.hp_lost, Some(0.30));
+    assert!((light.severity - 0.20).abs() < 1e-6);
+    assert!((repeated.severity - 0.22).abs() < 1e-6);
+    assert!((heavy.severity - 0.30).abs() < 1e-6);
 }
 
 /// 偏りと単発では、見出しだけでなく次にやることも変わる。

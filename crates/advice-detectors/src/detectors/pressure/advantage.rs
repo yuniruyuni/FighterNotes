@@ -28,6 +28,11 @@ pub fn detect_advantage_abandoned(events: &MatchEvents, own: u8) -> Option<Advic
         return None;
     }
     let biased = is_biased(opportunities.len(), abandoned.len(), losses.len());
+    let kind = if biased {
+        AdviceKind::Diagnosis
+    } else {
+        AdviceKind::Observation
+    };
     let hp_lost: f32 = losses.iter().map(|event| event.drop).sum();
     let continued = opportunities.len() - abandoned.len();
     let abandoned_percent = abandoned.len() * 100 / opportunities.len();
@@ -35,22 +40,17 @@ pub fn detect_advantage_abandoned(events: &MatchEvents, own: u8) -> Option<Advic
         / abandoned.len() as f32;
     Some(AdviceCard {
         id: "advantage_abandoned".to_string(),
-        kind: if biased {
-            AdviceKind::Diagnosis
-        } else {
-            AdviceKind::Observation
-        },
+        kind,
         confidence: EventConfidence::High,
-        title: if biased {
-            "ガードさせて有利を取った後に攻めを継続できていない"
-        } else {
-            "有利フレームを取った後にターンを渡した場面"
+        title: match kind {
+            AdviceKind::Diagnosis => "ガードさせて有利を取った後に攻めを継続できていない",
+            _ => "有利フレームを取った後にターンを渡した場面",
         }
         .to_string(),
         severity: hp_lost + 0.01 * losses.len() as f32,
         hp_lost: Some(hp_lost),
-        description: if biased {
-            format!(
+        description: match kind {
+            AdviceKind::Diagnosis => format!(
                 "入力まで確認できた有利フレームの機会 {} 回中、{} 回（{}%）で次の攻撃を始めていません（平均 +{:.0}F）。うち {} 回はそのまま相手に攻め返され、合計 {:.0}% の HP を失いました（攻めを継続できたのは {} 回）。有利を取った直後に何もしない選択へ偏っており、相手に主導権を戻しています。",
                 opportunities.len(),
                 abandoned.len(),
@@ -59,9 +59,8 @@ pub fn detect_advantage_abandoned(events: &MatchEvents, own: u8) -> Option<Advic
                 losses.len(),
                 hp_lost * 100.0,
                 continued
-            )
-        } else {
-            format!(
+            ),
+            _ => format!(
                 "入力まで確認できた有利フレームの機会 {} 回中、{} 回（{}%）で次の攻撃を始めず、そのうち {} 回、合計 {:.0}% 被弾しています（平均 +{:.0}F、攻めを継続できたのは {} 回）。距離を取り直す・ゲージを回復する意図があった場合もあるため、この件数だけでは攻めの止まる癖とは{OBSERVATION_REVIEW_CAVEAT}。",
                 opportunities.len(),
                 abandoned.len(),
@@ -70,12 +69,11 @@ pub fn detect_advantage_abandoned(events: &MatchEvents, own: u8) -> Option<Advic
                 hp_lost * 100.0,
                 average_plus,
                 continued
-            )
+            ),
         },
-        practice: if biased {
-            "該当クリップと同じ技をガードさせた状況をトレーニングで作り、そこから繋がる打撃と投げを1つずつ決めておきます。有利を確認したら必ずどちらかを出す、を先に体に入れてから選択肢を増やしましょう。"
-        } else {
-            "クリップで、有利を取った時点の距離とドライブゲージを確認します。離れていて届かない・回復を優先したなら問題ありません。密着で止まっている場合だけ、その状況からの攻め継続を1つ用意しましょう。"
+        practice: match kind {
+            AdviceKind::Diagnosis => "該当クリップと同じ技をガードさせた状況をトレーニングで作り、そこから繋がる打撃と投げを1つずつ決めておきます。有利を確認したら必ずどちらかを出す、を先に体に入れてから選択肢を増やしましょう。",
+            _ => "クリップで、有利を取った時点の距離とドライブゲージを確認します。離れていて届かない・回復を優先したなら問題ありません。密着で止まっている場合だけ、その状況からの攻め継続を1つ用意しましょう。",
         }
         .to_string(),
         evidence: losses

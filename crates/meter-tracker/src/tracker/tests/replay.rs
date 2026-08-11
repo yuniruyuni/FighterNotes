@@ -32,12 +32,14 @@ fn reset_replay_rewinds_old_data_and_replays_divergent_window() {
         insert_read(&mut tracker, "right", absolute, "stun", 1.0, false);
         tracker.dwell.insert(absolute, [absolute, 20]);
     }
+    tracker.dwell.get_mut(&6).unwrap()[1] = 11;
     tracker.video_map.insert(10, (0, 5));
     tracker.video_map.insert(11, (0, 6));
     tracker.video_map.insert(12, (0, 7));
 
     let mut observation = RowObs::empty();
     observation.states.fill(CellState::Counter);
+    observation.rescued.fill(true);
     tracker.window = vec![
         WinEntry {
             vf: 10,
@@ -78,6 +80,8 @@ fn reset_replay_rewinds_old_data_and_replays_divergent_window() {
         [5, 6]
     );
     assert_eq!(old_entries[1].video_frame_last, 10);
+    assert_eq!(tracker.reads["left"][&19].0, "counter");
+    assert_eq!(tracker.reads["left"][&20].0, "counter");
     assert_eq!(
         tracker.right.segments[0]
             .entries

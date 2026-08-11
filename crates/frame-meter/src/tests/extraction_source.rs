@@ -69,3 +69,40 @@ fn row_source_does_not_read_an_incomplete_rgba_pixel() {
 
     assert!(row.bgr.iter().all(|pixel| *pixel == [0; 3]));
 }
+
+#[test]
+fn row_source_uses_the_exact_global_column_and_rgba_channels() {
+    let width = 192usize;
+    let height = 108usize;
+    let mut rgba = vec![0; width * height * 4];
+    for row in 0..height {
+        for column in 0..width {
+            let index = (row * width + column) * 4;
+            rgba[index..index + 4].copy_from_slice(&[
+                column as u8,
+                row as u8,
+                (column ^ row) as u8,
+                255,
+            ]);
+        }
+    }
+    let row = RowSource::new(&rgba, width as u32, height as u32, 0)
+        .read_row(796, 834, &[], &[])
+        .unwrap();
+
+    assert_eq!(row.bgr[0], [35 ^ 79, 79, 35]);
+    assert_eq!(row.bgr[1], [36 ^ 79, 79, 36]);
+}
+
+#[test]
+fn reference_rows_scale_round_deduplicate_and_clamp() {
+    let width = 480;
+    let height = 270;
+    let rgba = solid_rgba(width, height, [10, 20, 30, 255]);
+    let row = RowSource::new(&rgba, width as u32, height as u32, 0)
+        .read_row(796, 834, &[0, 6, 13, 20, 26], &[])
+        .unwrap();
+
+    assert_eq!(row.patch_height, 7);
+    assert_eq!(row.region1_rows, [0, 2, 4, 5, 6]);
+}

@@ -36,13 +36,14 @@ fn own_super_arts_are_counted_by_level_and_critical_art() {
     events.super_arts.push(super_art(300, 1, 2, false));
     events.super_arts.push(super_art(500, 1, 3, false));
     events.super_arts.push(super_art(700, 1, 3, true));
+    events.super_arts.push(super_art(900, 1, 3, true));
 
     let stats = build_tactic_stats(&[], &events, 1, 2);
 
     assert_eq!(stats.sa1_used, 1);
     assert_eq!(stats.sa2_used, 1);
     assert_eq!(stats.sa3_used, 1);
-    assert_eq!(stats.ca_used, 1, "CA は SA3 と別に数える");
+    assert_eq!(stats.ca_used, 2, "CA は SA3 と別に数える");
 }
 
 /// 相手の SA も同じ粒度で数える。自分側と混ざると「撃たれた回数」と

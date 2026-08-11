@@ -10,10 +10,10 @@ pub fn confirm_execution(
     press: &InputSegment,
     damage: &DamageEvent,
 ) -> Option<bool> {
-    if events.meter_state[0].is_empty() {
+    let state = &events.meter_state[own_index];
+    if state.is_empty() {
         return Some(false);
     }
-    let state = &events.meter_state[own_index];
     let confidence = &events.meter_confidence[own_index];
     let reliable = |frame: usize| {
         confidence.is_empty()
@@ -49,9 +49,6 @@ pub fn is_neutral_or_counterplay(
     press: &InputSegment,
     damage: &DamageEvent,
 ) -> bool {
-    if events.meter_state[0].is_empty() {
-        return false;
-    }
     let opponent_state = &events.meter_state[2 - own as usize];
     let press_frame = press.start_frame as usize;
     if opponent_state.get(press_frame) == Some(&MeterState::Recovery) {
@@ -59,8 +56,9 @@ pub fn is_neutral_or_counterplay(
     }
     let own_state = &events.meter_state[own_index];
     let projectile_end = (press_frame + MASH_PROJECTILE_WINDOW).min(own_state.len());
-    if press_frame < projectile_end
-        && own_state[press_frame..projectile_end].contains(&MeterState::ProjectileActive)
+    if own_state
+        .get(press_frame..projectile_end)
+        .is_some_and(|states| states.contains(&MeterState::ProjectileActive))
     {
         return true;
     }

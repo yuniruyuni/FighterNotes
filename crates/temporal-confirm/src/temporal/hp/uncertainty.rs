@@ -12,7 +12,7 @@ impl UncertaintyWindow {
 
     pub(super) fn obscure_neighbors(&self, values: &mut [f32]) {
         for (value, &uncertain) in values.iter_mut().zip(&self.expanded) {
-            if uncertain && *value >= 0.0 {
+            if uncertain && is_readable(*value) {
                 *value = -1.0;
             }
         }
@@ -24,7 +24,7 @@ impl UncertaintyWindow {
         for index in (0..values.len()).rev() {
             if self.original[index] {
                 if let Some(next) = next {
-                    if values[index] >= 0.0 {
+                    if is_readable(values[index]) {
                         values[index] = values[index].min(next);
                     }
                 }
@@ -38,12 +38,16 @@ impl UncertaintyWindow {
 pub(super) fn forward_fill(values: &mut [f32]) {
     let mut previous = -1.0;
     for value in values {
-        if *value >= 0.0 {
+        if is_readable(*value) {
             previous = *value;
-        } else if previous >= 0.0 {
+        } else if is_readable(previous) {
             *value = previous;
         }
     }
+}
+
+fn is_readable(value: f32) -> bool {
+    value.total_cmp(&0.0).is_ge()
 }
 
 pub(super) fn expand_uncertain(uncertain: &[bool], gap_fill: usize) -> Vec<bool> {

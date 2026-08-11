@@ -5,8 +5,8 @@
 
 pub(super) use crate::detectors::*;
 pub(super) use crate::match_events::*;
+pub(super) use crate::test_support::empty_events;
 pub(super) use crate::*;
-pub(super) use match_event_layer::test_support::empty_events;
 
 pub(super) fn assert_invites_user_review(card: &AdviceCard) {
     assert_eq!(

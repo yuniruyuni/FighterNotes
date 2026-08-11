@@ -54,7 +54,6 @@ impl SequenceBuilder {
 
     fn close(mut self, frame_index: u32, closing_value: &AttackInfoSide) -> AttackSequence {
         if closing_value.max_combo_damage > self.max_combo_seen
-            && closing_value.max_combo_damage > self.sequence.combo_damage
             && closing_value.max_combo_damage > closing_value.combo_damage
         {
             self.sequence.combo_damage = closing_value.max_combo_damage;
@@ -94,7 +93,7 @@ pub fn build_attack_sequences(observations: &[AttackInfoObservation]) -> Vec<Att
                 if let Some(builder) = active.take() {
                     sequences.push(builder.close(observation.frame_index, current));
                 }
-                previous = Some(current);
+                previous = None;
                 continue;
             }
 
@@ -195,6 +194,24 @@ mod tests {
     }
 
     #[test]
+    fn a_zero_reset_separates_equal_combo_values() {
+        let observations = vec![
+            observation(100, value(600, 600, 600, 100, AttackAttribute::Upper)),
+            observation(120, value(0, 0, 600, 100, AttackAttribute::Upper)),
+            observation(300, value(600, 600, 600, 100, AttackAttribute::Upper)),
+            observation(320, value(0, 0, 600, 100, AttackAttribute::Upper)),
+        ];
+
+        let sequences = build_attack_sequences(&observations);
+
+        assert_eq!(sequences.len(), 2);
+        assert_eq!(sequences[0].start_frame, 100);
+        assert_eq!(sequences[0].closed_frame, Some(120));
+        assert_eq!(sequences[1].start_frame, 300);
+        assert_eq!(sequences[1].closed_frame, Some(320));
+    }
+
+    #[test]
     fn recovers_a_missed_record_from_the_next_sequence() {
         let observations = vec![
             observation(100, value(600, 600, 600, 100, AttackAttribute::Lower)),
@@ -218,5 +235,122 @@ mod tests {
         assert_eq!(sequences.len(), 1);
         assert!(!sequences[0].complete);
         assert_eq!(sequences[0].closed_frame, None);
+    }
+
+    #[test]
+    fn the_builder_preserves_every_observed_field() {
+        let first = value(120, 120, 300, 100, AttackAttribute::Lower);
+        let second = value(80, 200, 300, 75, AttackAttribute::Middle);
+        let mut builder = SequenceBuilder::new(2, 41, &first);
+
+        assert_eq!(builder.sequence.attacker, 2);
+        assert_eq!(builder.sequence.start_frame, 41);
+        assert_eq!(builder.sequence.end_frame, 41);
+        assert_eq!(
+            builder.sequence.starter_attribute,
+            Some(AttackAttribute::Lower)
+        );
+        assert_eq!(builder.sequence.observation_count, 1);
+        assert_eq!(builder.sequence.steps[0].frame_index, 41);
+
+        builder.update(47, &second);
+
+        assert_eq!(builder.sequence.end_frame, 47);
+        assert_eq!(builder.sequence.combo_damage, 200);
+        assert_eq!(builder.sequence.last_damage, 80);
+        assert_eq!(builder.sequence.final_scaling_percent, 75);
+        assert_eq!(builder.sequence.final_attribute, AttackAttribute::Middle);
+        assert_eq!(builder.sequence.observation_count, 2);
+        assert_eq!(builder.sequence.steps.len(), 2);
+        assert_eq!(builder.sequence.steps[1].frame_index, 47);
+    }
+
+    #[test]
+    fn a_partial_first_read_does_not_claim_a_starter_attribute() {
+        let builder = SequenceBuilder::new(1, 10, &value(80, 200, 200, 75, AttackAttribute::Throw));
+
+        assert_eq!(builder.sequence.starter_attribute, None);
+    }
+
+    #[test]
+    fn recovery_from_the_closing_max_requires_a_strictly_new_larger_record() {
+        let close = |first: AttackInfoSide, closing: AttackInfoSide| {
+            SequenceBuilder::new(1, 10, &first).close(20, &closing)
+        };
+
+        let recovered = close(
+            value(100, 100, 100, 100, AttackAttribute::Upper),
+            value(50, 50, 200, 100, AttackAttribute::Upper),
+        );
+        assert_eq!(recovered.combo_damage, 200);
+        assert_eq!(recovered.closed_frame, Some(20));
+        assert!(recovered.complete);
+        assert!(recovered.recovered_from_max);
+
+        let not_new = close(
+            value(100, 100, 300, 100, AttackAttribute::Upper),
+            value(50, 50, 300, 100, AttackAttribute::Upper),
+        );
+        assert!(!not_new.recovered_from_max);
+
+        let already_observed = close(
+            value(100, 100, 100, 100, AttackAttribute::Upper),
+            value(200, 200, 200, 100, AttackAttribute::Upper),
+        );
+        assert!(!already_observed.recovered_from_max);
+    }
+
+    #[test]
+    fn both_attackers_are_built_and_equal_or_lower_repeats_are_handled() {
+        let zero = value(0, 0, 0, 100, AttackAttribute::Upper);
+        let observations = vec![
+            AttackInfoObservation {
+                frame_index: 30,
+                p1: zero.clone(),
+                p2: value(70, 70, 70, 100, AttackAttribute::Throw),
+            },
+            // 同値は観測回数へ重ねず、低い累積値は同じ列にも足さない。
+            AttackInfoObservation {
+                frame_index: 31,
+                p1: zero.clone(),
+                p2: value(70, 70, 70, 100, AttackAttribute::Throw),
+            },
+            AttackInfoObservation {
+                frame_index: 32,
+                p1: zero.clone(),
+                p2: value(20, 70, 70, 90, AttackAttribute::Throw),
+            },
+            AttackInfoObservation {
+                frame_index: 33,
+                p1: zero,
+                p2: value(20, 60, 70, 80, AttackAttribute::Throw),
+            },
+        ];
+
+        let sequences = build_attack_sequences(&observations);
+
+        assert_eq!(sequences.len(), 2);
+        assert_eq!(sequences[0].attacker, 2);
+        assert_eq!(sequences[0].start_frame, 30);
+        assert_eq!(sequences[0].end_frame, 32);
+        assert_eq!(sequences[0].observation_count, 2);
+        assert_eq!(sequences[0].closed_frame, Some(33));
+        assert_eq!(sequences[1].attacker, 2);
+        assert_eq!(sequences[1].start_frame, 33);
+    }
+
+    #[test]
+    fn scanning_continues_after_a_zero_closes_a_sequence() {
+        let observations = vec![
+            observation(10, value(100, 100, 100, 100, AttackAttribute::Upper)),
+            observation(20, value(0, 0, 100, 80, AttackAttribute::Upper)),
+            observation(30, value(50, 50, 100, 100, AttackAttribute::Lower)),
+        ];
+
+        let sequences = build_attack_sequences(&observations);
+
+        assert_eq!(sequences.len(), 2);
+        assert_eq!(sequences[0].closed_frame, Some(20));
+        assert_eq!(sequences[1].start_frame, 30);
     }
 }

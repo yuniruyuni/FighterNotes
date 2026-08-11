@@ -88,3 +88,19 @@ pub(crate) const HP_COL_ROW_SKIP_BOTTOM: usize = 4; // 下から 4px 除外
 /// P1 は +slope（右下）、P2 は −slope（左下）。スキャン列インデックス cx は
 /// row_start 行での x 位置を基準とし、各行で `(ry - row_start) * slope` を加算する。
 pub(crate) const HP_BAR_SLOPE: f32 = 0.75; // 3/4（整数比率）
+
+pub(crate) fn strictly_above(value: f32, threshold: f32) -> bool {
+    value.total_cmp(&threshold).is_gt()
+}
+
+#[cfg(test)]
+mod threshold_tests {
+    use super::strictly_above;
+
+    #[test]
+    fn strict_comparison_excludes_only_the_exact_edge_and_below() {
+        assert!(!strictly_above(45.0, 45.0));
+        assert!(!strictly_above(44.9, 45.0));
+        assert!(strictly_above(45.1, 45.0));
+    }
+}

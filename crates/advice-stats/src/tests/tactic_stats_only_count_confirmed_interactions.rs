@@ -174,6 +174,7 @@ fn tactic_stats_only_count_confirmed_interactions() {
         (stats.anti_air_successes, stats.anti_air_opportunities),
         (1, 2)
     );
+    assert_eq!(stats.jump_ins_allowed, 1);
     assert_eq!(
         (stats.di_returned, stats.di_faced, stats.di_unconfirmed),
         (1, 2, 1)

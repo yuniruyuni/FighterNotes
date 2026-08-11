@@ -169,6 +169,7 @@ fn fight_markers_are_the_only_resets_in_the_marker_aware_path() {
     confirm_hp_with_fight_markers(&mut features, &markers, "p1");
 
     assert_close(features[20].own_hp, 1.0);
+    assert_close(features[37].own_hp, 1.0);
     assert_close(features[45].own_hp, 0.7);
     // HP だけが満タンへ戻っても、FIGHT marker が無ければ reset しない。
     assert_close(features[125].own_hp, 0.7);
@@ -198,6 +199,65 @@ fn fight_opening_uses_reliable_raw_hp_instead_of_previous_round_fill() {
 
     assert_close(features[52].opponent_hp, 1.0);
     assert_close(features[60].opponent_hp, 0.94);
+}
+
+#[test]
+fn p2_uses_the_right_raw_bar_as_its_own_opening_evidence() {
+    let mut features = hp_series(&[(0.89, 0.50); 50]);
+    reindex(&mut features);
+    for (index, feature) in features.iter_mut().enumerate() {
+        feature.left_hp_raw = if (10..=20).contains(&index) {
+            1.0
+        } else {
+            0.50
+        };
+        feature.right_hp_raw = if (10..=20).contains(&index) {
+            0.90
+        } else {
+            0.89
+        };
+        feature.left_hp_raw_quality = 0.0;
+        feature.right_hp_raw_quality = 0.0;
+    }
+    let markers = [FightMarker {
+        first_frame: 10,
+        last_frame: 20,
+        peak_frame: 15,
+        peak_score: 0.9,
+    }];
+
+    confirm_hp_with_fight_markers(&mut features, &markers, "p2");
+
+    assert_close(features[25].own_hp, 1.0);
+}
+
+#[test]
+fn recoverable_hp_is_restored_for_the_opponent_too() {
+    let mut opponent = vec![1.0; 40];
+    opponent.extend(vec![0.96; 100]);
+    for step in 1..=20 {
+        opponent.extend(vec![0.96 + step as f32 * 0.0015; 6]);
+    }
+    opponent.extend(vec![0.991; 12]);
+    opponent.extend(vec![0.72; 40]);
+    let pairs: Vec<_> = opponent.iter().map(|&value| (1.0, value)).collect();
+    let mut features = hp_series(&pairs);
+    for feature in &mut features[40..] {
+        feature.own_hp = 0.875;
+        feature.left_hp_raw = 0.875;
+    }
+    for feature in &mut features[246..260] {
+        feature.opponent_hp = -1.0;
+        feature.right_hp_raw = 0.0;
+        feature.right_hp_raw_quality = 1.0;
+    }
+
+    confirm_hp(&mut features);
+
+    assert!(features[40..272]
+        .iter()
+        .all(|feature| feature.opponent_hp == 1.0));
+    assert_close(features[272].opponent_hp, 0.72);
 }
 
 #[test]

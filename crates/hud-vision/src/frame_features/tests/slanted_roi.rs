@@ -96,6 +96,7 @@ fn rows_pushed_out_of_the_roi_belong_to_no_column() {
 
     // 右端の列を右へずらす。
     assert_eq!(roi(&rgba, 0.75).column_x(19, 0, 0), Some(29));
+    assert_eq!(roi(&rgba, 0.75).column_x(19, 1, 0), None);
     assert_eq!(
         roi(&rgba, 0.75).column_x(19, 2, 0),
         None,
@@ -118,6 +119,7 @@ fn the_pixel_comes_from_the_intersection() {
 
     // 列 5・行 2 → x=17、画面上の y は y_start + row = 6。
     assert_eq!(roi.rgb_at(5, 2, 0), Some([17.0, 6.0, 255.0]));
+    assert_eq!(roi.rgb_at(5, 8, 4), Some([18.0, 12.0, 255.0]));
 }
 
 /// 帯だけを渡されたときは、帯の先頭行の分だけ上へ詰める。

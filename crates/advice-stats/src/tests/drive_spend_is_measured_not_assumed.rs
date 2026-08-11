@@ -224,3 +224,22 @@ fn a_missing_baseline_alone_blocks_the_measurement() {
 
     assert_eq!(stats.drive_spend_samples, 0);
 }
+
+/// P2 を自分として解析するときは右側の Drive 系列を見る。P1 の満タン列を
+/// 読んでも同じにならないよう、右側だけを減らす。
+#[test]
+fn player_two_spend_comes_from_the_right_drive_gauge() {
+    let drive = vec![1.0_f32; 200];
+    let mut features = features_with_drive(&drive, None);
+    for feature in features.iter_mut().skip(52) {
+        feature.right_drive_ratio = 0.75;
+    }
+    let mut own_impact = impact(50, DriveImpactOutcome::Hit, 0.22);
+    own_impact.side = 2;
+    let events = events_with_impact(own_impact);
+
+    let stats = build_tactic_stats(&features, &events, 2, 1);
+
+    assert_eq!(stats.drive_spend_samples, 1);
+    assert!((stats.drive_spent_on_impacts - 0.25).abs() < 0.005);
+}

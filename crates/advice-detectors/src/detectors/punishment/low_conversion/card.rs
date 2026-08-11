@@ -14,6 +14,11 @@ pub fn build(success_count: usize, lows: &[LowReturn]) -> AdviceCard {
         .map(|input| lows.iter().filter(|low| low.input == input).count())
         .unwrap_or(0);
     let repeated = repeated_input_count >= MIN_REPEATED_NEGATIVE_OUTCOMES;
+    let kind = if repeated {
+        AdviceKind::Diagnosis
+    } else {
+        AdviceKind::Observation
+    };
     let total_return: f32 = lows.iter().map(|low| low.drop).sum();
     let exact_values: Vec<_> = lows.iter().filter_map(|low| low.exact_damage).collect();
     let exact_note = if exact_values.is_empty() {
@@ -30,12 +35,11 @@ pub fn build(success_count: usize, lows: &[LowReturn]) -> AdviceCard {
     };
     AdviceCard {
         id: "low_conversion".to_string(),
-        kind: if repeated { AdviceKind::Diagnosis } else { AdviceKind::Observation },
+        kind,
         confidence: EventConfidence::Medium,
-        title: if repeated {
-            "同じ確反入力が小さいリターンで終わっている"
-        } else {
-            "確反が小さいリターンで終わった場面"
+        title: match kind {
+            AdviceKind::Diagnosis => "同じ確反入力が小さいリターンで終わっている",
+            _ => "確反が小さいリターンで終わった場面",
         }.to_string(),
         severity: 0.03 * lows.len() as f32,
         // 損失は機会費用であり、この指摘が原因で失った HP ではない。
@@ -51,10 +55,9 @@ pub fn build(success_count: usize, lows: &[LowReturn]) -> AdviceCard {
                 success_count, lows.len(), total_return * 100.0, exact_note, lows.len()
             )
         },
-        practice: if repeated {
-            "該当クリップと同じ始動から、画面中央・端それぞれの基本コンボを1つ用意します。ゲージを使わない構成から始め、繰り返し使っている単発反撃との差を確認しましょう。"
-        } else {
-            "クリップで残り体力・ゲージ・位置を確認します。意図的な温存なら問題ありません。伸ばせた場面なら、その始動から安定する短いコンボを1つだけ確認しましょう。"
+        practice: match kind {
+            AdviceKind::Diagnosis => "該当クリップと同じ始動から、画面中央・端それぞれの基本コンボを1つ用意します。ゲージを使わない構成から始め、繰り返し使っている単発反撃との差を確認しましょう。",
+            _ => "クリップで残り体力・ゲージ・位置を確認します。意図的な温存なら問題ありません。伸ばせた場面なら、その始動から安定する短いコンボを1つだけ確認しましょう。",
         }.to_string(),
         evidence: lows.iter().map(|low| EvidenceClip {
             frame: low.frame,

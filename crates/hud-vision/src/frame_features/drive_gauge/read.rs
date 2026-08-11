@@ -1,7 +1,7 @@
 use super::{
     classification::{classify_drive_col, segment_drive_runs},
     decode::decode_drive_runs,
-    model::{DriveColClass, DriveGaugeRead},
+    model::DriveGaugeRead,
     scale_roi, SlantedRoi, DRIVE_BAR_SLOPE, DRIVE_ROI_LEFT, DRIVE_ROI_RIGHT,
 };
 
@@ -39,15 +39,14 @@ pub(crate) fn drive_gauge_read_impl(
     let y1 = y1u as usize;
     let roi_w = x2 - x1;
     let roi_h = y2u as usize - y1;
-    let slope: f32 = if is_left {
-        DRIVE_BAR_SLOPE
-    } else {
-        -DRIVE_BAR_SLOPE
+    let slope: f32 = match side {
+        "left" => DRIVE_BAR_SLOPE,
+        _ => -DRIVE_BAR_SLOPE,
     };
     let roi = SlantedRoi {
         rgba,
         frame_width: width as usize,
-        x: x1..x2,
+        x: std::ops::Range { start: x1, end: x2 },
         y_start: y1,
         height: roi_h,
         strip_y: y_strip_start,
@@ -56,12 +55,16 @@ pub(crate) fn drive_gauge_read_impl(
 
     // 全列をアンカー起点（index 0 = 画面中央側）で分類。
     // 左ゲージはアンカーが右端なので逆順、右ゲージは左端なのでそのまま。
-    let classify = |column: usize| classify_drive_col(&roi, column);
-    let mut cols: Vec<DriveColClass> = if is_left {
-        (0..roi_w).rev().map(classify).collect()
-    } else {
-        (0..roi_w).map(classify).collect()
-    };
+    let mut column = 0usize;
+    let mut cols = Vec::new();
+    cols.resize_with(roi_w, || {
+        let class = classify_drive_col(&roi, column);
+        column += 1;
+        class
+    });
+    if is_left {
+        cols.reverse();
+    }
 
     cols.truncate(cells_span(roi_w));
 

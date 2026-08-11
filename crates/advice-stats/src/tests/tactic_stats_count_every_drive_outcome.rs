@@ -170,3 +170,38 @@ fn a_cancelled_drive_rush_is_not_a_raw_one() {
     assert_eq!(stats.raw_drive_rushes_faced, 0);
     assert_eq!(stats.raw_drive_rushes_unconfirmed, 0);
 }
+
+/// 未確定の先頭要素を飛ばしても、同じ列の後続イベントは集計を続ける。
+/// `continue` を `break` にすると、三種類とも後続の確定結果が消える。
+#[test]
+fn an_unconfirmed_event_does_not_hide_later_drive_events() {
+    let mut events = empty_events();
+
+    let mut uncertain_own_impact = impact(100, DriveImpactOutcome::Hit);
+    uncertain_own_impact.side = 1;
+    uncertain_own_impact.confidence = EventConfidence::Medium;
+    let mut confirmed_own_impact = impact(200, DriveImpactOutcome::Hit);
+    confirmed_own_impact.side = 1;
+    events.drive_impacts = vec![uncertain_own_impact, confirmed_own_impact];
+
+    let mut uncertain_own_rush = rush(300, DriveRushOutcome::Hit);
+    uncertain_own_rush.side = 1;
+    uncertain_own_rush.confidence = EventConfidence::Medium;
+    let mut confirmed_own_rush = rush(400, DriveRushOutcome::Hit);
+    confirmed_own_rush.side = 1;
+    let mut uncertain_faced_rush = rush(500, DriveRushOutcome::Hit);
+    uncertain_faced_rush.confidence = EventConfidence::Medium;
+    let confirmed_faced_rush = rush(600, DriveRushOutcome::Hit);
+    events.drive_rushes = vec![
+        uncertain_own_rush,
+        confirmed_own_rush,
+        uncertain_faced_rush,
+        confirmed_faced_rush,
+    ];
+
+    let stats = build_tactic_stats(&[], &events, 1, 2);
+
+    assert_eq!(stats.own_di_hit, 1);
+    assert_eq!(stats.own_raw_drive_rush_hits, 1);
+    assert_eq!(stats.raw_drive_rushes_hit, 1);
+}

@@ -100,6 +100,30 @@ fn a_component_wider_than_half_the_label_is_not_the_digit() {
     assert_eq!(picked.map(|c| c.x0), Some(70), "幅の広い帯を数字にしている");
 }
 
+#[test]
+fn connected_components_record_seed_width_and_area_exactly() {
+    let patch = Patch {
+        x: 0,
+        y: 0,
+        width: 12,
+        height: 20,
+    };
+    let mut rgba = vec![0u8; patch.width * patch.height * 4];
+    for y in 2..17 {
+        for x in 3..6 {
+            let index = (y * patch.width + x) * 4;
+            rgba[index..index + 4].copy_from_slice(&[255, 255, 255, 255]);
+        }
+    }
+
+    let components = white_components(&rgba, patch.width, patch);
+    assert_eq!(components.len(), 1);
+    let component = components[0];
+    assert_eq!((component.x0, component.x1), (3, 5));
+    assert_eq!((component.y0, component.y1), (2, 16));
+    assert_eq!(component.area, 45);
+}
+
 /// 選ぶ位置は側で変わる。同じ二つの候補でも、左のゲージでは右寄りの
 /// 方を、右のゲージでは左寄りの方を数字として選ぶ。
 #[test]

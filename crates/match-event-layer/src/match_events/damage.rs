@@ -32,49 +32,52 @@ pub(crate) fn extract_damage_sequences(
 ) -> Vec<DamageEvent> {
     let n = features.len();
     let mut damage = Vec::new();
+    if n == 0 {
+        return damage;
+    }
     for round in rounds {
         let (a, b) = (
             idx_of(features, round.start_frame),
             idx_of(features, round.end_frame),
         );
         for (side, values) in hp.iter().enumerate() {
-            let mut i = a + 1;
-            while i <= b && i < n {
-                if values[i] >= values[i - 1] - DMG_EPS {
-                    i += 1;
+            let mut consumed_through = a;
+            for start in a..=b {
+                if start <= consumed_through || values[start] >= values[start - 1] - DMG_EPS {
                     continue;
                 }
 
-                let start = i;
-                let mut last_drop = i;
-                let mut j = i + 1;
-                while j <= b && j < n {
-                    let from = features[last_drop].frame_index;
-                    let to = features[j].frame_index;
-                    let gap = effective_gameplay_gap(from, to, freeze_spans);
-                    let freeze_relevant = freeze_spans.iter().any(|&(freeze_start, freeze_end)| {
-                        (freeze_start <= to && freeze_end > from)
-                            || (freeze_start > to
-                                && freeze_start.saturating_sub(from) <= DMG_GAP_ACROSS_FREEZE)
-                    });
-                    let max_gap = if freeze_relevant {
-                        DMG_GAP_ACROSS_FREEZE
-                    } else {
-                        DMG_GAP as u32
-                    };
-                    let continuous_stun = stun[side]
-                        .get(last_drop..=j)
-                        .is_some_and(|span| span.iter().all(|value| *value));
-                    if gap > max_gap && !continuous_stun {
-                        break;
+                let mut last_drop = start;
+                let mut searching = true;
+                for j in start.saturating_add(1)..=b {
+                    if searching {
+                        let from = features[last_drop].frame_index;
+                        let to = features[j].frame_index;
+                        let gap = effective_gameplay_gap(from, to, freeze_spans);
+                        let freeze_relevant =
+                            freeze_spans.iter().any(|&(freeze_start, freeze_end)| {
+                                (freeze_start <= to && freeze_end > from)
+                                    || (freeze_start > to
+                                        && freeze_start.saturating_sub(from)
+                                            <= DMG_GAP_ACROSS_FREEZE)
+                            });
+                        let max_gap = if freeze_relevant {
+                            DMG_GAP_ACROSS_FREEZE
+                        } else {
+                            DMG_GAP as u32
+                        };
+                        let continuous_stun = stun[side]
+                            .get(last_drop..=j)
+                            .is_some_and(|span| span.iter().all(|value| *value));
+                        if gap > max_gap && !continuous_stun {
+                            searching = false;
+                        } else if values[j] < values[j - 1] - DMG_EPS {
+                            last_drop = j;
+                        }
                     }
-                    if values[j] < values[j - 1] - DMG_EPS {
-                        last_drop = j;
-                    }
-                    j += 1;
                 }
                 let drop = values[start - 1] - values[last_drop];
-                if drop >= DMG_MIN_DROP && values[start - 1] > DEAD_HP {
+                if drop.total_cmp(&DMG_MIN_DROP).is_ge() && values[start - 1] > DEAD_HP {
                     damage.push(DamageEvent {
                         victim: side as u8 + 1,
                         start_frame: features[start].frame_index,
@@ -86,7 +89,7 @@ pub(crate) fn extract_damage_sequences(
                         round_no: round.round_no,
                     });
                 }
-                i = last_drop + 1;
+                consumed_through = last_drop;
             }
         }
     }
@@ -112,16 +115,13 @@ pub(crate) fn extend_rounds_through_freezes(
             |next| next.start_frame.saturating_sub(1),
         );
         let mut end = rounds[index].end_frame;
-        while let Some((_, freeze_end)) = freeze_spans
+        if let Some((_, freeze_end)) = freeze_spans
             .iter()
             .copied()
             .find(|&(freeze_start, freeze_end)| freeze_start <= end && end <= freeze_end)
         {
             let extended = freeze_end.min(limit);
-            if extended <= end {
-                break;
-            }
-            end = extended;
+            end = end.max(extended);
         }
         if end == rounds[index].end_frame {
             continue;

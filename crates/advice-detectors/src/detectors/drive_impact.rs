@@ -22,7 +22,7 @@ struct CommittedButton {
 }
 
 fn normal_button(input: &InputSegment) -> Option<&str> {
-    if input.throw || input.is_drive_impact() || input.badges.len() != 1 {
+    if input.throw || input.badges.len() != 1 {
         return None;
     }
     matches!(
@@ -49,9 +49,9 @@ fn button_press_segment(
     mut index: usize,
     earliest_frame: u32,
 ) -> &InputSegment {
-    while index > 0 {
+    for previous_index in (0..index).rev() {
         let current = &segments[index];
-        let previous = &segments[index - 1];
+        let previous = &segments[previous_index];
         let same_held_button = normal_button(previous) == normal_button(current)
             && previous.auto == current.auto
             && previous.dir != current.dir;
@@ -61,9 +61,9 @@ fn button_press_segment(
             || previous.start_frame < earliest_frame
             || !previous.evidence.has_direct_observation()
         {
-            break;
+            return &segments[index];
         }
-        index -= 1;
+        index = previous_index;
     }
     &segments[index]
 }
@@ -123,54 +123,57 @@ pub fn detect_committed_button_vs_di(
             && impact.confidence == EventConfidence::High
             && impact.damage > 0.0
     }) {
-        let Some(contact_frame) = impact.contact_frame else {
-            continue;
-        };
-        let Some(damage) = events
-            .damage
-            .iter()
-            .filter(|damage| {
-                damage.victim == own
-                    && damage.round_no == impact.round_no
-                    && damage.start_frame >= contact_frame.saturating_sub(2)
-                    && damage.start_frame <= contact_frame.saturating_add(RESULT_WINDOW)
-            })
-            .min_by_key(|damage| damage.start_frame.abs_diff(contact_frame))
-        else {
-            continue;
-        };
-        let segments = &events.segments[own_index];
-        let Some((input_index, _)) = segments
-            .iter()
-            .enumerate()
-            .filter(|input| {
-                input.1.evidence.has_direct_observation()
-                    && input.1.start_frame >= impact.input_frame
-                    && input.1.start_frame <= contact_frame
-            })
-            .filter(|(_, input)| normal_button(input).is_some())
-            .filter(|(_, input)| execution_is_confirmed(events, own_index, input, contact_frame))
-            .max_by_key(|(_, input)| input.start_frame)
-        else {
-            continue;
-        };
-        let input = button_press_segment(segments, input_index, impact.input_frame);
-        let Some(label) = normal_button_label(input) else {
-            continue;
-        };
-        caught.push(CommittedButton {
-            input_frame: input.start_frame,
-            damage_end_frame: damage.end_frame,
-            round_no: damage.round_no,
-            drop: damage.drop,
-            input: label,
-        });
+        if let Some(contact_frame) = impact.contact_frame {
+            if let Some(damage) = events
+                .damage
+                .iter()
+                .filter(|damage| {
+                    damage.victim == own
+                        && damage.round_no == impact.round_no
+                        && damage.start_frame >= contact_frame.saturating_sub(2)
+                        && damage.start_frame <= contact_frame.saturating_add(RESULT_WINDOW)
+                })
+                .min_by_key(|damage| damage.start_frame.abs_diff(contact_frame))
+            {
+                let segments = &events.segments[own_index];
+                if let Some((input_index, _)) = segments
+                    .iter()
+                    .enumerate()
+                    .filter(|input| {
+                        input.1.evidence.has_direct_observation()
+                            && input.1.start_frame >= impact.input_frame
+                            && input.1.start_frame <= contact_frame
+                    })
+                    .filter(|(_, input)| normal_button(input).is_some())
+                    .filter(|(_, input)| {
+                        execution_is_confirmed(events, own_index, input, contact_frame)
+                    })
+                    .max_by_key(|(_, input)| input.start_frame)
+                {
+                    let input = button_press_segment(segments, input_index, impact.input_frame);
+                    if let Some(label) = normal_button_label(input) {
+                        caught.push(CommittedButton {
+                            input_frame: input.start_frame,
+                            damage_end_frame: damage.end_frame,
+                            round_no: damage.round_no,
+                            drop: damage.drop,
+                            input: label,
+                        });
+                    }
+                }
+            }
+        }
     }
     if caught.is_empty() {
         return None;
     }
 
     let repeated = caught.len() >= MIN_REPEATED_NEGATIVE_OUTCOMES;
+    let kind = if repeated {
+        AdviceKind::Diagnosis
+    } else {
+        AdviceKind::Observation
+    };
     let hp_lost: f32 = caught.iter().map(|event| event.drop).sum();
     let common_input = caught
         .iter()
@@ -184,16 +187,11 @@ pub fn detect_committed_button_vs_di(
         .unwrap_or("通常技");
     Some(AdviceCard {
         id: "committed_button_vs_di".to_string(),
-        kind: if repeated {
-            AdviceKind::Diagnosis
-        } else {
-            AdviceKind::Observation
-        },
+        kind,
         confidence: EventConfidence::High,
-        title: if repeated {
-            "通常技の実行中にDIを繰り返し受けている"
-        } else {
-            "通常技の実行中にDIを受けた場面"
+        title: match kind {
+            AdviceKind::Diagnosis => "通常技の実行中にDIを繰り返し受けている",
+            _ => "通常技の実行中にDIを受けた場面",
         }
         .to_string(),
         severity: hp_lost,
@@ -212,10 +210,9 @@ pub fn detect_committed_button_vs_di(
                 hp_lost * 100.0
             )
         },
-        practice: if repeated {
-            "各クリップをスロー再生し、技が出始めた時点とDI演出開始の順序、その技のDIキャンセル可否を確認します。技が先でキャンセル不能なら置く距離・頻度を、DIが先またはキャンセル可能ならDI返し入力を練習しましょう。"
-        } else {
-            "クリップをスロー再生し、技が出始めた時点とDI演出開始の順序、その技のDIキャンセル可否を確認します。技が先でキャンセル不能なら置く距離・頻度を、DIが先またはキャンセル可能ならDI返し入力を個別に練習しましょう。"
+        practice: match kind {
+            AdviceKind::Diagnosis => "各クリップをスロー再生し、技が出始めた時点とDI演出開始の順序、その技のDIキャンセル可否を確認します。技が先でキャンセル不能なら置く距離・頻度を、DIが先またはキャンセル可能ならDI返し入力を練習しましょう。",
+            _ => "クリップをスロー再生し、技が出始めた時点とDI演出開始の順序、その技のDIキャンセル可否を確認します。技が先でキャンセル不能なら置く距離・頻度を、DIが先またはキャンセル可能ならDI返し入力を個別に練習しましょう。",
         }
         .to_string(),
         evidence: caught

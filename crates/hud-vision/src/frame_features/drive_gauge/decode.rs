@@ -189,7 +189,7 @@ fn chain_gray(runs: &[(DriveColClass, usize, usize)]) -> Option<(usize, usize)> 
             continue;
         };
         if start > reached + MAX_GRAY_GAP {
-            break;
+            return slab_start.zip(far);
         }
         far = Some(end);
     }

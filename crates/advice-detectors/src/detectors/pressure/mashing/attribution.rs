@@ -3,7 +3,7 @@ use crate::match_events::{
     MatchEvents, MinusPressOutcome, ThreatOutcome, JUMP_ATTACK_MAX, JUMP_ATTACK_MIN,
     JUMP_SELF_HIT_MIN, JUMP_SELF_HIT_WINDOW, THREAT_DAMAGE_WINDOW,
 };
-use crate::{BIG_DAMAGE, MASH_PRESS_WINDOW};
+use crate::MASH_PRESS_WINDOW;
 
 pub fn nearest_direct_press<'a>(
     segments: &'a [InputSegment],
@@ -27,7 +27,6 @@ pub fn claimed_by_other_detector(
     opponent: u8,
     damage: &DamageEvent,
 ) -> bool {
-    debug_assert!(damage.drop >= BIG_DAMAGE);
     let jump = events.jumps.iter().any(|jump| {
         (jump.side == own
             && jump.takeoff_confirmed

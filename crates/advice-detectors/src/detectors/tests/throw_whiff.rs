@@ -424,11 +424,15 @@ fn the_invincible_wording_changes_with_repetition() {
     let habit = detect_throw_interrupted_by_invincible(&habit, 1).expect("提示される");
 
     assert_eq!(once.id, habit.id);
+    assert_eq!(once.title, "投げが相手の無敵技に負けた場面");
+    assert_eq!(habit.title, "投げに無敵技を合わせられた場面");
     assert_ne!(once.title, habit.title, "見出しを書き分けていない");
     assert_ne!(
         once.description, habit.description,
         "説明を書き分けていない"
     );
+    assert!(once.description.contains("1件"));
+    assert!(habit.description.contains("2 件"));
 }
 
 /// 同じ損失でも、空振りを重ねた分だけ重く扱う。回数を重みに入れないと、

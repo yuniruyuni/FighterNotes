@@ -34,7 +34,7 @@ pub fn hp_bar_debug_json(rgba: &[u8], width: u32, height: u32, side: &str) -> St
     let roi = SlantedRoi {
         rgba,
         frame_width: width as usize,
-        x: x1..x2,
+        x: std::ops::Range { start: x1, end: x2 },
         y_start: y1,
         height: roi_h,
         strip_y: y_strip_start,
@@ -137,7 +137,7 @@ pub fn hp_col_pixel_detail_json(
     let roi = SlantedRoi {
         rgba,
         frame_width: width as usize,
-        x: x1..x2,
+        x: std::ops::Range { start: x1, end: x2 },
         y_start: y1,
         height: roi_h,
         strip_y: y_strip_start,
@@ -169,42 +169,41 @@ pub fn hp_col_pixel_detail_json(
         for ry in row_start..row_end {
             // 座標も画素も、解析が使う ROI に訊く。ここで別に計算すると、
             // 表示が本体とは違う場所を指しうる。
-            let (Some(gx), Some([r, g, b])) = (
+            if let (Some(gx), Some([r, g, b])) = (
                 roi.column_x(cy, ry, row_start),
                 roi.rgb_at(cy, ry, row_start),
-            ) else {
-                continue;
-            };
-            total += 1;
-            let [h, s, v] = rgb_to_hsv(r, g, b);
+            ) {
+                total += 1;
+                let [h, s, v] = rgb_to_hsv(r, g, b);
 
-            // 表示は解析と同じ判定を使う。ここで別に書くと、表示が
-            // 正しく見えるのに解析は違うものを読んでいる状態になる。
-            let px_class = match classify_hp_pixel(r, g, b, hue) {
-                HpColColor::White => {
-                    n_w += 1;
-                    "W"
-                }
-                HpColColor::Fill => {
-                    n_f += 1;
-                    "F"
-                }
-                HpColColor::Ghost => "G",
-                HpColColor::YellowWhite => {
-                    n_y += 1;
-                    "Y"
-                }
-                HpColColor::Orange => {
-                    n_o += 1;
-                    "O"
-                }
-                HpColColor::Dark => "D",
-            };
+                // 表示は解析と同じ判定を使う。ここで別に書くと、表示が
+                // 正しく見えるのに解析は違うものを読んでいる状態になる。
+                let px_class = match classify_hp_pixel(r, g, b, hue) {
+                    HpColColor::White => {
+                        n_w += 1;
+                        "W"
+                    }
+                    HpColColor::Fill => {
+                        n_f += 1;
+                        "F"
+                    }
+                    HpColColor::Ghost => "G",
+                    HpColColor::YellowWhite => {
+                        n_y += 1;
+                        "Y"
+                    }
+                    HpColColor::Orange => {
+                        n_o += 1;
+                        "O"
+                    }
+                    HpColColor::Dark => "D",
+                };
 
-            rows_json.push(format!(
-                r#"{{"ry":{},"gx":{},"r":{},"g":{},"b":{},"h":{:.0},"s":{:.0},"v":{:.0},"cls":"{}"}}"#,
-                ry, gx, r as u8, g as u8, b as u8, h, s, v, px_class
-            ));
+                rows_json.push(format!(
+                    r#"{{"ry":{},"gx":{},"r":{},"g":{},"b":{},"h":{:.0},"s":{:.0},"v":{:.0},"cls":"{}"}}"#,
+                    ry, gx, r as u8, g as u8, b as u8, h, s, v, px_class
+                ));
+            }
         }
 
         cols_json.push(format!(

@@ -1,4 +1,5 @@
 use super::support::*;
+use crate::AnalysisContext;
 
 #[test]
 fn damage_breakdown_matches_official_modern_low_with_meter_startup() {
@@ -66,9 +67,9 @@ fn damage_breakdown_matches_official_modern_low_with_meter_startup() {
     events.meter_state[1][14] = MeterState::Active;
     events.meter_game_frame[1] = (0..30).map(i64::from).collect();
 
-    let breakdown =
-        super::damage_origins::build_damage_breakdown(&features, &events, 1, Some("INGRID"));
-    let event = &breakdown.events[0];
+    let context = AnalysisContext::from_characters("p1", None, Some("INGRID"));
+    let report = build_report_with_context(&features, &events, &context);
+    let event = &report.damage_breakdown.events[0];
     assert_eq!(event.origin, DamageOrigin::Strike);
     assert_eq!(event.strike_kind, Some(crate::frame_data::StrikeKind::Low));
     assert_eq!(event.strike_kind_confidence, Some(EventConfidence::High));

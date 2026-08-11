@@ -193,6 +193,7 @@ fn an_advantage_is_read_from_whether_an_action_followed() {
     events
         .advantage_situations
         .push(advantage(100, Some(110), AdvantageOutcome::Continued));
+    events.advantage_situations[0].pressed = "中P".to_string();
     events
         .advantage_situations
         .push(advantage(200, None, AdvantageOutcome::TurnLost));
@@ -213,6 +214,10 @@ fn an_advantage_is_read_from_whether_an_action_followed() {
             (DecisionOption::NoAttack, DecisionResult::Lost),
             (DecisionOption::NoAttack, DecisionResult::Survived),
         ]
+    );
+    assert_eq!(
+        decisions[0].pressed, "中P",
+        "有利を取った後に選んだ入力を落としている"
     );
 }
 

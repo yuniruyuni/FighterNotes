@@ -8,6 +8,8 @@
 
 use pixel_color::rgb_to_hsv;
 
+use super::super::strictly_above;
+
 /// 走査が探している色。
 ///
 /// 述語をそのまま渡すのではなく名前で渡す。走査の実体が探す色ごとに
@@ -42,7 +44,7 @@ impl BarColour {
 /// 設けると高輝度の橙を取りこぼす方が害が大きい。
 pub(crate) fn is_damage_orange(r: f32, g: f32, b: f32) -> bool {
     let [hue, saturation, value] = rgb_to_hsv(r, g, b);
-    (10.0..=27.0).contains(&hue) && saturation > 60.0 && value > 80.0
+    (10.0..=27.0).contains(&hue) && strictly_above(saturation, 60.0) && strictly_above(value, 80.0)
 }
 
 /// 危険域（残 25% 以下）の黄。橙より高い彩度と明度を要求して、
@@ -61,7 +63,9 @@ pub(crate) fn is_remaining_health(side: &str, r: f32, g: f32, b: f32) -> bool {
     if side == "p1" {
         (hue <= 20.0 || hue >= 145.0) && saturation > 100.0 && value > 60.0
     } else {
-        (88.0..=160.0).contains(&hue) && saturation > 45.0 && value > 60.0
+        (88.0..=160.0).contains(&hue)
+            && strictly_above(saturation, 45.0)
+            && strictly_above(value, 60.0)
     }
 }
 

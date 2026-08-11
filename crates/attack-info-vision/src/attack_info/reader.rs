@@ -14,6 +14,7 @@ const NUMERIC_HEIGHT: usize = 56;
 const ATTRIBUTE_WIDTH: usize = 32;
 const ATTRIBUTE_HEIGHT: usize = 20;
 const ROW_SCAN_HEIGHT: usize = 29;
+const METER_STRIP_BYTES: usize = BASE_WIDTH * NUMERIC_HEIGHT * 4;
 
 const P1_NUMERIC_SOURCE: (usize, usize) = (600, 174);
 const P1_ATTRIBUTE_SOURCE: (usize, usize) = (749, 236);
@@ -72,7 +73,7 @@ struct AttributeRead {
     margin: u32,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Component {
     min_x: usize,
     min_y: usize,
@@ -111,14 +112,16 @@ pub fn read_attack_info(rgba: &[u8], width: u32, height: u32) -> AttackInfoFrame
 }
 
 pub fn read_attack_info_from_meter_strip(rgba: &[u8], width: u32) -> AttackInfoFrameInspection {
-    let height = rgba.len() / (width as usize).saturating_mul(4).max(1);
-    if width as usize != BASE_WIDTH || height < NUMERIC_HEIGHT {
+    if width as usize != BASE_WIDTH {
+        return empty_inspection();
+    }
+    if rgba.len() < METER_STRIP_BYTES {
         return empty_inspection();
     }
     read_frame(
         rgba,
         width as usize,
-        height,
+        NUMERIC_HEIGHT,
         P1_NUMERIC_PACKED,
         P1_ATTRIBUTE_PACKED,
         P2_NUMERIC_PACKED,
@@ -149,11 +152,20 @@ fn read_side(
     numeric_origin: (usize, usize),
     attribute_origin: (usize, usize),
 ) -> Option<AttackInfoSideInspection> {
-    if numeric_origin.0 + NUMERIC_WIDTH > width
-        || numeric_origin.1 + NUMERIC_HEIGHT > height
-        || attribute_origin.0 + ATTRIBUTE_WIDTH > width
-        || attribute_origin.1 + ATTRIBUTE_HEIGHT > height
-    {
+    if !window_fits(
+        numeric_origin,
+        (NUMERIC_WIDTH, NUMERIC_HEIGHT),
+        width,
+        height,
+    ) {
+        return None;
+    }
+    if !window_fits(
+        attribute_origin,
+        (ATTRIBUTE_WIDTH, ATTRIBUTE_HEIGHT),
+        width,
+        height,
+    ) {
         return None;
     }
     let attribute = read_attribute(rgba, width, attribute_origin)?;
@@ -172,9 +184,18 @@ fn read_side(
     })
 }
 
+fn window_fits(origin: (usize, usize), size: (usize, usize), width: usize, height: usize) -> bool {
+    width
+        .checked_sub(size.0)
+        .is_some_and(|last_x| origin.0 <= last_x)
+        && height
+            .checked_sub(size.1)
+            .is_some_and(|last_y| origin.1 <= last_y)
+}
+
 fn read_numeric(rgba: &[u8], width: usize, origin: (usize, usize)) -> Option<NumericRead> {
-    for threshold in [210, 180] {
-        let Some(damage) = read_numeric_row(
+    [210, 180].into_iter().find_map(|threshold| {
+        let damage = read_numeric_row(
             rgba,
             width,
             origin,
@@ -182,10 +203,8 @@ fn read_numeric(rgba: &[u8], width: usize, origin: (usize, usize)) -> Option<Num
             25,
             threshold,
             NumericRowKind::Damage,
-        ) else {
-            continue;
-        };
-        let Some(combo) = read_numeric_row(
+        )?;
+        let combo = read_numeric_row(
             rgba,
             width,
             origin,
@@ -193,21 +212,19 @@ fn read_numeric(rgba: &[u8], width: usize, origin: (usize, usize)) -> Option<Num
             NUMERIC_HEIGHT,
             threshold,
             NumericRowKind::Combo,
-        ) else {
-            continue;
-        };
-        if !numeric_values_are_plausible(damage.0, damage.1, combo.0, combo.1) {
-            continue;
-        }
-        return Some(NumericRead {
-            last_damage: damage.0,
-            scaling_percent: damage.1,
-            combo_damage: combo.0,
-            max_combo_damage: combo.1,
-            score: damage.2.saturating_add(combo.2),
-        });
-    }
-    None
+        )?;
+        combine_numeric_rows(damage, combo)
+    })
+}
+
+fn combine_numeric_rows(damage: (u32, u32, u32), combo: (u32, u32, u32)) -> Option<NumericRead> {
+    numeric_values_are_plausible(damage.0, damage.1, combo.0, combo.1).then(|| NumericRead {
+        last_damage: damage.0,
+        scaling_percent: damage.1,
+        combo_damage: combo.0,
+        max_combo_damage: combo.1,
+        score: damage.2.saturating_add(combo.2),
+    })
 }
 
 fn read_numeric_row(
@@ -223,65 +240,21 @@ fn read_numeric_row(
     if row_height == 0 || row_height > ROW_SCAN_HEIGHT {
         return None;
     }
-    let mut white = [false; NUMERIC_WIDTH * ROW_SCAN_HEIGHT];
+    let mut white = [0u8; NUMERIC_WIDTH * ROW_SCAN_HEIGHT];
     for y in 0..row_height {
         for x in 0..NUMERIC_WIDTH {
-            white[y * NUMERIC_WIDTH + x] =
-                gray(rgba, width, origin.0 + x, origin.1 + row_y1 + y) > threshold;
+            white[y * NUMERIC_WIDTH + x] = u8::from(
+                gray(rgba, width, origin.0 + x, origin.1 + row_y1 + y)
+                    .cmp(&threshold)
+                    .is_gt(),
+            );
         }
     }
 
-    let mut visited = [false; NUMERIC_WIDTH * ROW_SCAN_HEIGHT];
-    let mut stack = [0usize; NUMERIC_WIDTH * ROW_SCAN_HEIGHT];
-    let mut components = Vec::with_capacity(20);
-    for start in 0..row_height * NUMERIC_WIDTH {
-        if !white[start] || visited[start] {
-            continue;
-        }
-        let mut component = Component {
-            min_x: start % NUMERIC_WIDTH,
-            max_x: start % NUMERIC_WIDTH,
-            min_y: start / NUMERIC_WIDTH,
-            max_y: start / NUMERIC_WIDTH,
-            pixels: 0,
-        };
-        let mut stack_len = 1;
-        stack[0] = start;
-        visited[start] = true;
-        while stack_len > 0 {
-            stack_len -= 1;
-            let current = stack[stack_len];
-            let x = current % NUMERIC_WIDTH;
-            let y = current / NUMERIC_WIDTH;
-            component.min_x = component.min_x.min(x);
-            component.max_x = component.max_x.max(x);
-            component.min_y = component.min_y.min(y);
-            component.max_y = component.max_y.max(y);
-            component.pixels += 1;
-            for dy in -1i32..=1 {
-                for dx in -1i32..=1 {
-                    if dx == 0 && dy == 0 {
-                        continue;
-                    }
-                    let nx = x as i32 + dx;
-                    let ny = y as i32 + dy;
-                    if nx < 0 || ny < 0 || nx >= NUMERIC_WIDTH as i32 || ny >= row_height as i32 {
-                        continue;
-                    }
-                    let next = ny as usize * NUMERIC_WIDTH + nx as usize;
-                    if white[next] && !visited[next] {
-                        visited[next] = true;
-                        stack[stack_len] = next;
-                        stack_len += 1;
-                    }
-                }
-            }
-        }
-        components.push(component);
-    }
+    let components = connected_components(&white, row_height);
 
     let frame = Frame::new(rgba, width, 0, threshold);
-    let mut candidates = Vec::with_capacity(12);
+    let mut candidates = Vec::new();
     for component in &components {
         if !looks_like_a_digit(component) {
             continue;
@@ -301,6 +274,68 @@ fn read_numeric_row(
     candidates.sort_by_key(|candidate| candidate.x);
 
     parse_anchored_row(&components, &candidates, kind)
+}
+
+fn connected_components(
+    white: &[u8; NUMERIC_WIDTH * ROW_SCAN_HEIGHT],
+    row_height: usize,
+) -> Vec<Component> {
+    const NEIGHBOURS: [(isize, isize); 8] = [
+        (-1, -1),
+        (0, -1),
+        (1, -1),
+        (-1, 0),
+        (1, 0),
+        (-1, 1),
+        (0, 1),
+        (1, 1),
+    ];
+
+    let mut visited = [false; NUMERIC_WIDTH * ROW_SCAN_HEIGHT];
+    let mut components = Vec::new();
+    for start in 0..row_height * NUMERIC_WIDTH {
+        if white[start] == 0 || visited[start] {
+            continue;
+        }
+        let mut component = Component {
+            min_x: NUMERIC_WIDTH,
+            max_x: 0,
+            min_y: row_height,
+            max_y: 0,
+            pixels: 0,
+        };
+        let mut stack = vec![start];
+        visited[start] = true;
+        // A component can contain at most `white.len()` distinct pixels. The
+        // bound also prevents corrupted visit bookkeeping from cycling.
+        for _ in white {
+            if let Some(current) = stack.pop() {
+                let x = current % NUMERIC_WIDTH;
+                let y = current / NUMERIC_WIDTH;
+                component.min_x = component.min_x.min(x);
+                component.max_x = component.max_x.max(x);
+                component.min_y = component.min_y.min(y);
+                component.max_y = component.max_y.max(y);
+                component.pixels += 1;
+                for (dx, dy) in NEIGHBOURS {
+                    let (Some(nx), Some(ny)) = (x.checked_add_signed(dx), y.checked_add_signed(dy))
+                    else {
+                        continue;
+                    };
+                    if nx >= NUMERIC_WIDTH || ny >= row_height {
+                        continue;
+                    }
+                    let next = ny * NUMERIC_WIDTH + nx;
+                    if white[next] != 0 && !visited[next] {
+                        visited[next] = true;
+                        stack.push(next);
+                    }
+                }
+            }
+        }
+        components.push(component);
+    }
+    components
 }
 
 /// 連結成分が数字の大きさか。
@@ -350,26 +385,14 @@ fn parse_anchored_row(
 ) -> Option<(u32, u32, u32)> {
     let parentheses = components.iter().filter(is_parenthesis).collect::<Vec<_>>();
     let mut reads = Vec::new();
-    for (left_index, left) in parentheses.iter().enumerate() {
-        for right in parentheses.iter().skip(left_index + 1) {
-            let inner_width = right.min_x.saturating_sub(left.max_x);
-            if !(12..=62).contains(&inner_width) {
-                continue;
+    let mut remaining = parentheses.as_slice();
+    while let Some((left, rights)) = remaining.split_first() {
+        for right in rights {
+            if let Some(read) = parse_anchored_pair(components, candidates, kind, left, right) {
+                reads.push(read);
             }
-            let Some(first_group) = digits_before_parenthesis(candidates, left) else {
-                continue;
-            };
-            let second_group = match kind {
-                NumericRowKind::Damage => scaling_digits(components, candidates, left, right),
-                NumericRowKind::Combo => digits_between_parentheses(candidates, left, right),
-            };
-            let Some(second_group) = second_group else {
-                continue;
-            };
-            let (first, first_score) = parse_digit_group(first_group);
-            let (second, second_score) = parse_digit_group(second_group);
-            reads.push((first, second, first_score.saturating_add(second_score)));
         }
+        remaining = rights;
     }
     let first = *reads.first()?;
     if reads
@@ -379,6 +402,27 @@ fn parse_anchored_row(
         return None;
     }
     reads.into_iter().min_by_key(|candidate| candidate.2)
+}
+
+fn parse_anchored_pair(
+    components: &[Component],
+    candidates: &[DigitCandidate],
+    kind: NumericRowKind,
+    left: &Component,
+    right: &Component,
+) -> Option<(u32, u32, u32)> {
+    let inner_width = right.min_x.saturating_sub(left.max_x);
+    if !(12..=62).contains(&inner_width) {
+        return None;
+    }
+    let first_group = digits_before_parenthesis(candidates, left)?;
+    let second_group = match kind {
+        NumericRowKind::Damage => scaling_digits(components, candidates, left, right),
+        NumericRowKind::Combo => digits_between_parentheses(candidates, left, right),
+    }?;
+    let (first, first_score) = parse_digit_group(first_group);
+    let (second, second_score) = parse_digit_group(second_group);
+    Some((first, second, first_score.saturating_add(second_score)))
 }
 
 fn is_parenthesis(component: &&Component) -> bool {
@@ -436,8 +480,7 @@ fn scaling_digits<'a>(
     for length in 1..=inside.len().min(3) {
         let group = &inside[..length];
         let last = group.last()?;
-        if !valid_group(group)
-            || !(1..=8).contains(&group[0].x.saturating_sub(left.max_x))
+        if !(1..=8).contains(&group[0].x.saturating_sub(left.max_x))
             || !digits_are_contiguous(group)
             || !(14..=25).contains(&right.min_x.saturating_sub(last.end_x))
             || !has_percent_evidence(components, last.end_x, right.min_x)
@@ -489,18 +532,21 @@ fn parse_digit_group(group: &[DigitCandidate]) -> (u32, u32) {
 }
 
 fn read_attribute(rgba: &[u8], width: usize, origin: (usize, usize)) -> Option<AttributeRead> {
-    for threshold in [210u8, 180u8] {
+    for (threshold, max_score) in [(210u8, 90u32), (180u8, 100u32)] {
         let mut observed = [0u32; ATTRIBUTE_HEIGHT];
-        let mut white_count = 0u32;
         for (y, row) in observed.iter_mut().enumerate() {
-            for x in 0..ATTRIBUTE_WIDTH {
-                if gray(rgba, width, origin.0 + x, origin.1 + y) > threshold {
-                    *row |= 1 << x;
-                    white_count += 1;
-                }
-            }
+            *row = (0..ATTRIBUTE_WIDTH)
+                .map(|x| {
+                    u32::from(
+                        gray(rgba, width, origin.0 + x, origin.1 + y)
+                            .cmp(&threshold)
+                            .is_gt(),
+                    ) << x
+                })
+                .sum();
         }
-        if !(60..=280).contains(&white_count) {
+        let white_count = observed.iter().map(|row| row.count_ones()).sum();
+        if !attribute_white_count_is_plausible(white_count) {
             continue;
         }
         let mut scores = ATTRIBUTE_TEMPLATES
@@ -510,8 +556,7 @@ fn read_attribute(rgba: &[u8], width: usize, origin: (usize, usize)) -> Option<A
         scores.sort_by_key(|(_, score)| *score);
         let (value, score) = scores[0];
         let margin = scores[1].1.saturating_sub(score);
-        let max_score = if threshold == 210 { 90 } else { 100 };
-        if score <= max_score && margin >= 20 {
+        if attribute_match_is_confident(score, margin, max_score) {
             return Some(AttributeRead {
                 value,
                 score,
@@ -520,6 +565,14 @@ fn read_attribute(rgba: &[u8], width: usize, origin: (usize, usize)) -> Option<A
         }
     }
     None
+}
+
+fn attribute_white_count_is_plausible(count: u32) -> bool {
+    (60..=280).contains(&count)
+}
+
+fn attribute_match_is_confident(score: u32, margin: u32, max_score: u32) -> bool {
+    score <= max_score && margin >= 20
 }
 
 fn attribute_distance(observed: &[u32; ATTRIBUTE_HEIGHT], template: &[u32; 20]) -> u32 {
@@ -549,10 +602,11 @@ fn attribute_distance(observed: &[u32; ATTRIBUTE_HEIGHT], template: &[u32; 20]) 
 
 fn gray(rgba: &[u8], width: usize, x: usize, y: usize) -> u8 {
     let index = (y * width + x) * 4;
-    if index + 2 >= rgba.len() {
+    let Some([red, green, blue]) = rgba.get(index..).and_then(|tail| tail.first_chunk::<3>())
+    else {
         return 0;
-    }
-    rgba[index].min(rgba[index + 1]).min(rgba[index + 2])
+    };
+    (*red).min(*green).min(*blue)
 }
 
 fn empty_inspection() -> AttackInfoFrameInspection {
@@ -585,6 +639,18 @@ mod tests {
         assert_eq!(read(0, ROW_SCAN_HEIGHT + 1), None);
     }
 
+    #[test]
+    fn numeric_rows_are_combined_only_when_their_values_agree() {
+        let read = combine_numeric_rows((77, 80, 11), (777, 999, 13)).expect("整合する");
+
+        assert_eq!(read.last_damage, 77);
+        assert_eq!(read.scaling_percent, 80);
+        assert_eq!(read.combo_damage, 777);
+        assert_eq!(read.max_combo_damage, 999);
+        assert_eq!(read.score, 24);
+        assert!(combine_numeric_rows((800, 80, 3), (700, 999, 5)).is_none());
+    }
+
     /// 括弧で挟まれた数値行を読み切れることを確かめる。
     ///
     /// 桁は連結成分の外接矩形から 1px 外側を起点に照合するので、明るい画素が
@@ -595,12 +661,13 @@ mod tests {
         use input_vision::test_support::paint_digit;
 
         let width = BASE_WIDTH;
-        let origin = (100usize, 5usize);
-        let mut rgba = vec![0u8; width * 64 * 4];
+        let origin = (300usize, 5usize);
+        let row_y1 = 30usize;
+        let mut rgba = vec![0u8; width * 80 * 4];
 
         // 走査窓を基準に配置する。数字はテンプレート左上、括弧は塗り潰し。
         let mut paint = |x: usize, y: usize, digit: usize| {
-            paint_digit(&mut rgba, width, origin.0 + x, origin.1 + y, digit);
+            paint_digit(&mut rgba, width, origin.0 + x, origin.1 + row_y1 + y, digit);
         };
         for x in [0, 11] {
             paint(x, 2, 7);
@@ -612,7 +679,7 @@ mod tests {
         let mut bar = |x0: usize| {
             for y in 2..=20 {
                 for x in x0..x0 + 3 {
-                    let index = ((origin.1 + y) * width + origin.0 + x) * 4;
+                    let index = ((origin.1 + row_y1 + y) * width + origin.0 + x) * 4;
                     rgba[index..index + 4].copy_from_slice(&[255, 255, 255, 255]);
                 }
             }
@@ -620,11 +687,33 @@ mod tests {
         bar(28);
         bar(68);
 
-        let read = read_numeric_row(&rgba, width, origin, 0, 25, 210, NumericRowKind::Combo);
+        let read = read_numeric_row(
+            &rgba,
+            width,
+            origin,
+            row_y1,
+            row_y1 + 25,
+            210,
+            NumericRowKind::Combo,
+        );
 
         let (first, second, score) = read.expect("括弧が揃った行は読める");
         assert_eq!((first, second), (77, 777));
         assert_eq!(score, 0, "テンプレートそのものなので誤差は出ない");
+
+        assert_eq!(
+            read_numeric_row(
+                &rgba,
+                width,
+                origin,
+                row_y1,
+                row_y1 + ROW_SCAN_HEIGHT,
+                210,
+                NumericRowKind::Combo,
+            ),
+            Some((77, 777, 0)),
+            "最大走査高は境界を含む"
+        );
     }
 
     /// 括弧のアンカーが無い行は、数字が並んでいても読み取らない。
@@ -656,6 +745,47 @@ mod tests {
             max_y: y + height - 1,
             pixels,
         }
+    }
+
+    #[test]
+    fn connected_components_join_diagonals_and_respect_the_row_edges() {
+        let mut white = [0u8; NUMERIC_WIDTH * ROW_SCAN_HEIGHT];
+        for (x, y) in [
+            (0, 0),
+            (0, 1),
+            (1, 1),
+            (2, 2),
+            (10, 0),
+            (10, 1),
+            (189, 0),
+            (188, 1),
+        ] {
+            white[y * NUMERIC_WIDTH + x] = 1;
+        }
+        // 走査高の直後にある画素は別の行なので含めない。
+        white[3 * NUMERIC_WIDTH + 2] = 1;
+
+        assert_eq!(
+            connected_components(&white, 3),
+            vec![
+                component(0, 3, 0, 3, 4),
+                component(10, 1, 0, 2, 2),
+                component(188, 2, 0, 2, 2),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_right_edge_does_not_wrap_into_the_next_row() {
+        let mut white = [0u8; NUMERIC_WIDTH * ROW_SCAN_HEIGHT];
+        white[NUMERIC_WIDTH - 1] = 1;
+        white[NUMERIC_WIDTH] = 1;
+
+        let components = connected_components(&white, 2);
+
+        assert_eq!(components.len(), 2);
+        assert_eq!(components[0], component(189, 1, 0, 1, 1));
+        assert_eq!(components[1], component(0, 1, 1, 1, 1));
     }
 
     fn digit(x: usize, value: u32) -> DigitCandidate {
@@ -743,6 +873,7 @@ mod tests {
     fn numeric_relationships_reject_partial_animation_reads() {
         assert!(numeric_values_are_plausible(480, 80, 1152, 2660));
         assert!(numeric_values_are_plausible(6000, 100, 11_000, 11_000));
+        assert!(numeric_values_are_plausible(600, 100, 600, 20_000));
         assert!(!numeric_values_are_plausible(480, 80, 115, 2660));
         assert!(!numeric_values_are_plausible(0, 80, 1152, 2660));
         assert!(!numeric_values_are_plausible(600, 101, 600, 600));
@@ -783,6 +914,12 @@ mod tests {
         assert!(!is_parenthesis(&&component(0, 4, 0, 17, 30)), "低すぎる");
         assert!(!is_parenthesis(&&component(0, 4, 0, 22, 30)), "高すぎる");
         assert!(!is_parenthesis(&&component(0, 4, 0, 20, 13)), "薄すぎる");
+    }
+
+    #[test]
+    fn parenthesis_size_limits_include_every_edge() {
+        assert!(is_parenthesis(&&component(0, 2, 0, 18, 14)));
+        assert!(is_parenthesis(&&component(0, 6, 0, 21, 14)));
     }
 
     /// 細くて高さ 18px の塊は、数字にも括弧にも見える。どちらとして
@@ -928,6 +1065,7 @@ mod tests {
         assert_eq!(gray(&rgba, 1, 0, 1), 255);
         assert_eq!(gray(&rgba, 1, 0, 2), 0, "画面の外を明るいと読んでいる");
         assert_eq!(gray(&rgba, 1, 5, 5), 0);
+        assert_eq!(gray(&[255, 255], 1, 0, 0), 0, "RGB が揃わない画素");
     }
 
     // ── 属性の読み ───────────────────────────────────────────────────────
@@ -989,6 +1127,15 @@ mod tests {
         assert!(read_side(&rgba, width, 64, (100, 0), (width - 1, 0)).is_none());
         // 属性の窓が下へはみ出す。
         assert!(read_side(&rgba, width, 64, (100, 0), (100, 63)).is_none());
+    }
+
+    #[test]
+    fn window_fit_checks_each_axis_and_includes_the_exact_edge() {
+        assert!(window_fits((10, 20), (30, 40), 40, 60));
+        assert!(!window_fits((11, 20), (30, 40), 40, 60));
+        assert!(!window_fits((10, 21), (30, 40), 40, 60));
+        assert!(!window_fits((0, 0), (41, 40), 40, 60));
+        assert!(!window_fits((0, 0), (30, 61), 40, 60));
     }
 
     /// 想定と違う幅の映像は読まない。中央表示の位置は 1920px 基準で
@@ -1096,6 +1243,26 @@ mod tests {
         assert_eq!(read.value.max_combo_damage, 777);
         assert_eq!(read.value.attribute, ATTRIBUTE_TEMPLATES[0].0);
         assert_eq!(read.numeric_score, 0, "手本そのものなので誤差は出ない");
+    }
+
+    #[test]
+    fn dim_numeric_rows_are_retried_with_the_lower_threshold() {
+        let numeric = (100, 10);
+        let attribute = (400, 10);
+        let mut rgba = painted_frame(numeric, attribute);
+        for y in numeric.1..numeric.1 + NUMERIC_HEIGHT {
+            for x in numeric.0..numeric.0 + NUMERIC_WIDTH {
+                let index = (y * BASE_WIDTH + x) * 4;
+                if rgba[index] == 255 {
+                    rgba[index..index + 3].fill(200);
+                }
+            }
+        }
+
+        let read = read_side(&rgba, BASE_WIDTH, 1080, numeric, attribute).expect("暗くても読める");
+
+        assert_eq!(read.value.last_damage, 77);
+        assert_eq!(read.value.combo_damage, 77);
     }
 
     /// 走査窓が画面からはみ出す位置では読まない。読める絵が描いてあっても、
@@ -1292,6 +1459,10 @@ mod tests {
         let group = digits_before_parenthesis(&candidates, &parenthesis).expect("読める");
 
         assert_eq!(parse_digit_group(group), (123, 15));
+
+        let boundary = [digit(3, 1), digit(19, 2), digit(35, 3)];
+        let group = digits_before_parenthesis(&boundary, &parenthesis).expect("境界も読める");
+        assert_eq!(parse_digit_group(group), (123, 15));
     }
 
     /// 大きく離れた桁は別の数。さかのぼりはそこで止まる。
@@ -1369,6 +1540,30 @@ mod tests {
         let group = scaling_digits(&percent, &candidates, &left, &right).expect("読める");
 
         assert_eq!(parse_digit_group(group), (80, 10));
+    }
+
+    #[test]
+    fn a_one_digit_scaling_value_can_touch_both_edges() {
+        let left = component(10, 4, 2, 20, 30);
+        let right = component(45, 4, 2, 20, 30);
+        let components = [left, right, component(33, 5, 2, 4, 20)];
+        for x in [14, 21] {
+            let candidates = [digit(x, 8)];
+            let group = scaling_digits(&components, &candidates, &left, &right).expect("読める");
+            assert_eq!(parse_digit_group(group), (8, 5));
+        }
+
+        assert!(
+            scaling_digits(&components, &[digit(22, 8)], &left, &right).is_none(),
+            "左括弧から9px離れた桁を採っている"
+        );
+    }
+
+    #[test]
+    fn percent_evidence_must_begin_after_the_last_digit() {
+        let crossing_mark = [component(10, 12, 0, 4, 20)];
+
+        assert!(!has_percent_evidence(&crossing_mark, 15, 27));
     }
 
     /// `%` の証拠が無ければ補正値ではない。括弧の中の数を何でも
@@ -1456,6 +1651,25 @@ mod tests {
         assert!(!row(54), "狭すぎる組を使っている");
     }
 
+    #[test]
+    fn the_largest_parenthesis_pair_span_is_included() {
+        let left = component(40, 4, 2, 20, 30);
+        let right = component(105, 4, 2, 20, 30);
+        let components = [left, right, component(96, 5, 2, 4, 20)];
+        let candidates = [digit(25, 1), digit(51, 8), digit(67, 0), digit(83, 0)];
+
+        assert_eq!(
+            parse_anchored_pair(
+                &components,
+                &candidates,
+                NumericRowKind::Damage,
+                &left,
+                &right,
+            ),
+            Some((1, 800, 20))
+        );
+    }
+
     // ── 属性を読む門 ─────────────────────────────────────────────────────
 
     /// 属性の枠に散らばる白の量には上下の限りがある。少なすぎれば
@@ -1479,6 +1693,36 @@ mod tests {
             "白が少なすぎる枠を読んでいる"
         );
         assert!(read_with_white(281).is_none(), "白が多すぎる枠を読んでいる");
+
+        assert!(attribute_white_count_is_plausible(60));
+        assert!(attribute_white_count_is_plausible(280));
+        assert!(!attribute_white_count_is_plausible(59));
+        assert!(!attribute_white_count_is_plausible(281));
+        assert!(attribute_match_is_confident(90, 20, 90));
+        assert!(!attribute_match_is_confident(91, 20, 90));
+        assert!(!attribute_match_is_confident(90, 19, 90));
+    }
+
+    #[test]
+    fn pixels_exactly_at_the_dim_threshold_are_still_dark() {
+        let width = BASE_WIDTH;
+        let (_, template) = ATTRIBUTE_TEMPLATES[0];
+        let paint_at = |brightness: u8| {
+            let mut rgba = vec![0u8; width * 64 * 4];
+            for (y, bits) in template.iter().enumerate() {
+                for x in 0..ATTRIBUTE_WIDTH {
+                    if bits & (1 << x) != 0 {
+                        let index = ((y + 5) * width + 100 + x) * 4;
+                        rgba[index..index + 4]
+                            .copy_from_slice(&[brightness, brightness, brightness, 255]);
+                    }
+                }
+            }
+            read_attribute(&rgba, width, (100, 5))
+        };
+
+        assert!(paint_at(180).is_none());
+        assert!(paint_at(181).is_some());
     }
 
     /// 二番目の候補と紛れている形は読まない。

@@ -66,9 +66,12 @@ pub fn analyze_match_with_context(
     advice::build_report_with_context(features, &events, context)
 }
 
-/// フレームフィーチャ列のみからアドバイスレポートを生成する（互換）。
-pub fn analyze_features(features: &[FrameFeatures], own_side: &str) -> AdviceReport {
-    analyze_match(features, &[], &[], None, own_side, None)
+/// フレームフィーチャ列のみからアドバイスレポートを生成する。
+///
+/// `FrameFeatures` の HP は既に自分・相手の視点へ正規化されており、この入口は
+/// 左右別の入力・メーターを受け取らない。そのため側を指定する必要はない。
+pub fn analyze_features(features: &[FrameFeatures]) -> AdviceReport {
+    analyze_match(features, &[], &[], None, "p1", None)
 }
 
 /// フレームフィーチャ列のみを context 付きで解析する。

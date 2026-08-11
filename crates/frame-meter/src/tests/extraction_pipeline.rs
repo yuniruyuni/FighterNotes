@@ -12,6 +12,23 @@ fn fill_rows(pixels: &mut [u8], width: usize, y1: usize, y2: usize, rgba: [u8; 4
     }
 }
 
+fn fill_rect(
+    pixels: &mut [u8],
+    width: usize,
+    x1: usize,
+    x2: usize,
+    y1: usize,
+    y2: usize,
+    rgba: [u8; 4],
+) {
+    for row in y1..y2 {
+        for column in x1..x2 {
+            let index = (row * width + column) * 4;
+            pixels[index..index + 4].copy_from_slice(&rgba);
+        }
+    }
+}
+
 #[test]
 fn strip_extraction_uses_scaled_full_frame_origin() {
     let width = 1920;
@@ -64,6 +81,8 @@ fn hinted_strip_extraction_scores_tracker_window_without_observed_edge() {
     }
     assert!(left.digit_correlation(40).is_none());
     assert!(right.digit_correlation(40).is_none());
+    assert!(left.digit_correlation(77).is_none());
+    assert!(right.digit_correlation(77).is_none());
 }
 
 #[test]
@@ -99,4 +118,49 @@ fn hinted_strip_extraction_scores_observed_edge_without_tracker_hint() {
             full_right.digit_correlation(index)
         );
     }
+}
+
+#[test]
+fn observed_edge_at_cell_zero_still_enables_digit_scoring() {
+    let width = 1920;
+    let mut strip = vec![0; width * METER_STRIP_H as usize * 4];
+    fill_rect(&mut strip, width, 359, 374, 0, 38, [19, 201, 146, 255]);
+
+    let (left, right) =
+        extract_row_obs_from_strip_with_digit_hint(&strip, width as u32, 1080, None);
+
+    assert_eq!(left.fresh_edge, 0);
+    assert!(left.digit_correlation(0).is_some());
+    assert!(left.digit_correlation(79).is_some());
+    assert!(right.digit_correlation(40).is_some());
+}
+
+#[test]
+fn right_observed_edge_at_cell_zero_enables_full_digit_scoring() {
+    let width = 1920;
+    let mut strip = vec![0; width * METER_STRIP_H as usize * 4];
+    fill_rect(&mut strip, width, 359, 374, 40, 78, [19, 201, 146, 255]);
+
+    let (left, right) =
+        extract_row_obs_from_strip_with_digit_hint(&strip, width as u32, 1080, None);
+
+    assert_eq!(left.fresh_edge, -1);
+    assert_eq!(right.fresh_edge, 0);
+    assert!(left.digit_correlation(40).is_some());
+    assert!(right.digit_correlation(0).is_some());
+}
+
+#[test]
+fn observed_edge_at_zero_extends_an_unrelated_tracker_hint() {
+    let width = 1920;
+    let mut strip = vec![0; width * METER_STRIP_H as usize * 4];
+    fill_rect(&mut strip, width, 359, 374, 0, 38, [19, 201, 146, 255]);
+
+    let (left, _) =
+        extract_row_obs_from_strip_with_digit_hint(&strip, width as u32, 1080, Some((40, 0)));
+
+    assert_eq!(left.fresh_edge, 0);
+    assert!(left.digit_correlation(0).is_some());
+    assert!(left.digit_correlation(40).is_some());
+    assert!(left.digit_correlation(41).is_some());
 }

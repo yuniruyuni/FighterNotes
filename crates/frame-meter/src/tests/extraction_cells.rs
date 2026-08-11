@@ -185,6 +185,34 @@ fn only_the_requested_cells_have_their_digits_read() {
     assert!(observation.digit_correlation(64).is_none());
 }
 
+#[test]
+fn sparse_digits_ignore_bits_beyond_the_eighty_cells() {
+    let observation = parts(1_600, 40).finish_sparse([1, 1 << 16]);
+
+    assert!(observation.digit_correlation(0).is_some());
+    assert!(observation.digit_correlation(1).is_none());
+}
+
+fn patterned_row() -> RowPixels {
+    let mut pixels = uniform_row(1_600, 40, COUNTER);
+    for row in 0..pixels.height {
+        for column in 0..pixels.width {
+            pixels.value[row * pixels.width + column] = ((row * 37 + column * 11) % 251) as f32;
+        }
+    }
+    pixels
+}
+
+#[test]
+fn sparse_digit_patches_keep_the_selected_cell_pixels() {
+    let full = extract(patterned_row());
+    let sparse =
+        extract_parts(patterned_row(), &mut QuantizedModeScratch::new()).finish_sparse([1 << 3, 0]);
+
+    assert_eq!(sparse.digit_correlation(3), full.digit_correlation(3));
+    assert!(sparse.digit_correlation(2).is_none());
+}
+
 /// 上位の語のビットも読む。64 番目以降のセルを取りこぼさない。
 #[test]
 fn the_upper_word_of_the_selection_is_honoured() {
@@ -248,6 +276,28 @@ fn a_cell_striped_top_and_bottom_is_marked_as_striped() {
         !extract(row_lit_up_to(1_600, 40, 30, COUNTER)).stripe[10],
         "縞でないセルに印を付けている"
     );
+}
+
+#[test]
+fn rescued_cells_keep_the_rescue_marker_in_the_row_observation() {
+    let width = 1_600;
+    let height = 40;
+    let noisy = [255, 0, 255];
+    let mut pixels = uniform_row(width, height, noisy);
+    let counter_hsv = bgr_to_hsv([COUNTER[0] as f32, COUNTER[1] as f32, COUNTER[2] as f32]);
+    for local_row in (0..6).chain(14..20) {
+        let row = pixels.trim_y + local_row;
+        for column in 0..width {
+            let index = row * width + column;
+            pixels.bgr[index] = COUNTER;
+            pixels.value[index] = counter_hsv[2];
+            pixels.saturation[index] = counter_hsv[1];
+        }
+    }
+
+    let observation = extract(pixels);
+    assert_eq!(observation.states[10], CellState::Counter);
+    assert!(observation.rescued[10]);
 }
 
 /// フレーム差を示す明るい塊の位置を覚える。色見本に無い明るい色が

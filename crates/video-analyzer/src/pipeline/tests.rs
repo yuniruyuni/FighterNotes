@@ -37,7 +37,7 @@ fn an_empty_capture_survives_the_pipeline() {
     finalize_features(&mut features);
     assert!(features.is_empty());
 
-    let report = analyze_features(&features, "p1");
+    let report = analyze_features(&features);
     assert_eq!(report.rounds_detected, 0);
 }
 
@@ -49,7 +49,7 @@ fn the_entry_points_share_one_wiring() {
         .map(|index| feature(index, 1.0 - index as f32 / 400.0, 1.0))
         .collect();
 
-    let plain = analyze_features(&features, "p1");
+    let plain = analyze_features(&features);
     let with_context = analyze_features_with_context(
         &features,
         &crate::context::AnalysisContext::from_characters("p1", None, None),
@@ -167,8 +167,8 @@ fn the_frames_passed_in_are_the_frames_analysed() {
     let short: Vec<FrameFeatures> = (0..60).map(|index| feature(index, 1.0, 1.0)).collect();
     let long: Vec<FrameFeatures> = (0..600).map(|index| feature(index, 1.0, 1.0)).collect();
 
-    assert_eq!(analyze_features(&short, "p1").total_frames, 60);
-    assert_eq!(analyze_features(&long, "p1").total_frames, 600);
+    assert_eq!(analyze_features(&short).total_frames, 60);
+    assert_eq!(analyze_features(&long).total_frames, 600);
 }
 
 /// 自分の側の指定が、入力列の帰属に効く。HP は自分と相手の視点で持つので
@@ -269,7 +269,7 @@ fn the_plain_entry_points_use_the_frames_they_are_given() {
         .collect();
     let context = crate::context::AnalysisContext::from_characters("p1", None, None);
 
-    let plain = analyze_features(&features, "p1");
+    let plain = analyze_features(&features);
     let via_context = analyze_features_with_context(&features, &context);
 
     assert_eq!(plain.total_frames, 600, "渡したフレーム列を使っていない");
@@ -279,29 +279,60 @@ fn the_plain_entry_points_use_the_frames_they_are_given() {
     );
     assert_eq!(plain.rounds_detected, via_context.rounds_detected);
     assert_eq!(
-        analyze_features(&features[..120], "p1").total_frames,
+        analyze_features(&features[..120]).total_frames,
         120,
         "渡した長さと結果が噛み合っていない"
     );
 }
 
-/// キャラクター名は確反の技名列挙に使う。渡した名前が捨てられていないことを、
-/// 名前の有無で結果が変わることで見る。
+/// キャラクター名はキャラ固有のイベント判定にも使う。ダルシムの長い空中ランで
+/// 遅い対空被弾を拾えることにより、互換入口から名前が落ちていないことを見る。
 #[test]
 fn the_character_name_reaches_the_report() {
-    let features: Vec<FrameFeatures> = (0..600)
-        .map(|index| feature(index, if index < 300 { 1.0 } else { 0.4 }, 1.0))
+    use match_event_layer::test_support::{synth_run, synth_timeline, up_inputs};
+
+    let features: Vec<FrameFeatures> = (0..400)
+        .map(|frame| {
+            let own_hp = if frame < 165 {
+                1.0
+            } else if frame < 185 {
+                1.0 - 0.005 * (frame - 164) as f32
+            } else {
+                0.9
+            };
+            feature(frame, own_hp, 1.0)
+        })
         .collect();
-
-    let unnamed = analyze_match(&features, &[], &[], None, "p1", None);
-    let named = analyze_match(&features, &[], &[], None, "p1", Some("LUKE"));
-
-    assert_eq!(
-        unnamed.total_frames, named.total_frames,
-        "映像は同じものを見ている"
+    let p2_inputs = up_inputs(features.len(), &[(100, 104)]);
+    let left = synth_timeline(vec![(100, "active", 160, 167)]);
+    let right = synth_timeline(
+        [
+            synth_run(0, "motion_recovery", 100, 159),
+            vec![(60, "stun", 160, 167)],
+        ]
+        .concat(),
     );
-    assert_eq!(
-        unnamed.ruleset_version, named.ruleset_version,
-        "版数は名前で変わらない"
+
+    let unnamed = analyze_match(
+        &features,
+        &[],
+        &p2_inputs,
+        Some((&left, &right)),
+        "p2",
+        None,
+    );
+    let dhalsim = analyze_match(
+        &features,
+        &[],
+        &p2_inputs,
+        Some((&left, &right)),
+        "p2",
+        Some("DHALSIM"),
+    );
+
+    assert!(unnamed.cards.iter().all(|card| card.id != "own_jumps"));
+    assert!(
+        dhalsim.cards.iter().any(|card| card.id == "own_jumps"),
+        "ダルシムの長い空中ランがキャラ固有判定へ届いていない"
     );
 }

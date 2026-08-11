@@ -80,6 +80,36 @@ fn digit_patch_requires_both_dimensions_and_normalizes_values() {
 }
 
 #[test]
+fn digit_patch_reads_the_requested_offset_from_each_physical_row() {
+    let width = DIGIT_TEMPLATE_W + 4;
+    let height = DIGIT_TEMPLATE_H + 2;
+    let pixels = make_pixels(width, height, 1);
+    let bounds = CellBounds {
+        x1: 2,
+        x2: 2 + DIGIT_TEMPLATE_W,
+    };
+    let mut actual = vec![0.0; DIGIT_TEMPLATE_W * DIGIT_TEMPLATE_H];
+    assert!(write_digit_patch(&mut actual, &pixels, bounds));
+
+    let mut raw = Vec::new();
+    for row in 0..DIGIT_TEMPLATE_H {
+        for column in 0..DIGIT_TEMPLATE_W {
+            raw.push(pixels.value[(row + 1) * width + 2 + column]);
+        }
+    }
+    let mean = raw.iter().sum::<f32>() / raw.len() as f32;
+    let variance = raw
+        .iter()
+        .map(|value| (value - mean) * (value - mean))
+        .sum::<f32>()
+        / raw.len() as f32;
+    let denominator = variance.sqrt().max(1.0);
+    for (index, value) in actual.iter().enumerate() {
+        assert_close(*value, (raw[index] - mean) / denominator);
+    }
+}
+
+#[test]
 fn white_fraction_requires_high_value_and_low_saturation_per_row() {
     let mut pixels = make_pixels(2, 4, 0);
     pixels.value = vec![201.0, 201.0, 200.0, 200.0, 201.0, 201.0, 201.0, 201.0];

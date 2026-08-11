@@ -61,6 +61,55 @@ fn one_run_of_falling_health_is_one_event() {
     assert!((events[0].hp_after - 0.9).abs() < 1e-5);
 }
 
+/// ラウンドの最後のフレームで始まる被弾も取りこぼさない。
+#[test]
+fn damage_on_the_last_frame_of_a_round_is_seen() {
+    let events = damage_of(&stairs(51, &[(50, 0.1)]));
+
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].start_frame, 50);
+    assert_eq!(events[0].end_frame, 50);
+}
+
+/// ラウンド開始前から開始フレームにかけての下降は、そのラウンドの被弾ではない。
+#[test]
+fn damage_at_the_round_start_boundary_is_not_brought_in() {
+    let right = stairs(30, &[(10, 0.1)]);
+    let left = vec![1.0f32; right.len()];
+    let features = features_for(&left, &right);
+    let hp = [left, right];
+    let mut rounds = round(30);
+    rounds[0].start_frame = 10;
+
+    assert!(extract_damage_sequences(&features, &hp, &rounds, &[], [&[], &[]]).is_empty());
+}
+
+/// 最終フレームの追撃も、直前に始まった同じ被弾へ含める。
+#[test]
+fn a_followup_on_the_last_frame_extends_the_damage_event() {
+    let events = damage_of(&stairs(51, &[(49, 0.1), (50, 0.1)]));
+
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].start_frame, 49);
+    assert_eq!(events[0].end_frame, 50);
+    assert!((events[0].drop - 0.2).abs() < 1e-5);
+}
+
+/// 一度通常間隔を越えた後に暗転へ入っても、別の被弾を前へ結合しない。
+#[test]
+fn a_later_freeze_does_not_reopen_a_closed_damage_sequence() {
+    let right = stairs(120, &[(10, 0.1), (60, 0.1)]);
+    let left = vec![1.0f32; right.len()];
+    let features = features_for(&left, &right);
+    let hp = [left, right];
+
+    let events = extract_damage_sequences(&features, &hp, &round(120), &[(60, 100)], [&[], &[]]);
+
+    assert_eq!(events.len(), 2, "閉じた被弾を暗転で再結合している");
+    assert_eq!(events[0].start_frame, 10);
+    assert_eq!(events[1].start_frame, 60);
+}
+
 /// 読み取りの揺れ程度の下降は被弾ではない。
 #[test]
 fn a_wobble_too_small_to_be_a_hit_is_ignored() {
@@ -79,6 +128,41 @@ fn a_drop_below_the_reporting_floor_is_not_an_event() {
         1,
         "報告すべき下降を落としている"
     );
+}
+
+/// 下降判定のノイズ幅ちょうどは、次の実ダメージの開始にしない。
+#[test]
+fn a_wobble_exactly_at_epsilon_does_not_move_the_damage_start() {
+    let mut right = vec![1.0f32; 100];
+    right[20..].fill(1.0 - DMG_EPS);
+    right[30..].fill(0.8);
+
+    let events = damage_of(&right);
+
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].start_frame, 30);
+}
+
+/// コンボ中のノイズ幅ちょうどの揺れも、最終ヒットを後ろへ動かさない。
+#[test]
+fn a_wobble_exactly_at_epsilon_does_not_move_the_damage_end() {
+    let mut right = vec![1.0f32; 100];
+    right[20..].fill(0.9);
+    right[30..].fill(0.9 - DMG_EPS);
+
+    let events = damage_of(&right);
+
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].end_frame, 20);
+}
+
+/// 倒れていると判定する HP ちょうどからの揺れは被弾にしない。
+#[test]
+fn health_at_the_dead_threshold_cannot_start_another_hit() {
+    let mut right = vec![DEAD_HP; 100];
+    right[20..].fill(0.0);
+
+    assert!(damage_of(&right).is_empty());
 }
 
 /// 既に倒れている相手の HP が動いても被弾ではない。KO 演出中の
@@ -117,6 +201,16 @@ fn hits_far_apart_are_separate_events() {
     assert_eq!(events.len(), 2, "別々の被弾をまとめている");
     assert_eq!(events[0].start_frame, 50);
     assert_eq!(events[1].start_frame, 150);
+}
+
+/// 最大間隔ちょうどの 2 ヒットは同じコンボ。
+#[test]
+fn hits_exactly_one_damage_gap_apart_stay_together() {
+    let second = 10 + DMG_GAP;
+    let events = damage_of(&stairs(100, &[(10, 0.1), (second, 0.1)]));
+
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].end_frame, second as u32);
 }
 
 /// 切れ目は最後の下降から測る。コンボの先頭からではない。
@@ -176,6 +270,22 @@ fn an_unbroken_stun_keeps_the_hits_together() {
         extract_damage_sequences(&features, &hp, &round(right.len()), &[], [&[], &broken[..]]);
 
     assert_eq!(split.len(), 2, "硬直の切れ目を無視している");
+}
+
+/// 次のヒットのフレームで硬直が切れていれば、別の被弾として扱う。
+#[test]
+fn stun_must_include_the_candidate_hit_frame() {
+    let right = stairs(120, &[(10, 0.1), (70, 0.1)]);
+    let left = vec![1.0f32; right.len()];
+    let features = features_for(&left, &right);
+    let hp = [left, right.clone()];
+    let mut stunned = vec![true; right.len()];
+    stunned[70] = false;
+
+    let events =
+        extract_damage_sequences(&features, &hp, &round(right.len()), &[], [&[], &stunned]);
+
+    assert_eq!(events.len(), 2, "候補フレームの硬直切れを見ていない");
 }
 
 /// 硬直は殴られた側のものを見る。殴った側の硬直では繋がらない。
@@ -379,4 +489,46 @@ fn an_unreadable_health_is_not_taken_as_the_end_value() {
     assert_eq!(rounds[0].end_frame, 250);
     assert_eq!(rounds[0].p1_hp_end, 1.0, "読めない値を終値にしている");
     assert_eq!(rounds[0].p2_hp_end, 1.0, "読めない値を終値にしている");
+}
+
+/// 先のラウンドが延長対象でなくても、後のラウンドは調べる。
+#[test]
+fn a_round_without_an_extension_does_not_end_the_scan() {
+    let left = vec![1.0f32; 400];
+    let right = vec![1.0f32; 400];
+    let features = features_for(&left, &right);
+    let hp = [left, right];
+    let mut rounds = vec![
+        freeze_round(50),
+        RoundInfo {
+            round_no: 2,
+            start_frame: 200,
+            end_frame: 250,
+            winner: None,
+            p1_hp_end: 1.0,
+            p2_hp_end: 1.0,
+        },
+    ];
+
+    extend_rounds_through_freezes(&mut rounds, &features, &hp, &[(220, 300)]);
+
+    assert_eq!(rounds[0].end_frame, 50);
+    assert_eq!(rounds[1].end_frame, 300);
+}
+
+/// 延長先の HP が 0 なら、左右ともそれが正しい終値。
+#[test]
+fn zero_health_is_kept_as_the_extended_end_value_for_both_sides() {
+    let mut left = vec![1.0f32; 300];
+    let mut right = vec![1.0f32; 300];
+    left[250] = 0.0;
+    right[250] = 0.0;
+    let features = features_for(&left, &right);
+    let hp = [left, right];
+    let mut rounds = vec![freeze_round(150)];
+
+    extend_rounds_through_freezes(&mut rounds, &features, &hp, &[(120, 250)]);
+
+    assert_eq!(rounds[0].p1_hp_end, 0.0);
+    assert_eq!(rounds[0].p2_hp_end, 0.0);
 }

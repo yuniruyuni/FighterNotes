@@ -8,7 +8,7 @@ pub(super) fn dir_mask(f: &Frame, x0: usize, y0: usize) -> ([u64; DIR_H], u32) {
     for (ry, row) in m.iter_mut().enumerate() {
         for rx in 0..DIR_W {
             if f.is_white(x0 + rx, y0 + ry) {
-                *row |= 1 << rx;
+                *row += 1 << rx;
                 n += 1;
             }
         }
@@ -20,7 +20,7 @@ pub(super) fn mask_centroid(m: &[u64; DIR_H]) -> Option<(f32, f32)> {
     let (mut sx, mut sy, mut n) = (0f32, 0f32, 0u32);
     for (y, row) in m.iter().enumerate() {
         let mut bits = *row;
-        while bits != 0 {
+        for _ in 0..bits.count_ones() {
             let x = bits.trailing_zeros();
             sx += x as f32;
             sy += y as f32;
@@ -45,13 +45,50 @@ pub(super) fn shift_mask(m: &[u64; DIR_H], dx: i32, dy: i32) -> [u64; DIR_H] {
             continue;
         }
         let row = m[sy as usize];
-        out[y as usize] = if dx >= 0 {
-            (row << dx) & col_mask
-        } else {
-            row >> (-dx)
-        };
+        out[y as usize] = shift_row(row, dx, col_mask);
     }
     out
+}
+
+fn shift_row(row: u64, dx: i32, col_mask: u64) -> u64 {
+    match dx.cmp(&0) {
+        std::cmp::Ordering::Less => row >> dx.unsigned_abs(),
+        std::cmp::Ordering::Equal => row & col_mask,
+        std::cmp::Ordering::Greater => (row << dx.unsigned_abs()) & col_mask,
+    }
+}
+
+pub(super) fn alignment_offset(sample: (f32, f32), template: (f32, f32)) -> (i32, i32) {
+    (
+        (sample.0 - template.0).round() as i32,
+        (sample.1 - template.1).round() as i32,
+    )
+}
+
+pub(super) fn fine_offsets(center: i32) -> [i32; 3] {
+    [center - 1, center, center + 1]
+}
+
+pub(super) fn within_alignment_window(dx: i32, dy: i32) -> bool {
+    dx.unsigned_abs() <= 6 && dy.unsigned_abs() <= 6
+}
+
+pub(super) fn rank_direction_candidate(
+    best: (InputDir, u32),
+    second: u32,
+    candidate: (InputDir, u32),
+) -> ((InputDir, u32), u32) {
+    match candidate.1.cmp(&best.1) {
+        std::cmp::Ordering::Less => (candidate, best.1),
+        std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => match candidate.1.cmp(&second) {
+            std::cmp::Ordering::Less => (best, candidate.1),
+            std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => (best, second),
+        },
+    }
+}
+
+pub(super) fn direction_score_is_accepted(best: u32, second: u32) -> bool {
+    best <= DIR_MAX_DIFF && second.saturating_sub(best) >= DIR_MIN_MARGIN
 }
 
 /// 方向グリフの許容距離（背景不変 glyph_distance）。
@@ -74,36 +111,30 @@ pub(super) fn read_dir(f: &Frame, x0: usize, y0: usize) -> (InputDir, bool, u32)
     if n_white > DIR_MAX_WHITE {
         return (InputDir::Unknown, true, u32::MAX); // 全面白フラッシュ
     }
-    let Some(cm) = mask_centroid(&m) else {
-        return (InputDir::Unknown, false, u32::MAX);
+    let cm = match mask_centroid(&m) {
+        Some(centroid) => centroid,
+        None => unreachable!("a nonempty direction mask must have a centroid"),
     };
 
     let mut best = (InputDir::Unknown, u32::MAX);
     let mut second = u32::MAX;
     for (ti, t) in DIR_TEMPLATES.iter().enumerate() {
-        let Some(ct) = mask_centroid(t) else { continue };
-        let bx = (cm.0 - ct.0).round() as i32;
-        let by = (cm.1 - ct.1).round() as i32;
+        let ct = mask_centroid(t).expect("direction templates are nonempty");
+        let (bx, by) = alignment_offset(cm, ct);
         let mut tbest = u32::MAX;
         // 重心整列 ±1px の微調整
-        for dy in (by - 1)..=(by + 1) {
-            for dx in (bx - 1)..=(bx + 1) {
-                if dx.abs() > 6 || dy.abs() > 6 {
-                    continue;
+        for dy in fine_offsets(by) {
+            for dx in fine_offsets(bx) {
+                if within_alignment_window(dx, dy) {
+                    let ts = shift_mask(t, dx, dy);
+                    let score = glyph_distance(&m, &ts, DIR_W as u32);
+                    tbest = tbest.min(score);
                 }
-                let ts = shift_mask(t, dx, dy);
-                let score = glyph_distance(&m, &ts, DIR_W as u32);
-                tbest = tbest.min(score);
             }
         }
-        if tbest < best.1 {
-            second = best.1;
-            best = (DIR_ORDER[ti], tbest);
-        } else if tbest < second {
-            second = tbest;
-        }
+        (best, second) = rank_direction_candidate(best, second, (DIR_ORDER[ti], tbest));
     }
-    if best.1 <= DIR_MAX_DIFF && second.saturating_sub(best.1) >= DIR_MIN_MARGIN {
+    if direction_score_is_accepted(best.1, second) {
         (best.0, false, best.1)
     } else {
         (InputDir::Unknown, true, best.1) // 判別不能（残余の遮蔽等）

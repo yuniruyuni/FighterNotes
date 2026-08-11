@@ -65,6 +65,31 @@ fn pair_stripe_rules_require_both_expected_palette_roles() {
 }
 
 #[test]
+fn pair_stripe_rules_reject_distant_palette_lookalikes() {
+    let rejected_whiteish = [252.0, 84.0, 156.0];
+    let rejected_pink = [170.0, 0.0, 255.0];
+    let rejected_orange = [0.0, 30.0, 255.0];
+    let white = PaletteName::White.color();
+
+    for (stripe, expected) in [
+        (PaletteName::StripePink.color(), CellState::InvStrike),
+        (PaletteName::StripeOrange.color(), CellState::InvProj),
+    ] {
+        assert_eq!(
+            classify_cell_pair(rejected_whiteish, stripe),
+            (CellState::Other, BrightClass::None_),
+            "a rejected first sample must not create {expected:?}"
+        );
+    }
+    for rejected_stripe in [rejected_pink, rejected_orange] {
+        assert_eq!(
+            classify_cell_pair(white, rejected_stripe),
+            (CellState::Other, BrightClass::None_)
+        );
+    }
+}
+
+#[test]
 fn pair_same_family_is_fresh_only_when_both_samples_are_fresh() {
     assert_eq!(
         classify_cell_pair(
@@ -72,6 +97,25 @@ fn pair_same_family_is_fresh_only_when_both_samples_are_fresh() {
             PaletteName::CounterDim.color()
         ),
         (CellState::Counter, BrightClass::Low)
+    );
+}
+
+#[test]
+fn pair_colored_samples_use_both_family_identity_and_brightness() {
+    assert_eq!(
+        classify_cell_pair(
+            PaletteName::CounterDim.color(),
+            PaletteName::Counter.color()
+        ),
+        (CellState::Counter, BrightClass::Low)
+    );
+    assert_eq!(
+        classify_cell_pair(PaletteName::Counter.color(), PaletteName::Active.color()),
+        (CellState::Active, BrightClass::Fresh)
+    );
+    assert_eq!(
+        classify_cell_pair(PaletteName::Counter.color(), PaletteName::ActiveDim.color()),
+        (CellState::Active, BrightClass::Low)
     );
 }
 
@@ -127,6 +171,12 @@ fn raw_counter_accepts_either_low_hue_or_high_saturation_evidence() {
         classify_cell_raw(bgr_from_hsv(90.0, 210.0, 180.0), 0.0, Some(false)),
         CellState::Counter
     );
+}
+
+#[test]
+fn raw_attack_includes_its_exact_hue_and_saturation_boundaries() {
+    assert_eq!(raw(145, 40), CellState::Active);
+    assert_eq!(raw(160, 40), CellState::Active);
 }
 
 // ── 生の色から状態を読む ─────────────────────────────────────────────────

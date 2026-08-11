@@ -156,6 +156,44 @@ fn a_charged_reversal_without_enough_charge_stays_unknown() {
     );
 }
 
+#[test]
+fn exactly_forty_five_advancing_frames_complete_the_charge() {
+    let segments = [vec![holding_down(56, 100)], vec![]];
+    let game_frames = [
+        (0..200).map(i64::from).collect::<Vec<_>>(),
+        (0..200).map(i64::from).collect::<Vec<_>>(),
+    ];
+
+    assert!(rising_reversal_available(
+        &segments,
+        &game_frames,
+        1,
+        100,
+        RisingReversalKind::Charge,
+    ));
+}
+
+#[test]
+fn charge_inputs_and_game_frames_come_from_the_defending_side() {
+    let segments = [vec![], vec![holding_down(56, 100)]];
+    let game_frames = [vec![-1; 200], (0..200).map(i64::from).collect::<Vec<_>>()];
+
+    assert!(rising_reversal_available(
+        &segments,
+        &game_frames,
+        2,
+        100,
+        RisingReversalKind::Charge,
+    ));
+    assert!(!rising_reversal_available(
+        &segments,
+        &game_frames,
+        0,
+        100,
+        RisingReversalKind::Charge,
+    ));
+}
+
 /// 溜めの記録が無ければ撃てない。
 #[test]
 fn a_charged_reversal_without_any_down_input_stays_unknown() {
@@ -221,6 +259,45 @@ fn consecutive_down_inputs_are_joined_into_one_charge() {
     assert_eq!(reach, DpReachability::Confirmed, "続いた溜めを繋いでいない");
 }
 
+#[test]
+fn one_unrecorded_frame_between_down_segments_is_still_joined() {
+    let segments = [vec![holding_down(20, 58), holding_down(60, 100)], vec![]];
+    let game_frames = [
+        (0..200).map(i64::from).collect::<Vec<_>>(),
+        (0..200).map(i64::from).collect::<Vec<_>>(),
+    ];
+
+    assert!(rising_reversal_available(
+        &segments,
+        &game_frames,
+        1,
+        100,
+        RisingReversalKind::Charge,
+    ));
+}
+
+#[test]
+fn a_non_down_segment_stops_searching_before_an_older_charge() {
+    let mut released = holding_down(59, 59);
+    released.dir = "R".into();
+    let segments = [
+        vec![holding_down(20, 58), released, holding_down(60, 100)],
+        vec![],
+    ];
+    let game_frames = [
+        (0..200).map(i64::from).collect::<Vec<_>>(),
+        (0..200).map(i64::from).collect::<Vec<_>>(),
+    ];
+
+    assert!(!rising_reversal_available(
+        &segments,
+        &game_frames,
+        1,
+        100,
+        RisingReversalKind::Charge,
+    ));
+}
+
 /// 途中で下を離していれば溜めは切れる。
 #[test]
 fn a_gap_in_the_down_input_breaks_the_charge() {
@@ -253,6 +330,15 @@ fn a_charge_released_a_moment_earlier_still_counts() {
         "直前の溜めを捨てている"
     );
     assert_eq!(long_gone, DpReachability::Unknown, "古い溜めを使っている");
+}
+
+#[test]
+fn advancing_game_frame_count_checks_bounds_negatives_and_inclusive_edges() {
+    assert_eq!(advancing_game_frames(&[10], 0, 0), 1);
+    assert_eq!(advancing_game_frames(&[10, 10, 11], 0, 2), 2);
+    assert_eq!(advancing_game_frames(&[10, 10, -1], 0, 2), 0);
+    assert_eq!(advancing_game_frames(&[10, 11], 0, 2), 0);
+    assert_eq!(advancing_game_frames(&[10, 11], 1, 0), 0);
 }
 
 // ── 位置 ─────────────────────────────────────────────────────────────────

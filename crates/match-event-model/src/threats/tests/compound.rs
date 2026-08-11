@@ -135,3 +135,58 @@ fn later_contact_owns_delayed_damage() {
     assert_eq!(teleports[0].damage, 0.0);
     assert_eq!(compounds[0].outcome, ThreatOutcome::Defended);
 }
+
+/// P1 側の projectile/teleport と P2 側の parry/stun も同じ結線を通る。
+/// 左右を入れ替えても各 state run と response の side が落ちないことを固定する。
+#[test]
+fn player_one_compound_threat_keeps_player_two_responses() {
+    let features: Vec<_> = (0..400).map(feature).collect();
+    let p1 = timeline(
+        "left",
+        &[
+            (100, 150, "projectile_active"),
+            (170, 176, "inv_full"),
+            (190, 195, "active"),
+        ],
+    );
+    let p2 = timeline(
+        "right",
+        &[(160, 174, "parry"), (175, 180, "stun"), (188, 192, "parry")],
+    );
+    let meter = [state_per_frame(&p1, 400), state_per_frame(&p2, 400)];
+    let contacts = vec![ContactEvent {
+        frame: 190,
+        attacker: 1,
+        victim: 2,
+        hit: false,
+        projectile: false,
+        round_no: 1,
+    }];
+
+    let (projectiles, teleports, compounds) = extract_test_threats!(
+        &features,
+        [&p1, &p2],
+        &meter,
+        &[vec![teleport_segment(160)], vec![]],
+        &[],
+        &contacts,
+        &[],
+        &[round()],
+        [Some("DHALSIM"), Some("BLANKA")],
+    );
+
+    assert_eq!(projectiles.len(), 1);
+    assert_eq!(projectiles[0].owner, 1);
+    assert_eq!(projectiles[0].contact_frame, Some(175));
+    assert_eq!(teleports.len(), 1);
+    assert_eq!(teleports[0].followup_contact_frame, Some(190));
+    assert_eq!(teleports[0].outcome, ThreatOutcome::Defended);
+    assert_eq!(
+        teleports[0]
+            .response
+            .as_ref()
+            .map(|response| (response.side, response.kind)),
+        Some((2, DefenseResponseKind::Parry))
+    );
+    assert_eq!(compounds.len(), 1);
+}

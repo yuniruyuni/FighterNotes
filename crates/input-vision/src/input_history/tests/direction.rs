@@ -5,7 +5,10 @@
 //! テンプレート」だけでは足りない。二番目との差が開いていることまで
 //! 確かめて、初めてその方向だと言える。
 
-use super::super::direction::{dir_mask, mask_centroid, read_dir, shift_mask};
+use super::super::direction::{
+    alignment_offset, dir_mask, direction_score_is_accepted, fine_offsets, mask_centroid,
+    rank_direction_candidate, read_dir, shift_mask, within_alignment_window,
+};
 use super::super::*;
 
 const WHITE_THRESHOLD: u8 = 210;
@@ -75,6 +78,7 @@ fn the_mask_collects_the_white_pixels() {
     canvas.set(3, 2);
     canvas.set(5, 2);
     canvas.set(3, 7);
+    canvas.set(DIR_W, 7);
     let frame = Frame::new(&canvas.rgba, canvas.width, 0, WHITE_THRESHOLD);
 
     let (mask, count) = dir_mask(&frame, 0, 0);
@@ -85,17 +89,51 @@ fn the_mask_collects_the_white_pixels() {
     assert_eq!(mask[0], 0);
 }
 
+#[test]
+fn alignment_helpers_have_exact_rounding_search_and_score_boundaries() {
+    assert_eq!(alignment_offset((4.6, 3.4), (2.2, 1.7)), (2, 2));
+    assert_eq!(alignment_offset((1.2, 2.1), (3.6, 5.8)), (-2, -4));
+    assert_eq!(fine_offsets(4), [3, 4, 5]);
+    assert_eq!(fine_offsets(-4), [-5, -4, -3]);
+
+    assert!(within_alignment_window(6, -6));
+    assert!(!within_alignment_window(7, 0));
+    assert!(!within_alignment_window(0, -7));
+
+    let best = (InputDir::Left, 5);
+    assert_eq!(
+        rank_direction_candidate(best, 9, (InputDir::Right, 4)),
+        ((InputDir::Right, 4), 5)
+    );
+    assert_eq!(
+        rank_direction_candidate(best, 9, (InputDir::Right, 5)),
+        (best, 5)
+    );
+    assert_eq!(
+        rank_direction_candidate(best, 9, (InputDir::Right, 7)),
+        (best, 7)
+    );
+    assert_eq!(
+        rank_direction_candidate(best, 9, (InputDir::Right, 9)),
+        (best, 9)
+    );
+
+    assert!(direction_score_is_accepted(32, 40));
+    assert!(!direction_score_is_accepted(33, 41));
+    assert!(!direction_score_is_accepted(32, 39));
+}
+
 /// 重心は白い点の平均の位置。
 #[test]
 fn the_centroid_is_the_average_position_of_the_white_pixels() {
     let mut mask = [0u64; DIR_H];
-    mask[2] = 1 << 4;
+    mask[2] = (1 << 4) | (1 << 8);
     mask[6] = 1 << 8;
 
     let (x, y) = mask_centroid(&mask).expect("白があれば重心がある");
 
-    assert!((x - 6.0).abs() < 1e-5, "x={x}");
-    assert!((y - 4.0).abs() < 1e-5, "y={y}");
+    assert!((x - 20.0 / 3.0).abs() < 1e-5, "x={x}");
+    assert!((y - 10.0 / 3.0).abs() < 1e-5, "y={y}");
 }
 
 /// 白が一つも無ければ重心は無い。
@@ -271,4 +309,8 @@ fn the_amount_of_white_decides_empty_from_washed_out() {
 
     let (_, wide_uncertain, _) = read_with_white(701);
     assert!(wide_uncertain, "白飛びを空の行にしている");
+
+    let (_, exact_uncertain, exact_score) = read_with_white(700);
+    assert!(exact_uncertain);
+    assert_ne!(exact_score, u32::MAX, "上限ちょうどを早期棄却している");
 }

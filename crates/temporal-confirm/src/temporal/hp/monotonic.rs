@@ -50,46 +50,48 @@ pub(super) fn normalize_structural_full_runs(
     opponent: &mut [f32],
     match_frames: &[bool],
 ) {
-    let mut index = 0;
-    while index < own.len() {
-        if !is_structural_full(features, own, opponent, match_frames, index) {
-            index += 1;
-            continue;
+    let mut runs = Vec::new();
+    let mut run_start = None;
+    for (index, _) in own.iter().enumerate() {
+        if is_structural_full(features, own, opponent, match_frames, index) {
+            run_start.get_or_insert(index);
+        } else if let Some(start) = run_start.take() {
+            runs.push((start, index));
         }
-        let start = index;
-        while index < own.len() && is_structural_full(features, own, opponent, match_frames, index)
-        {
-            index += 1;
+    }
+    if let Some(start) = run_start {
+        runs.push((start, own.len()));
+    }
+
+    for (start, end) in runs {
+        if end - start >= FULL_MIN_RUN {
+            if let Some((gap_start, _gap_end)) = recent_non_match_gap(match_frames, start) {
+                if has_round_recovery(own, opponent, match_frames, gap_start, start) {
+                    let mut own_baseline = own[start];
+                    let mut opponent_baseline = opponent[start];
+                    for (&own_value, &opponent_value) in
+                        own.iter().zip(opponent.iter()).take(end).skip(start)
+                    {
+                        own_baseline = own_baseline.min(own_value);
+                        opponent_baseline = opponent_baseline.min(opponent_value);
+                    }
+                    promote_opening_side(own, match_frames, start, own_baseline);
+                    promote_opening_side(opponent, match_frames, start, opponent_baseline);
+                }
+            }
         }
-        if index - start < FULL_MIN_RUN {
-            continue;
-        }
-        let Some((gap_start, _gap_end)) = recent_non_match_gap(match_frames, start) else {
-            continue;
-        };
-        if !has_round_recovery(own, opponent, match_frames, gap_start, start) {
-            continue;
-        }
-        let own_baseline = own[start..index].iter().copied().fold(1.0, f32::min);
-        let opponent_baseline = opponent[start..index].iter().copied().fold(1.0, f32::min);
-        let own_end = promote_opening_side(own, match_frames, start, own_baseline);
-        let opponent_end = promote_opening_side(opponent, match_frames, start, opponent_baseline);
-        index = index.max(own_end).max(opponent_end);
     }
 }
 
-fn promote_opening_side(
-    values: &mut [f32],
-    match_frames: &[bool],
-    start: usize,
-    baseline: f32,
-) -> usize {
-    let mut end = start;
-    while end < values.len() && match_frames[end] && values[end] >= baseline - OPENING_EDGE_JITTER {
-        values[end] = 1.0;
-        end += 1;
+fn promote_opening_side(values: &mut [f32], match_frames: &[bool], start: usize, baseline: f32) {
+    let mut promoting = true;
+    for (value, &is_match) in values.iter_mut().zip(match_frames).skip(start) {
+        if promoting && is_match && *value >= baseline - OPENING_EDGE_JITTER {
+            *value = 1.0;
+        } else {
+            promoting = false;
+        }
     }
-    end
 }
 
 fn is_structural_full(
@@ -120,18 +122,24 @@ fn is_structural_full(
 fn recent_non_match_gap(match_frames: &[bool], start: usize) -> Option<(usize, usize)> {
     let search_start = start.saturating_sub(ROUND_GAP_LOOKBACK);
     let mut latest = None;
-    let mut index = search_start;
-    while index < start {
-        if match_frames[index] {
-            index += 1;
-            continue;
+    let mut gap_start = None;
+    for (index, &is_match) in match_frames
+        .iter()
+        .enumerate()
+        .take(start)
+        .skip(search_start)
+    {
+        if !is_match {
+            gap_start.get_or_insert(index);
+        } else if let Some(gap_start) = gap_start.take() {
+            if index - gap_start >= ROUND_GAP_MIN {
+                latest = Some((gap_start, index));
+            }
         }
-        let gap_start = index;
-        while index < start && !match_frames[index] {
-            index += 1;
-        }
-        if index - gap_start >= ROUND_GAP_MIN {
-            latest = Some((gap_start, index));
+    }
+    if let Some(gap_start) = gap_start {
+        if start - gap_start >= ROUND_GAP_MIN {
+            latest = Some((gap_start, start));
         }
     }
     latest
@@ -145,12 +153,15 @@ fn has_round_recovery(
     candidate_start: usize,
 ) -> bool {
     let candidate_min = own[candidate_start].min(opponent[candidate_start]);
-    let prior_min = (0..gap_start)
+    let prior_min = own
+        .iter()
+        .zip(opponent.iter())
+        .zip(match_frames.iter())
+        .take(gap_start)
         .rev()
-        .filter(|&index| match_frames[index])
-        .filter_map(|index| {
-            let value = own[index].min(opponent[index]);
-            (value >= 0.0).then_some(value)
+        .filter_map(|((&own, &opponent), &is_match)| {
+            let value = own.min(opponent);
+            (is_match && value >= 0.0).then_some(value)
         })
         .take(ROUND_GAP_LOOKBACK)
         .reduce(f32::min);
@@ -345,6 +356,152 @@ mod tests {
             );
             (self.own, self.opponent)
         }
+    }
+
+    #[test]
+    fn structural_full_checks_every_signal_and_exact_threshold() {
+        let mut frame = feature(0, 1.0);
+        frame.is_match_screen = true;
+        frame.left_drive_ratio = FULL_DRIVE;
+        frame.right_drive_ratio = FULL_DRIVE;
+        let matches = [true];
+        let hp = [STRUCTURAL_FULL_HP];
+        let check = |frame: &FrameFeatures| {
+            is_structural_full(std::slice::from_ref(frame), &hp, &hp, &matches, 0)
+        };
+
+        assert!(check(&frame));
+
+        for changed in 0..6 {
+            let mut invalid = frame.clone();
+            match changed {
+                0 => invalid.left_drive_ratio = FULL_DRIVE - 0.001,
+                1 => invalid.right_drive_ratio = FULL_DRIVE - 0.001,
+                2 => invalid.left_burnout = true,
+                3 => invalid.right_burnout = true,
+                4 => invalid.left_drive_uncertain = true,
+                5 => invalid.right_drive_uncertain = true,
+                _ => unreachable!(),
+            }
+            assert!(!check(&invalid), "signal {changed} was ignored");
+        }
+
+        assert!(!is_structural_full(
+            &[frame.clone()],
+            &[0.899],
+            &hp,
+            &matches,
+            0
+        ));
+        assert!(!is_structural_full(&[frame], &hp, &[0.899], &matches, 0));
+        assert!(!is_structural_full(&[], &[], &[], &[], 0));
+        assert!(!is_structural_full(&[feature(0, 1.0)], &hp, &hp, &[], 0));
+
+        let mut invalid_first = feature(0, 1.0);
+        invalid_first.is_match_screen = true;
+        invalid_first.left_drive_ratio = 0.0;
+        let mut valid_second = feature(1, 1.0);
+        valid_second.is_match_screen = true;
+        valid_second.left_drive_ratio = FULL_DRIVE;
+        valid_second.right_drive_ratio = FULL_DRIVE;
+        assert!(!is_structural_full(
+            &[invalid_first, valid_second],
+            &[STRUCTURAL_FULL_HP; 2],
+            &[STRUCTURAL_FULL_HP; 2],
+            &[true; 2],
+            0
+        ));
+        assert!(is_structural_full(
+            &[feature(0, 1.0), {
+                let mut frame = feature(1, 1.0);
+                frame.is_match_screen = true;
+                frame.left_drive_ratio = FULL_DRIVE;
+                frame.right_drive_ratio = FULL_DRIVE;
+                frame
+            }],
+            &[STRUCTURAL_FULL_HP; 2],
+            &[STRUCTURAL_FULL_HP; 2],
+            &[true; 2],
+            1
+        ));
+    }
+
+    #[test]
+    fn opening_extension_includes_its_edge_and_stops_after_it() {
+        let baseline = 0.92;
+        let edge = baseline - OPENING_EDGE_JITTER;
+        let mut values = [baseline, edge, edge - 0.001, baseline];
+
+        promote_opening_side(&mut values, &[true; 4], 0, baseline);
+
+        assert_eq!(values[0], 1.0);
+        assert_eq!(values[1], 1.0);
+        assert_eq!(values[2], edge - 0.001);
+        assert_eq!(values[3], baseline, "途切れた後から昇格を再開している");
+    }
+
+    #[test]
+    fn an_exact_structural_run_uses_each_sides_lowest_opening_sample() {
+        let mut opening = Opening::new();
+        opening.own[90] = STRUCTURAL_FULL_HP;
+        opening.opponent[91] = STRUCTURAL_FULL_HP;
+        opening.own[100] = 0.904;
+        opening.opponent[100] = 0.904;
+        opening.features[100].left_drive_ratio = 0.0;
+        opening.own[101] = 0.7;
+        opening.opponent[101] = 0.7;
+
+        let (own, opponent) = opening.normalize();
+
+        assert_eq!(own[100], 1.0);
+        assert_eq!(opponent[100], 1.0);
+        assert_eq!(own[101], 0.7);
+        assert_eq!(opponent[101], 0.7);
+    }
+
+    #[test]
+    fn transition_search_has_exact_length_and_lookback_edges() {
+        let mut exact = vec![true; 300];
+        exact[80..80 + ROUND_GAP_MIN].fill(false);
+        assert_eq!(
+            recent_non_match_gap(&exact, 200),
+            Some((80, 80 + ROUND_GAP_MIN))
+        );
+
+        let mut short = vec![true; 300];
+        short[80..80 + ROUND_GAP_MIN - 1].fill(false);
+        assert_eq!(recent_non_match_gap(&short, 200), None);
+
+        let mut too_old = vec![true; 300];
+        too_old[0..ROUND_GAP_MIN].fill(false);
+        assert_eq!(recent_non_match_gap(&too_old, 250), None);
+
+        let start = 100;
+        let mut candidate_frame_is_not_part_of_the_gap = vec![true; 150];
+        candidate_frame_is_not_part_of_the_gap[start - ROUND_GAP_MIN + 1..=start].fill(false);
+        assert_eq!(
+            recent_non_match_gap(&candidate_frame_is_not_part_of_the_gap, start),
+            None
+        );
+
+        let mut ending_at_candidate = vec![true; 150];
+        ending_at_candidate[start - ROUND_GAP_MIN..start].fill(false);
+        assert_eq!(
+            recent_non_match_gap(&ending_at_candidate, start),
+            Some((start - ROUND_GAP_MIN, start))
+        );
+    }
+
+    #[test]
+    fn round_recovery_includes_the_exact_material_gain() {
+        let own = [0.50, 0.50, 0.50, 0.50 + ROUND_RECOVERY_MIN];
+        let opponent = own;
+        let matches = [true, true, true, true];
+        assert!(has_round_recovery(&own, &opponent, &matches, 3, 3));
+
+        let below = [0.50, 0.50, 0.50, 0.50 + ROUND_RECOVERY_MIN - 0.001];
+        assert!(!has_round_recovery(&below, &below, &matches, 3, 3));
+        assert!(has_round_recovery(&own, &opponent, &[false; 4], 3, 3));
     }
 
     /// 画面の切り替わりの後に続く、両者ほぼ満タン・ドライブも満タンの

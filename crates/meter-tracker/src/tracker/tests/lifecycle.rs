@@ -5,6 +5,8 @@ use super::{insert_read, shared_pair, MeterTracker};
 #[test]
 fn open_and_close_segment_reset_state_and_finalize_pending_reads() {
     let mut tracker = MeterTracker::new();
+    assert_eq!(tracker.left.side, "left");
+    assert_eq!(tracker.right.side, "right");
     insert_read(&mut tracker, "left", 1, "stale", 1.0, false);
     tracker.dwell.insert(1, [1, 2]);
     tracker.divergence = 4;
@@ -39,6 +41,8 @@ fn open_and_close_segment_reset_state_and_finalize_pending_reads() {
         ),
         (4, "active", 10, 12, 0.877)
     );
+    assert_eq!(tracker.emitted["left"][&4], "active");
+    assert_eq!(tracker.emitted["right"][&4], "stun");
 }
 
 #[test]
@@ -79,4 +83,18 @@ fn emission_uses_unknown_state_and_missing_video_sentinels() {
         ),
         ("unknown", -1, -1, 0.0)
     );
+}
+
+#[test]
+fn emission_includes_a_dwell_entry_without_any_colour_read() {
+    let mut tracker = MeterTracker::new();
+    tracker.open_segment(7);
+    tracker.dwell.insert(7, [20, 22]);
+
+    tracker.close_segment();
+
+    let left = &tracker.left.segments[0].entries[0];
+    assert_eq!(left.game_frame, 7);
+    assert_eq!(left.state, "unknown");
+    assert_eq!((left.video_frame_first, left.video_frame_last), (20, 22));
 }

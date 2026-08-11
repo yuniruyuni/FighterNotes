@@ -26,52 +26,67 @@ pub fn match_digit_gray(f: &Frame, x0: usize, y0: usize) -> (u32, u32, u32) {
             }
         }
         let mut sbest = u32::MAX;
-        for dy in -1i32..=1 {
-            for dx in -1i32..=1 {
+        for dy in [-1i32, 0, 1] {
+            for dx in [-1i32, 0, 1] {
                 let (mut sum_s, mut sum_ss, mut sum_st) = (0i64, 0i64, 0i64);
                 for y in 0..DIGIT_H {
                     let mrow = mask[y];
-                    if mrow == 0 {
-                        continue;
-                    }
-                    for (x, &template_value) in means[y].iter().enumerate() {
-                        if mrow & (1 << x) == 0 {
-                            continue;
+                    if mrow != 0 {
+                        for (x, &template_value) in means[y].iter().enumerate() {
+                            if mrow & (1 << x) == 0 {
+                                continue;
+                            }
+                            let sx = shifted_coordinate(x0, x, dx);
+                            let sy = shifted_coordinate(y0, y, dy);
+                            let sv = i64::from(f.gray(sx, sy));
+                            let tv = i64::from(template_value);
+                            sum_s += sv;
+                            sum_ss += sv * sv;
+                            sum_st += sv * tv;
                         }
-                        let sx = (x0 as i32 + x as i32 + dx).max(0) as usize;
-                        let sy = (y0 as i32 + y as i32 + dy).max(0) as usize;
-                        let sv = i64::from(f.gray(sx, sy));
-                        let tv = i64::from(template_value);
-                        sum_s += sv;
-                        sum_ss += sv * sv;
-                        sum_st += sv * tv;
                     }
-                }
-                if n < 20 {
-                    continue;
                 }
                 // Pearson相関を和だけで計算する。平均との差分を配列へ保存して
                 // 2周目を回す式と等価で、一時配列と再走査を避けられる。
                 let numerator = n * sum_st - sum_s * sum_t;
                 let sample_variance = n * sum_ss - sum_s * sum_s;
                 let template_variance = n * sum_tt - sum_t * sum_t;
-                if sample_variance <= 0 || template_variance <= 0 {
-                    continue;
+                if variances_are_positive(sample_variance, template_variance) {
+                    let denominator =
+                        ((sample_variance as f64) * (template_variance as f64)).sqrt();
+                    let r = numerator as f64 / denominator;
+                    let score = ((1.0 - r) * 100.0).max(0.0) as u32;
+                    sbest = sbest.min(score);
                 }
-                let denominator = ((sample_variance as f64) * (template_variance as f64)).sqrt();
-                let r = numerator as f64 / denominator;
-                let score = ((1.0 - r) * 100.0).max(0.0) as u32;
-                sbest = sbest.min(score);
             }
         }
-        if sbest < best.1 {
-            second = best;
-            best = (d as u32, sbest);
-        } else if sbest < second.1 {
-            second = (d as u32, sbest);
-        }
+        (best, second) = rank_digit_candidate(best, second, (d as u32, sbest));
     }
     (best.0, best.1, second.1.saturating_sub(best.1))
+}
+
+pub(super) fn shifted_coordinate(origin: usize, offset: usize, shift: i32) -> usize {
+    (origin as i32 + offset as i32 + shift).max(0) as usize
+}
+
+pub(super) fn variances_are_positive(sample: i64, template: i64) -> bool {
+    sample > 0 && template > 0
+}
+
+pub(super) fn rank_digit_candidate(
+    best: (u32, u32),
+    second: (u32, u32),
+    candidate: (u32, u32),
+) -> ((u32, u32), (u32, u32)) {
+    match candidate.1.cmp(&best.1) {
+        std::cmp::Ordering::Less => (candidate, best),
+        std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => {
+            match candidate.1.cmp(&second.1) {
+                std::cmp::Ordering::Less => (best, candidate),
+                std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => (best, second),
+            }
+        }
+    }
 }
 
 /// 桁マッチの許容スコア（(1-相関)×100）。正解 実測 ≤25（背景次第で
@@ -91,6 +106,34 @@ pub(super) const DIGIT_AMBIG_MARGIN: u32 = 3;
 /// 桁ボックスに数字があると見なす最小白ピクセル数
 const DIGIT_MIN_WHITE: u32 = 12;
 
+pub(super) fn digit_evidence(f: &Frame, x0: usize, y0: usize) -> (u32, u32) {
+    let (mut strong, mut weak) = (0, 0);
+    for y in 0..DIGIT_H {
+        for x in 0..DIGIT_W {
+            let value = f.gray(x0 + x, y0 + y);
+            if value > 230 {
+                strong += 1;
+            }
+            if value > 180 {
+                weak += 1;
+            }
+        }
+    }
+    (strong, weak)
+}
+
+pub(super) fn digit_box_has_trace(strong: bool, weak: u32) -> bool {
+    strong || weak >= DIGIT_MIN_WHITE
+}
+
+pub(super) fn digit_match_is_accepted(score: u32, margin: u32) -> bool {
+    score <= DIGIT_MAX_DIFF || (score <= DIGIT_MARGIN_MAX_DIFF && margin >= DIGIT_MARGIN_MIN)
+}
+
+fn unreadable_count() -> (Option<u32>, bool, u32) {
+    (None, true, u32::MAX)
+}
+
 /// カウント数字列を読む。右端（ones）から左へ最大 MAX_DIGITS 桁。
 /// 戻り値: (count, uncertain, スコア合計)。スコアが小さいほど確信度が高い。
 ///
@@ -101,44 +144,31 @@ pub(super) fn read_count(f: &Frame, ones_x: u32, y0: usize) -> (Option<u32>, boo
     let mut scale = 1u32;
     let mut digits = 0usize;
     let mut total_score = 0u32;
-    for k in 0..MAX_DIGITS {
-        let x0 = ones_x as i64 - (k as i64) * DIGIT_W as i64;
-        if x0 < 0 {
-            break;
-        }
-        let x0 = x0 as usize;
+    let available_columns = (ones_x as usize / DIGIT_W + 1).min(MAX_DIGITS);
+    for k in 0..available_columns {
+        let x0 = ones_x as usize - k * DIGIT_W;
         // 桁存在判定: グリフの白芯（240+）は背景（透過部のキャラ肌 ≤220 等）より
         // 明るいため、強証拠は >230。暗転時はグリフ全体が沈むため、弱証拠
         // （>180）+ NCC 一致でも桁ありとする。
         // パネルの上に他の演出が重なることはない（グリフは常に不透明）ので、
         // 弱証拠のみで NCC 全滅なら「桁なし」（背景ノイズ）と断定できる
-        let (mut n_strong, mut n_weak) = (0u32, 0u32);
-        for y in 0..DIGIT_H {
-            for x in 0..DIGIT_W {
-                let v = f.gray(x0 + x, y0 + y);
-                if v > 230 {
-                    n_strong += 1;
-                }
-                if v > 180 {
-                    n_weak += 1;
-                }
-            }
-        }
+        let (n_strong, n_weak) = digit_evidence(f, x0, y0);
         let strong = n_strong >= 8;
-        if !strong && n_weak < DIGIT_MIN_WHITE {
+        if !digit_box_has_trace(strong, n_weak) {
             break; // 桁なし = 数字列の終端
         }
         let (d, score, margin) = match_digit_gray(f, x0, y0);
-        let accepted = score <= DIGIT_MAX_DIFF
-            || (score <= DIGIT_MARGIN_MAX_DIFF && margin >= DIGIT_MARGIN_MIN);
-        if !accepted {
+        if !digit_match_is_accepted(score, margin) {
             if strong {
-                return (None, true, u32::MAX); // 白芯があるのに読めない = 想定外
+                return unreadable_count(); // 白芯があるのに読めない = 想定外
             }
             break; // 弱証拠のみ + NCC 全滅 = 背景ノイズ → 桁なし
         }
-        if margin < DIGIT_AMBIG_MARGIN {
-            return (None, true, u32::MAX); // 描画劣化で原理的に曖昧
+        match margin.cmp(&DIGIT_AMBIG_MARGIN) {
+            std::cmp::Ordering::Less => {
+                return unreadable_count(); // 描画劣化で原理的に曖昧
+            }
+            std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => {}
         }
         value += d * scale;
         scale *= 10;

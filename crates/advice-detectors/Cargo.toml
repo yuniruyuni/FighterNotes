@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
+[features]
+# 各検出器を確実に発火させるイベント列。検出器を束ねる上位 crate が、
+# 呼び出しの配線まで検査するために使う。
+test-support = ["match-event-layer/test-support"]
+
 [dependencies]
 advice-model = { path = "../advice-model" }
 analysis-context = { path = "../analysis-context" }

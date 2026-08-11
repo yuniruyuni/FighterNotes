@@ -10,9 +10,9 @@
 
 use super::support::*;
 use crate::match_events::{
-    ContactEvent, DamageEvent, DriveImpactEvent, DriveImpactOutcome, EventConfidence,
-    InputEvidence, InputSegment, JumpDirection, JumpEvent, JumpOutcome, MatchEvents, MeterState,
-    MinusPressEvent, MinusPressOutcome, ReversalEvent,
+    CompoundThreat, ContactEvent, DamageEvent, DriveImpactEvent, DriveImpactOutcome,
+    EventConfidence, InputEvidence, InputSegment, JumpDirection, JumpEvent, JumpOutcome,
+    MatchEvents, MeterState, MinusPressEvent, MinusPressOutcome, ReversalEvent, ThreatOutcome,
 };
 
 /// 押した入力。
@@ -429,6 +429,7 @@ fn the_wording_changes_when_it_repeats() {
 
     assert_eq!(once.kind, AdviceKind::Observation);
     assert_eq!(twice.kind, AdviceKind::Diagnosis);
+    assert_eq!(once.id, "mashing");
     assert_eq!(once.id, twice.id);
     assert_ne!(once.title, twice.title, "見出しを書き分けていない");
     assert_ne!(
@@ -467,7 +468,6 @@ fn an_input_without_a_badge_still_gets_a_name() {
     events.segments[0][0].dir = "N".to_string();
     // ボタンを含む扱いにするため、自動入力として記録された場面にする。
     events.segments[0][0].auto = true;
-    events.segments[0][0].badges = vec!["AUTO".to_string()];
 
     let card = detect_mashing(&[], &events, 1, 0).expect("提示される");
 
@@ -637,5 +637,99 @@ fn losing_to_an_invincible_move_is_not_a_mash() {
     assert!(
         !with_invincibility_at(979),
         "遠すぎる無敵まで結び付けている"
+    );
+}
+
+/// 被弾フレームそのものから始まった無敵表示は、押した時点で既に無敵
+/// だった根拠にはしない。
+#[test]
+fn invincibility_starting_on_the_hit_frame_is_not_counterplay() {
+    let mut events = one_mash();
+    back_the_press_with_a_move(&mut events);
+    events.meter_state[1][1000] = MeterState::Invincible;
+
+    assert!(
+        detect_mashing(&[], &events, 1, 0).is_some(),
+        "被弾と同時の無敵表示まで事前の切り返しにしている"
+    );
+}
+
+/// 被弾フレームだけで技中・発生の双方を確認できる場合も窓に含める。
+#[test]
+fn startup_on_the_hit_frame_is_inside_both_confirmation_windows() {
+    let mut events = one_mash();
+    events.meter_state = [vec![MeterState::Free; 2000], vec![MeterState::Free; 2000]];
+    events.meter_confidence = [vec![1.0; 2000], vec![1.0; 2000]];
+    events.meter_state[0][1000] = MeterState::Startup;
+
+    assert!(
+        detect_mashing(&[], &events, 1, 0).is_some(),
+        "確認窓の終端フレームを除外している"
+    );
+}
+
+/// P2 の実行裏付けは P2 側のメーターから読む。
+#[test]
+fn second_player_execution_uses_the_second_meter() {
+    let mut events = one_mash();
+    for damage in &mut events.damage {
+        damage.victim = 2;
+    }
+    events.segments[1] = std::mem::take(&mut events.segments[0]);
+    events.meter_state = [vec![MeterState::Free; 2000], vec![MeterState::Free; 2000]];
+    events.meter_confidence = [vec![1.0; 2000], vec![1.0; 2000]];
+    for frame in 995..=1000 {
+        events.meter_state[1][frame] = MeterState::Startup;
+    }
+
+    assert!(
+        detect_mashing(&[], &events, 2, 1).is_some(),
+        "P1 側のメーターを参照している"
+    );
+}
+
+/// P2 が撃った飛び道具も、P2 側のメーターから除外する。
+#[test]
+fn second_player_projectile_counterplay_uses_the_second_meter() {
+    let mut events = one_mash();
+    for damage in &mut events.damage {
+        damage.victim = 2;
+    }
+    events.segments[1] = std::mem::take(&mut events.segments[0]);
+    events.meter_state = [vec![MeterState::Free; 2000], vec![MeterState::Free; 2000]];
+    events.meter_confidence = [vec![1.0; 2000], vec![1.0; 2000]];
+    for frame in 995..=1000 {
+        events.meter_state[1][frame] = MeterState::Startup;
+    }
+    events.meter_state[1][1004] = MeterState::ProjectileActive;
+
+    assert!(
+        detect_mashing(&[], &events, 2, 1).is_none(),
+        "P2 の飛び道具を暴れとしている"
+    );
+}
+
+/// 複合連係の後段で受けた被弾は、専用カードへ譲る。
+#[test]
+fn a_compound_threat_belongs_to_the_layered_defense_card() {
+    let mut events = one_mash();
+    events.compound_threats = vec![CompoundThreat {
+        attacker: 2,
+        defender: 1,
+        projectile_start_frame: 900,
+        teleport_frame: 940,
+        followup_attack_frame: 990,
+        followup_contact_frame: Some(1000),
+        projectile_response: None,
+        followup_response: None,
+        outcome: ThreatOutcome::Hit,
+        damage: 0.12,
+        round_no: 1,
+        confidence: 1.0,
+    }];
+
+    assert!(
+        detect_mashing(&[], &events, 1, 0).is_none(),
+        "複合連係の被弾を暴れにも重複計上している"
     );
 }

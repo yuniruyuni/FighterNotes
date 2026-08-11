@@ -30,6 +30,7 @@ fn one_early_hit_is_kept_as_an_observation() {
 
     let card = detect_early_hits(&ev, &[round], 1).expect("単発も確認場面にする");
     assert_eq!(card.kind, AdviceKind::Observation);
+    assert!((card.severity - 0.05).abs() < 1e-6);
     assert_invites_user_review(&card);
     assert_eq!(card.evidence.len(), 1);
 }

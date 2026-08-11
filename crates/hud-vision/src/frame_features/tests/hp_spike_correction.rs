@@ -7,7 +7,15 @@
 //! ここを取り違えると、実ダメージを消すか、無いダメージを作るかのどちらかに
 //! なる。どちらも集計を直接壊す。
 
-use crate::frame_features::{compute_spike_frames, spike_hold_forward_pass};
+use super::support::make_frame;
+use crate::frame_features::{compute_spike_frames, correct_hp_side, spike_hold_forward_pass};
+
+#[test]
+#[should_panic(expected = "stun flags must be empty or aligned with features")]
+fn stun_flags_must_align_with_the_feature_timeline() {
+    let mut features = vec![make_frame(1.0, false, true); 2];
+    correct_hp_side(&mut features, "p1", "left", &[false]);
+}
 
 /// 1 ラウンド分の走査範囲。
 fn one_round(len: usize) -> (Vec<bool>, Vec<usize>) {
@@ -127,6 +135,24 @@ fn the_rounds_are_compared_separately() {
     assert!(
         !separated[195],
         "ラウンド内で比べれば、ただの平常値をスパイクにしない"
+    );
+}
+
+/// 新しいラウンドの冒頭では、直前のラウンドにあった低い読みを後方窓へ
+/// 混ぜない。前ラウンドを含めると、両側に低い値があるように見えてしまう。
+#[test]
+fn the_backward_window_stops_at_the_round_start() {
+    let mut raw = vec![0.40_f32; 400];
+    raw[200] = 0.60;
+    raw[201] = 0.62;
+    raw[202..].fill(0.40);
+    let in_match = vec![true; raw.len()];
+
+    let spikes = compute_spike_frames(&raw, &in_match, &[0, 200, 400]);
+
+    assert!(
+        !spikes[201],
+        "前ラウンドの低い読みを新ラウンドの後方窓へ混ぜている"
     );
 }
 

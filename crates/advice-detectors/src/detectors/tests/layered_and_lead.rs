@@ -133,6 +133,7 @@ fn a_single_short_parry_stays_an_observation() {
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Observation);
     assert_eq!(card.hp_lost, Some(0.18));
+    assert!((card.severity - 0.20).abs() < 1e-6);
 }
 
 /// 繰り返していれば、防御回答の見直し候補。
@@ -145,6 +146,7 @@ fn repeating_the_short_parry_becomes_a_diagnosis() {
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Diagnosis);
     assert!((card.hp_lost.expect("損失がある") - 0.36).abs() < 1e-6);
+    assert!((card.severity - 0.40).abs() < 1e-6);
 }
 
 /// 同じ状況が何回あったかを分母に出す。受け切れている回もあるなら、
@@ -283,11 +285,42 @@ fn the_card_lists_the_rounds_without_judging_them() {
 
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Observation);
+    assert!((card.severity - 0.15).abs() < 1e-6);
     assert!(
         card.description.contains("断定"),
         "決められないことを決めている: {}",
         card.description
     );
+}
+
+/// 逆転されたラウンド数を重みにそのまま反映する。
+#[test]
+fn two_lost_leads_have_twice_the_base_weight() {
+    let mut events = round_with((1.0, 0.0), (0.6, 0.4));
+    let own_round = events.hp[0].clone();
+    let opponent_round = events.hp[1].clone();
+    events.hp[0].extend_from_slice(&own_round);
+    events.hp[1].extend_from_slice(&opponent_round);
+    let second_round = crate::match_events::RoundInfo {
+        round_no: 2,
+        start_frame: 600,
+        end_frame: 1199,
+        ..events.rounds[0].clone()
+    };
+    events.rounds.push(second_round);
+
+    let mut rounds = lost_round();
+    rounds.push(RoundSummary {
+        round_no: 2,
+        start_frame: 600,
+        end_frame: 1199,
+        ..rounds[0].clone()
+    });
+
+    let card = detect_lead_loss(&events, &rounds, 0).expect("提示される");
+
+    assert_eq!(card.evidence.len(), 2);
+    assert!((card.severity - 0.30).abs() < 1e-6);
 }
 
 /// クリップは最大リードの時点から、逆転された時点まで。手前から
@@ -333,6 +366,38 @@ fn the_latest_peak_is_the_one_used() {
         card.evidence[0].frame, 349,
         "最後の最大リードを選んでいない"
     );
+}
+
+/// ラウンド終端で初めて最大リードになった場合も、その終端を最大値と
+/// クリップ起点の両方へ含める。
+#[test]
+fn a_peak_on_the_rounds_end_frame_is_included() {
+    let mut events = round_with((1.0, 0.0), (0.6, 0.4));
+    events.hp = [vec![0.5, 0.5, 1.0], vec![0.5, 0.5, 0.0]];
+    events.rounds[0].end_frame = 2;
+    let mut rounds = lost_round();
+    rounds[0].end_frame = 2;
+
+    let card = detect_lead_loss(&events, &rounds, 0).expect("終端の最大リードを検出する");
+
+    assert_eq!(card.evidence[0].frame, 2);
+    assert_eq!(card.evidence[0].end_frame, Some(2));
+}
+
+/// HP が同値になっただけでは逆転ではない。相手 HP が上回る最初の
+/// フレームまで走査を続ける。
+#[test]
+fn tied_health_before_the_flip_is_not_the_flip() {
+    let mut events = round_with((1.0, 0.0), (0.6, 0.4));
+    events.hp = [vec![1.0, 0.5, 0.4], vec![0.6, 0.5, 0.6]];
+    events.rounds[0].end_frame = 2;
+    let mut rounds = lost_round();
+    rounds[0].end_frame = 2;
+
+    let card = detect_lead_loss(&events, &rounds, 0).expect("提示される");
+
+    assert_eq!(card.evidence[0].frame, 0);
+    assert_eq!(card.evidence[0].end_frame, Some(2));
 }
 
 /// 失った HP は、最大リードから逆転までに減った分。

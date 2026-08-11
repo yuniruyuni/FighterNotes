@@ -88,6 +88,7 @@ fn a_single_jump_getting_through_stays_an_observation() {
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Observation, "一度で診断にしている");
     assert_eq!(card.hp_lost, Some(0.15));
+    assert!((card.severity - 0.17).abs() < 1e-6);
 }
 
 /// 決着した飛びの半分以上を通されて、しかも複数回なら対空の課題。
@@ -107,6 +108,31 @@ fn letting_most_jumps_through_becomes_a_diagnosis() {
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Diagnosis, "傾向を拾えていない");
     assert!((card.hp_lost.expect("損失がある") - 0.27).abs() < 1e-6);
+    assert!((card.severity - 0.31).abs() < 1e-6);
+}
+
+/// 決着した飛びがちょうど半々でも、同じ失敗が複数回なら診断にする。
+/// 成功数との足し算と 50% の境界を同時に固定する。
+#[test]
+fn exactly_half_of_resolved_jumps_getting_through_is_inclusive() {
+    let mut jumps = Vec::new();
+    for (index, outcome) in [
+        JumpOutcome::LandedHit,
+        JumpOutcome::LandedHit,
+        JumpOutcome::LandedHit,
+        JumpOutcome::GotHit,
+        JumpOutcome::GotHit,
+        JumpOutcome::GotHit,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        jumps.push(jump(2, 100 + index as u32 * 300, outcome));
+    }
+
+    let card = detect_anti_air(&events_with(jumps, vec![]), 1, 2).expect("提示される");
+
+    assert_eq!(card.kind, AdviceKind::Diagnosis);
 }
 
 /// 通した回数が同じでも、迎撃できている回数の方が多ければ課題ではない。
@@ -279,6 +305,7 @@ fn a_single_stopped_jump_stays_an_observation() {
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Observation);
     assert_eq!(card.hp_lost, Some(0.15));
+    assert!((card.severity - 0.17).abs() < 1e-6);
 }
 
 /// 決着した飛びの半分以上を落とされて、しかも複数回なら接近手段の課題。
@@ -298,6 +325,30 @@ fn being_stopped_most_of_the_time_becomes_a_diagnosis() {
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Diagnosis);
     assert!((card.hp_lost.expect("損失がある") - 0.27).abs() < 1e-6);
+    assert!((card.severity - 0.31).abs() < 1e-6);
+}
+
+/// 自分の飛びも、成功と被対空がちょうど半々なら境界を含める。
+#[test]
+fn exactly_half_of_resolved_own_jumps_getting_stopped_is_inclusive() {
+    let mut jumps = Vec::new();
+    for (index, outcome) in [
+        JumpOutcome::GotHit,
+        JumpOutcome::GotHit,
+        JumpOutcome::GotHit,
+        JumpOutcome::LandedHit,
+        JumpOutcome::LandedHit,
+        JumpOutcome::LandedHit,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        jumps.push(jump(1, 100 + index as u32 * 300, outcome));
+    }
+
+    let card = detect_own_jumps(&events_with(jumps, vec![]), 1).expect("提示される");
+
+    assert_eq!(card.kind, AdviceKind::Diagnosis);
 }
 
 /// 通っている飛びの方が多ければ課題ではない。

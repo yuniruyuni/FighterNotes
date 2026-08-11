@@ -76,6 +76,25 @@ fn a_large_drive_drop_stands_in_for_being_pressured() {
     );
 }
 
+/// ドライブ減少量の閾値はちょうどを含む。
+#[test]
+fn the_drive_drop_threshold_is_inclusive() {
+    let events = one_mash_without_a_meter();
+    let mut features = drive_dropping_by(0.0);
+    for feature in &mut features {
+        feature.left_drive_ratio = if feature.frame_index < 1000 {
+            PRESSURE_DRIVE_DROP
+        } else {
+            0.0
+        };
+    }
+
+    assert!(
+        detect_mashing(&features, &events, 1, 0).is_some(),
+        "閾値ちょうどの減少を落としている"
+    );
+}
+
 /// 観測が無ければ判断しない。
 #[test]
 fn without_any_frame_features_nothing_is_assumed() {
@@ -94,6 +113,20 @@ fn a_burnout_recovery_is_not_a_drive_spend() {
     assert!(detect_mashing(&features, &one_mash_without_a_meter(), 1, 0).is_none());
 }
 
+/// 観測窓の片端だけでもバーンアウトなら、通常ゲージの消費とは扱わない。
+#[test]
+fn burnout_at_either_window_endpoint_rejects_the_drive_drop() {
+    let mut features = drive_dropping_by(0.20);
+    let end = 1000usize;
+    let start = end.saturating_sub(PRESSURE_DRIVE_WINDOW);
+    features[start].left_burnout = true;
+
+    assert!(
+        detect_mashing(&features, &one_mash_without_a_meter(), 1, 0).is_none(),
+        "片端のバーンアウトを無視している"
+    );
+}
+
 /// 見る側を取り違えない。相手のゲージが減っていても、自分が固められて
 /// いたことにはならない。
 #[test]
@@ -107,6 +140,24 @@ fn the_opponents_drive_spend_is_not_yours() {
     assert!(
         detect_mashing(&features, &one_mash_without_a_meter(), 2, 1).is_none(),
         "相手側のゲージで自分を守勢にしている"
+    );
+}
+
+/// P2 の被弾を解析するときは P2 側の入力と右ゲージを使う。
+#[test]
+fn second_player_pressure_uses_the_right_drive_gauge() {
+    let mut events = one_mash_without_a_meter();
+    events.damage[0].victim = 2;
+    events.segments[1] = std::mem::take(&mut events.segments[0]);
+    let mut features = drive_dropping_by(0.20);
+    for feature in &mut features {
+        feature.right_drive_ratio = feature.left_drive_ratio;
+        feature.left_drive_ratio = 1.0;
+    }
+
+    assert!(
+        detect_mashing(&features, &events, 2, 1).is_some(),
+        "P2 の右ゲージ減少を見ていない"
     );
 }
 

@@ -215,3 +215,69 @@ pub fn idx_of(features: &[FrameFeatures], frame: u32) -> usize {
         .binary_search_by_key(&frame, |f| f.frame_index)
         .unwrap_or_else(|i| i.min(features.len().saturating_sub(1)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use meter_tracker::{TimelineEntry, TimelineSegment};
+
+    fn timeline(entries: &[(u32, u32, &str)]) -> MeterTimeline {
+        MeterTimeline {
+            side: "left".to_string(),
+            segments: vec![TimelineSegment {
+                segment_id: 0,
+                entries: entries
+                    .iter()
+                    .enumerate()
+                    .map(|(game_frame, &(first, last, state))| TimelineEntry {
+                        game_frame: game_frame as i64,
+                        state: state.to_string(),
+                        video_frame_first: first as i64,
+                        video_frame_last: last as i64,
+                        confidence: 1.0,
+                    })
+                    .collect(),
+            }],
+        }
+    }
+
+    #[test]
+    fn a_free_entry_does_not_hide_the_later_non_free_state() {
+        let states = state_per_frame(&timeline(&[(0, 1, "empty"), (3, 4, "active")]), 8);
+
+        assert_eq!(states[0], MeterState::Free);
+        assert_eq!(states[3], MeterState::Active);
+    }
+
+    #[test]
+    fn a_meter_state_ends_at_the_inclusive_observed_frame() {
+        let states = state_per_frame(&timeline(&[(2, 4, "active")]), 8);
+
+        assert_eq!(&states[2..=4], &[MeterState::Active; 3]);
+        assert_eq!(states[5], MeterState::Free);
+    }
+
+    #[test]
+    fn round_lookup_uses_the_requested_frame() {
+        let rounds = [
+            RoundInfo {
+                round_no: 1,
+                start_frame: 0,
+                end_frame: 99,
+                winner: None,
+                p1_hp_end: 1.0,
+                p2_hp_end: 1.0,
+            },
+            RoundInfo {
+                round_no: 2,
+                start_frame: 100,
+                end_frame: 199,
+                winner: None,
+                p1_hp_end: 1.0,
+                p2_hp_end: 1.0,
+            },
+        ];
+
+        assert_eq!(round_of(&rounds, 150), Some(2));
+    }
+}

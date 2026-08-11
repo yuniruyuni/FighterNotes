@@ -2,6 +2,8 @@ mod button_glyphs;
 mod conservative;
 mod digits;
 mod direction;
+mod mask;
+mod pixel;
 mod support;
 mod synthetic_rows;
 mod template_quality;

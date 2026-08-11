@@ -84,3 +84,16 @@ impl SpatialConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_playfield_has_all_four_calibrated_edges() {
+        assert_eq!(
+            SpatialConfig::default().playfield,
+            SpatialRect::new(0.0, 0.14, 1.0, 0.97)
+        );
+    }
+}

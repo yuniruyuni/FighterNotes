@@ -17,9 +17,6 @@ impl CellBounds {
 pub(crate) fn cell_bounds(row_width: usize, index: usize) -> Option<CellBounds> {
     let cell_x1 = row_width * index / CELL_COUNT;
     let cell_x2 = row_width * (index + 1) / CELL_COUNT;
-    if cell_x1 >= cell_x2 {
-        return None;
-    }
     let trim_x = ((cell_x2 - cell_x1) / 8).max(1);
     let x1 = cell_x1 + trim_x;
     let x2 = cell_x2.saturating_sub(trim_x).max(x1 + 1).min(row_width);
@@ -67,11 +64,13 @@ pub(crate) fn write_digit_patch(
     if pixels.patch_height < DIGIT_TEMPLATE_H || bounds.width() < DIGIT_TEMPLATE_W {
         return false;
     }
-    for row in 0..DIGIT_TEMPLATE_H {
-        for column in 0..DIGIT_TEMPLATE_W {
-            output[row * DIGIT_TEMPLATE_W + column] =
-                pixels.value[(pixels.trim_y + row) * pixels.width + bounds.x1 + column];
-        }
+    let source_rows = pixels
+        .value
+        .chunks_exact(pixels.width)
+        .skip(pixels.trim_y)
+        .take(DIGIT_TEMPLATE_H);
+    for (output_row, source_row) in output.chunks_exact_mut(DIGIT_TEMPLATE_W).zip(source_rows) {
+        output_row.copy_from_slice(&source_row[bounds.x1..][..DIGIT_TEMPLATE_W]);
     }
     normalize(output);
     true

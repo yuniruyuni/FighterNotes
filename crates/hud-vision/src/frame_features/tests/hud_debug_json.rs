@@ -180,6 +180,60 @@ fn the_pixel_counts_stay_within_the_pixels_read() {
     }
 }
 
+#[test]
+fn pixel_detail_reports_exact_rows_hsv_and_each_counted_colour() {
+    let mut rgba = vec![0u8; WIDTH as usize * HEIGHT as usize * 4];
+    let samples = [
+        (100usize, [200u8, 200, 200], "White", "nW"),
+        (101usize, [220u8, 0, 0], "Fill", "nF"),
+        (102usize, [200u8, 180, 150], "YW", "nY"),
+        (103usize, [255u8, 190, 0], "Orange", "nO"),
+    ];
+    for (column, rgb, _, _) in samples {
+        for row in HP_COL_ROW_SKIP_TOP..31 - HP_COL_ROW_SKIP_BOTTOM {
+            let offset = ((row - HP_COL_ROW_SKIP_TOP) as f32 * HP_BAR_SLOPE).round() as usize;
+            let x = 172 + column + offset;
+            let y = 64 + row;
+            let index = (y * WIDTH as usize + x) * 4;
+            rgba[index..index + 3].copy_from_slice(&rgb);
+            rgba[index + 3] = 255;
+        }
+    }
+
+    let detail: serde_json::Value = serde_json::from_str(&hp_col_pixel_detail_json(
+        &rgba, WIDTH, HEIGHT, "p1", 100, 103,
+    ))
+    .expect("JSON である");
+    let columns = detail.as_array().expect("配列である");
+    assert_eq!(columns.len(), 4);
+    for (offset, (column, (_, rgb, class, count_key))) in columns.iter().zip(samples).enumerate() {
+        assert_eq!(column["cy"], 100 + offset as u64);
+        assert_eq!(column["col_cls"], class);
+        assert_eq!(column["total"], 22);
+        assert_eq!(column[count_key], 22);
+        let rows = column["rows"].as_array().expect("行配列である");
+        assert_eq!(rows.len(), 22);
+        assert_eq!(rows.first().unwrap()["ry"], 5);
+        assert_eq!(rows.last().unwrap()["ry"], 26);
+        assert_eq!(rows[0]["r"], rgb[0]);
+        assert_eq!(rows[0]["g"], rgb[1]);
+        assert_eq!(rows[0]["b"], rgb[2]);
+    }
+    assert_eq!(columns[1]["rows"][0]["h"], 0);
+    assert_eq!(columns[1]["rows"][0]["s"], 255);
+    assert_eq!(columns[1]["rows"][0]["v"], 220);
+}
+
+#[test]
+fn debug_output_serializes_present_and_missing_boundaries() {
+    let rgba = make_rgba_p1_bar_yellow_with_orange(0.25, 350, 100);
+    let value: serde_json::Value =
+        serde_json::from_str(&hp_bar_debug_json(&rgba, WIDTH, HEIGHT, "p1")).expect("JSON である");
+
+    assert!(value["fill_edge_cy"].is_number());
+    assert!(value["damage_left_cy"].is_null());
+}
+
 /// ROI の外は頼まれても返さない。範囲外を読む手前で止める。
 #[test]
 fn the_pixel_detail_stops_at_the_edge_of_the_roi() {

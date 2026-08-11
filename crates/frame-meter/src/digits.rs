@@ -49,29 +49,13 @@ pub(crate) fn digit_correlations(cells_vpatch: &[f32]) -> Option<Vec<[f32; 10]>>
 
     for dy in [-1i32, 0, 1] {
         let source_y = dy.max(0) as usize;
-        let source_y_end = if dy >= 0 {
-            height
-        } else {
-            height - (-dy) as usize
-        };
         let template_y = (-dy).max(0) as usize;
-        let row_count = source_y_end - source_y;
-        if row_count == 0 {
-            continue;
-        }
+        let row_count = height - dy.unsigned_abs() as usize;
 
         for dx in [-2i32, -1, 0, 1, 2] {
             let source_x = dx.max(0) as usize;
-            let source_x_end = if dx >= 0 {
-                width
-            } else {
-                width - (-dx) as usize
-            };
             let template_x = (-dx).max(0) as usize;
-            let column_count = source_x_end - source_x;
-            if column_count == 0 {
-                continue;
-            }
+            let column_count = width - dx.unsigned_abs() as usize;
 
             let area = (row_count * column_count) as f32;
             for cell_index in 0..CELL_COUNT {
@@ -139,29 +123,13 @@ fn digit_correlations_for_cell_patches(
 
     for dy in [-1i32, 0, 1] {
         let source_y = dy.max(0) as usize;
-        let source_y_end = if dy >= 0 {
-            height
-        } else {
-            height - (-dy) as usize
-        };
         let template_y = (-dy).max(0) as usize;
-        let row_count = source_y_end - source_y;
-        if row_count == 0 {
-            continue;
-        }
+        let row_count = height - dy.unsigned_abs() as usize;
 
         for dx in [-2i32, -1, 0, 1, 2] {
             let source_x = dx.max(0) as usize;
-            let source_x_end = if dx >= 0 {
-                width
-            } else {
-                width - (-dx) as usize
-            };
             let template_x = (-dx).max(0) as usize;
-            let column_count = source_x_end - source_x;
-            if column_count == 0 {
-                continue;
-            }
+            let column_count = width - dx.unsigned_abs() as usize;
 
             let area = (row_count * column_count) as f32;
             for (patch_position, &cell_index) in cells.iter().enumerate() {

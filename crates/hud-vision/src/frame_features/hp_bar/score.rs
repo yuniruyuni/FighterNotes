@@ -33,20 +33,42 @@ pub(crate) fn hp_bar_score_impl(
     for gy in y1..y2 {
         for gx in x1..x2 {
             let idx = ((gy as usize - y_strip_start) * width as usize + gx as usize) * 4;
-            if idx + 2 >= rgba.len() {
-                continue;
+            if let Some(pixel) = rgba.get(idx..).and_then(|bytes| bytes.first_chunk::<3>()) {
+                let [_, s, v] = rgb_to_hsv(pixel[0] as f32, pixel[1] as f32, pixel[2] as f32);
+                if strictly_above(s, 45.0) && strictly_above(v, 80.0) {
+                    match_count += 1;
+                }
+                total += 1;
             }
-            let [_, s, v] =
-                rgb_to_hsv(rgba[idx] as f32, rgba[idx + 1] as f32, rgba[idx + 2] as f32);
-            if s > 45.0 && v > 80.0 {
-                match_count += 1;
-            }
-            total += 1;
         }
     }
     if total == 0 {
         0.0
     } else {
         match_count as f32 / total as f32
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn solid_frame(rgb: [u8; 3]) -> Vec<u8> {
+        let mut rgba = vec![0u8; 192 * 108 * 4];
+        for pixel in rgba.chunks_exact_mut(4) {
+            pixel[..3].copy_from_slice(&rgb);
+            pixel[3] = 255;
+        }
+        rgba
+    }
+
+    #[test]
+    fn score_requires_saturation_and_value_past_the_exact_edges() {
+        assert_eq!(
+            hp_bar_score(&solid_frame([255, 210, 210]), 192, 108, "p1"),
+            0.0
+        );
+        assert_eq!(hp_bar_score(&solid_frame([80, 0, 0]), 192, 108, "p1"), 0.0);
+        assert_eq!(hp_bar_score(&solid_frame([81, 0, 0]), 192, 108, "p1"), 1.0);
     }
 }

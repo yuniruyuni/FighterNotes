@@ -46,6 +46,21 @@ fn a_mixture_with_any_separation_is_not_confirmed() {
     );
 }
 
+#[test]
+fn opposite_separation_bands_cannot_cancel_each_other() {
+    let mixed = [
+        DistanceBand::Overlap,
+        DistanceBand::Overlap,
+        DistanceBand::Mid,
+        DistanceBand::Far,
+    ];
+
+    assert_eq!(
+        reachability(PunishOutcome::Missed, &mixed),
+        PunishReachability::Unknown
+    );
+}
+
 /// 近距離でも、反撃を出していないなら断定しない。どの技なら届いたのかが
 /// 分からない。
 #[test]
@@ -143,6 +158,21 @@ fn only_far_spacing_puts_a_whiffed_punish_out_of_range() {
 fn one_close_frame_blocks_the_out_of_range_verdict() {
     let mut mixed = bands(DistanceBand::Far, 5);
     mixed.push(DistanceBand::Close);
+
+    assert_eq!(
+        reachability(PunishOutcome::WhiffFail, &mixed),
+        PunishReachability::Unknown
+    );
+}
+
+#[test]
+fn close_and_mid_samples_cannot_cancel_when_deciding_a_whiff_is_out_of_range() {
+    let mixed = [
+        DistanceBand::Close,
+        DistanceBand::Mid,
+        DistanceBand::Far,
+        DistanceBand::Far,
+    ];
 
     assert_eq!(
         reachability(PunishOutcome::WhiffFail, &mixed),

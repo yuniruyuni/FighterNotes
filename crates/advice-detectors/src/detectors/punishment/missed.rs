@@ -29,10 +29,9 @@ pub fn detect_punish_missed(
         id: "punish_missed".to_string(),
         kind: AdviceKind::Diagnosis,
         confidence: EventConfidence::High,
-        title: if missed.len() == 1 {
-            "確定反撃を見逃した場面"
-        } else {
-            "確定反撃を繰り返し見逃している"
+        title: match missed.len() {
+            1 => "確定反撃を見逃した場面",
+            _ => "確定反撃を繰り返し見逃している",
         }.to_string(),
         severity: 0.04 * missed.len() as f32,
         // 損失は機会費用であり、この指摘が原因で失った HP ではない。

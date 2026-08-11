@@ -62,10 +62,9 @@ pub(crate) fn build_segments(
             Some((a, last)) => {
                 let same_key = key(t) == key(&inputs[a]);
                 // count の減少 = 新しい入力（同一キーでも別入力として切る）
-                let count_reset = match (inputs[last].count, t.count) {
-                    (Some(p), Some(c)) => c < p,
-                    _ => false,
-                };
+                // `last` と `t` はどちらも上の valid 検査を通っている。
+                // Option の順序は Some 同士で中の count の順序と一致する。
+                let count_reset = t.count < inputs[last].count;
                 if same_key && !count_reset {
                     cur = Some((a, i));
                 } else {

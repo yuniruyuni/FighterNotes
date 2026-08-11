@@ -73,6 +73,19 @@ fn a_contact_without_the_stun_that_follows_it_is_not_a_block() {
     );
 }
 
+/// 観測列の末尾そのものは有効な添字ではない。境界外の接触を読み進めない。
+#[test]
+fn a_contact_at_the_series_length_is_out_of_bounds() {
+    let (ms, mut contacts, mut segs, rounds) = fixture();
+    observed(&mut segs, 0);
+    contacts[0].frame = ms[0].len() as u32;
+
+    let extracted = extract_minus_all(&ms, &contacts, &[], &segs, &rounds);
+
+    assert!(extracted.situations.is_empty());
+    assert!(extracted.presses.is_empty());
+}
+
 /// 硬直の始まりが接触から離れていれば、その接触の結果ではない。
 #[test]
 fn a_stun_that_starts_much_later_is_not_from_this_contact() {
@@ -108,6 +121,22 @@ fn becoming_actionable_first_is_not_a_minus_situation() {
         extracted.situations.is_empty(),
         "有利な場面を不利にしている"
     );
+}
+
+/// P2 がガードした場合も、P1/P2 の配列を正しい向きで読む。
+#[test]
+fn a_p2_press_uses_the_other_player_as_the_opponent() {
+    let (mut ms, mut contacts, mut segs, rounds) = fixture();
+    ms.swap(0, 1);
+    contacts[0].attacker = 1;
+    contacts[0].victim = 2;
+    observed(&mut segs, 1);
+    segs[1].push(minus_press(120));
+
+    let extracted = extract_minus_all(&ms, &contacts, &[], &segs, &rounds);
+
+    assert_eq!(extracted.presses.len(), 1);
+    assert_eq!(extracted.presses[0].side, 2);
 }
 
 // ── 不利幅 ───────────────────────────────────────────────────────────────
@@ -254,6 +283,19 @@ fn an_invincible_move_is_not_a_strike_or_a_throw() {
     assert_eq!(extracted.situations.len(), 1, "分母から外している");
     assert_eq!(extracted.situations[0].fastest_action, None);
     assert!(extracted.presses.is_empty());
+}
+
+/// 無敵判定窓の終端は含まない。次の行動の無敵を現在の回答へ混ぜない。
+#[test]
+fn invincibility_at_the_exclusive_window_end_does_not_exclude_the_press() {
+    let (mut ms, contacts, mut segs, rounds) = fixture();
+    observed(&mut segs, 0);
+    segs[0].push(minus_press(120));
+    ms[0][135] = MeterState::Invincible;
+
+    let extracted = extract_minus_all(&ms, &contacts, &[], &segs, &rounds);
+
+    assert_eq!(extracted.presses.len(), 1);
 }
 
 /// 相手の硬直に合わせて押したのなら、暴れではなく差し返し。
@@ -679,6 +721,7 @@ fn getting_hit_while_the_move_runs_is_a_counter_hit() {
     assert_eq!(extracted.presses.len(), 1);
     assert_eq!(extracted.presses[0].outcome, MinusPressOutcome::CounterHit);
     assert!((extracted.presses[0].drop - 0.12).abs() < 1e-6);
+    assert_eq!(extracted.presses[0].confidence, EventConfidence::High);
 }
 
 /// 技が終わった後の被弾は、その技が潰された結果ではない。
@@ -828,6 +871,45 @@ fn an_automatic_input_still_gets_a_name() {
 
     assert_eq!(extracted.presses.len(), 1);
     assert_eq!(extracted.presses[0].pressed, "AUTO");
+}
+
+/// 抽出結果には接触時点を含む実際のラウンド番号を引き継ぐ。
+#[test]
+fn minus_events_keep_the_observed_round_number() {
+    let (ms, contacts, mut segs, mut rounds) = fixture();
+    observed(&mut segs, 0);
+    segs[0].push(minus_press(120));
+    segs[1] = vec![idle_input(110, 140)];
+    rounds[0].round_no = 7;
+
+    let extracted = extract_minus_all(&ms, &contacts, &[], &segs, &rounds);
+
+    assert_eq!(extracted.presses[0].round_no, 7);
+    assert_eq!(extracted.situations[0].round_no, 7);
+    assert_eq!(extracted.advantages[0].round_no, 7);
+}
+
+/// どちらか一方でもエポック列が短ければ、二者の時刻を比較できない。
+#[test]
+fn one_short_epoch_series_rejects_the_observation() {
+    let (ms, contacts, mut segs, rounds) = fixture();
+    observed(&mut segs, 0);
+    let length = ms[0].len();
+    let epochs = [vec![0; length - 1], vec![0; length]];
+
+    let extracted = extract_minus_with(
+        &ms,
+        &epochs,
+        &default_game_frames(length),
+        &contacts,
+        &[],
+        &segs,
+        &rounds,
+    );
+
+    assert!(extracted.presses.is_empty());
+    assert!(extracted.situations.is_empty());
+    assert!(extracted.advantages.is_empty());
 }
 
 // ── 有利側の確度 ─────────────────────────────────────────────────────────

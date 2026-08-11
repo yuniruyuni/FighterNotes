@@ -48,6 +48,7 @@ fn a_burnout_is_reported_as_a_tally() {
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Statistic, "判断に踏み込んでいる");
     assert_eq!(card.hp_lost, Some(0.10));
+    assert!((card.severity - 0.13).abs() < 1e-6);
 }
 
 /// 相手のバーンアウトは自分の話ではない。
@@ -113,20 +114,46 @@ fn an_unclassified_burnout_stays_unclassified() {
 /// 終わりまで続いたこととして書く。
 #[test]
 fn a_burnout_shorter_than_a_second_is_described_by_its_end() {
+    let one_second = events_with_burnouts(vec![burnout(100, 1, BurnoutCause::SelfInitiated)]);
     let long = events_with_burnouts(vec![burnout(100, 5, BurnoutCause::SelfInitiated)]);
     let brief = events_with_burnouts(vec![BurnoutPeriod {
         end_frame: 130,
         ..burnout(100, 0, BurnoutCause::SelfInitiated)
     }]);
 
+    let one_second = detect_burnout(&one_second, 1).expect("提示される");
     let long = detect_burnout(&long, 1).expect("提示される");
     let brief = detect_burnout(&brief, 1).expect("提示される");
 
+    assert!(
+        one_second.description.contains("1 秒"),
+        "境界ちょうどを短時間扱いしている: {}",
+        one_second.description
+    );
     assert!(long.description.contains("5 秒"), "{}", long.description);
     assert!(
         brief.description.contains("ラウンド終了まで"),
         "短い期間を秒で書いている: {}",
         brief.description
+    );
+}
+
+/// 対象ラウンドを欠かさず列挙する。期間の集計だけが正しくても、見返す
+/// ラウンドを落とすとクリップ確認へ辿り着けない。
+#[test]
+fn every_burnout_round_is_listed() {
+    let first = burnout(100, 2, BurnoutCause::SelfInitiated);
+    let second = BurnoutPeriod {
+        round_no: 2,
+        ..burnout(1000, 2, BurnoutCause::ForcedByGuard)
+    };
+
+    let card = detect_burnout(&events_with_burnouts(vec![first, second]), 1).expect("提示される");
+
+    assert!(
+        card.description.contains("（ラウンド 1, 2）"),
+        "対象ラウンドを列挙していない: {}",
+        card.description
     );
 }
 
@@ -186,6 +213,8 @@ fn entering_more_often_weighs_more() {
     let twice = detect_burnout(&twice, 1).expect("提示される");
 
     assert_eq!(once.hp_lost, twice.hp_lost, "被ダメは同じはず");
+    assert!((once.severity - 0.23).abs() < 1e-6);
+    assert!((twice.severity - 0.26).abs() < 1e-6);
     assert!(
         twice.severity > once.severity,
         "回数が重みに効いていない: {} / {}",
@@ -334,6 +363,8 @@ fn more_throws_landed_weighs_more() {
         many.severity > few.severity,
         "通された回数が重みに効いていない"
     );
+    assert!((few.severity - 0.12).abs() < 1e-6);
+    assert!((many.severity - 0.36).abs() < 1e-6);
 }
 
 /// 投げの被ダメージは記録に無い。推定で埋めず、空のままにする。

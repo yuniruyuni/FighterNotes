@@ -85,6 +85,8 @@ fn a_drop_across_a_stock_boundary_is_a_use() {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].level, 3);
     assert_eq!(events[0].side, 1);
+    assert_eq!(events[0].gauge_before, 3.0);
+    assert_eq!(events[0].gauge_after, 0.0);
 }
 
 /// 消えたストックの数がレベルになる。
@@ -95,6 +97,8 @@ fn the_number_of_stocks_spent_is_the_level() {
 
         assert_eq!(events.len(), 1, "{before}→{after} を読めていない");
         assert_eq!(events[0].level, level, "{before}→{after}");
+        assert_eq!(events[0].gauge_before, before);
+        assert_eq!(events[0].gauge_after, after);
     }
 }
 
@@ -102,6 +106,12 @@ fn the_number_of_stocks_spent_is_the_level() {
 #[test]
 fn a_rising_gauge_is_not_a_use() {
     assert!(extract(&features_dropping(1.0, 2.0)).is_empty());
+}
+
+/// ストック数が同じまま大きく減っても、ストックを消費した SA ではない。
+#[test]
+fn a_large_drop_inside_one_stock_is_not_a_super() {
+    assert!(extract(&features_dropping(2.9, 2.1)).is_empty());
 }
 
 /// 少ししか減っていなければ、ストックの境目の表示揺れ。
@@ -140,6 +150,33 @@ fn a_frame_outside_the_match_takes_no_part() {
     }
 
     assert!(extract(&features).is_empty());
+}
+
+/// 序盤の読めない 1 フレームで、後ろの実際の消費まで走査を止めない。
+#[test]
+fn an_early_unreadable_frame_does_not_end_the_scan() {
+    let mut features = features_dropping(3.0, 0.0);
+    features[50].is_match_screen = false;
+
+    assert_eq!(extract(&features).len(), 1);
+}
+
+/// 隣接フレームで別のストックが減った場合も、二回の消費として残す。
+#[test]
+fn adjacent_stock_drops_are_both_recorded() {
+    let mut features = features_dropping(3.0, 3.0);
+    for feature in &mut features[100..101] {
+        feature.left_super_value = 2.0;
+    }
+    for feature in &mut features[101..] {
+        feature.left_super_value = 1.0;
+    }
+
+    let events = extract(&features);
+
+    assert_eq!(events.len(), 2, "{events:#?}");
+    assert_eq!(events[0].gauge_drop_frame, 100);
+    assert_eq!(events[1].gauge_drop_frame, 101);
 }
 
 /// 二人とも別々に見る。
@@ -193,6 +230,62 @@ fn a_freeze_span_far_from_the_drop_is_not_this_super() {
     );
 
     assert_ne!(events[0].frame, 100, "無関係な暗転を起点にしている");
+}
+
+/// 起点がラウンド外でも、ゲージ減少自体がラウンド内なら帰属できる。
+#[test]
+fn the_drop_frame_can_supply_the_round_when_the_anchor_is_outside() {
+    let features = features_dropping(3.0, 0.0);
+    let bounded_rounds = [RoundInfo {
+        round_no: 7,
+        start_frame: 190,
+        end_frame: 300,
+        winner: None,
+        p1_hp_end: 1.0,
+        p2_hp_end: 1.0,
+    }];
+
+    let events = extract_super_arts(SuperArtInputs {
+        features: &features,
+        meter_state: &[Vec::new(), Vec::new()],
+        contacts: &[],
+        damage: &[],
+        punishes: &[],
+        rounds: &bounded_rounds,
+        freeze_spans: &[(150, 195)],
+    });
+
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].frame, 150);
+    assert_eq!(events[0].round_no, 7);
+}
+
+/// 減少表示がラウンド外へ遅れても、実際の発動起点が内側なら帰属できる。
+#[test]
+fn the_anchor_supplies_the_round_when_the_drop_frame_is_late() {
+    let features = features_dropping(3.0, 0.0);
+    let bounded_rounds = [RoundInfo {
+        round_no: 9,
+        start_frame: 140,
+        end_frame: 190,
+        winner: None,
+        p1_hp_end: 1.0,
+        p2_hp_end: 1.0,
+    }];
+
+    let events = extract_super_arts(SuperArtInputs {
+        features: &features,
+        meter_state: &[Vec::new(), Vec::new()],
+        contacts: &[],
+        damage: &[],
+        punishes: &[],
+        rounds: &bounded_rounds,
+        freeze_spans: &[(150, 195)],
+    });
+
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].frame, 150);
+    assert_eq!(events[0].round_no, 9);
 }
 
 /// 暗転が無ければ、メーターに出た発生まで遡る。
@@ -580,6 +673,70 @@ fn a_super_out_of_neutral_is_recorded_as_neutral() {
     );
 
     assert_eq!(events[0].context, SuperArtContext::Neutral);
+    assert_eq!(events[0].confidence, EventConfidence::Medium);
+}
+
+/// P2 のメーター硬直と CA 表示は P2 のゲージ消費へ結び付ける。
+#[test]
+fn p2_uses_its_own_meter_context_and_ca_label() {
+    let mut features = features_dropping(3.0, 3.0);
+    for feature in &mut features {
+        feature.right_super_value = if feature.frame_index < 200 { 3.0 } else { 0.0 };
+        feature.right_super_uncertain = false;
+        feature.right_ca_ready = true;
+    }
+    let mut p2_states = vec![MeterState::Free; LENGTH];
+    p2_states[160..180].fill(MeterState::Stun);
+
+    let events = extract_with(
+        &features,
+        &[vec![MeterState::Free; LENGTH], p2_states],
+        &[],
+        &[],
+        &[],
+        &[],
+    );
+
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].side, 2);
+    assert_eq!(events[0].context, SuperArtContext::DefensiveReversal);
+    assert!(events[0].critical_art);
+}
+
+// ── 起点探索の境界 ───────────────────────────────────────────────────────────────
+
+#[test]
+fn an_empty_meter_has_no_action_anchor() {
+    let features = features_dropping(3.0, 3.0);
+
+    let anchor = action_anchor(&features, &[], &[], 0, 0);
+
+    assert_eq!(anchor.frame, 0);
+    assert!(!anchor.evidence);
+}
+
+#[test]
+fn an_action_older_than_the_lookback_is_ignored() {
+    let features = features_dropping(3.0, 3.0);
+    let mut states = vec![MeterState::Free; LENGTH];
+    states[100] = MeterState::Startup;
+
+    let anchor = action_anchor(&features, &states, &[], 199, 200);
+
+    assert_eq!(anchor.frame, 200);
+    assert!(!anchor.evidence);
+}
+
+#[test]
+fn an_action_on_the_search_endpoint_is_included() {
+    let features = features_dropping(3.0, 3.0);
+    let mut states = vec![MeterState::Free; LENGTH];
+    states[200] = MeterState::Startup;
+
+    let anchor = action_anchor(&features, &states, &[], 199, 200);
+
+    assert_eq!(anchor.frame, 200);
+    assert!(anchor.evidence);
 }
 
 /// メーターが読めていなければ、文脈は分からない。

@@ -410,3 +410,58 @@ fn a_neutral_input_is_labelled_without_an_arrow() {
         card.evidence[0].label
     );
 }
+
+/// P2 を解析するときは、P2 側の入力とメーターを使う。
+#[test]
+fn the_player_index_selects_the_second_players_evidence() {
+    let mut events = one_catch();
+    events.damage[0].victim = 2;
+    events.drive_impacts[0].side = 1;
+    events.segments[1] = std::mem::take(&mut events.segments[0]);
+    events.meter_state[1] = events.meter_state[0].clone();
+    events.meter_state[0].fill(MeterState::Free);
+
+    let card = detect_committed_button_vs_di(&events, 2, 1).expect("P2 側を検出する");
+
+    assert_eq!(card.evidence[0].frame, 990);
+    assert!(
+        detect_committed_button_vs_di(&events, 2, 0).is_none(),
+        "P1 側の空の入力を参照している"
+    );
+}
+
+/// DI 入力より前から保持していた同じボタンまでは遡らない。
+#[test]
+fn held_input_tracing_stops_at_the_drive_impact_input() {
+    let mut events = one_catch();
+    events.segments[0] = vec![button(960, "強K", "DR"), button(990, "強K", "N")];
+    events.segments[0][0].end_frame = 989;
+
+    let card = detect_committed_button_vs_di(&events, 1, 0).expect("提示される");
+
+    assert_eq!(card.evidence[0].frame, 990);
+}
+
+/// ボタンが変わった隣接セグメントは、方向だけを離した保持入力ではない。
+#[test]
+fn a_different_held_button_starts_a_new_press() {
+    let mut events = one_catch();
+    events.segments[0] = vec![button(990, "弱P", "DR"), button(995, "強K", "N")];
+    events.segments[0][0].end_frame = 994;
+
+    let card = detect_committed_button_vs_di(&events, 1, 0).expect("提示される");
+
+    assert_eq!(card.evidence[0].frame, 995);
+}
+
+/// DI 入力と同じフレームで始まった保持入力は境界内なので遡る。
+#[test]
+fn a_held_button_starting_on_the_di_frame_is_included() {
+    let mut events = one_catch();
+    events.segments[0] = vec![button(970, "強K", "DR"), button(995, "強K", "N")];
+    events.segments[0][0].end_frame = 994;
+
+    let card = detect_committed_button_vs_di(&events, 1, 0).expect("提示される");
+
+    assert_eq!(card.evidence[0].frame, 970);
+}

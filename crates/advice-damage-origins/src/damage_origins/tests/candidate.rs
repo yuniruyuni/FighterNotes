@@ -75,6 +75,9 @@ fn matching_windows_are_inclusive_at_both_edges() {
     assert!(contact_matches(&damage, 105));
     assert!(!contact_matches(&damage, 106));
     assert!(starts_in(&damage, 100, 100));
+    assert!(!starts_in(&damage, 101, 200));
+    assert!(!starts_in(&damage, 0, 99));
+    assert!(approximately_same_drop(0.005, 0.0));
     assert!(approximately_same_drop(0.1, 0.104));
     assert!(!approximately_same_drop(0.1, 0.106));
 }

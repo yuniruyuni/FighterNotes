@@ -1,4 +1,4 @@
-use crate::color::{bgr_to_hsv, dim_anchor, l2_dist, QuantizedModeScratch};
+use crate::color::{bgr_to_hsv, dim_anchor, l2_dist, quantized_bucket, QuantizedModeScratch};
 
 use super::assert_close;
 
@@ -61,6 +61,18 @@ fn quantized_mode_uses_most_frequent_bucket_and_its_mean() {
 fn quantized_mode_ties_use_the_lowest_bgr_bucket() {
     let pixels = [[248, 248, 248], [249, 249, 249], [0, 0, 0], [1, 1, 1]];
     assert_eq!(QuantizedModeScratch::new().mean(&pixels), [0.5, 0.5, 0.5]);
+}
+
+#[test]
+fn quantized_mode_does_not_replace_a_lower_bucket_on_a_late_tie() {
+    let pixels = [[0, 0, 0], [1, 1, 1], [248, 248, 248], [249, 249, 249]];
+    assert_eq!(QuantizedModeScratch::new().mean(&pixels), [0.5, 0.5, 0.5]);
+}
+
+#[test]
+fn quantized_bucket_keeps_asymmetric_channel_fields() {
+    assert_eq!(quantized_bucket(&[161, 82, 43]), 20 * 32 * 32 + 10 * 32 + 5);
+    assert_eq!(quantized_bucket(&[7, 8, 255]), 63);
 }
 
 #[test]

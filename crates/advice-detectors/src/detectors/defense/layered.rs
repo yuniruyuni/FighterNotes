@@ -30,19 +30,19 @@ pub fn detect_layered_defense(events: &MatchEvents, own: u8) -> Option<AdviceCar
         .filter(|threat| threat.defender == own)
         .count();
     let repeated = threats.len() >= MIN_REPEATED_NEGATIVE_OUTCOMES;
+    let kind = if repeated {
+        AdviceKind::Diagnosis
+    } else {
+        AdviceKind::Observation
+    };
     let hp_lost: f32 = threats.iter().map(|threat| threat.damage).sum();
     Some(AdviceCard {
         id: "layered_defense".to_string(),
-        kind: if repeated {
-            AdviceKind::Diagnosis
-        } else {
-            AdviceKind::Observation
-        },
+        kind,
         confidence: EventConfidence::High,
-        title: if repeated {
-            "複合攻撃への短いパリィが繰り返されている"
-        } else {
-            "複合攻撃でパリィ後に被弾した場面"
+        title: match kind {
+            AdviceKind::Diagnosis => "複合攻撃への短いパリィが繰り返されている",
+            _ => "複合攻撃でパリィ後に被弾した場面",
         }
         .to_string(),
         severity: hp_lost + 0.02 * threats.len() as f32,
@@ -60,10 +60,9 @@ pub fn detect_layered_defense(events: &MatchEvents, own: u8) -> Option<AdviceCar
                 hp_lost * 100.0
             )
         },
-        practice: if repeated {
-            "トレーニングモードで「飛び道具→テレポート攻撃」を記録し、飛び道具を受けた時点でパリィを離さず、後ろからの打撃まで受け切る練習をします。投げも成立する状況ではガード・無敵技を含めて回答を散らします。"
-        } else {
-            "クリップでパリィを離した理由を確認します。後段の打撃を見落としていた場合は長めのパリィを試し、投げを警戒した判断なら他の同状況でも同じ離し方に偏っていないかを見比べましょう。"
+        practice: match kind {
+            AdviceKind::Diagnosis => "トレーニングモードで「飛び道具→テレポート攻撃」を記録し、飛び道具を受けた時点でパリィを離さず、後ろからの打撃まで受け切る練習をします。投げも成立する状況ではガード・無敵技を含めて回答を散らします。",
+            _ => "クリップでパリィを離した理由を確認します。後段の打撃を見落としていた場合は長めのパリィを試し、投げを警戒した判断なら他の同状況でも同じ離し方に偏っていないかを見比べましょう。",
         }
         .to_string(),
         evidence: threats

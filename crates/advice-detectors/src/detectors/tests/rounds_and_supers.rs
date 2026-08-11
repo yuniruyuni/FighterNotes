@@ -72,6 +72,7 @@ fn the_rounds_are_listed_without_calling_it_a_habit() {
 
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Observation);
+    assert!((card.severity - 0.05).abs() < 1e-6);
     assert!(
         card.description.contains("2 ラウンド中 1 ラウンド"),
         "全ラウンドに対する数を出していない: {}",
@@ -332,6 +333,7 @@ fn the_super_card_lists_without_judging() {
     assert_eq!(card.kind, AdviceKind::Observation);
     assert_eq!(card.confidence, EventConfidence::Medium);
     assert_eq!(card.hp_lost, None, "機会の損失を被ダメとして出している");
+    assert!((card.severity - 0.03).abs() < 1e-6);
     assert!(
         card.description.contains("断定"),
         "見ていないことを決めている: {}",
@@ -360,6 +362,7 @@ fn the_damage_the_super_added_is_summed() {
         card.description
     );
     assert_eq!(card.evidence.len(), 2);
+    assert!((card.severity - 0.06).abs() < 1e-6);
 }
 
 /// クリップには使った SA と、投入時の補正率、増えた分を出す。

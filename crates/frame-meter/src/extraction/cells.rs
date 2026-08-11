@@ -56,10 +56,6 @@ impl CellExtraction {
             return None;
         }
         let pixels = self.pixels.as_ref()?;
-        if pixels.patch_height < DIGIT_TEMPLATE_H || self.observation.cols_w < DIGIT_TEMPLATE_W {
-            return None;
-        }
-
         let digit_stride = DIGIT_TEMPLATE_H * DIGIT_TEMPLATE_W;
         let mut digit_patches = vec![0.0; cells.len() * digit_stride];
         for (patch_index, &cell_index) in cells.iter().enumerate() {
@@ -119,7 +115,7 @@ pub(crate) fn extract_parts(
     let mut region1 = Vec::new();
     let mut region2 = Vec::new();
 
-    let mut readings = Vec::with_capacity(CELL_COUNT);
+    let mut readings = Vec::new();
     for index in 0..CELL_COUNT {
         let Some(bounds) = cell_bounds(pixels.width, index) else {
             readings.push(CellReading::unreadable());
@@ -170,7 +166,7 @@ pub(crate) fn extract_parts(
         .rev()
         .find(|(index, state)| **state == CellState::Other && values[*index] >= HIGHLIGHT_V_MIN)
         .map_or(-1, |(index, _)| index as i32);
-    let fresh_edge = fresh_color_edge(&values, &white_fractions, &states, &brightness);
+    let fresh_edge = fresh_color_edge(&values, &states, &brightness);
     CellExtraction {
         observation: RowObs {
             v: values,

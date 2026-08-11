@@ -8,6 +8,15 @@ pub(super) use match_event_layer::test_support::empty_events;
 /// 検出器の契約テストではイベント自体を主題にするため、coverageによる抑制に
 /// 必要な各入力を明示的に満たした小さなレポートを組み立てる。
 pub(super) fn detector_test_report(events: &MatchEvents, own_side: &str) -> AdviceReport {
+    detector_test_report_with_character(events, own_side, None)
+}
+
+/// 旧 API のキャラクター引数まで含め、上位レポートへの伝播を検査する版。
+pub(super) fn detector_test_report_with_character(
+    events: &MatchEvents,
+    own_side: &str,
+    own_character: Option<&str>,
+) -> AdviceReport {
     let mut events = events.clone();
     const FRAMES: u32 = 10;
     events.input_coverage = crate::match_events::InputCoverage {
@@ -57,7 +66,7 @@ pub(super) fn detector_test_report(events: &MatchEvents, own_side: &str) -> Advi
             right_hp_raw_quality: 0.0,
         })
         .collect();
-    build_report(&features, &events, own_side, None)
+    build_report(&features, &events, own_side, own_character)
 }
 
 /// 事実確認の指摘は、断定せず利用者の検討を促す文言を必ず含む。

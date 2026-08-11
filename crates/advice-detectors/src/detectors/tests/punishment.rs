@@ -89,6 +89,7 @@ fn one_missed_punish_is_already_worth_saying() {
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Diagnosis);
     assert_eq!(card.evidence.len(), 1);
+    assert!((card.severity - 0.04).abs() < 1e-6);
 }
 
 /// 失った HP ではなく取り逃がした利益なので、被ダメは空にする。
@@ -212,6 +213,7 @@ fn a_single_whiffed_punish_stays_an_observation() {
 
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Observation);
+    assert!((card.severity - 0.03).abs() < 1e-6);
 }
 
 /// 同じ入力で繰り返し届いていなければ、技選択の話。
@@ -280,10 +282,16 @@ fn health_lost_after_the_whiff_is_counted() {
     let card = detect_punish_fail(&events, 1, None).expect("提示される");
 
     assert_eq!(card.hp_lost, Some(0.18));
+    assert!((card.severity - 0.21).abs() < 1e-6);
     assert!(
         card.evidence[0].label.contains("18"),
         "被弾を出していない: {}",
         card.evidence[0].label
+    );
+    assert!(
+        card.description.contains("合計 18%"),
+        "説明の被ダメ率が違う: {}",
+        card.description
     );
 }
 
@@ -318,6 +326,29 @@ fn the_number_of_punishes_that_landed_is_reported() {
         "取れている回数を出していない: {}",
         card.description
     );
+}
+
+/// 届かなかった反撃でも、候補技は最も小さい有利幅に合わせる。
+#[test]
+fn failed_punish_suggestions_use_the_tightest_advantage() {
+    let events = events_with(vec![
+        chance(100, PunishOutcome::WhiffFail, 20),
+        chance(600, PunishOutcome::WhiffFail, 5),
+    ]);
+
+    let card = detect_punish_fail(&events, 1, Some("LUKE")).expect("提示される");
+
+    assert!(
+        card.description.contains("有利 5F"),
+        "最も厳しい有利幅を使っていない: {}",
+        card.description
+    );
+    assert!(
+        card.description.contains("2LP"),
+        "キャラクター別候補をカードへ渡していない: {}",
+        card.description
+    );
+    assert!((card.severity - 0.06).abs() < 1e-6);
 }
 
 // ── 小さく終わった反撃 ───────────────────────────────────────────────────
@@ -422,6 +453,7 @@ fn a_single_low_return_stays_an_observation() {
 
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Observation);
+    assert!((card.severity - 0.03).abs() < 1e-6);
 }
 
 /// 同じ入力で繰り返し小さく終わっていれば、コンボに繋ぐ話。
@@ -437,9 +469,15 @@ fn the_same_input_ending_small_twice_is_a_diagnosis() {
     let card = detect_low_conversion(&events, 1).expect("提示される");
 
     assert_eq!(card.kind, AdviceKind::Diagnosis);
+    assert!((card.severity - 0.06).abs() < 1e-6);
     assert!(
         card.description.contains("強P"),
         "繰り返した入力を出していない: {}",
+        card.description
+    );
+    assert!(
+        card.description.contains("合計 11%"),
+        "小リターンの合計が違う: {}",
         card.description
     );
 }

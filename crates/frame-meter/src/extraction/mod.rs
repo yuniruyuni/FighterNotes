@@ -44,10 +44,13 @@ pub fn extract_row_obs_from_strip(
     full_width: u32,
     full_height: u32,
 ) -> (RowObs, RowObs) {
-    let scale_y = full_height as f32 / 1080.0;
-    let strip_y = (METER_STRIP_Y as f32 * scale_y) as i32;
     extract_rows(
-        RowSource::new(meter_strip, full_width, full_height, strip_y),
+        RowSource::new(
+            meter_strip,
+            full_width,
+            full_height,
+            meter_strip_origin(full_height),
+        ),
         DigitSelection::Full,
     )
 }
@@ -61,12 +64,19 @@ pub fn extract_row_obs_from_strip_with_digit_hint(
     full_height: u32,
     digit_hint: Option<(usize, usize)>,
 ) -> (RowObs, RowObs) {
-    let scale_y = full_height as f32 / 1080.0;
-    let strip_y = (METER_STRIP_Y as f32 * scale_y) as i32;
     extract_rows(
-        RowSource::new(meter_strip, full_width, full_height, strip_y),
+        RowSource::new(
+            meter_strip,
+            full_width,
+            full_height,
+            meter_strip_origin(full_height),
+        ),
         DigitSelection::Tracker(digit_hint),
     )
+}
+
+fn meter_strip_origin(full_height: u32) -> i32 {
+    (METER_STRIP_Y as f32 * (full_height as f32 / 1080.0)) as i32
 }
 
 fn extract_rows(source: RowSource<'_>, digit_selection: DigitSelection) -> (RowObs, RowObs) {
@@ -80,22 +90,20 @@ fn extract_rows(source: RowSource<'_>, digit_selection: DigitSelection) -> (RowO
 
     let left_edge = left.observation.fresh_edge;
     let right_edge = right.observation.fresh_edge;
+    let Some((current_cell, lookback)) = digit_hint else {
+        if left_edge >= 0 || right_edge >= 0 {
+            return (left.finish_full(), right.finish_full());
+        }
+        return (left.finish_without_digits(), right.finish_without_digits());
+    };
+
     let mut valid = [0u64; 2];
-    if let Some((current_cell, lookback)) = digit_hint {
-        add_digit_window(&mut valid, current_cell, lookback);
-        add_digit_window(&mut valid, current_cell + 1, lookback);
-    }
+    add_digit_window(&mut valid, current_cell, lookback);
+    add_digit_window(&mut valid, current_cell + 1, lookback);
     for edge in [left_edge, right_edge] {
         if edge >= 0 {
-            add_digit_window(
-                &mut valid,
-                edge as usize,
-                digit_hint.map_or(crate::constants::CELL_COUNT - 1, |(_, lookback)| lookback),
-            );
+            add_digit_window(&mut valid, edge as usize, lookback);
         }
-    }
-    if valid == [0; 2] {
-        return (left.finish_without_digits(), right.finish_without_digits());
     }
     (left.finish_sparse(valid), right.finish_sparse(valid))
 }
@@ -114,7 +122,8 @@ fn extract_row_parts(
 
 fn add_digit_window(valid: &mut [u64; 2], center: usize, lookback: usize) {
     let center = center % crate::constants::CELL_COUNT;
-    for offset in 0..=lookback.min(crate::constants::CELL_COUNT - 1) {
+    let window_length = lookback.saturating_add(1).min(crate::constants::CELL_COUNT);
+    for offset in 0..window_length {
         let index = (center + crate::constants::CELL_COUNT - offset) % crate::constants::CELL_COUNT;
         valid[index / 64] |= 1 << (index % 64);
     }

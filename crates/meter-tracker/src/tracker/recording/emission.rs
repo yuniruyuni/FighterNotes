@@ -39,7 +39,7 @@ impl MeterTracker {
             self.emitted
                 .get_mut(side)
                 .expect("side emitted reads")
-                .insert(absolute, state.clone());
+                .extend([(absolute, state.clone())]);
             let timeline = if side == "left" {
                 &mut self.left
             } else {

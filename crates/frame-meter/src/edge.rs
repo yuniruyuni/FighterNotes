@@ -20,20 +20,18 @@ fn has_front_gap(v: &[f32], index: usize) -> bool {
 }
 
 /// Returns the rightmost fresh colored-cell index, or -1 when none exists.
-pub fn fresh_color_edge(
-    v: &[f32],
-    _wf: &[f32],
-    states: &[CellState],
-    bright: &[BrightClass],
-) -> i32 {
+pub fn fresh_color_edge(v: &[f32], states: &[CellState], bright: &[BrightClass]) -> i32 {
     for index in (0..CELL_COUNT).rev() {
         let state = &states[index];
-        let colored = state.is_stripe() || fresh_v_min_for(state).is_some();
+        let colored = matches!(
+            state,
+            CellState::InvFull | CellState::InvStrike | CellState::InvProj
+        ) || fresh_v_min_for(state).is_some();
         let is_fresh = colored
-            && (bright[index] == BrightClass::Fresh
-                || (bright[index] == BrightClass::Low
+            && (matches!(bright[index], BrightClass::Fresh)
+                || (matches!(bright[index], BrightClass::Low)
                     && index > 0
-                    && bright[index - 1] == BrightClass::Fresh));
+                    && matches!(bright[index - 1], BrightClass::Fresh)));
         if is_fresh && has_front_gap(v, index) {
             return index as i32;
         }

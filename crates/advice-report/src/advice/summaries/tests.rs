@@ -267,6 +267,10 @@ fn suppressed_cards_prevent_claiming_there_is_nothing_to_fix() {
         "{summary}"
     );
     assert!(summary.contains('1'), "件数を出していない: {summary}");
+    assert!(
+        !summary.contains("なお"),
+        "表示カードが無いのに、候補不足を二重に追記している: {summary}"
+    );
 }
 
 /// 読み取り自体が足りていなければ、やはり「改善点なし」とは言わない。

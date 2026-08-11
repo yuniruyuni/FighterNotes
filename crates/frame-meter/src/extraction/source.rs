@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use crate::color::bgr_to_hsv;
 use crate::constants::{REGION_REF_ROWS, ROW_X1, ROW_X2};
 
@@ -31,12 +29,6 @@ impl<'a> RowSource<'a> {
         region1_reference: &[usize],
         region2_reference: &[usize],
     ) -> Option<RowPixels> {
-        if self.width <= 0 {
-            return None;
-        }
-        if self.height <= 0 {
-            return None;
-        }
         let x1 = ((ROW_X1 as f32 * self.scale_x) as i32).max(0);
         let x2 = ((ROW_X2 as f32 * self.scale_x) as i32)
             .max(0)
@@ -58,25 +50,24 @@ impl<'a> RowSource<'a> {
         let mut bgr = vec![[0; 3]; width * height];
         let mut value = vec![0.0; width * height];
         let mut saturation = vec![0.0; width * height];
-        for row in 0..height {
+        let first_available_row = (self.strip_y - y1).max(0) as usize;
+        for row in first_available_row..height {
             let strip_y = y1 + row as i32 - self.strip_y;
-            if strip_y < 0 {
-                continue;
-            }
             for column in 0..width {
                 let global_x = x1 as usize + column;
                 let source_index = (strip_y as usize * self.width as usize + global_x) * 4;
-                if source_index + 3 >= self.rgba.len() {
-                    continue;
+                if let Some(pixel) = self
+                    .rgba
+                    .get(source_index..)
+                    .and_then(|bytes| bytes.first_chunk::<4>())
+                {
+                    let [red, green, blue, _alpha] = *pixel;
+                    let target_index = row * width + column;
+                    bgr[target_index] = [blue, green, red];
+                    let hsv = bgr_to_hsv([blue as f32, green as f32, red as f32]);
+                    value[target_index] = hsv[2];
+                    saturation[target_index] = hsv[1];
                 }
-                let red = self.rgba[source_index];
-                let green = self.rgba[source_index + 1];
-                let blue = self.rgba[source_index + 2];
-                let target_index = row * width + column;
-                bgr[target_index] = [blue, green, red];
-                let hsv = bgr_to_hsv([blue as f32, green as f32, red as f32]);
-                value[target_index] = hsv[2];
-                saturation[target_index] = hsv[1];
             }
         }
 
@@ -107,10 +98,14 @@ pub(crate) struct RowPixels {
 }
 
 fn scale_rows(rows: &[usize], patch_height: usize) -> Vec<usize> {
-    let mut scaled_rows = BTreeSet::new();
+    let mut scaled_rows = Vec::new();
     for &row in rows {
         let scaled = ((row * patch_height) as f32 / REGION_REF_ROWS as f32).round() as usize;
-        scaled_rows.insert(scaled.min(patch_height.saturating_sub(1)));
+        let scaled = scaled.min(patch_height.saturating_sub(1));
+        if !scaled_rows.contains(&scaled) {
+            scaled_rows.push(scaled);
+        }
     }
-    scaled_rows.into_iter().collect()
+    scaled_rows.sort_unstable();
+    scaled_rows
 }

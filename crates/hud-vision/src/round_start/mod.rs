@@ -84,8 +84,8 @@ pub fn fight_score_from_hud_strip(hud_strip: &[u8], strip_width: usize) -> f32 {
             let mut dot = 0.0f64;
             let mut sample_energy = 0.0f64;
             for edge in &model.edges {
-                let source_x = edge.x + shift_x;
-                let source_y = edge.y + shift_y;
+                let source_x = edge.x.saturating_add(shift_x);
+                let source_y = edge.y.saturating_add(shift_y);
                 let gx = patch_luma(hud_strip, strip_width, source_x + 1, source_y)
                     - patch_luma(hud_strip, strip_width, source_x - 1, source_y);
                 let gy = patch_luma(hud_strip, strip_width, source_x, source_y + 1)
@@ -93,9 +93,7 @@ pub fn fight_score_from_hud_strip(hud_strip: &[u8], strip_width: usize) -> f32 {
                 dot += f64::from(edge.gx) * f64::from(gx) + f64::from(edge.gy) * f64::from(gy);
                 sample_energy += f64::from(gx) * f64::from(gx) + f64::from(gy) * f64::from(gy);
             }
-            if sample_energy > 0.0 {
-                best = best.max((dot / (model.energy * sample_energy).sqrt()) as f32);
-            }
+            best = best.max((dot / (model.energy * sample_energy).sqrt()) as f32);
         }
     }
     best.max(0.0)

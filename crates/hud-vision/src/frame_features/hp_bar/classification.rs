@@ -21,9 +21,14 @@ pub(crate) fn classify_hp_pixel(r: f32, g: f32, b: f32, hue: HpFillHue) -> HpCol
     // B 閾値に依存しない HSV 条件で判定する（YW の b>100 に任せると分裂する）。
     let is_primary = match hue {
         HpFillHue::Red => (h <= 20.0 || h >= 145.0) && s > 100.0 && v > 60.0,
-        HpFillHue::Blue => (88.0..=160.0).contains(&h) && s > 45.0 && v > 60.0,
+        HpFillHue::Blue => {
+            (88.0..=160.0).contains(&h) && strictly_above(s, 45.0) && strictly_above(v, 60.0)
+        }
     };
-    let is_pinch_yellow = (22.0..=35.0).contains(&h) && s > 120.0 && v > 200.0 && g > r * 0.80;
+    let is_pinch_yellow = (22.0..=35.0).contains(&h)
+        && strictly_above(s, 120.0)
+        && strictly_above(v, 200.0)
+        && strictly_above(g, r * 0.80);
     if is_primary || is_pinch_yellow {
         return HpColColor::Fill;
     }
@@ -34,7 +39,11 @@ pub(crate) fn classify_hp_pixel(r: f32, g: f32, b: f32, hue: HpFillHue) -> HpCol
     // G/R > 0.82 で暗い純橙（G/R<0.82）を除外する。
     // HP=0 の KO 直後はバー全域がこの色で点灯し続けるため、
     // Fill と区別しないと fill_ratio を誤読する。
-    if (20.0..=30.0).contains(&h) && s > 150.0 && (100.0..200.0).contains(&v) && g > r * 0.82 {
+    if (20.0..=30.0).contains(&h)
+        && strictly_above(s, 150.0)
+        && (100.0..200.0).contains(&v)
+        && strictly_above(g, r * 0.82)
+    {
         return HpColColor::Ghost;
     }
 
@@ -46,7 +55,7 @@ pub(crate) fn classify_hp_pixel(r: f32, g: f32, b: f32, hue: HpFillHue) -> HpCol
     // 5. Orange ダメージゾーン
     // V 上限なし: 高輝度オレンジ（V≥200, G/R<0.80）も捕捉する。
     // 黄色 HP fill は上記 Fill 条件（g > r*0.80）で先に除外済み。
-    if (10.0..=27.0).contains(&h) && s > 60.0 && v > 80.0 {
+    if (10.0..=27.0).contains(&h) && strictly_above(s, 60.0) && strictly_above(v, 80.0) {
         return HpColColor::Orange;
     }
 

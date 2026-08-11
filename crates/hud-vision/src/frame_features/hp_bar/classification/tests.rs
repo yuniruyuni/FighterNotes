@@ -115,6 +115,22 @@ fn anything_else_is_empty() {
     );
 }
 
+/// 橙は色相・彩度・明度の三条件が同時に必要。明るいだけの別色や、
+/// 橙の色相にある低彩度の背景をダメージ帯へ混ぜない。
+#[test]
+fn orange_requires_its_hue_and_saturation_together() {
+    assert_eq!(
+        classify_hp_pixel(0.0, 100.0, 0.0, HpFillHue::Red),
+        HpColColor::Dark,
+        "明るい緑を橙と読んでいる"
+    );
+    assert_eq!(
+        classify_hp_pixel(100.0, 90.0, 80.0, HpFillHue::Red),
+        HpColColor::Dark,
+        "低彩度の橙色をダメージ帯と読んでいる"
+    );
+}
+
 /// 優先順位は上から順。純白は他のどの条件より先に決まる。
 #[test]
 fn the_frame_wins_over_every_other_colour() {
@@ -280,6 +296,58 @@ fn the_yellowed_frame_shares_are_met_exactly_at_their_edge() {
 #[test]
 fn a_column_that_reads_nothing_is_empty() {
     assert_eq!(classify(&[]), HpColColor::Dark);
+}
+
+#[test]
+fn the_requested_column_and_later_readable_rows_are_used() {
+    let height = FIRST_SCANNED_ROW + SCANNED_ROWS + HP_COL_ROW_SKIP_BOTTOM;
+    let mut rgba = vec![0u8; height * 2 * 4];
+    for row in FIRST_SCANNED_ROW..FIRST_SCANNED_ROW + SCANNED_ROWS {
+        let index = (row * 2) * 4;
+        rgba[index..index + 4].copy_from_slice(&[220, 0, 0, 255]);
+    }
+    let roi = SlantedRoi {
+        rgba: &rgba,
+        frame_width: 2,
+        x: 0..2,
+        y_start: 0,
+        height,
+        strip_y: 0,
+        slope: 0.0,
+    };
+    assert_eq!(classify_hp_col(&roi, 0, HpFillHue::Red), HpColColor::Fill);
+    assert_eq!(classify_hp_col(&roi, 1, HpFillHue::Red), HpColColor::Dark);
+
+    let red_strip = [220, 0, 0, 255].repeat(SCANNED_ROWS);
+    let strip_roi = SlantedRoi {
+        rgba: &red_strip,
+        frame_width: 1,
+        x: 0..1,
+        y_start: 0,
+        height,
+        strip_y: 10,
+        slope: 0.0,
+    };
+    assert_eq!(
+        classify_hp_col(&strip_roi, 0, HpFillHue::Red),
+        HpColColor::Fill
+    );
+}
+
+#[test]
+fn a_yellowed_frame_needs_both_independent_shares() {
+    let mut too_little_white = vec![[20u8, 20, 30]; 20];
+    too_little_white[0] = WHITE;
+    too_little_white[1..16].fill(BLEND);
+    assert_ne!(classify(&column_of(&too_little_white)), HpColColor::White);
+
+    let mut too_little_combined = vec![[20u8, 20, 30]; 20];
+    too_little_combined[..2].fill(WHITE);
+    too_little_combined[2..10].fill(BLEND);
+    assert_ne!(
+        classify(&column_of(&too_little_combined)),
+        HpColColor::White
+    );
 }
 
 // ── 画素の判定の境目 ─────────────────────────────────────────────────────

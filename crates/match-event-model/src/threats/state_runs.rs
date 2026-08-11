@@ -29,7 +29,7 @@ pub fn state_runs(timeline: &MeterTimeline, predicate: impl Fn(&str) -> bool) ->
         if let Some((last, game_frames)) = grouped.last_mut() {
             if start <= last.end.saturating_add(2) {
                 last.end = last.end.max(end);
-                game_frames.insert(game_frame);
+                game_frames.extend([game_frame]);
                 last.distinct_game_frames = game_frames.len();
                 continue;
             }

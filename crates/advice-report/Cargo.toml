@@ -18,4 +18,5 @@ serde_json = { workspace = true }
 temporal-confirm = { path = "../temporal-confirm" }
 
 [dev-dependencies]
+advice-detectors = { path = "../advice-detectors", features = ["test-support"] }
 match-event-layer = { path = "../match-event-layer", features = ["test-support"] }

@@ -15,9 +15,6 @@ pub fn detect_mashing(
     own_index: usize,
 ) -> Option<AdviceCard> {
     let segments = &events.segments[own_index];
-    if segments.is_empty() {
-        return None;
-    }
     let opponent = 3 - own;
     let mut hits = Vec::new();
     for damage in events
@@ -25,23 +22,19 @@ pub fn detect_mashing(
         .iter()
         .filter(|damage| damage.victim == own && damage.drop >= BIG_DAMAGE)
     {
-        if attribution::claimed_by_other_detector(events, own, opponent, damage) {
-            continue;
+        if !attribution::claimed_by_other_detector(events, own, opponent, damage) {
+            if let Some(press) = attribution::nearest_direct_press(segments, damage) {
+                if let Some(meter_confirmed) =
+                    meter::confirm_execution(events, own_index, press, damage)
+                {
+                    if !meter::is_neutral_or_counterplay(events, own, own_index, press, damage)
+                        && pressure::is_pressured(features, events, own, own_index, damage)
+                    {
+                        hits.push(model::MashHit::new(press, damage, meter_confirmed));
+                    }
+                }
+            }
         }
-        let Some(press) = attribution::nearest_direct_press(segments, damage) else {
-            continue;
-        };
-        let Some(meter_confirmed) = meter::confirm_execution(events, own_index, press, damage)
-        else {
-            continue;
-        };
-        if meter::is_neutral_or_counterplay(events, own, own_index, press, damage) {
-            continue;
-        }
-        if !pressure::is_pressured(features, events, own, own_index, damage) {
-            continue;
-        }
-        hits.push(model::MashHit::new(press, damage, meter_confirmed));
     }
     card::build(hits)
 }

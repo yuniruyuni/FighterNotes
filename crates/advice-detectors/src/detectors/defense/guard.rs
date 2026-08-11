@@ -53,6 +53,11 @@ pub fn detect_guard_break(events: &MatchEvents, own: u8) -> Option<AdviceCard> {
         .filter(|event| event.guard_dir == pattern.0 && event.broke_to == pattern.1)
         .count();
     let repeated = pattern_count >= MIN_REPEATED_NEGATIVE_OUTCOMES;
+    let kind = if repeated {
+        AdviceKind::Diagnosis
+    } else {
+        AdviceKind::Observation
+    };
     let hp_lost: f32 = all_breaks.iter().map(|event| event.drop).sum();
     let attributes: Vec<_> = all_breaks
         .iter()
@@ -84,12 +89,13 @@ pub fn detect_guard_break(events: &MatchEvents, own: u8) -> Option<AdviceCard> {
     });
     Some(AdviceCard {
         id: "guard_break".to_string(),
-        kind: if repeated { AdviceKind::Diagnosis } else { AdviceKind::Observation },
+        kind,
         confidence: EventConfidence::High,
-        title: if repeated {
+        title: match kind {
+            AdviceKind::Diagnosis => {
             "同じ方向へガード入力が繰り返し崩れている"
-        } else {
-            "ガード入力が外れて被弾した場面"
+            }
+            _ => "ガード入力が外れて被弾した場面",
         }
         .to_string(),
         severity: hp_lost,
@@ -105,10 +111,11 @@ pub fn detect_guard_break(events: &MatchEvents, own: u8) -> Option<AdviceCard> {
                 dir_arrow(&pattern.0), dir_arrow(&pattern.1), hp_lost * 100.0, attribute_note
             )
         },
-        practice: if repeated {
+        practice: match kind {
+            AdviceKind::Diagnosis => {
             "相手の固めを記録し、ガード方向を握り続けたまま受け切る練習をします。反撃・移動・ジャンプを始める箇所を1つずつ確認し、ガード成立前に同じ方向へ動かないようにします。"
-        } else {
-            "クリップで、投げ・中下段を読んで意図的に動いたのか、反撃や移動を早く始めたのかを確認します。普段も同じ方向へ外している場合だけ、ガードを離すタイミングを遅らせましょう。"
+            }
+            _ => "クリップで、投げ・中下段を読んで意図的に動いたのか、反撃や移動を早く始めたのかを確認します。普段も同じ方向へ外している場合だけ、ガードを離すタイミングを遅らせましょう。",
         }.to_string(),
         evidence: all_breaks.iter().map(|event| EvidenceClip {
             frame: event.frame,

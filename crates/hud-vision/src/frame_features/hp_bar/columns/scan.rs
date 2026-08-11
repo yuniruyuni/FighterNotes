@@ -74,20 +74,19 @@ impl ColumnScan {
         for ry in self.row_start..self.row_end {
             let x_offset = ((ry - self.row_start) as f32 * self.slope).round() as i32;
             let gx = self.x1 as i32 + cx as i32 + x_offset;
-            if gx < self.x1 as i32 || gx >= self.x2 as i32 {
-                continue;
-            }
-            let gy = self.y1 + ry;
-            let Some(row) = gy.checked_sub(self.y_strip_start) else {
-                continue;
-            };
-            let index = (row * self.width + gx as usize) * 4;
-            let Some(pixel) = rgba.get(index..index + 3) else {
-                continue;
-            };
-            effective += 1;
-            if wanted.matches(pixel[0] as f32, pixel[1] as f32, pixel[2] as f32) {
-                matched += 1;
+            if gx >= self.x1 as i32 && gx < self.x2 as i32 {
+                let gy = self.y1 + ry;
+                if let Some(row) = gy.checked_sub(self.y_strip_start) {
+                    let index = (row * self.width + gx as usize) * 4;
+                    if let Some(pixel) =
+                        rgba.get(index..).and_then(|bytes| bytes.first_chunk::<3>())
+                    {
+                        effective += 1;
+                        if wanted.matches(pixel[0] as f32, pixel[1] as f32, pixel[2] as f32) {
+                            matched += 1;
+                        }
+                    }
+                }
             }
         }
         (matched, effective)

@@ -121,13 +121,16 @@ fn an_advantage_situation_is_counted_by_what_followed() {
         .push(advantage(300, None, AdvantageOutcome::Reset));
     events
         .advantage_situations
+        .push(advantage(400, None, AdvantageOutcome::Reset));
+    events
+        .advantage_situations
         .push(advantage(500, None, AdvantageOutcome::TurnLost));
 
     let stats = build_tactic_stats(&[], &events, 1, 2);
 
-    assert_eq!(stats.advantage_opportunities, 3);
+    assert_eq!(stats.advantage_opportunities, 4);
     assert_eq!(stats.advantage_continued, 1);
-    assert_eq!(stats.advantage_abandoned, 2);
+    assert_eq!(stats.advantage_abandoned, 3);
     assert_eq!(
         stats.advantage_turns_lost, 1,
         "手放した上で取り返された場面だけを数える"

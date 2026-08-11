@@ -5,7 +5,9 @@
 //! 試合」と見分けが付かないので、どの欄も必ず埋まることを固定する。
 
 use super::support::*;
-use crate::match_events::{DamageEvent, RoundInfo};
+use crate::match_events::{
+    DamageEvent, DriveImpactEvent, DriveImpactOutcome, EventConfidence, RoundInfo,
+};
 
 /// 被弾のある 1 ラウンドの試合。
 fn events_with_damage() -> MatchEvents {
@@ -69,6 +71,50 @@ fn the_side_decides_who_won_the_round() {
         as_p2.damage_taken_events.len(),
         0,
         "相手の被弾を自分の被弾に数えている"
+    );
+}
+
+/// 相手側はカードだけでなく、独立した戦術統計にも渡す。P2 視点で
+/// `3 - own` を取り違えると、P1 の DI が相手行動として数えられない。
+#[test]
+fn the_opponent_side_reaches_tactic_stats() {
+    let mut events = empty_events();
+    events.drive_impacts.push(DriveImpactEvent {
+        side: 1,
+        input_frame: 100,
+        active_frame: Some(120),
+        contact_frame: Some(120),
+        outcome: DriveImpactOutcome::Blocked,
+        damage: 0.0,
+        confidence: EventConfidence::High,
+        round_no: 1,
+    });
+
+    let report = detector_test_report(&events, "p2");
+
+    assert_eq!(report.tactic_stats.di_faced, 1);
+    assert_eq!(report.tactic_stats.di_blocked, 1);
+}
+
+/// 旧 API で渡された自キャラクターは、確反候補を選ぶ検出器まで届く。
+#[test]
+fn the_legacy_own_character_reaches_advice_detectors() {
+    let fixture = advice_detectors::test_support::card_fixtures()
+        .into_iter()
+        .find(|fixture| fixture.id == "punish_missed")
+        .expect("確反見逃し fixture");
+
+    let report = detector_test_report_with_character(&fixture.events, "p1", Some("LUKE"));
+    let card = report
+        .cards
+        .iter()
+        .find(|card| card.id == fixture.id)
+        .expect("確反見逃しカード");
+
+    assert!(
+        card.description.contains("威力"),
+        "キャラクター別の確反候補が届いていない: {}",
+        card.description
     );
 }
 

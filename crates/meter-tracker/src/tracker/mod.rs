@@ -49,19 +49,21 @@ pub struct MeterTracker {
 
 impl MeterTracker {
     pub fn new() -> Self {
-        let mut reads = HashMap::new();
-        reads.insert("left".to_string(), HashMap::new());
-        reads.insert("right".to_string(), HashMap::new());
-        let mut emitted = HashMap::new();
-        emitted.insert("left".to_string(), HashMap::new());
-        emitted.insert("right".to_string(), HashMap::new());
+        let reads = HashMap::from([
+            (String::from("left"), HashMap::new()),
+            (String::from("right"), HashMap::new()),
+        ]);
+        let emitted = HashMap::from([
+            (String::from("left"), HashMap::new()),
+            (String::from("right"), HashMap::new()),
+        ]);
         Self {
             left: MeterTimeline {
-                side: "left".to_string(),
+                side: String::from("left"),
                 segments: vec![],
             },
             right: MeterTimeline {
-                side: "right".to_string(),
+                side: String::from("right"),
                 segments: vec![],
             },
             video_map: HashMap::new(),

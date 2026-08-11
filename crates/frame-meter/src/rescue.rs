@@ -6,9 +6,6 @@ use crate::model::CellState;
 use crate::palette::PaletteName;
 
 pub(crate) fn dominant_color_family(pixels: &[[u8; 3]]) -> Option<(CellState, Bgr)> {
-    if pixels.is_empty() {
-        return None;
-    }
     let palette_colors: Vec<Bgr> = PaletteName::all().iter().map(|name| name.color()).collect();
     let mut nearest = vec![0usize; pixels.len()];
     let mut assigned = vec![false; pixels.len()];

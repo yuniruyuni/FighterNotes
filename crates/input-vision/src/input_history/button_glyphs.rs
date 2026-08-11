@@ -27,20 +27,38 @@ struct GlyphMatch {
     margin: u32,
 }
 
+pub(super) fn is_glyph_dark(r: u8, g: u8, b: u8) -> bool {
+    r.min(g).min(b) < BTN_GLYPH_DARK
+}
+
+pub(super) fn has_glyph_light_hole(interior: u32, dark: u32) -> bool {
+    interior.saturating_sub(dark) >= BTN_GLYPH_MIN_LIGHT
+}
+
+pub(super) fn glyph_score_is_accepted(best: u32, margin: u32) -> bool {
+    best <= BTN_GLYPH_MAX && margin >= BTN_GLYPH_AMBIG
+}
+
+pub(super) fn glyph_score_margin(punch: u32, kick: u32) -> u32 {
+    punch.abs_diff(kick)
+}
+
 fn match_btn_glyph(f: &Frame, x_start: usize, y0: usize) -> Option<GlyphMatch> {
     // 暗画素マスク（楕円内部限定。円外の透過背景ノイズを避ける）
     let mut mask = [0u64; DIGIT_H];
     for (ry, row) in mask.iter_mut().enumerate() {
         let mut bits = 0u64;
-        for k in 0..BTN_GLYPH_W as usize {
-            let Some((r, g, b)) = f.px(x_start + k, y0 + ry) else {
-                continue;
-            };
-            if r.min(g).min(b) < BTN_GLYPH_DARK {
-                bits |= 1 << k;
+        let mut interior = BTN_GLYPH_INTERIOR[ry];
+        for _ in 0..interior.count_ones() {
+            let k = interior.trailing_zeros() as usize;
+            if f.px(x_start + k, y0 + ry)
+                .is_some_and(|(r, g, b)| is_glyph_dark(r, g, b))
+            {
+                bits += 1 << k;
             }
+            interior &= interior - 1;
         }
-        *row = bits & BTN_GLYPH_INTERIOR[ry];
+        *row = bits;
     }
 
     // 無地円ゲート: グリフは fill 内の明るい穴として写る。穴が無い円は
@@ -48,7 +66,7 @@ fn match_btn_glyph(f: &Frame, x_start: usize, y0: usize) -> Option<GlyphMatch> {
     // 侵食スコアが偶然低く出て誤マッチする）
     let interior_total: u32 = BTN_GLYPH_INTERIOR.iter().map(|r| r.count_ones()).sum();
     let dark_total: u32 = mask.iter().map(|r| r.count_ones()).sum();
-    if interior_total - dark_total < BTN_GLYPH_MIN_LIGHT {
+    if !has_glyph_light_hole(interior_total, dark_total) {
         return None;
     }
 
@@ -95,20 +113,17 @@ fn match_btn_glyph(f: &Frame, x_start: usize, y0: usize) -> Option<GlyphMatch> {
     let flipped = flip(&mask);
     let dp = dist_shifted(&mask, &BTN_GLYPH_PUNCH).min(dist_shifted(&flipped, &BTN_GLYPH_PUNCH));
     let dk = dist_shifted(&mask, &BTN_GLYPH_KICK).min(dist_shifted(&flipped, &BTN_GLYPH_KICK));
-    let (best, margin) = if dp <= dk {
-        (dp, dk - dp)
-    } else {
-        (dk, dp - dk)
+    let margin = glyph_score_margin(dp, dk);
+    let (glyph, best, margin) = match dp.cmp(&dk) {
+        std::cmp::Ordering::Less => (BtnGlyph::Punch, dp, margin),
+        std::cmp::Ordering::Greater => (BtnGlyph::Kick, dk, margin),
+        std::cmp::Ordering::Equal => return None,
     };
-    if best > BTN_GLYPH_MAX || margin < BTN_GLYPH_AMBIG {
+    if !glyph_score_is_accepted(best, margin) {
         return None;
     }
     Some(GlyphMatch {
-        glyph: if dp <= dk {
-            BtnGlyph::Punch
-        } else {
-            BtnGlyph::Kick
-        },
+        glyph,
         distance: best,
         margin,
     })

@@ -184,6 +184,7 @@ fn one_confirmed_miss_is_already_worth_saying() {
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Diagnosis);
     assert_eq!(card.hp_lost, Some(0.20));
+    assert!((card.severity - 0.22).abs() < 1e-6);
 }
 
 /// 繰り返していれば見出しを書き分ける。一度の見落としと、対空が
@@ -214,6 +215,8 @@ fn missing_more_often_weighs_more() {
     let twice = detect_teleport_defense(&twice, 1).expect("提示される");
 
     assert_eq!(once.hp_lost, twice.hp_lost, "損失は同じはず");
+    assert!((once.severity - 0.42).abs() < 1e-6);
+    assert!((twice.severity - 0.44).abs() < 1e-6);
     assert!(twice.severity > once.severity, "回数が重みに効いていない");
 }
 

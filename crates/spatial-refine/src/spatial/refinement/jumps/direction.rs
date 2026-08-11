@@ -21,3 +21,20 @@ pub(super) fn resolve(side: u8, input_dir: &str, order: Option<HorizontalOrder>)
         JumpDirection::Backward
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn right_input_is_forward_when_player_one_is_on_the_left() {
+        assert_eq!(
+            resolve(1, "UR", Some(HorizontalOrder::P1Left)),
+            JumpDirection::Forward
+        );
+        assert_eq!(
+            resolve(1, "UL", Some(HorizontalOrder::P1Left)),
+            JumpDirection::Backward
+        );
+    }
+}

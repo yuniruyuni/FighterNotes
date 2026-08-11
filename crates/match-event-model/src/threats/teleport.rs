@@ -42,7 +42,7 @@ pub fn teleport_input(segments: &[InputSegment], inv_start: u32) -> Option<&Inpu
     let mut cluster_start = *candidates.last()?;
     for candidate in candidates.iter().rev().skip(1) {
         if candidate.end_frame.saturating_add(2) < cluster_start.start_frame {
-            break;
+            return Some(cluster_start);
         }
         cluster_start = *candidate;
     }

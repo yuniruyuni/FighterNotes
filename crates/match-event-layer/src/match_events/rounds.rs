@@ -22,20 +22,19 @@ pub(crate) fn detect_rounds_from_hp(
     // 全快 run（FULL_MIN_RUN 以上持続）の開始位置を収集
     let full = |i: usize| features[i].is_match_screen && hp[0][i] >= FULL_HP && hp[1][i] >= FULL_HP;
     let mut onsets: Vec<usize> = Vec::new();
-    {
-        let mut i = 0usize;
-        while i < n {
-            if full(i) {
-                let start = i;
-                while i < n && full(i) {
-                    i += 1;
-                }
-                if i - start >= FULL_MIN_RUN {
-                    onsets.push(start);
-                }
-            } else {
-                i += 1;
+    let mut run_start = None;
+    for i in 0..n {
+        if full(i) {
+            run_start.get_or_insert(i);
+        } else if let Some(start) = run_start.take() {
+            if i - start >= FULL_MIN_RUN {
+                onsets.push(start);
             }
+        }
+    }
+    if let Some(start) = run_start {
+        if n - start >= FULL_MIN_RUN {
+            onsets.push(start);
         }
     }
     if onsets.is_empty() {
@@ -48,8 +47,12 @@ pub(crate) fn detect_rounds_from_hp(
     let mut merged: Vec<usize> = vec![onsets[0]];
     for &o in &onsets[1..] {
         let prev = *merged.last().unwrap();
-        let min_hp = (prev..o)
-            .map(|i| hp[0][i].min(hp[1][i]))
+        let min_hp = hp[0]
+            .iter()
+            .zip(&hp[1])
+            .take(o)
+            .skip(prev)
+            .map(|(p1, p2)| p1.min(*p2))
             .fold(f32::MAX, f32::min);
         if min_hp < MERGE_MIN_HP {
             merged.push(o);
@@ -73,7 +76,7 @@ pub(crate) fn detect_rounds_from_fight_markers(
     hp: &[Vec<f32>; 2],
     markers: &[FightMarker],
 ) -> Vec<RoundInfo> {
-    if features.is_empty() || markers.is_empty() {
+    if features.is_empty() {
         return Vec::new();
     }
     let starts: Vec<usize> = markers
@@ -113,23 +116,26 @@ fn detect_rounds_from_bounds(
         let mut end = hard_end;
         let mut winner: Option<u8> = None;
         let mut hp_end = (hp[0][hard_end], hp[1][hard_end]);
-        let mut i = o;
-        while i + KO_MIN_RUN <= hard_end {
-            let p1_ko = (i..i + KO_MIN_RUN).all(|j| hp[0][j] <= KO_HP);
-            let p2_ko = (i..i + KO_MIN_RUN).all(|j| hp[1][j] <= KO_HP);
-            if p1_ko || p2_ko {
-                hp_end = (hp[0][i], hp[1][i]); // 終了 HP は KO 確定時点で読む
-                end = (i + KO_MIN_RUN + 45).min(hard_end); // KO 演出を少し含める
-                winner = if p1_ko && !p2_ko {
-                    Some(2)
-                } else if p2_ko && !p1_ko {
-                    Some(1)
-                } else {
-                    None
-                };
-                break;
+        let last_ko_start = hard_end
+            .checked_add(1)
+            .and_then(|length| length.checked_sub(KO_MIN_RUN));
+        if let Some(last_ko_start) = last_ko_start {
+            for i in o..=last_ko_start {
+                let p1_ko = (i..i + KO_MIN_RUN).all(|j| hp[0][j] <= KO_HP);
+                let p2_ko = (i..i + KO_MIN_RUN).all(|j| hp[1][j] <= KO_HP);
+                if p1_ko || p2_ko {
+                    hp_end = (hp[0][i], hp[1][i]); // 終了 HP は KO 確定時点で読む
+                    end = (i + KO_MIN_RUN + 45).min(hard_end); // KO 演出を少し含める
+                    winner = if p1_ko && !p2_ko {
+                        Some(2)
+                    } else if p2_ko && !p1_ko {
+                        Some(1)
+                    } else {
+                        None
+                    };
+                    break;
+                }
             }
-            i += 1;
         }
         // KO が検出できないラウンド（KO フラッシュで最後の一撃が uncertain に
         // なった / タイムアップ / 動画途中で終了）は、両者の読み取り品質が
@@ -167,7 +173,7 @@ fn detect_rounds_from_bounds(
             );
             let (l, r) = hp_end;
             if (l - r).abs() > WINNER_HP_MARGIN {
-                winner = Some(if l > r { 1 } else { 2 });
+                winner = Some(if l.total_cmp(&r).is_gt() { 1 } else { 2 });
             }
         }
         rounds.push(RoundInfo {

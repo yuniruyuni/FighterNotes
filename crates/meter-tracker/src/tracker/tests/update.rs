@@ -92,12 +92,29 @@ fn update_advances_one_and_resyncs_small_positive_delta() {
     tracker.previous = Some(shared_pair(lit_observation(79), lit_observation(-1)));
     tracker.update(1, lit_observation(0), lit_observation(-1));
     assert_eq!(tracker.absolute_frame, Some(80));
+    assert_eq!(tracker.previous.as_ref().unwrap().0.fresh_edge, 0);
     assert_eq!((tracker.divergence, tracker.divergent_edge), (0, None));
     assert_eq!(tracker.still_frames, 0);
 
     tracker.previous = Some(shared_pair(lit_observation(0), lit_observation(-1)));
     tracker.update(2, lit_observation(3), lit_observation(-1));
     assert_eq!(tracker.absolute_frame, Some(83));
+}
+
+#[test]
+fn confirmed_large_divergence_resets_for_both_directions() {
+    for (edge, previous_edge) in [(15, 14), (5, 4)] {
+        let mut tracker = MeterTracker::new();
+        tracker.open_segment(10);
+        tracker.divergence = RESET_DIVERGENCE - 1;
+        tracker.divergent_edge = Some(previous_edge);
+        tracker.previous = Some(shared_pair(lit_observation(10), RowObs::empty()));
+
+        tracker.update(1, lit_observation(edge), RowObs::empty());
+
+        assert_eq!(tracker.segment_id, 1, "edge={edge}");
+        assert_eq!(tracker.absolute_frame, Some(edge as i64), "edge={edge}");
+    }
 }
 
 #[test]
@@ -183,6 +200,23 @@ fn update_requires_both_sides_black_when_edge_is_missing() {
 }
 
 #[test]
+fn update_requires_both_sides_black_when_an_edge_is_present() {
+    let mut closed = MeterTracker::new();
+    closed.open_segment(10);
+    closed.previous = Some(shared_pair(lit_observation(10), lit_observation(10)));
+    let mut black = RowObs::empty();
+    black.fresh_edge = 10;
+    closed.update(1, black.clone(), black.clone());
+    assert_eq!(closed.absolute_frame, None);
+
+    let mut one_black = MeterTracker::new();
+    one_black.open_segment(10);
+    one_black.previous = Some(shared_pair(lit_observation(10), lit_observation(10)));
+    one_black.update(1, black, lit_observation(10));
+    assert_eq!(one_black.absolute_frame, Some(10));
+}
+
+#[test]
 fn update_requires_vote_before_missing_edge_change_can_advance() {
     let mut tracker = MeterTracker::new();
     tracker.open_segment(30);
@@ -255,6 +289,20 @@ fn opening_a_segment_also_records_the_frame_before_it() {
     assert_eq!(tracker.video_map[&8], (0, 8));
 }
 
+#[test]
+fn opening_preserves_stationary_other_reads() {
+    let mut tracker = MeterTracker::new();
+    let mut observation = lit_observation(8);
+    observation.states[8] = CellState::Other;
+    observation.cols = Some((0..80).map(|cell| cell as f32).collect());
+    observation.cols_w = 1;
+
+    tracker.update(7, observation.clone(), observation.clone());
+    tracker.update(8, observation.clone(), observation);
+
+    assert_eq!(tracker.reads["left"][&8].0, "other");
+}
+
 /// 直前のフレームの票が割れていたなら、そのフレームの色は採らない。
 /// 開き直したからといって、読めていなかったものが読めた扱いにならない。
 #[test]
@@ -279,6 +327,26 @@ fn the_recorded_previous_frame_keeps_its_own_vote() {
         [7, 8],
         "直前のフレームを区間に含めていない"
     );
+}
+
+#[test]
+fn a_rejected_previous_vote_cannot_override_the_opening_frame_colour() {
+    let mut tracker = MeterTracker::new();
+    tracker.previous = Some(shared_pair(lit_observation(-1), lit_observation(-1)));
+    let mut rejected = lit_observation(8);
+    rejected.states[8] = CellState::Counter;
+    rejected.cols = Some((0..80).map(|cell| cell as f32).collect());
+    rejected.cols_w = 1;
+    rejected.v[..WIPE_GUARD_MIN_CELLS as usize].fill(0.0);
+    let mut accepted = lit_observation(8);
+    accepted.states[8] = CellState::Other;
+    accepted.cols = Some((0..80).map(|cell| cell as f32).collect());
+    accepted.cols_w = 1;
+
+    tracker.update(7, rejected.clone(), rejected);
+    tracker.update(8, accepted.clone(), accepted);
+
+    assert_eq!(tracker.reads["left"][&8].0, "other");
 }
 
 /// 画面が真っ黒になれば、そこで区間は終わり。演出やリプレイの

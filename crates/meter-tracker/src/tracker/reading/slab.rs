@@ -21,7 +21,7 @@ impl MeterTracker {
         let (Some(columns), Some(previous_columns)) =
             (observation.cols.as_ref(), previous.cols.as_ref())
         else {
-            return "other".to_string();
+            return String::from("other");
         };
 
         let slide_difference = compare_columns(

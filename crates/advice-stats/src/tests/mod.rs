@@ -8,5 +8,6 @@ mod super_gauge_coverage;
 mod tactic_stats_count_every_drive_outcome;
 mod tactic_stats_count_every_pressure_variant;
 mod tactic_stats_count_every_super_art_variant;
+mod tactic_stats_count_strict_attack_evidence;
 mod tactic_stats_only_count_confirmed_interactions;
 mod throw_defence_counts_only_real_chances;

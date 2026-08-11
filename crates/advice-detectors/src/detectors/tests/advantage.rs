@@ -72,6 +72,7 @@ fn a_single_lost_turn_stays_an_observation() {
     assert_eq!(card.id, "advantage_abandoned");
     assert_eq!(card.kind, AdviceKind::Observation);
     assert_eq!(card.evidence.len(), 1);
+    assert!((card.severity - 0.11).abs() < 1e-6);
 }
 
 /// 機会数・放棄数・損失数・選択率が揃って初めて原因診断へ上げる。

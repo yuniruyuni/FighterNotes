@@ -190,6 +190,24 @@ fn a_full_health_run_of_exactly_the_minimum_starts_a_round() {
 
     assert_eq!(starts(FULL_MIN_RUN), 2, "ちょうどの持続を落としている");
     assert_eq!(starts(FULL_MIN_RUN - 1), 1, "短すぎる全快を開始にしている");
+
+    let ending_run = |run: usize| {
+        let mut left = vec![0.5; 10];
+        let mut right = vec![0.5; 10];
+        left.extend(std::iter::repeat_n(1.0, run));
+        right.extend(std::iter::repeat_n(1.0, run));
+        detect(&left, &right).len()
+    };
+    assert_eq!(
+        ending_run(FULL_MIN_RUN),
+        1,
+        "列の末尾でちょうど続く全快を落としている"
+    );
+    assert_eq!(
+        ending_run(FULL_MIN_RUN - 1),
+        0,
+        "列の末尾の短い全快を開始にしている"
+    );
 }
 
 // ── FIGHT 表示から割る場合 ───────────────────────────────────────────────
@@ -326,11 +344,14 @@ fn the_knockout_length_is_read_the_same_on_both_sides() {
 #[test]
 fn a_knockout_that_ends_exactly_at_the_boundary_still_counts() {
     let hard_end = 300usize;
-    let start = hard_end - KO_MIN_RUN;
-    let left = vec![1.0f32; 600];
+    let start = hard_end + 1 - KO_MIN_RUN;
+    let mut left = vec![1.0f32; 600];
     let mut right = vec![1.0f32; 600];
+    for value in &mut left[start..] {
+        *value = KO_HP + 0.01;
+    }
     for value in &mut right[start..] {
-        *value = 0.0;
+        *value = KO_HP;
     }
     let features = features_for(&left, &right);
     let hp = [left, right];
@@ -507,6 +528,33 @@ fn an_isolated_readable_frame_does_not_extend_the_round() {
     );
 }
 
+/// 前後の別 HUD 区間がどちらも安定しているときは、後ろの区間を採る。
+/// 最終フレームを安定 run の終端に含めないと、前の HUD まで巻き戻る。
+#[test]
+fn the_latest_stable_hud_run_wins_even_when_it_ends_at_the_boundary() {
+    let left = vec![1.0f32; 100];
+    let right = vec![0.5f32; 100];
+    let mut features = features_for(&left, &right);
+    for feature in &mut features {
+        feature.left_hp_raw_quality = 1.0;
+        feature.right_hp_raw_quality = 1.0;
+    }
+    for feature in &mut features[10..18] {
+        feature.left_hp_raw_quality = 0.0;
+        feature.right_hp_raw_quality = 0.0;
+    }
+    for feature in &mut features[92..100] {
+        feature.left_hp_raw_quality = 0.0;
+        feature.right_hp_raw_quality = 0.0;
+    }
+    features[50].is_match_screen = false;
+    let hp = [left, right];
+
+    let rounds = detect_rounds_from_fight_markers(&features, &hp, &[marker(0)]);
+
+    assert_eq!(rounds[0].end_frame, 99);
+}
+
 /// 一度安定して読めた後は、同じ HUD が続く限り終端を伸ばす。SA の
 /// 演出で片側のバーが長く隠れても、ラウンドはそこで終わっていない。
 #[test]
@@ -562,4 +610,19 @@ fn a_difference_within_the_reading_noise_leaves_the_winner_unknown() {
 
     assert_eq!(winner_for(0.019), None, "揺れの範囲で勝者を決めている");
     assert_eq!(winner_for(0.05), Some(1));
+}
+
+/// 読み取り誤差の最小差ちょうどでは勝者を決めない。
+#[test]
+fn a_difference_exactly_at_the_winner_margin_is_still_a_draw() {
+    // FIGHT の安定末尾 f5 から最終 f18 までは 14 フレーム。
+    // P2 HP=0 でも KO_MIN_RUN に届かないため、残 HP 差の分岐を直接見られる。
+    let left = vec![WINNER_HP_MARGIN; KO_MIN_RUN + 4];
+    let right = vec![0.0f32; KO_MIN_RUN + 4];
+    let features = features_for(&left, &right);
+    let hp = [left, right];
+
+    let rounds = detect_rounds_from_fight_markers(&features, &hp, &[marker(0)]);
+
+    assert_eq!(rounds[0].winner, None);
 }

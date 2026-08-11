@@ -142,6 +142,18 @@ fn the_dim_colour_is_the_fresh_one_darkened() {
     }
 }
 
+#[test]
+fn stripe_and_neutral_dim_colours_have_exact_nonzero_anchors() {
+    for (name, expected) in [
+        (PaletteName::WhiteDim, [177.0, 174.8, 174.8]),
+        (PaletteName::GrayDim, [150.0, 147.0, 147.8]),
+        (PaletteName::StripePinkDim, [105.0, 60.0, 150.0]),
+        (PaletteName::StripeOrangeDim, [30.0, 97.5, 172.5]),
+    ] {
+        assert_eq!(name.color(), expected, "{name:?}");
+    }
+}
+
 /// 見分けの役割は色ごとに一つだけ。
 #[test]
 fn each_colour_has_at_most_one_role() {
@@ -213,4 +225,8 @@ fn state_quality_is_nearest_distance_within_requested_family() {
 
     assert_close(state_quality(&CellState::Counter, a, b), 3.0);
     assert_close(state_quality(&CellState::Empty, a, b), 0.0);
+
+    let far = [255.0, 0.0, 255.0];
+    let near_b = [counter[0], counter[1], counter[2] + 2.0];
+    assert_close(state_quality(&CellState::Counter, far, near_b), 2.0);
 }

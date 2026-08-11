@@ -92,6 +92,17 @@ fn a_rising_frame_counter_keeps_one_segment() {
     assert_eq!(build_segments(&screen(30), &inputs).len(), 1);
 }
 
+/// カウンターが同じ値を数フレーム保持しても新しい入力ではない。
+#[test]
+fn an_unchanged_frame_counter_keeps_one_segment() {
+    let inputs: Vec<_> = (0..30).map(|_| held(7, InputDir::Neutral)).collect();
+
+    let segments = build_segments(&screen(30), &inputs);
+
+    assert_eq!(segments.len(), 1);
+    assert_eq!((segments[0].start_frame, segments[0].end_frame), (0, 29));
+}
+
 /// ボタンが変われば別の入力。
 #[test]
 fn a_change_of_button_starts_a_new_segment() {

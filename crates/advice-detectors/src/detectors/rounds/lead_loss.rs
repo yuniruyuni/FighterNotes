@@ -10,38 +10,39 @@ pub fn detect_lead_loss(
 ) -> Option<AdviceCard> {
     let mut losses = Vec::new();
     for summary in rounds {
-        if summary.won != Some(false) {
-            continue;
+        if summary.won == Some(false) {
+            if let Some(round) = events
+                .rounds
+                .iter()
+                .find(|round| round.round_no == summary.round_no)
+            {
+                let own_hp = &events.hp[own_index];
+                let opponent_hp = &events.hp[1 - own_index];
+                let len = own_hp.len().min(opponent_hp.len());
+                let start = round.start_frame as usize;
+                if let std::cmp::Ordering::Less = start.cmp(&len) {
+                    let end = (round.end_frame as usize).min(len.saturating_sub(1));
+                    let max_lead = (start..=end)
+                        .map(|frame| own_hp[frame] - opponent_hp[frame])
+                        .fold(f32::MIN, f32::max);
+                    if max_lead >= LEAD_MARGIN {
+                        let peak = (start..=end)
+                            .rev()
+                            .find(|&frame| own_hp[frame] - opponent_hp[frame] >= max_lead - 0.001)
+                            .unwrap_or(start);
+                        let flipped = own_hp
+                            .iter()
+                            .zip(opponent_hp)
+                            .enumerate()
+                            .find_map(|(frame, (&own, &opponent))| {
+                                (frame >= peak && frame < end && opponent > own).then_some(frame)
+                            })
+                            .unwrap_or(end);
+                        losses.push((summary, peak as u32, flipped as u32));
+                    }
+                }
+            }
         }
-        let Some(round) = events
-            .rounds
-            .iter()
-            .find(|round| round.round_no == summary.round_no)
-        else {
-            continue;
-        };
-        let own_hp = &events.hp[own_index];
-        let opponent_hp = &events.hp[1 - own_index];
-        let len = own_hp.len().min(opponent_hp.len());
-        let start = round.start_frame as usize;
-        let end = (round.end_frame as usize).min(len.saturating_sub(1));
-        if start >= len {
-            continue;
-        }
-        let max_lead = (start..=end)
-            .map(|frame| own_hp[frame] - opponent_hp[frame])
-            .fold(f32::MIN, f32::max);
-        if max_lead < LEAD_MARGIN {
-            continue;
-        }
-        let peak = (start..=end)
-            .rev()
-            .find(|&frame| own_hp[frame] - opponent_hp[frame] >= max_lead - 0.001)
-            .unwrap_or(start);
-        let flipped = (peak..=end)
-            .find(|&frame| opponent_hp[frame] > own_hp[frame])
-            .unwrap_or(end);
-        losses.push((summary, peak as u32, flipped as u32));
     }
     if losses.is_empty() {
         return None;

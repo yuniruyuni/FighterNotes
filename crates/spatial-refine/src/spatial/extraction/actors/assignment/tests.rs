@@ -369,3 +369,145 @@ fn a_side_expecting_a_discontinuity_takes_the_region_first() {
     );
     assert_eq!(waiting_on_the_first, [Some(0), None]);
 }
+
+#[test]
+fn initial_tracks_keep_the_frame_and_include_the_exact_separation() {
+    let regions = vec![region(-0.05, 0.05, 0.9, 100), region(0.07, 0.17, 0.9, 100)];
+
+    let tracks = initial_tracks(&regions, &[0, 1], 42, [false, false], &config())
+        .expect("exactly separated actors should initialize");
+
+    assert_eq!(tracks[0].last_observed_frame, 42);
+    assert_eq!(tracks[1].last_observed_frame, 42);
+    assert_eq!(tracks[0].confidence, 0.55);
+    assert_eq!(tracks[1].confidence, 0.55);
+}
+
+#[test]
+fn the_second_side_is_scored_even_when_the_first_has_no_track() {
+    let p2 = track_at(0.7, 0.9);
+    let regions = vec![region(0.66, 0.76, 0.9, 100)];
+
+    let assigned = assign_regions(
+        [None, Some(&p2)],
+        [false, false],
+        [false, false],
+        &regions,
+        &[0],
+        &config(),
+    );
+
+    assert_eq!(assigned, [None, Some(0)]);
+}
+
+#[test]
+fn movement_limits_are_inclusive_and_each_axis_is_required() {
+    let mut limits = config();
+    limits.actor_ground_y = 1.0;
+    limits.max_track_dx = 0.25;
+    limits.max_track_dy = 0.25;
+    let track = track_at(0.25, 0.5);
+    let exact_x = region(0.45, 0.55, 0.5, 100);
+    let exact_y = region(0.20, 0.30, 0.75, 100);
+    let beyond_y = region(0.20, 0.30, 0.76, 100);
+
+    assert_eq!(
+        assign_regions(
+            [Some(&track), None],
+            [false, false],
+            [false, false],
+            &[exact_x],
+            &[0],
+            &limits,
+        )[0],
+        Some(0)
+    );
+    assert_eq!(
+        assign_regions(
+            [Some(&track), None],
+            [false, false],
+            [false, false],
+            &[exact_y],
+            &[0],
+            &limits,
+        )[0],
+        Some(0)
+    );
+    assert_eq!(
+        assign_regions(
+            [Some(&track), None],
+            [false, false],
+            [false, false],
+            &[beyond_y],
+            &[0],
+            &limits,
+        )[0],
+        None
+    );
+}
+
+#[test]
+fn rejecting_one_airborne_candidate_does_not_hide_a_later_grounded_one() {
+    let track = track_at(0.3, 0.9);
+    let regions = vec![region(0.28, 0.38, 0.7, 100), region(0.28, 0.38, 0.9, 100)];
+
+    let assigned = assign_regions(
+        [Some(&track), None],
+        [false, false],
+        [false, false],
+        &regions,
+        &[0, 1],
+        &config(),
+    );
+
+    assert_eq!(assigned[0], Some(1));
+}
+
+#[test]
+fn region_score_uses_distance_discontinuity_size_and_ground_terms() {
+    let scored_region = region(0.0, 0.1, 0.86, 100);
+    let score = region_score(0.2, 0.1, &scored_region, &config());
+
+    assert!((score - 0.275).abs() < 1e-6, "score={score}");
+
+    let exact_dx = region_score(config().max_track_dx, 0.0, &scored_region, &config());
+    let expected = config().max_track_dx * 1.8 - 0.12 - 0.18;
+    assert!((exact_dx - expected).abs() < 1e-6);
+}
+
+#[test]
+fn the_airborne_hint_treats_the_ground_threshold_as_grounded_for_either_candidate() {
+    let ground = config().actor_ground_y;
+    let first_ground = vec![
+        region(0.70, 0.80, ground, 100),
+        region(0.20, 0.30, 0.60, 100),
+    ];
+    let tracks = initial_tracks(&first_ground, &[0, 1], 0, [false, true], &config()).unwrap();
+    assert!((tracks[1].anchor.x - 0.25).abs() < 1e-6);
+
+    let second_ground = vec![
+        region(0.70, 0.80, 0.60, 100),
+        region(0.20, 0.30, ground, 100),
+    ];
+    let tracks = initial_tracks(&second_ground, &[0, 1], 0, [true, false], &config()).unwrap();
+    assert!((tracks[0].anchor.x - 0.75).abs() < 1e-6);
+}
+
+#[test]
+fn staying_exactly_on_the_ground_threshold_needs_no_jump_hint() {
+    let ground = config().actor_ground_y;
+    let track = track_at(0.30, ground);
+    let candidate = region(0.28, 0.38, ground, 100);
+
+    assert_eq!(
+        assign_regions(
+            [Some(&track), None],
+            [false, false],
+            [false, false],
+            &[candidate],
+            &[0],
+            &config(),
+        )[0],
+        Some(0)
+    );
+}

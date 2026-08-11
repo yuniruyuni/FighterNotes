@@ -46,6 +46,8 @@ fn a_single_punished_whiff_stays_an_observation() {
     let card = detect_whiff_punished(&events, 1).expect("card");
     assert_eq!(card.id, "whiff_punished");
     assert_eq!(card.kind, AdviceKind::Observation);
+    assert_eq!(card.title, "空振りした技の硬直を狩られた場面");
+    assert!(card.practice.starts_with("クリップで、間合いを測る意図"));
     assert_eq!(card.evidence.len(), 1);
     assert_eq!(card.evidence[0].end_frame, Some(108));
 }
@@ -61,6 +63,8 @@ fn repeated_punished_whiffs_become_a_diagnosis() {
 
     let card = detect_whiff_punished(&events, 1).expect("card");
     assert_eq!(card.kind, AdviceKind::Diagnosis);
+    assert_eq!(card.title, "届かない技の硬直を繰り返し狩られている");
+    assert!(card.practice.starts_with("クリップで、相手のどの位置"));
     assert_eq!(card.evidence.len(), 2);
     assert!((card.severity - 0.37).abs() < 1e-5);
 }

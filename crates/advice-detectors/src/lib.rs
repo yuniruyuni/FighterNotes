@@ -21,5 +21,8 @@ pub use match_event_layer::match_events::{
 
 pub mod detectors;
 
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
+
 #[cfg(test)]
 mod tests;

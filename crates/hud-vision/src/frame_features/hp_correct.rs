@@ -52,9 +52,13 @@ pub(crate) fn correct_hp_side(
     own_side: &str,
     hp_side: &str,
     // Phase 2（スタン検証）は現行実装では未使用。将来の再有効化に備えて
-    // シグネチャは維持する
-    _stun: &[bool],
+    // シグネチャとフレーム対応の契約は維持する。
+    stun: &[bool],
 ) {
+    assert!(
+        stun.is_empty() || stun.len() == features.len(),
+        "stun flags must be empty or aligned with features"
+    );
     // 試合画面フレームのみを対象とするマスク（非試合フレームは補正対象外）
     let in_match: Vec<bool> = features.iter().map(|f| f.is_match_screen).collect();
 
@@ -235,12 +239,37 @@ pub(crate) fn fill_unreadable_from_the_future(
     }
 }
 
-/// 範囲内の試合中フレームの最小値。試合中のフレームが無ければ None。
-fn window_min(raw: &[f32], in_match: &[bool], range: std::ops::Range<usize>) -> Option<f32> {
-    range
-        .filter(|index| in_match[*index])
-        .map(|index| raw[index])
-        .reduce(f32::min)
+/// 指定フレームの前後 `window` フレームにある試合中の最小値。
+/// 自分自身とセグメント外は含めない。
+fn surrounding_window_minima(
+    raw: &[f32],
+    in_match: &[bool],
+    index: usize,
+    segment_start: usize,
+    segment_end: usize,
+    window: usize,
+) -> (Option<f32>, Option<f32>) {
+    let behind = raw
+        .iter()
+        .copied()
+        .zip(in_match.iter().copied())
+        .take(index)
+        .skip(segment_start)
+        .rev()
+        .take(window)
+        .filter_map(|(value, is_match)| is_match.then_some(value))
+        .reduce(f32::min);
+    let ahead = raw
+        .iter()
+        .copied()
+        .zip(in_match.iter().copied())
+        .take(segment_end)
+        .skip(index)
+        .skip(1)
+        .take(window)
+        .filter_map(|(value, is_match)| is_match.then_some(value))
+        .reduce(f32::min);
+    (behind, ahead)
 }
 
 /// ラウンドセグメント内で「偽ハイ」フレームを特定する。
@@ -285,17 +314,10 @@ pub(crate) fn compute_spike_frames(
                 continue;
             }
 
-            // 後方ウィンドウ: i の前 SPIKE_WINDOW フレームの最小値
-            let bw_start = if i > seg_start + SPIKE_WINDOW {
-                i - SPIKE_WINDOW
-            } else {
-                seg_start
-            };
-            backward_min[li] = window_min(raw, in_match, bw_start..i);
-
-            // 前方ウィンドウ: i の後 SPIKE_WINDOW フレームの最小値
-            let fw_end = (i + SPIKE_WINDOW + 1).min(seg_end);
-            lookahead_min[li] = window_min(raw, in_match, i + 1..fw_end);
+            let (behind, ahead) =
+                surrounding_window_minima(raw, in_match, i, seg_start, seg_end, SPIKE_WINDOW);
+            backward_min[li] = behind;
+            lookahead_min[li] = ahead;
         }
 
         for li in 0..len {

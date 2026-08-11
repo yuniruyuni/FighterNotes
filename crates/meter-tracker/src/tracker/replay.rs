@@ -13,9 +13,6 @@ impl MeterTracker {
             .and_then(|entry| entry.prev_abs);
 
         if let Some(previous_absolute) = previous_absolute {
-            for entry in &self.window[window_start..] {
-                self.video_map.remove(&entry.vf);
-            }
             self.dwell
                 .retain(|&absolute, _| absolute <= previous_absolute);
             self.reads

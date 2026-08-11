@@ -22,7 +22,7 @@ impl MeterTracker {
                         != previous.states[index]
                         || observation.bright[index] != previous.bright[index];
                     if classification_changed {
-                        changed.insert(index as i64);
+                        changed.extend([index as i64]);
                     }
                 }
             }

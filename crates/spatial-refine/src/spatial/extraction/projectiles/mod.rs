@@ -120,3 +120,71 @@ impl ProjectileTracker {
         output
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::spatial::{SpatialConfig, SpatialRect};
+
+    fn region(x: f32) -> MotionRegion {
+        MotionRegion {
+            bounds: SpatialRect::new(x - 0.03, 0.45, x + 0.03, 0.55),
+            changed_cells: 10,
+            energy: 1_000,
+            effect_cells: 2,
+        }
+    }
+
+    fn actor(x: f32) -> ActorObservation {
+        ActorObservation {
+            anchor: SpatialPoint::new(x, 0.9),
+            bounds: SpatialRect::new(x - 0.05, 0.5, x + 0.05, 0.9),
+            confidence: 1.0,
+            observed: true,
+            ground_anchor: true,
+            discontinuity: false,
+        }
+    }
+
+    #[test]
+    fn actor_regions_and_actor_proximity_are_independent_exclusions() {
+        let regions = [region(0.5)];
+        let config = SpatialConfig::default();
+
+        let mut tracker = ProjectileTracker::default();
+        assert_eq!(
+            tracker.observe(10, &regions, &[0], [None, None], &config),
+            []
+        );
+
+        let nearby = actor(0.5);
+        let mut tracker = ProjectileTracker::default();
+        assert_eq!(
+            tracker.observe(10, &regions, &[], [Some(&nearby), None], &config),
+            []
+        );
+
+        let left = actor(0.2);
+        let right = actor(0.8);
+        let mut tracker = ProjectileTracker::default();
+        let candidates = tracker.observe(10, &regions, &[], [Some(&left), Some(&right)], &config);
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].center, SpatialPoint::new(0.5, 0.5));
+    }
+
+    #[test]
+    fn reset_restarts_track_ids() {
+        let regions = [region(0.5)];
+        let config = SpatialConfig::default();
+        let mut tracker = ProjectileTracker::default();
+        assert_eq!(
+            tracker.observe(10, &regions, &[], [None, None], &config)[0].track_id,
+            1
+        );
+        tracker.reset();
+        assert_eq!(
+            tracker.observe(20, &regions, &[], [None, None], &config)[0].track_id,
+            1
+        );
+    }
+}

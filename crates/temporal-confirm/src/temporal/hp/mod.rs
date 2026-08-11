@@ -40,14 +40,17 @@ pub fn confirm_hp_with_fight_markers(
     markers: &[FightMarker],
     own_side: &str,
 ) {
-    confirm_hp_impl(features, Some((markers, own_side)));
+    confirm_hp_impl(features, Some((markers, RawHpSide::from_name(own_side))));
 }
 
-fn confirm_hp_impl(features: &mut [FrameFeatures], fight_context: Option<(&[FightMarker], &str)>) {
+fn confirm_hp_impl(
+    features: &mut [FrameFeatures],
+    fight_context: Option<(&[FightMarker], RawHpSide)>,
+) {
     let mut own: Vec<_> = features.iter().map(|feature| feature.own_hp).collect();
     let mut opponent: Vec<_> = features.iter().map(|feature| feature.opponent_hp).collect();
-    let own_source = own.clone();
-    let opponent_source = opponent.clone();
+    let own_source: Vec<_> = features.iter().map(|feature| feature.own_hp).collect();
+    let opponent_source: Vec<_> = features.iter().map(|feature| feature.opponent_hp).collect();
     let match_frames: Vec<_> = features
         .iter()
         .map(|feature| feature.is_match_screen)
@@ -65,14 +68,14 @@ fn confirm_hp_impl(features: &mut [FrameFeatures], fight_context: Option<(&[Figh
 
     normalize_structural_full_runs(features, &mut own, &mut opponent, &match_frames);
     let reset_frames = match fight_context {
-        Some((markers, own_side)) => {
+        Some((markers, own_raw_side)) => {
             normalize_fight_openings(
                 features,
                 &mut own,
                 &mut opponent,
                 &match_frames,
                 markers,
-                own_side,
+                own_raw_side,
             );
             fight_reset_frames(features, markers)
         }
@@ -103,41 +106,66 @@ fn normalize_fight_openings(
     opponent: &mut [f32],
     match_frames: &[bool],
     markers: &[FightMarker],
-    own_side: &str,
+    own_raw_side: RawHpSide,
 ) {
-    let own_raw_side = if own_side.eq_ignore_ascii_case("p2") {
-        RawHpSide::Right
-    } else {
-        RawHpSide::Left
-    };
     let opponent_raw_side = own_raw_side.opposite();
-    for (marker_index, marker) in markers.iter().enumerate() {
-        let start = feature_index(features, marker.first_frame);
-        let end = feature_index(features, marker.last_frame);
-        let hard_end = markers
-            .get(marker_index + 1)
-            .map_or(features.len(), |next| {
-                feature_index(features, next.first_frame)
-            });
-        promote_fight_opening_side(
+    for pair in markers.windows(2) {
+        normalize_fight_marker(
             features,
             own,
-            match_frames,
-            start,
-            end,
-            hard_end,
-            own_raw_side,
-        );
-        promote_fight_opening_side(
-            features,
             opponent,
             match_frames,
-            start,
-            end,
-            hard_end,
+            &pair[0],
+            feature_index(features, pair[1].first_frame),
+            own_raw_side,
             opponent_raw_side,
         );
     }
+    if let Some(marker) = markers.last() {
+        normalize_fight_marker(
+            features,
+            own,
+            opponent,
+            match_frames,
+            marker,
+            features.len(),
+            own_raw_side,
+            opponent_raw_side,
+        );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn normalize_fight_marker(
+    features: &[FrameFeatures],
+    own: &mut [f32],
+    opponent: &mut [f32],
+    match_frames: &[bool],
+    marker: &FightMarker,
+    hard_end: usize,
+    own_raw_side: RawHpSide,
+    opponent_raw_side: RawHpSide,
+) {
+    let start = feature_index(features, marker.first_frame);
+    let end = feature_index(features, marker.last_frame);
+    promote_fight_opening_side(
+        features,
+        own,
+        match_frames,
+        start,
+        end,
+        hard_end,
+        own_raw_side,
+    );
+    promote_fight_opening_side(
+        features,
+        opponent,
+        match_frames,
+        start,
+        end,
+        hard_end,
+        opponent_raw_side,
+    );
 }
 
 #[derive(Clone, Copy)]
@@ -147,6 +175,14 @@ enum RawHpSide {
 }
 
 impl RawHpSide {
+    fn from_name(name: &str) -> Self {
+        if name.eq_ignore_ascii_case("p2") {
+            Self::Right
+        } else {
+            Self::Left
+        }
+    }
+
     fn opposite(self) -> Self {
         match self {
             Self::Left => Self::Right,

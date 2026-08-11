@@ -21,7 +21,7 @@ impl MeterTracker {
     ) {
         let absolute = self.absolute_frame.expect("active segment");
         self.video_map
-            .insert(video_frame, (self.segment_id, absolute));
+            .extend([(video_frame, (self.segment_id, absolute))]);
         self.dwell
             .entry(absolute)
             .and_modify(|dwell| dwell[1] = video_frame)
@@ -49,11 +49,9 @@ impl MeterTracker {
                 };
                 self.store_read(side, absolute, state, READ_FADE_CONF, covered);
 
-                for offset in 1..=READ_WINDOW {
-                    let target = absolute - offset;
-                    if target < 0 || target / CELL_COUNT_I64 != lap {
-                        break;
-                    }
+                let lap_start = lap * CELL_COUNT_I64;
+                for target in (lap_start..absolute).rev().take(READ_WINDOW as usize) {
+                    let offset = absolute - target;
                     let target_cell = target % CELL_COUNT_I64;
                     let state = observation.states[target_cell as usize]
                         .as_str()
@@ -67,7 +65,7 @@ impl MeterTracker {
                     self.store_read(side, target, state, confidence, covered);
                 }
 
-                if lap > 0 && cell <= READ_WINDOW {
+                if lap > 0 {
                     for &position in DIM_READ_POSITIONS {
                         let target = (lap - 1) * CELL_COUNT_I64 + position;
                         if target < absolute - READ_WINDOW {
@@ -83,7 +81,7 @@ impl MeterTracker {
         self.finalize_until(absolute - READ_WINDOW - 1);
     }
 
-    fn store_read(
+    pub(crate) fn store_read(
         &mut self,
         side: &str,
         absolute: i64,
@@ -96,7 +94,7 @@ impl MeterTracker {
             self.reads
                 .get_mut(side)
                 .expect("side reads")
-                .insert(absolute, (state, confidence, covered));
+                .extend([(absolute, (state, confidence, covered))]);
         }
     }
 }
