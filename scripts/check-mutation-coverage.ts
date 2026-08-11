@@ -21,10 +21,14 @@ const workflow = parse(
   await Bun.file(".github/workflows/mutation.yml").text(),
 ) as {
   jobs: {
-    rust: { strategy: { matrix: { include: { crates: string }[] } } };
+    rust: {
+      env?: { RUST_TEST_THREADS?: string };
+      strategy: { matrix: { include: { crates: string }[] } };
+    };
   };
 };
-const shards = workflow.jobs.rust.strategy.matrix.include;
+const rustJob = workflow.jobs.rust;
+const shards = rustJob.strategy.matrix.include;
 const sharded = shards.flatMap((shard) => shard.crates.split(/\s+/)).filter(Boolean);
 
 const metadata = await new Response(
@@ -35,6 +39,11 @@ const crates: string[] = metadata.packages
   .sort();
 
 const problems: string[] = [];
+if (rustJob.env?.RUST_TEST_THREADS !== "2") {
+  problems.push(
+    "workflow の Rust 変異検査は RUST_TEST_THREADS=2 で CPU 待ちによる誤時間切れを防ぐ",
+  );
+}
 for (const [label, list] of [
   ["package.json", declared],
   ["workflow のシャード", sharded],

@@ -146,6 +146,12 @@ jobs:
   rust:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # mutest の自動 timeout は無変異時の実行時間に最低 1 秒だけ足す。
+    # 4 並列の隔離 process を共有 runner で動かすと、CPU 待ちだけでこの
+    # 余裕を超えて正常な変異が時間切れになるため、1 core 分を空ける。
+    # 1 は mutest の timeout 監視が使えないので、安定する最小値の 2 にする。
+    env:
+      RUST_TEST_THREADS: "2"
     strategy:
       fail-fast: false
       matrix:
