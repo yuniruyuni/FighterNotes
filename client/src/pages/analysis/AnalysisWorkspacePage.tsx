@@ -1,4 +1,5 @@
-import { type ReactNode, useEffect, useReducer, useRef } from "react";
+import { type ReactNode, useEffect, useMemo, useRef } from "react";
+import { useLocation } from "wouter";
 import { paths } from "~/app/paths.js";
 import {
   type AdviceReport,
@@ -9,8 +10,8 @@ import {
 import {
   DebugView,
   SummaryView,
+  useWorkspaceNavigation,
   VideoView,
-  WorkspaceNavigation,
   WorkspaceSidebar,
 } from "~/modules/results/index.js";
 import { SharePanel, usePublication } from "~/modules/sharing/index.js";
@@ -18,6 +19,7 @@ import { SharePanel, usePublication } from "~/modules/sharing/index.js";
 export function AnalysisWorkspacePage() {
   const { state, reset } = useAnalysisSession();
   const publication = usePublication();
+  const [, navigateUrl] = useLocation();
   if (!state.file || !state.result || !state.report || !state.context) {
     return null;
   }
@@ -34,6 +36,7 @@ export function AnalysisWorkspacePage() {
       report={report}
       context={context}
       onBack={backToSetup}
+      onHistoryUnwound={() => navigateUrl(paths.home, { replace: true })}
       sharing={
         <SharePanel
           context={context}
@@ -52,6 +55,7 @@ interface AnalysisWorkspaceProps {
   context: AnalysisContext;
   sharing?: ReactNode;
   onBack(): void;
+  onHistoryUnwound?(): void;
 }
 
 export function AnalysisWorkspace({
@@ -61,33 +65,14 @@ export function AnalysisWorkspace({
   context,
   sharing,
   onBack,
+  onHistoryUnwound,
 }: AnalysisWorkspaceProps) {
-  const [navigation, dispatch] = useReducer(
-    WorkspaceNavigation.reduce,
-    undefined,
-    WorkspaceNavigation.initial,
-  );
-  const [focusRevision, requestFocus] = useReducer(
-    (revision: number) => revision + 1,
-    0,
-  );
+  const cards = useMemo(() => report.cards ?? [], [report.cards]);
+  const { navigation, focusRevision, navigate, openScene, leave } =
+    useWorkspaceNavigation(workspaceSession(file, context), cards);
   const summaryFocus = useRef<HTMLHeadingElement>(null);
   const videoFocus = useRef<HTMLInputElement>(null);
   const debugFocus = useRef<HTMLButtonElement>(null);
-  const cards = report.cards ?? [];
-  const openScene = (
-    scene: Parameters<typeof WorkspaceNavigation.openScene>[1],
-  ) => {
-    const cardIndex = scene.card
-      ? cards.findIndex((card) => card.id === scene.card?.id)
-      : -1;
-    dispatch({
-      type: "scene",
-      scene,
-      selected: cardIndex >= 0 ? `card-${cardIndex}` : "video",
-    });
-    requestFocus();
-  };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: repeated activation of the current item must restore panel focus.
   useEffect(() => {
@@ -100,9 +85,10 @@ export function AnalysisWorkspace({
     target?.focus({ preventScroll: true });
   }, [focusRevision, navigation.view]);
 
-  const navigate = (action: Parameters<typeof dispatch>[0]) => {
-    dispatch(action);
-    requestFocus();
+  const backToSetup = () => {
+    onBack();
+    // 解析結果を捨てた後に戻る操作が空振りしないよう、積んだ entry も畳む。
+    leave(onHistoryUnwound);
   };
 
   return (
@@ -112,7 +98,7 @@ export function AnalysisWorkspace({
           filename={file.name}
           cards={cards}
           selected={navigation.selected}
-          onBack={onBack}
+          onBack={backToSetup}
           onSummary={() => navigate({ type: "summary" })}
           onCard={(card, index) => navigate({ type: "card", card, index })}
           onVideo={() => navigate({ type: "video" })}
@@ -148,4 +134,16 @@ export function AnalysisWorkspace({
       </div>
     </div>
   );
+}
+
+/** 解析ごとに history stack を分ける識別子。別の解析が残した entry を復元しないために使う。 */
+function workspaceSession(file: File, context: AnalysisContext): string {
+  return [
+    file.name,
+    file.size,
+    file.lastModified,
+    context.ownSide,
+    context.p1.character ?? "",
+    context.p2.character ?? "",
+  ].join(":");
 }

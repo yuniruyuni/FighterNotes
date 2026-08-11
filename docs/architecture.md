@@ -82,6 +82,13 @@ Wouter で URL を解決し、
 直接 navigation や reload では server-rendered 公開ページを取得するため、SPA は同じ URL を
 network navigation し直す。
 
+結果画面のサマリー、指摘カード、動画、認識デバッグ、証拠場面の移動は URL を変えずに
+History API の entry を積む。戻る / 進むは前後の項目へ移動し、場面の entry は再生位置を
+取り直す。同じ項目を選び直した場合は entry を増やさない。entry は解析ごとに独立した key を
+持つため、別の解析や reload をまたいだ位置は復元しない。「解析し直す」はこの解析で積んだ
+entry をまとめて戻してから解析前の画面を表示する。共有 URL への差し替えは URL だけを
+置き換え、entry が持つ位置はそのまま残す。
+
 ### Client の境界
 
 ```text

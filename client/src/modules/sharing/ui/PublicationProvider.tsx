@@ -73,7 +73,7 @@ export function PublicationProvider({
           return;
         }
         dispatch({ type: "created", ...created });
-        navigate(routes.share(created.published.id), { replace: true });
+        navigate(routes.share(created.published.id), replacingUrlOnly());
       } catch (error) {
         if (currentRevision !== revision.current) return;
         dispatch({
@@ -128,7 +128,7 @@ export function PublicationProvider({
       if (currentRevision !== revision.current) return;
       dispatch({ type: "deleted", removedLocally });
       if (location === routes.share(deleting.id)) {
-        navigate(routes.home, { replace: true });
+        navigate(routes.home, replacingUrlOnly());
       }
     } catch {
       if (currentRevision === revision.current) {
@@ -147,7 +147,7 @@ export function PublicationProvider({
     revision.current += 1;
     dispatch({ type: "reset" });
     if (shareIdFromPath(location)) {
-      navigate(routes.home, { replace: true });
+      navigate(routes.home, replacingUrlOnly());
     }
   }, [location, navigate, routes]);
 
@@ -168,6 +168,11 @@ export function PublicationProvider({
       {children}
     </PublicationContext.Provider>
   );
+}
+
+/** URL だけを差し替え、画面が積んだ history state はその entry に残す。 */
+function replacingUrlOnly() {
+  return { replace: true, state: window.history.state };
 }
 
 export function usePublication(): PublicationValue {

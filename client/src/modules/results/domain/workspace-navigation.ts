@@ -10,6 +10,21 @@ export interface WorkspaceNavigationState {
   nextSceneKey: number;
 }
 
+/** browser history へ残せる形にした scene。card は id だけを持つ。 */
+export interface WorkspaceSceneLocation {
+  frame: number;
+  cardId: string | null;
+  label?: string;
+  endFrame?: number;
+}
+
+/** browser history へ残せる形にした workspace の現在位置。 */
+export interface WorkspaceLocation {
+  view: WorkspaceView;
+  selected: string;
+  scene: WorkspaceSceneLocation | null;
+}
+
 export type WorkspaceNavigationAction =
   | { type: "summary" }
   | { type: "video" }
@@ -75,8 +90,86 @@ function openWorkspaceScene(
   };
 }
 
+/**
+ * history entry へ残す位置。scene は動画を表示している間だけ意味を持つため、
+ * 他の view では持ち越さない。
+ */
+function workspaceLocation(state: WorkspaceNavigationState): WorkspaceLocation {
+  const scene = state.view === "video" ? state.scene : null;
+  return {
+    view: state.view,
+    selected: state.selected,
+    scene: scene
+      ? {
+          frame: scene.frame,
+          cardId: scene.card?.id ?? null,
+          label: scene.label,
+          endFrame: scene.endFrame,
+        }
+      : null,
+  };
+}
+
+function sameWorkspaceLocation(a: WorkspaceLocation, b: WorkspaceLocation) {
+  return (
+    a.view === b.view &&
+    a.selected === b.selected &&
+    sameSceneLocation(a.scene, b.scene)
+  );
+}
+
+function sameSceneLocation(
+  a: WorkspaceSceneLocation | null,
+  b: WorkspaceSceneLocation | null,
+) {
+  if (!a || !b) return a === b;
+  return (
+    a.frame === b.frame &&
+    a.cardId === b.cardId &&
+    a.label === b.label &&
+    a.endFrame === b.endFrame
+  );
+}
+
+/**
+ * history から受け取った位置へ戻す。位置がない entry は初期位置として扱う。
+ * scene は毎回新しい key を振り、戻る/進むでも再生位置を取り直させる。
+ */
+function restoreWorkspaceLocation(
+  state: WorkspaceNavigationState,
+  location: WorkspaceLocation | null,
+  cards: readonly AdviceCard[],
+): WorkspaceNavigationState {
+  const target = location ?? workspaceLocation(initialWorkspaceNavigation());
+  const scene = target.scene;
+  if (!scene) {
+    return {
+      ...state,
+      view: target.view,
+      selected: target.selected,
+      scene: null,
+    };
+  }
+  return {
+    ...state,
+    view: target.view,
+    selected: target.selected,
+    scene: {
+      frame: scene.frame,
+      card: cards.find((card) => card.id === scene.cardId) ?? null,
+      label: scene.label,
+      endFrame: scene.endFrame,
+      key: state.nextSceneKey,
+    },
+    nextSceneKey: state.nextSceneKey + 1,
+  };
+}
+
 export const WorkspaceNavigation = {
   initial: initialWorkspaceNavigation,
   reduce: reduceWorkspaceNavigation,
   openScene: openWorkspaceScene,
+  location: workspaceLocation,
+  sameLocation: sameWorkspaceLocation,
+  restore: restoreWorkspaceLocation,
 };

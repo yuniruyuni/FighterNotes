@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { DebugFrameInspector } from "~/modules/results/application/debug-frame-inspection.js";
 import type { DebugFrameSource } from "~/modules/results/application/debug-frame-source.js";
@@ -150,6 +150,143 @@ describe("AnalysisWorkspace accessibility", () => {
     }
   });
 });
+
+describe("AnalysisWorkspace history", () => {
+  test("項目ごとにhistoryを積み、戻る/進むで前後の項目へ移動する", async () => {
+    const user = userEvent.setup();
+    const report = syntheticAdviceReport({
+      rounds_detected: 1,
+      cards: [
+        {
+          id: "anti_air",
+          kind: "diagnosis",
+          confidence: "high",
+          title: "対空を見直す",
+          severity: 2,
+          description: "飛び込みを受けています。",
+          practice: "対空を練習する。",
+          evidence: [{ frame: 60, label: "対空確認" }],
+        },
+      ],
+    });
+    const result = {
+      ...syntheticAnalysisResult(report),
+      frameCount: 180,
+      frameTimestamps: Array.from({ length: 180 }, (_, frame) => frame / 60),
+      sampleData: null,
+    };
+    const restoreCanvas = installCanvasContext();
+    let backCount = 0;
+    let unwoundCount = 0;
+    // 先行するtestが積んだentryを、このtestのstack起点にする。
+    window.history.replaceState(null, "", window.location.href);
+
+    try {
+      render(
+        <ResultsServicesProvider services={resultsServices()}>
+          <AnalysisWorkspace
+            file={new File(["video"], "replay.mp4", { type: "video/mp4" })}
+            result={result}
+            report={report}
+            context={result.analysisContext}
+            onBack={() => {
+              backCount += 1;
+            }}
+            onHistoryUnwound={() => {
+              unwoundCount += 1;
+            }}
+          />
+        </ResultsServicesProvider>,
+      );
+
+      const navigation = screen.getByRole("navigation", { name: "解析結果" });
+      const summaryButton = within(navigation).getByRole("button", {
+        name: "解析サマリー",
+      });
+      const videoButton = within(navigation).getByRole("button", {
+        name: "動画",
+      });
+      const cardButton = within(navigation).getByRole("button", {
+        name: /対空を見直す/,
+      });
+      const current = (name: string) =>
+        expect(
+          within(navigation).getByRole("button", { name }),
+        ).toHaveAttribute("aria-current", "page");
+      const showing = (id: string) => {
+        for (const view of ["view-summary", "view-video", "view-debug"]) {
+          const panel = document.querySelector(`#${view}`);
+          if (view === id) {
+            expect(panel).not.toHaveAttribute("hidden");
+            expect(panel).not.toHaveAttribute("inert");
+          } else {
+            expect(panel).toHaveAttribute("hidden");
+            expect(panel).toHaveAttribute("inert");
+          }
+        }
+      };
+      const advice = () => document.querySelector(".clip-advice");
+
+      showing("view-summary");
+      await user.click(videoButton);
+      showing("view-video");
+      expect(advice()).toBeEmptyDOMElement();
+
+      await user.click(cardButton);
+      current("対空を見直す 1 場面");
+      showing("view-video");
+      expect(advice()).toHaveTextContent("対空を見直す");
+
+      // 場面から動画へ戻ると、同じ動画表示でも場面の解説と再生範囲が外れる。
+      await travel(() => window.history.back());
+      current("動画");
+      expect(cardButton).not.toHaveAttribute("aria-current");
+      showing("view-video");
+      expect(advice()).toBeEmptyDOMElement();
+
+      await travel(() => window.history.back());
+      current("解析サマリー");
+      showing("view-summary");
+
+      await travel(() => window.history.forward());
+      current("動画");
+      showing("view-video");
+      expect(advice()).toBeEmptyDOMElement();
+
+      await travel(() => window.history.forward());
+      current("対空を見直す 1 場面");
+      showing("view-video");
+      expect(advice()).toHaveTextContent("対空を見直す");
+
+      // 同じ項目を選び直してもentryは増やさない。
+      await user.click(cardButton);
+      await travel(() => window.history.back());
+      current("動画");
+      showing("view-video");
+
+      // 解析し直すと、この解析で積んだentryを畳んでから解析前の位置へ戻す。
+      await travel(() =>
+        screen.getByRole("button", { name: "解析し直す" }).click(),
+      );
+      expect(backCount).toBe(1);
+      expect(unwoundCount).toBe(1);
+      expect(window.history.state).toBeNull();
+      current("解析サマリー");
+      showing("view-summary");
+      expect(summaryButton).toHaveAttribute("aria-current", "page");
+    } finally {
+      restoreCanvas();
+    }
+  });
+});
+
+/** history traversal の popstate は非同期に届くため、反映まで待ってから確認する。 */
+async function travel(move: () => void) {
+  await act(async () => {
+    move();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  });
+}
 
 function resultsServices(): ResultsServices {
   const source: DebugFrameSource = {
