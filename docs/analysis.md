@@ -26,7 +26,8 @@
 ファイル選択時に MP4 metadata を段階的に読み、表示・coded 寸法がともに 1920x1080、
 59〜61fps、固定 frame rate、回転なしであることを解析開始前に検証する。固定 frame rate は
 presentation timestamp を表示順へ並べ、60/1 または 60000/1001fps の一貫した整数量子化に
-全sampleが一致する場合だけ固定frame rateと判定する。単発のframe欠落はVFRとして拒否する。
+edit範囲内の全sampleが一致する場合だけ固定frame rateと判定する。B-frame復号用でedit終端外の
+sampleは判定対象に含めず、提示範囲内の単発frame欠落はVFRとして拒否する。
 fragmented MP4 は `moov` だけで全区間の固定 frame rate を証明できないため、現在は受け付けない。
 `ftyp` は先頭のmajor brandを明示したMP4 allowlistと照合し、HEIC、AVIF、3GP、QuickTimeを
 compatible brandだけでMP4と誤認しないようにする。

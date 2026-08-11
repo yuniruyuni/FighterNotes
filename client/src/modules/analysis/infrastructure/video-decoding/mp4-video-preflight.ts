@@ -279,11 +279,7 @@ function inspectVideoTrack(
   const trackWidth = positiveDimension(track.track_width, codedWidth);
   const trackHeight = positiveDimension(track.track_height, codedHeight);
   const swapsDimensions = rotation === 90 || rotation === 270;
-  const timing = summarizeFrameTiming(
-    samples,
-    track.timescale,
-    track.nb_samples,
-  );
+  const timing = summarizeTrackFrameTiming(samples, track);
   const description = extractCodecDescription(file, track.id);
   return {
     trackId: track.id,
@@ -311,6 +307,58 @@ function inspectVideoTrack(
       description,
     },
   };
+}
+
+function summarizeTrackFrameTiming(
+  samples: readonly Sample[],
+  track: Movie["videoTracks"][number],
+): { readonly framesPerSecond: number; readonly constantFrameRate: boolean } {
+  if (samples.length !== track.nb_samples) {
+    return summarizeFrameTiming(samples, track.timescale, track.nb_samples);
+  }
+  const presentationSamples = samplesInSinglePresentationEdit(samples, track);
+  return summarizeFrameTiming(
+    presentationSamples,
+    track.timescale,
+    presentationSamples.length,
+  );
+}
+
+function samplesInSinglePresentationEdit(
+  samples: readonly Sample[],
+  track: Movie["videoTracks"][number],
+): readonly Sample[] {
+  const edits = track.edits;
+  if (!edits || edits.length === 0) return samples;
+  const mediaEdits = edits.filter(({ media_time }) => media_time >= 0);
+  if (mediaEdits.length !== 1) return samples;
+
+  const [edit] = mediaEdits;
+  if (
+    edit.media_rate_integer !== 1 ||
+    edit.media_rate_fraction !== 0 ||
+    !Number.isSafeInteger(edit.media_time) ||
+    !Number.isSafeInteger(edit.segment_duration) ||
+    edit.segment_duration <= 0 ||
+    !Number.isSafeInteger(track.movie_timescale) ||
+    track.movie_timescale <= 0 ||
+    !Number.isSafeInteger(track.timescale) ||
+    track.timescale <= 0
+  ) {
+    return samples;
+  }
+
+  const scaledMediaDuration = edit.segment_duration * track.timescale;
+  if (!Number.isSafeInteger(scaledMediaDuration)) return samples;
+  const mediaDuration = scaledMediaDuration / track.movie_timescale;
+  const mediaEnd = edit.media_time + mediaDuration;
+  if (!Number.isFinite(mediaEnd) || mediaEnd <= edit.media_time) return samples;
+
+  // A coded sample at the edit endpoint can be a future reference needed to
+  // decode the final B-frame, while its own frame is outside the presentation
+  // interval. Keep it in the demux/decode sample count, but do not let it create
+  // an apparent cadence gap during preflight.
+  return samples.filter(({ cts }) => cts >= edit.media_time && cts < mediaEnd);
 }
 
 function maximumSampleBytes(samples: readonly Sample[]): number {

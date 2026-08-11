@@ -154,6 +154,41 @@ describe("MP4 video metadata parser", () => {
     }
   });
 
+  test("edit終端外のreorder sampleをCFR判定から除外する", () => {
+    const track = {
+      nb_samples: 6,
+      timescale: 60,
+      duration: 6,
+      movie_timescale: 1000,
+      edits: [
+        {
+          segment_duration: 100,
+          media_time: 0,
+          media_rate_integer: 1,
+          media_rate_fraction: 0,
+        },
+      ],
+    } satisfies Partial<Movie["videoTracks"][number]>;
+
+    // CTS=6はB-frameを復号するための将来sampleだが、editの半開区間[0, 6)では
+    // 提示されない。範囲内のCTS 0..4は60fpsで連続している。
+    expect(
+      inspectMovie(isoFile([0, 2, 1, 4, 6, 3]), movie(track), 4096).track,
+    ).toMatchObject({
+      framesPerSecond: 60,
+      constantFrameRate: true,
+      totalSamples: 6,
+    });
+
+    // edit範囲内の欠落は、終端外sampleを除外した後もVFRとして拒否する。
+    expect(
+      inspectMovie(isoFile([0, 2, 1, 5, 6, 4]), movie(track), 4096).track,
+    ).toMatchObject({
+      framesPerSecond: 48,
+      constantFrameRate: false,
+    });
+  });
+
   test("130k超のsamplesを引数spreadやdelta配列なしで集計する", () => {
     const frameCount = 130_001;
     const samples = Array.from({ length: frameCount }, (_, cts) => ({ cts }));
