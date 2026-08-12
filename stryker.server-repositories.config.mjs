@@ -1,9 +1,20 @@
+// Stryker は終了コードだけで生死を決めるので、変異を殺す test が 1 つ見つかれば
+// 残りは走らせなくてよい。DB を使わない test を先に置くと、大半の変異は重い
+// integration へ到達する前に死ぬ。生き残る変異が走らせる test の集合は変わらない。
+const repositoryTests = [
+  'bun test --bail $(find src/repositories -name "*.test.ts" ! -name "*.integration.test.ts")',
+  'bun test --bail $(find src/repositories -name "*.integration.test.ts")',
+];
+
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 const config = {
   testRunner: "command",
   commandRunner: {
-    command:
-      'test -n "$TEST_DATABASE_URL" && cd server && bun test src/repositories',
+    command: [
+      'test -n "$TEST_DATABASE_URL"',
+      "cd server",
+      ...repositoryTests,
+    ].join(" && "),
   },
   mutate: [
     "server/src/repositories/**/postgres/*.ts",
