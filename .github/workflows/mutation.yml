@@ -50,9 +50,16 @@ env:
   MUTEST_REF: "a55cb8abc50dcbc1687abf5d6c49efa737c9880a"
 
 jobs:
+  # 1変異あたりの費用はbun起動とtest読み込みが大半で、走らせるtestはどのshardでも
+  # 同じ。所要は変異の数にほぼ比例するので、moduleごとに分けるだけで素直に短くなる。
+  # 対象の網羅は scripts/mutation-scopes.test.ts が検査する。
   client:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        scope: [analysis, results, sharing]
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
@@ -62,14 +69,16 @@ jobs:
         run: npm install -g bun@${BUN_VERSION}
       - name: Install dependencies
         run: bun install --frozen-lockfile
-      - name: Mutate client domain and application code
+      - name: Mutate client ${{ matrix.scope }} module
+        env:
+          MUTATION_SCOPE: ${{ matrix.scope }}
         run: bun run mutation:ts:client
       - name: Upload mutation report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: mutation-client
-          path: reports/mutation/client.*
+          name: mutation-client-${{ matrix.scope }}
+          path: reports/mutation/client-${{ matrix.scope }}.*
           if-no-files-found: ignore
 
   server-models:
@@ -156,22 +165,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 手元の実測秒で均した組。最大が全体の所要時間になる。
+          # CIの実測秒で均した組。最大が全体の所要時間になる。単体で135秒の
+          # advice-detectorsが下限なので、他はその前後へ寄せる。
           - name: "1"
-            crates: frame-meter
+            crates: advice-detectors
           - name: "2"
-            crates: advice-report match-event-defense match-event-layer
+            crates: hud-vision
           - name: "3"
-            crates: >-
-              advice-model advice-stats analysis-context hud-vision video-analyzer
+            crates: analysis-context frame-meter video-analyzer
           - name: "4"
             crates: >-
-              advice-damage-origins meter-tracker pixel-color temporal-confirm
+              advice-damage-origins advice-model match-event-layer
+              match-event-model spatial-refine
           - name: "5"
-            crates: attack-info-vision input-vision match-event-model
+            crates: >-
+              attack-info-vision input-vision meter-tracker pixel-color
+              wasm-bridge
           - name: "6"
             crates: >-
-              advice-detectors match-event-offense spatial-refine wasm-bridge
+              advice-report advice-stats match-event-defense
+              match-event-offense temporal-confirm
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       # mutest はコンパイラ内部 API を使うため、固定の nightly が要る。
