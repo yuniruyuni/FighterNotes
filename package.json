@@ -25,7 +25,7 @@
     "mutation": "bun run mutation:ts && bun run mutation:rust:mutest",
     "mutation:rust:mutest": "bun scripts/run-mutest.ts pixel-color analysis-context advice-model advice-report advice-stats advice-damage-origins advice-detectors match-event-model match-event-defense match-event-offense spatial-refine match-event-layer temporal-confirm attack-info-vision input-vision hud-vision frame-meter meter-tracker video-analyzer wasm-bridge",
     "mutation:ts": "bun run mutation:ts:client && bun run mutation:ts:server-models",
-    "mutation:ts:client": "stryker run stryker.client.config.mjs && bun scripts/check-stryker-results.ts reports/mutation/client.json",
+    "mutation:ts:client": "stryker run stryker.client.config.mjs && bun scripts/check-stryker-results.ts \"reports/mutation/client${MUTATION_SCOPE:+-$MUTATION_SCOPE}.json\"",
     "mutation:ts:server-models": "stryker run stryker.server-models.config.mjs && bun scripts/check-stryker-results.ts reports/mutation/server-models.json",
     "mutation:ts:server-repositories": "stryker run stryker.server-repositories.config.mjs && bun scripts/check-stryker-results.ts reports/mutation/server-repositories.json",
     "prepare:check": "bun run --filter @fighter-notes/client build:wasm",

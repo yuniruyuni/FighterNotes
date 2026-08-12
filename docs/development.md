@@ -170,6 +170,15 @@ bun run mutation:ts:server-models
 bun run mutation:rust:mutest
 ```
 
+client は module ごとに対象を分けて CI で並列に回す。`MUTATION_SCOPE` を指定すると
+1 module だけを検査でき、指定しなければ全 module を対象にする。走らせる test はどちらでも
+同じなので、module をまたいで殺している変異も見落とさない。対象の網羅は
+`scripts/mutation-scopes.test.ts` が検査する。
+
+```bash
+MUTATION_SCOPE=sharing bun run mutation:ts:client
+```
+
 PostgreSQL repository は使い捨て DB を指定して別に実行する。
 
 ```bash
