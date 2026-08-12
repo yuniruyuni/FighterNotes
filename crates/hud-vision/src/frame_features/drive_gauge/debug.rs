@@ -53,6 +53,7 @@ pub fn drive_bar_debug_json(rgba: &[u8], width: u32, height: u32, side: &str) ->
             DriveColClass::Gray => "Gray",
             DriveColClass::Foreign => "Foreign",
             DriveColClass::Rest => "Rest",
+            DriveColClass::Outside => "Outside",
         }
     }
     fn class_char(c: DriveColClass) -> char {
@@ -61,6 +62,7 @@ pub fn drive_bar_debug_json(rgba: &[u8], width: u32, height: u32, side: &str) ->
             DriveColClass::Gray => 'G',
             DriveColClass::Foreign => 'F',
             DriveColClass::Rest => '.',
+            DriveColClass::Outside => 'o',
         }
     }
     let runs_json: Vec<String> = runs

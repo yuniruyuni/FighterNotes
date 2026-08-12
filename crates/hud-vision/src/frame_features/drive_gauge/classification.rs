@@ -1,17 +1,31 @@
 use super::{model::DriveColClass, rgb_to_hsv, SlantedRoi};
 
 /// ドライブゲージ斜め列 1 本を分類する。
+///
+/// バーは平行四辺形なので、アンカー側の列は下の行ほど ROI の外へ出る。
+/// 全行を取れない列はバーではなくその外側を見ているので、色ではなく
+/// 「測れていない」として返す。傾き 0.625 と高さ 18 行なら、これに
+/// 当たるのはアンカーから 11 列。
 pub(crate) fn classify_drive_col(roi: &SlantedRoi<'_>, column: usize) -> DriveColClass {
+    // 回復バーは通常のゲージより細いので、灰色の割合はバーが占める行だけで測る。
+    // ROI 全高で測ると、満了間近の回復バーでも閾値に届かない。
+    let gray_rows = super::burnout_row_start(roi.height)..roi.height;
+
     let mut n_lit = 0usize;
     let mut n_gray = 0usize;
     let mut n_foreign = 0usize;
     let mut total = 0usize;
+    let mut gray_total = 0usize;
 
     for row in 0..roi.height {
         let Some([r, g, b]) = roi.rgb_at(column, row, 0) else {
             continue;
         };
         total += 1;
+        let in_gray_rows = gray_rows.contains(&row);
+        if in_gray_rows {
+            gray_total += 1;
+        }
 
         let [h, s, v] = rgb_to_hsv(r, g, b);
 
@@ -21,13 +35,13 @@ pub(crate) fn classify_drive_col(roi: &SlantedRoi<'_>, column: usize) -> DriveCo
             } else {
                 n_foreign += 1;
             }
-        } else if s < 60.0 && v > 120.0 && v < 210.0 {
+        } else if s < 60.0 && v > 120.0 && v < 210.0 && in_gray_rows {
             n_gray += 1;
         }
     }
 
-    if total == 0 {
-        return DriveColClass::Rest;
+    if total < roi.height {
+        return DriveColClass::Outside;
     }
     let t = total as f32;
     if n_lit as f32 / t >= 0.35 {
@@ -36,7 +50,7 @@ pub(crate) fn classify_drive_col(roi: &SlantedRoi<'_>, column: usize) -> DriveCo
     if n_foreign as f32 / t >= 0.35 {
         return DriveColClass::Foreign;
     }
-    if n_gray as f32 / t >= 0.40 {
+    if gray_total > 0 && n_gray as f32 / gray_total as f32 >= 0.40 {
         return DriveColClass::Gray;
     }
     DriveColClass::Rest

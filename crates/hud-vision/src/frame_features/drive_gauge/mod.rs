@@ -24,6 +24,19 @@ pub(crate) const DRIVE_ROI_LEFT: (u32, u32, u32, u32) = (561, 885, 114, 132);
 pub(crate) const DRIVE_ROI_RIGHT: (u32, u32, u32, u32) = (1036, 1360, 114, 132);
 /// 斜め列の 1 行あたり x ずれ（左ゲージ +、右ゲージ −。実測 10px/16行）
 pub(crate) const DRIVE_BAR_SLOPE: f32 = 0.625;
+/// バーンアウト回復バーの上端（1920x1080 基準）。
+///
+/// 回復バーは通常のゲージより細く、下寄りに描かれる。実測（左右・別動画で一致）
+/// では灰白の芯が y=123〜130、その上下 y=121,122 と y=131 が明るい縁。
+/// 通常のゲージが埋める y=114〜131 の 18 行で灰色の割合を測ると、
+/// 満了間近の回復バーでも 7/18 = 0.39 にしかならず、閾値 0.40 をちょうど下回る。
+pub(crate) const DRIVE_BURNOUT_TOP: u32 = 121;
+
+/// 回復バーが始まる行（ROI 内の相対行）。解像度に比例させる。
+pub(crate) fn burnout_row_start(roi_h: usize) -> usize {
+    let (_, _, y1, y2) = DRIVE_ROI_LEFT;
+    (DRIVE_BURNOUT_TOP - y1) as usize * roi_h / (y2 - y1) as usize
+}
 
 mod classification;
 mod debug;

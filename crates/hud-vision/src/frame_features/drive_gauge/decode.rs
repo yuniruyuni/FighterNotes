@@ -70,12 +70,22 @@ enum LitChain {
     Missing,
 }
 
+/// バーの測定になっている最初の列。
+///
+/// 平行四辺形の傾きでアンカー側の数列は全行を取れず、Outside として
+/// 返ってくる。縁の欠けを許す幅はこの列から数える。
+fn anchor(runs: &[(DriveColClass, usize, usize)]) -> usize {
+    runs.iter()
+        .find(|&&(class, _, _)| class != DriveColClass::Outside)
+        .map_or(0, |&(_, start, _)| start)
+}
+
 /// アンカー側から点灯のランを繋ぐ。
 ///
 /// ゲージはアンカー側のセルが最後に減るので、繋がった範囲より先に本物の
 /// 点灯は無い。あるとすれば遮蔽で連鎖が分断されたか、ゲージ以外の何かが
 /// 光っている。
-fn chain_lit(runs: &[(DriveColClass, usize, usize)]) -> LitChain {
+fn chain_lit(runs: &[(DriveColClass, usize, usize)], anchor: usize) -> LitChain {
     /// 通常のセル間の隙間の上限。実測 2〜4px。
     const MAX_SEAM_GAP: usize = 8;
     /// 大きな隙間の先で許す小島や文字ストロークの幅。
@@ -91,7 +101,7 @@ fn chain_lit(runs: &[(DriveColClass, usize, usize)]) -> LitChain {
         let width = end - start + 1;
         let Some(reached) = far else {
             // 先頭の点灯がアンカーから離れていれば、アンカー側が隠れている。
-            if start > MAX_EDGE_SKIP {
+            if start > anchor + MAX_EDGE_SKIP {
                 return LitChain::Occluded;
             }
             far = Some(end);
@@ -131,6 +141,7 @@ fn has_wide_foreign(runs: &[(DriveColClass, usize, usize)]) -> bool {
 /// 「EMPTY」の文字か、キャラクターの遮蔽のどちらか。
 fn read_lit_chain(
     runs: &[(DriveColClass, usize, usize)],
+    anchor: usize,
     far: usize,
     roi_w: usize,
 ) -> DriveGaugeRead {
@@ -153,7 +164,8 @@ fn read_lit_chain(
         .map(|&(_, start, end)| end - start + 1)
         .collect();
     let covered: usize = widths.iter().sum();
-    let coverage = covered as f32 / (far + 1) as f32;
+    // 測れていないアンカー側の列は、埋まり具合の分母から外す。
+    let coverage = covered as f32 / (far + 1 - anchor) as f32;
     let widest = widths.iter().copied().max().unwrap_or(0);
 
     // 十分埋まっているか、実セル幅のランが一本でもあれば残量として通す。
@@ -173,7 +185,7 @@ fn read_lit_chain(
 
 /// アンカー側から伸びる灰色の帯を繋ぐ。バーンアウト中の回復バー。
 /// 返すのは帯の始まりと遠端。
-fn chain_gray(runs: &[(DriveColClass, usize, usize)]) -> Option<(usize, usize)> {
+fn chain_gray(runs: &[(DriveColClass, usize, usize)], anchor: usize) -> Option<(usize, usize)> {
     let mut slab_start: Option<usize> = None;
     let mut far: Option<usize> = None;
     for &(class, start, end) in runs {
@@ -182,7 +194,7 @@ fn chain_gray(runs: &[(DriveColClass, usize, usize)]) -> Option<(usize, usize)> 
         }
         let Some(reached) = far else {
             // アンカーから離れた灰色は背景の透け。回復バーではない。
-            if start <= MAX_EDGE_SKIP {
+            if start <= anchor + MAX_EDGE_SKIP {
                 slab_start = Some(start);
                 far = Some(end);
             }
@@ -201,13 +213,14 @@ pub(crate) fn decode_drive_runs(
     runs: &[(DriveColClass, usize, usize)],
     roi_w: usize,
 ) -> DriveGaugeRead {
-    match chain_lit(runs) {
+    let anchor = anchor(runs);
+    match chain_lit(runs, anchor) {
         LitChain::Occluded => return DriveGaugeRead::unreadable(),
         LitChain::Reaches(far) => {
             if has_wide_foreign(runs) {
                 return DriveGaugeRead::unreadable();
             }
-            return read_lit_chain(runs, far, roi_w);
+            return read_lit_chain(runs, anchor, far, roi_w);
         }
         LitChain::Missing => {}
     }
@@ -216,7 +229,7 @@ pub(crate) fn decode_drive_runs(
     if has_wide_foreign(runs) {
         return DriveGaugeRead::unreadable();
     }
-    let Some((slab_start, slab_far)) = chain_gray(runs) else {
+    let Some((slab_start, slab_far)) = chain_gray(runs, anchor) else {
         // 点灯も回復バーも無い。HUD の消失、全画面フラッシュ、バーンアウト
         // 突入直後（バー幅ゼロ）は互いに区別できない。
         return DriveGaugeRead::unreadable();
