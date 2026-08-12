@@ -4,9 +4,11 @@ import type {
   AnalysisSide,
 } from "~/modules/analysis/contracts.js";
 import {
-  DebugFrameNavigation,
-  type DebugFrameNavigationAction,
-} from "../../domain/debug-frame-navigation.js";
+  FrameNavigation,
+  type FrameNavigationAction,
+} from "../../domain/frame-navigation.js";
+import { ShortcutLegend } from "../ShortcutLegend.js";
+import { DEBUG_SHORTCUT_HELP, FRAME_SHORTCUT_HELP } from "../shortcuts.js";
 import { useDebugViewer } from "./use-debug-viewer.js";
 
 interface DebugViewProps {
@@ -132,6 +134,9 @@ export function DebugView(props: DebugViewProps) {
             攻撃情報
           </label>
         </div>
+        <ShortcutLegend
+          entries={[...FRAME_SHORTCUT_HELP, ...DEBUG_SHORTCUT_HELP]}
+        />
       </div>
     </section>
   );
@@ -142,11 +147,11 @@ function DebugStepButton({
   buttonRef,
   onNavigate,
 }: {
-  action: DebugFrameNavigationAction;
+  action: FrameNavigationAction;
   buttonRef?: Ref<HTMLButtonElement>;
-  onNavigate(action: DebugFrameNavigationAction): void;
+  onNavigate(action: FrameNavigationAction): void;
 }) {
-  const delta = DebugFrameNavigation.delta(action);
+  const delta = FrameNavigation.delta(action);
   const frames = Math.abs(delta);
   const backward = delta < 0;
   const label = `${frames}フレーム${backward ? "戻る" : "進む"}`;

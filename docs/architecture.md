@@ -115,8 +115,10 @@ React UI は concrete adapter を直接 import せず、application port を Pro
 `modules/results/infrastructure/frame-access` は動画フレーム取得、
 `modules/results/infrastructure/frame-inspection` は generated WASM inspection、
 `modules/results/infrastructure/history-persistence` は IndexedDB 履歴を所有する。
-debug viewer のボタンとキーボード入力は UI が domain の navigation action へ変換し、
-domain model が action ごとの移動フレーム数とカーソル範囲を決定する。
+結果画面のボタンとキーボード入力は UI が domain の navigation action へ変換し、
+domain model が action ごとの移動フレーム数とカーソル範囲を決定する。キー表は
+`modules/results/ui/shortcuts.ts` が単一の正本を持ち、動画プレイヤーと認識デバッグが
+同じ表を使う。その画面に無い操作は適用せず、browser の既定動作も止めない。
 `bun run check:arch` は循環、layer の逆依存、module 内部への直接参照を検査する。
 
 ### 動画処理

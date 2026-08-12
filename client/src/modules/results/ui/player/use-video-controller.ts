@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import { useObjectUrl } from "../../../../shared/browser/use-object-url.js";
+import { FrameNavigation } from "../../domain/frame-navigation.js";
 import {
   clipRange,
   frameToSeconds,
@@ -13,7 +14,8 @@ import {
   shouldLoopBack,
 } from "../../domain/frame-time.js";
 import type { SceneSelection } from "../../domain/scene-selection.js";
-import type { PlaybackRate } from "./playback-rate.js";
+import { useShortcutKeys } from "../use-shortcut-keys.js";
+import { type PlaybackRate, stepPlaybackRate } from "./playback-rate.js";
 
 interface VideoControllerOptions {
   active: boolean;
@@ -83,6 +85,49 @@ export function useVideoController({
     );
   };
 
+  const changePlaybackRate = (rate: PlaybackRate) => {
+    setPlaybackRate(rate);
+    if (videoRef.current) videoRef.current.playbackRate = rate;
+  };
+
+  const togglePlayback = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) void video.play().catch(() => undefined);
+    else video.pause();
+  };
+
+  const restartScene = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    const startSec = range?.startSec ?? 0;
+    previousSeconds.current = startSec;
+    video.currentTime = startSec;
+  };
+
+  useShortcutKeys(active, (action) => {
+    switch (action.type) {
+      case "frame":
+        stepFrame(FrameNavigation.delta(action.move));
+        return true;
+      case "playback":
+        togglePlayback();
+        return true;
+      case "loop":
+        setLoopEnabled((enabled) => !enabled);
+        return true;
+      case "rate":
+        changePlaybackRate(stepPlaybackRate(playbackRate, action.direction));
+        return true;
+      case "sceneStart":
+        restartScene();
+        return true;
+      // 認識デバッグだけが持つ操作。ここでは既定動作を止めない。
+      default:
+        return false;
+    }
+  });
+
   return {
     videoRef,
     source,
@@ -100,19 +145,11 @@ export function useVideoController({
           videoRef.current.currentTime = milliseconds / 1000;
       },
       stepFrame,
-      changePlaybackRate(rate: PlaybackRate) {
-        setPlaybackRate(rate);
-        if (videoRef.current) videoRef.current.playbackRate = rate;
-      },
+      changePlaybackRate,
       toggleLoop() {
         setLoopEnabled((enabled) => !enabled);
       },
-      togglePlayback() {
-        const video = videoRef.current;
-        if (!video) return;
-        if (video.paused) void video.play().catch(() => undefined);
-        else video.pause();
-      },
+      togglePlayback,
     },
     events: {
       loadedMetadata(video: HTMLVideoElement) {

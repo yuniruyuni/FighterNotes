@@ -86,6 +86,13 @@ describe("DebugView navigation", () => {
       fireEvent.keyDown(hpToggle, { key: "ArrowLeft" });
       expect(seekFallback).toHaveBeenCalledTimes(3);
 
+      // 動画プレイヤーと同じ表を使う。この画面に無い操作は何もしない。
+      fireEvent.keyDown(window, { key: "[" });
+      expect(seekFallback).toHaveBeenLastCalledWith(0);
+      fireEvent.keyDown(window, { key: " " });
+      fireEvent.keyDown(window, { key: "l" });
+      expect(seekFallback).toHaveBeenCalledTimes(4);
+
       const canvas = document.querySelector("canvas");
       expect(canvas).not.toBeNull();
       const toBlob = mock((callback: BlobCallback) => callback(null));

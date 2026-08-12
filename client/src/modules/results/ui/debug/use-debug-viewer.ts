@@ -3,9 +3,9 @@ import type {
   AnalysisResult,
   AnalysisSide,
 } from "~/modules/analysis/contracts.js";
-import type { DebugFrameNavigationAction } from "../../domain/debug-frame-navigation.js";
+import type { FrameNavigationAction } from "../../domain/frame-navigation.js";
 import { useResultsServices } from "../ResultsServicesProvider.js";
-import { navigationActionForKey } from "./debug-frame-shortcuts.js";
+import { useShortcutKeys } from "../use-shortcut-keys.js";
 import {
   type DebugOverlayVisibility,
   initialDebugOverlayVisibility,
@@ -33,7 +33,7 @@ export function useDebugViewer(options: DebugViewerOptions) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const navigate = useCallback((action: DebugFrameNavigationAction) => {
+  const navigate = useCallback((action: FrameNavigationAction) => {
     const viewer = session.current;
     if (!viewer) return;
     const requestGeneration = generation.current;
@@ -65,23 +65,19 @@ export function useDebugViewer(options: DebugViewerOptions) {
     session.current?.saveCurrentFrame();
   }, []);
 
-  useEffect(() => {
-    if (!options.active) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (isFormControl(event.target)) return;
-      const action = navigationActionForKey(event.key, {
-        ctrl: event.ctrlKey,
-        shift: event.shiftKey,
-      });
-      if (action) {
-        navigate(action);
-      } else if (event.key === "s") {
+  useShortcutKeys(options.active, (action) => {
+    switch (action.type) {
+      case "frame":
+        navigate(action.move);
+        return true;
+      case "saveFrame":
         saveCurrentFrame();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [navigate, options.active, saveCurrentFrame]);
+        return true;
+      // 動画プレイヤーだけが持つ操作。ここでは既定動作を止めない。
+      default:
+        return false;
+    }
+  });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -174,12 +170,6 @@ export function useDebugViewer(options: DebugViewerOptions) {
     loading,
     error,
   };
-}
-
-function isFormControl(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLInputElement || target instanceof HTMLSelectElement
-  );
 }
 
 function errorMessage(cause: unknown): string {

@@ -5,9 +5,9 @@ import type {
   DebugFrameSourceFactory,
 } from "../../application/debug-frame-source.js";
 import {
-  DebugFrameNavigation,
-  type DebugFrameNavigationAction,
-} from "../../domain/debug-frame-navigation.js";
+  FrameNavigation,
+  type FrameNavigationAction,
+} from "../../domain/frame-navigation.js";
 import type {
   DebugOverlayVisibility,
   DebugViewerData,
@@ -15,7 +15,7 @@ import type {
 import { DebugFrameRenderer } from "./rendering/frame-renderer.js";
 
 export interface DebugViewerSession {
-  navigate(action: DebugFrameNavigationAction): Promise<void>;
+  navigate(action: FrameNavigationAction): Promise<void>;
   setVisibility(visibility: DebugOverlayVisibility): Promise<void>;
   saveCurrentFrame(): void;
   destroy(): void;
@@ -101,7 +101,7 @@ export async function createDebugViewerSession({
 
     const seekTo = async (requestedIndex: number): Promise<void> => {
       if (destroyed) return;
-      frameIndex = DebugFrameNavigation.clamp(requestedIndex, totalFrames);
+      frameIndex = FrameNavigation.clamp(requestedIndex, totalFrames);
       const request = ++latestRequest;
       if (!activeSource.usesExactFrames) {
         activeSource.seekFallback(frameIndex);
@@ -129,9 +129,7 @@ export async function createDebugViewerSession({
 
     return {
       navigate(action) {
-        return seekTo(
-          DebugFrameNavigation.move(frameIndex, totalFrames, action),
-        );
+        return seekTo(FrameNavigation.move(frameIndex, totalFrames, action));
       },
       setVisibility(nextVisibility) {
         if (destroyed) return Promise.resolve();
