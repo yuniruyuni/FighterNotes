@@ -1,12 +1,14 @@
 # ---- WASM build (Rust → wasm-pack) --------------------------------------
 FROM rust:1.95@sha256:f49565f188ee00bc2a18dd418183f2c5f23ef7d6e691890517ed341a598f67c3 AS build-wasm
-ARG FIGHTER_NOTES_BUILD_SHA=dev
-ENV FIGHTER_NOTES_BUILD_SHA=${FIGHTER_NOTES_BUILD_SHA}
 WORKDIR /work
 RUN rustup target add wasm32-unknown-unknown \
  && cargo install wasm-pack --version 0.15.0 --locked
 COPY Cargo.toml Cargo.lock /work/
 COPY crates/ /work/crates/
+# SHA を読むのは advice-report の option_env! だけ。commit ごとに変わる値なので、
+# toolchain の層より後ろに置く。前に置くと以降の層が毎 commit 無効になる。
+ARG FIGHTER_NOTES_BUILD_SHA=dev
+ENV FIGHTER_NOTES_BUILD_SHA=${FIGHTER_NOTES_BUILD_SHA}
 RUN wasm-pack build crates/wasm-bridge --target web
 
 # ---- Client build (Bun bundler; consumes wasm pkg) ----------------------
