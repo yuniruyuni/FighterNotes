@@ -181,6 +181,11 @@ Stryker の `Survived`、`NoCoverage`、`Timeout`、runtime error は失敗と�
 生成不能な `CompileError` は結果に残すが失敗にはせず、`Ignored` は source 内に理由が
 ある場合だけ許可する。`reports/mutation` は生成物であり Git へ含めない。
 
+Stryker は command の終了コードだけで生死を決めるため、test は `--bail` で最初の失敗で
+止める。repository の検査はさらに、DB を使わない test を先に走らせ、生き残った変異だけを
+integration test へ回す。生き残る変異が走らせる test の集合は変わらないので、判定は同じに
+なる。全 suite を毎回通していた頃は CI で 12 分かかっていた。
+
 #### 全域を毎回回す理由
 
 以前は cargo-mutants を使い、PR では変更行だけ、全域は週次にしていた。cargo-mutants は

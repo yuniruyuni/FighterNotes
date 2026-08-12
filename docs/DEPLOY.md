@@ -57,7 +57,15 @@ reusable build workflow は `workflow_call.secrets` で builder 用3項目だけ
 2. WASM と client / server を build する。
 3. TypeScript、Biome、client / server test を実行する。
 4. 別 Job で `bun audit` を実行する。
-5. application と migration image を build し、application の `/health` を smoke test する。
+5. 別 Job で application と migration image を build し、application の `/health` を smoke test する。
+
+image build は test の完了を待たない。同じ commit を別々に検証するだけで順序に意味はなく、
+待たせると build 時間がそのまま CI 全体に積み上がる。test が落ちた場合は build 1 回分を無駄に払う。
+
+`cargo install` する CLI、Rust の build 成果物、image の layer は cache から復元する。cache は
+`main` の push でだけ保存する。pull request で作った cache はその pull request からしか見えず、
+他へ再利用されないまま容量を占める。cache は成果物の再現手段であり、release の入力ではない。
+release が配置する image は毎回 Artifact Registry へ push した digest で固定する。
 
 `/health` は process の HTTP 応答だけを確認し、DB query は行わない。DB を含む read / create / delete は
 PostgreSQL integration testで確認する。production deployはさらに`/ready`でruntime app roleからの
@@ -109,6 +117,10 @@ image tagは `<git-sha>-<deploy-run-id>-<run-attempt>` で再実行を含め一�
 5. cleanup Job manifest をapplication image digestで置換する。
 6. Web service manifest を同じapplication image digestで置換する。
 7. `https://fighter.yuniruyuni.net/health`と`/ready`をsmoke testする。
+
+imageのbuildはbuildxで行い、layer cacheをCIのimage buildと共有する。同じcommitをCIが先に
+buildしているため、releaseのbuildは残ったlayerを読むだけで済む。buildxへ任せるのはbuildと
+daemonへのloadまでで、Artifact RegistryとGHCRへのpush、digestの取り出しは従来どおり行う。
 
 build jobは並行できるが、migration、cleanup、service更新、smoke testは1つの
 `fighter-production-release` concurrency groupで直列実行し、後続pushから開始済みreleaseをcancelしない。
