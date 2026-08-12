@@ -143,3 +143,88 @@ export const SUPER_GAUGE_LAYOUT = {
     },
   },
 } as const;
+
+/**
+ * `VideoFrame.copyTo` 用に、アトラス相対の座標を動画フレームの絶対座標へ直した窓。
+ *
+ * I420 の彩度は 2px 単位で、奇数 x から読むと canvas 経路と値がずれる。
+ * `readX` / `readWidth` は偶数境界へ広げた読み出し範囲で、`source.x - readX`
+ * だけずらして strip へ書き写すと従来と同じ画素になる。
+ */
+export interface CopyWindow {
+  readonly key: string;
+  readonly source: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  };
+  readonly target: { readonly x: number; readonly y: number };
+  readonly readX: number;
+  readonly readWidth: number;
+}
+
+function copyWindowOf(
+  key: string,
+  atlas: { readonly x: number; readonly y: number },
+  patch: {
+    readonly source: {
+      readonly x: number;
+      readonly y: number;
+      readonly width: number;
+      readonly height: number;
+    };
+    readonly target: { readonly x: number; readonly y: number };
+  },
+): CopyWindow {
+  const x = atlas.x + patch.source.x;
+  const readX = x - (x % 2);
+  const readWidth = alignUpToEven(patch.source.width + (x - readX));
+  return {
+    key,
+    source: {
+      x,
+      y: atlas.y + patch.source.y,
+      width: patch.source.width,
+      height: patch.source.height,
+    },
+    target: { x: patch.target.x, y: patch.target.y },
+    readX,
+    readWidth,
+  };
+}
+
+function alignUpToEven(value: number): number {
+  return value + (value % 2);
+}
+
+/** 攻撃情報は中段アトラスから meter strip の左右端へ等倍で詰める。 */
+export const ATTACK_INFO_COPY_WINDOWS: readonly CopyWindow[] = [
+  copyWindowOf(
+    "p1-numeric",
+    MID_ATLAS_LAYOUT.source,
+    ATTACK_INFO_LAYOUT.p1.numeric,
+  ),
+  copyWindowOf(
+    "p1-attribute",
+    MID_ATLAS_LAYOUT.source,
+    ATTACK_INFO_LAYOUT.p1.attribute,
+  ),
+  copyWindowOf(
+    "p2-numeric",
+    MID_ATLAS_LAYOUT.source,
+    ATTACK_INFO_LAYOUT.p2.numeric,
+  ),
+  copyWindowOf(
+    "p2-attribute",
+    MID_ATLAS_LAYOUT.source,
+    ATTACK_INFO_LAYOUT.p2.attribute,
+  ),
+];
+
+/** frame meter は下部アトラス経由で strip の同じ x へ等倍で入る。 */
+export const METER_COPY_WINDOW: CopyWindow = copyWindowOf(
+  "meter",
+  LOWER_ATLAS_LAYOUT.source,
+  LOWER_ATLAS_LAYOUT.meter,
+);

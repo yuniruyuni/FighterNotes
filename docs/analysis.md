@@ -77,6 +77,13 @@ decoder内部copy、codec、GPU memoryはJavaScriptのbuffer統計に含まれ�
 WebCodecs の `VideoDecoder` は encoded sample を順に decode し、各 `VideoFrame` から HUD、入力、
 フレームメーターの strip を切り出す。
 
+切り出しは `VideoFrame.copyTo` で必要な領域だけを読む。`createImageBitmap` は切り出し範囲に
+関係なくフレーム全体を変換するため、実測で1回あたり約6msかかり、1フレーム3回呼ぶ以前の経路は
+21.7ms/frameを占めていた。等倍でよい領域は `copyTo` で直接読み、縮小が要る SA ゲージと FIGHT
+だけを1枚の ImageBitmap から描いて小領域を読み戻す。I420 の彩度は 2px 単位なので、奇数 x の
+領域は偶数境界から読んで1pxずらして書き写す。これを守れば strip の内容は canvas 経路と一致する。
+`copyTo` の RGBA 変換に対応しない環境だけ、従来の canvas 経路へ落とす。
+
 main thread は描画と buffer 転送を担当し、`client/src/entrypoints/analyzer-worker.ts` から
 起動した Worker runtime が WASM を実行する。
 2 slot の ping-pong buffer、decode queue 上限、Worker 未完了数の上限で memory 使用量を抑える。

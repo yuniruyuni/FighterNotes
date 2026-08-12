@@ -12,6 +12,10 @@ import type {
   VideoCodecConfig,
 } from "../../domain/result.js";
 import type { ValidatedVideoInput } from "../../domain/video-preflight.js";
+import {
+  CopyStripExtractor,
+  supportsRgbaCopy,
+} from "../frame-extraction/copy-strip-extractor.js";
 import { FrameStripExtractor } from "../frame-extraction/strip-extractor.js";
 import { createAnalysisVideoDecoder } from "../video-decoding/analysis-video-decoder.js";
 import {
@@ -26,7 +30,10 @@ import {
 import { abortReason, throwIfAborted } from "./abort.js";
 import { completeAnalysis } from "./complete-analysis.js";
 import { DecodePump } from "./decode-pump.js";
-import { FrameDispatcher } from "./frame-dispatcher.js";
+import {
+  FrameDispatcher,
+  type StripFrameExtractor,
+} from "./frame-dispatcher.js";
 import { logPerformance } from "./performance-log.js";
 import { WorkerFrameBridge } from "./worker-frame-bridge.js";
 
@@ -55,6 +62,11 @@ export async function analyzeWithWebCodecs(
   // origin outside the demux source also captures any file materialization or
   // worker/decoder setup that precedes the first encoded sample.
   const analysisStartedAt = performance.now();
+  // copyTo で必要な領域だけ読む。対応しない環境だけ canvas 経路へ落とす。
+  const extractor: StripFrameExtractor<VideoFrame, unknown> =
+    (await supportsRgbaCopy())
+      ? new CopyStripExtractor()
+      : new FrameStripExtractor();
   // 独立した WASM インスタンスでメーターと HUD・入力を並列解析する。
   const workerUrl = new URL("./analyzer-worker.js", import.meta.url);
   const resultWorker = new Worker(workerUrl, { type: "module" });
@@ -99,7 +111,7 @@ export async function analyzeWithWebCodecs(
     const onAbort = () => fail(abortReason(signal));
     let frameBridge!: WorkerFrameBridge;
     const frameDispatcher = new FrameDispatcher({
-      extractor: new FrameStripExtractor(),
+      extractor,
       sendFrame: (frameIndex, pixels) => frameBridge.send(frameIndex, pixels),
       onError: fail,
     });
