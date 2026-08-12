@@ -9,13 +9,8 @@
  *
  * 使い方: bun scripts/run-mutest.ts <crate> [<crate>...]
  */
-const CRATES = process.argv.slice(2);
-if (CRATES.length === 0) {
-  console.error("使い方: bun scripts/run-mutest.ts <crate> [<crate>...]");
-  process.exit(2);
-}
 
-type Result = {
+export type Result = {
   crate: string;
   total: number;
   detected: number;
@@ -23,19 +18,47 @@ type Result = {
   timedOut: number;
   crashed: number;
   seconds: number;
+  retried?: boolean;
   failure?: string;
 };
 
-// test-support は一部の crate だけが持つ。持たない crate へ渡すと
-// cargo が拒否するので、宣言している crate にだけ付ける。
-const metadata = await new Response(
-  Bun.spawn(["cargo", "metadata", "--no-deps", "--format-version", "1"]).stdout,
-).json();
-const hasTestSupport = new Set<string>(
-  metadata.packages
-    .filter((p: { features: Record<string, unknown> }) => "test-support" in p.features)
-    .map((p: { name: string }) => p.name),
-);
+/**
+ * 時間切れだけが問題なら、その crate をもう一度だけ測り直す。
+ *
+ * mutest の timeout は「無変異時の実行時間 + max(10%, 1秒)」で固定されており、
+ * この版では上書きできない。数十msで終わるテストの猶予は1秒しかないので、
+ * 共有 runner の CPU 待ちだけで正常な変異が時間切れになる。停止しない変異は
+ * 測り直しても時間切れになるため、判定の厳しさは変わらない。
+ *
+ * 未検出や異常終了は測り直さない。どちらも runner の混み具合では変わらない。
+ */
+export function needsTimeoutRetry(result: Result): boolean {
+  return (
+    !result.failure &&
+    result.timedOut > 0 &&
+    result.undetected === 0 &&
+    result.crashed === 0
+  );
+}
+
+async function crateFeatures(): Promise<Set<string>> {
+  // test-support は一部の crate だけが持つ。持たない crate へ渡すと
+  // cargo が拒否するので、宣言している crate にだけ付ける。
+  const metadata = await new Response(
+    Bun.spawn(["cargo", "metadata", "--no-deps", "--format-version", "1"])
+      .stdout,
+  ).json();
+  return new Set<string>(
+    metadata.packages
+      .filter(
+        (p: { features: Record<string, unknown> }) =>
+          "test-support" in p.features,
+      )
+      .map((p: { name: string }) => p.name),
+  );
+}
+
+let hasTestSupport = new Set<string>();
 
 async function runOne(crate: string): Promise<Result> {
   const started = Date.now();
@@ -102,51 +125,75 @@ async function runOne(crate: string): Promise<Result> {
   return { crate, seconds, ...totals };
 }
 
-const results: Result[] = [];
-for (const crate of CRATES) results.push(await runOne(crate));
-
-const width = Math.max(...results.map((r) => r.crate.length));
-const problems: string[] = [];
-for (const r of results) {
-  const head = `${r.crate.padEnd(width)}  ${String(r.seconds).padStart(3)}s`;
-  if (r.failure) {
-    console.log(`${head}  失敗: ${r.failure}`);
-    problems.push(`${r.crate}: ${r.failure}`);
-    continue;
-  }
-  // 変異が生成されないのは「守られている」ではなく「テストが無い」。
-  if (r.total === 0) {
-    console.log(`${head}  変異が 1 つも生成されなかった`);
-    problems.push(`${r.crate}: テストからたどれるコードが無い`);
-    continue;
-  }
-  const score = ((r.detected / r.total) * 100).toFixed(1);
-  console.log(
-    `${head}  ${String(r.total).padStart(5)} 変異  検出 ${score}%  ` +
-      `未検出 ${r.undetected}${r.timedOut > 0 ? ` / 時間切れ ${r.timedOut}` : ""}` +
-      `${r.crashed > 0 ? ` / 異常終了 ${r.crashed}` : ""}`,
-  );
-  if (r.undetected > 0) {
-    problems.push(`${r.crate}: ${r.undetected} 変異が未検出`);
-  }
-  if (r.timedOut > 0) {
-    problems.push(`${r.crate}: ${r.timedOut} 変異が時間切れ`);
-  }
-  if (r.crashed > 0) {
-    problems.push(`${r.crate}: ${r.crashed} 変異でハーネスが異常終了`);
-  }
+async function runCrate(crate: string): Promise<Result> {
+  const first = await runOne(crate);
+  if (!needsTimeoutRetry(first)) return first;
+  console.log(`${crate}: ${first.timedOut} 変異が時間切れ。測り直す`);
+  const second = await runOne(crate);
+  return { ...second, seconds: first.seconds + second.seconds, retried: true };
 }
 
-const total = results.reduce((n, r) => n + r.total, 0);
-const detected = results.reduce((n, r) => n + r.detected, 0);
-console.log(
-  `\n合計 ${total} 変異 / 検出 ${detected} ` +
-    `(${total > 0 ? ((detected / total) * 100).toFixed(1) : "0.0"}%) / ` +
-    `${results.reduce((n, r) => n + r.seconds, 0)} 秒`,
-);
+export function report(results: Result[]): string[] {
+  const width = Math.max(...results.map((r) => r.crate.length));
+  const problems: string[] = [];
+  for (const r of results) {
+    const head = `${r.crate.padEnd(width)}  ${String(r.seconds).padStart(3)}s`;
+    if (r.failure) {
+      console.log(`${head}  失敗: ${r.failure}`);
+      problems.push(`${r.crate}: ${r.failure}`);
+      continue;
+    }
+    // 変異が生成されないのは「守られている」ではなく「テストが無い」。
+    if (r.total === 0) {
+      console.log(`${head}  変異が 1 つも生成されなかった`);
+      problems.push(`${r.crate}: テストからたどれるコードが無い`);
+      continue;
+    }
+    const score = ((r.detected / r.total) * 100).toFixed(1);
+    console.log(
+      `${head}  ${String(r.total).padStart(5)} 変異  検出 ${score}%  ` +
+        `未検出 ${r.undetected}${r.timedOut > 0 ? ` / 時間切れ ${r.timedOut}` : ""}` +
+        `${r.crashed > 0 ? ` / 異常終了 ${r.crashed}` : ""}` +
+        `${r.retried ? " / 測り直し済み" : ""}`,
+    );
+    if (r.undetected > 0) {
+      problems.push(`${r.crate}: ${r.undetected} 変異が未検出`);
+    }
+    if (r.timedOut > 0) {
+      problems.push(`${r.crate}: ${r.timedOut} 変異が測り直しても時間切れ`);
+    }
+    if (r.crashed > 0) {
+      problems.push(`${r.crate}: ${r.crashed} 変異でハーネスが異常終了`);
+    }
+  }
 
-if (problems.length > 0) {
+  const total = results.reduce((n, r) => n + r.total, 0);
+  const detected = results.reduce((n, r) => n + r.detected, 0);
+  console.log(
+    `\n合計 ${total} 変異 / 検出 ${detected} ` +
+      `(${total > 0 ? ((detected / total) * 100).toFixed(1) : "0.0"}%) / ` +
+      `${results.reduce((n, r) => n + r.seconds, 0)} 秒`,
+  );
+  return problems;
+}
+
+async function main(crates: string[]): Promise<void> {
+  if (crates.length === 0) {
+    console.error("使い方: bun scripts/run-mutest.ts <crate> [<crate>...]");
+    process.exit(2);
+  }
+  hasTestSupport = await crateFeatures();
+
+  const results: Result[] = [];
+  for (const crate of crates) results.push(await runCrate(crate));
+
+  const problems = report(results);
+  if (problems.length === 0) return;
   console.error("\n変異検査に問題がある crate があります:");
   for (const p of problems) console.error(`  - ${p}`);
   process.exit(1);
+}
+
+if (import.meta.main) {
+  await main(process.argv.slice(2));
 }
