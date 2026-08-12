@@ -12,7 +12,8 @@ export type ViewerShortcutAction =
   | { type: "loop" }
   | { type: "rate"; direction: -1 | 1 }
   | { type: "sceneStart" }
-  | { type: "saveFrame" };
+  | { type: "saveFrame" }
+  | { type: "saveFrameData" };
 
 export interface ShortcutModifiers {
   ctrl: boolean;
@@ -41,7 +42,9 @@ export function shortcutActionForKey(
   if (normalized === "ArrowUp") return { type: "rate", direction: 1 };
   if (normalized === "ArrowDown") return { type: "rate", direction: -1 };
   if (normalized === "Home") return { type: "sceneStart" };
-  if (normalized === "s") return { type: "saveFrame" };
+  if (normalized === "s") {
+    return { type: modifiers.shift ? "saveFrameData" : "saveFrame" };
+  }
   return null;
 }
 
@@ -69,15 +72,20 @@ export const FRAME_SHORTCUT_HELP: readonly ShortcutHelpEntry[] = [
   { keys: "Ctrl + ← →", label: "60フレーム" },
 ];
 
+/** 両画面が持つ再生の操作。 */
+export const PLAYBACK_SHORTCUT_HELP: readonly ShortcutHelpEntry[] = [
+  { keys: "Space / K", label: "再生・停止" },
+  { keys: "↑ ↓", label: "再生速度" },
+];
+
 /** 動画プレイヤーだけが持つ操作。 */
 export const PLAYER_SHORTCUT_HELP: readonly ShortcutHelpEntry[] = [
-  { keys: "Space / K", label: "再生・停止" },
   { keys: "L", label: "区間ループ" },
-  { keys: "↑ ↓", label: "再生速度" },
   { keys: "Home", label: "場面の先頭" },
 ];
 
 /** 認識デバッグだけが持つ操作。 */
 export const DEBUG_SHORTCUT_HELP: readonly ShortcutHelpEntry[] = [
-  { keys: "S", label: "表示中のフレームを保存" },
+  { keys: "S", label: "画像を保存" },
+  { keys: "Shift + S", label: "フレームデータを保存" },
 ];

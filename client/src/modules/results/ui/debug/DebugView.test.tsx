@@ -86,12 +86,37 @@ describe("DebugView navigation", () => {
       fireEvent.keyDown(hpToggle, { key: "ArrowLeft" });
       expect(seekFallback).toHaveBeenCalledTimes(3);
 
-      // 動画プレイヤーと同じ表を使う。この画面に無い操作は何もしない。
+      // 動画プレイヤーと同じ表を使う。
       fireEvent.keyDown(window, { key: "[" });
       expect(seekFallback).toHaveBeenLastCalledWith(0);
+
+      const play = screen.getByRole("button", { name: "再生" });
       fireEvent.keyDown(window, { key: " " });
+      await waitFor(() =>
+        expect(seekFallback).toHaveBeenLastCalledWith(expect.any(Number)),
+      );
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "一時停止" })).toBeTruthy(),
+      );
+      fireEvent.keyDown(window, { key: "ArrowUp" });
+      expect(
+        screen.getByRole("button", { name: "再生速度 1倍" }),
+      ).toHaveAttribute("aria-pressed", "true");
+      fireEvent.keyDown(window, { key: "ArrowDown" });
+      expect(
+        screen.getByRole("button", { name: "再生速度 0.5倍" }),
+      ).toHaveAttribute("aria-pressed", "true");
+
+      // 手でコマ送りすると再生は止まる。
+      fireEvent.keyDown(window, { key: "ArrowLeft" });
+      await waitFor(() => expect(play).toBeTruthy());
+      const stoppedAt = seekFallback.mock.calls.length;
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(seekFallback.mock.calls.length).toBe(stoppedAt);
+
+      // この画面に区間ループは無い。
       fireEvent.keyDown(window, { key: "l" });
-      expect(seekFallback).toHaveBeenCalledTimes(4);
+      expect(seekFallback.mock.calls.length).toBe(stoppedAt);
 
       const canvas = document.querySelector("canvas");
       expect(canvas).not.toBeNull();

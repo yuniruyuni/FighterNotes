@@ -9,7 +9,8 @@ import {
 } from "lucide-react";
 import type { CSSProperties, ReactNode, Ref } from "react";
 import { secondsToFrame } from "../../domain/frame-time.js";
-import { PLAYBACK_RATES, type PlaybackRate } from "./playback-rate.js";
+import { PlaybackRateControls } from "../PlaybackRateControls.js";
+import type { PlaybackRate } from "../playback-rate.js";
 
 interface VideoPlayerControlsProps {
   focusRef?: Ref<HTMLInputElement>;
@@ -101,20 +102,10 @@ export function VideoPlayerControls(props: VideoPlayerControlsProps) {
           <Repeat2 size={17} aria-hidden="true" />
           <span>ループ</span>
         </PlayerButton>
-        <fieldset className="playback-rate-controls">
-          <legend className="playback-rate-label">速度</legend>
-          {PLAYBACK_RATES.map((rate) => (
-            <PlayerButton
-              key={rate}
-              label={`再生速度 ${rate}倍`}
-              className={`speed ${props.playbackRate === rate ? "active" : ""}`}
-              pressed={props.playbackRate === rate}
-              onClick={() => props.onPlaybackRateChange(rate)}
-            >
-              <span>{rate}×</span>
-            </PlayerButton>
-          ))}
-        </fieldset>
+        <PlaybackRateControls
+          rate={props.playbackRate}
+          onChange={props.onPlaybackRateChange}
+        />
       </div>
     </div>
   );

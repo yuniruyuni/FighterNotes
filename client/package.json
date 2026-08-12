@@ -23,7 +23,7 @@
     "watch:run:worker": "bun build --watch --sourcemap=inline --outdir=./static/ src/entrypoints/analyzer-worker.ts",
     "check:lint": "biome check .",
     "check:arch": "depcruise src --config .dependency-cruiser.cjs --output-type err",
-    "check:functions": "bun --config=bunfig.domain.toml test --coverage src/modules/analysis/domain src/modules/results/domain src/modules/sharing/domain src/modules/analysis/application src/modules/results/application src/modules/sharing/application src/modules/results/ui/shortcuts.test.ts src/modules/results/ui/player/playback-rate.test.ts src/modules/results/ui/debug/debug-viewer-model.test.ts src/modules/results/ui/summary/damage-origin-format.test.ts",
+    "check:functions": "bun --config=bunfig.domain.toml test --coverage src/modules/analysis/domain src/modules/results/domain src/modules/sharing/domain src/modules/analysis/application src/modules/results/application src/modules/sharing/application src/modules/results/ui/shortcuts.test.ts src/modules/results/ui/playback-rate.test.ts src/modules/results/ui/debug/debug-viewer-model.test.ts src/modules/results/ui/summary/damage-origin-format.test.ts",
     "check:type": "tsc --noEmit",
     "check:test": "bun test src/ scripts/",
     "fix:lint": "biome check --write .",

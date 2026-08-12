@@ -6,7 +6,7 @@ const pureLogicTests = [
   "src/modules/sharing/domain",
   "src/modules/sharing/application",
   "src/modules/results/ui/shortcuts.test.ts",
-  "src/modules/results/ui/player/playback-rate.test.ts",
+  "src/modules/results/ui/playback-rate.test.ts",
   "src/modules/results/ui/debug/debug-viewer-model.test.ts",
   "src/modules/results/ui/summary/damage-origin-format.test.ts",
 ].join(" ");
@@ -19,7 +19,7 @@ export const mutationScopes = {
   results: [
     "client/src/modules/results/{domain,application}/**/*.ts",
     "client/src/modules/results/ui/shortcuts.ts",
-    "client/src/modules/results/ui/player/playback-rate.ts",
+    "client/src/modules/results/ui/playback-rate.ts",
     "client/src/modules/results/ui/debug/debug-viewer-model.ts",
     "client/src/modules/results/ui/summary/damage-origin-format.ts",
   ],

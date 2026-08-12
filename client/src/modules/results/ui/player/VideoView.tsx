@@ -1,7 +1,11 @@
 import type { Ref } from "react";
 import type { SceneSelection } from "../../domain/scene-selection.js";
 import { ShortcutLegend } from "../ShortcutLegend.js";
-import { FRAME_SHORTCUT_HELP, PLAYER_SHORTCUT_HELP } from "../shortcuts.js";
+import {
+  FRAME_SHORTCUT_HELP,
+  PLAYBACK_SHORTCUT_HELP,
+  PLAYER_SHORTCUT_HELP,
+} from "../shortcuts.js";
 import { CardAdvice } from "./CardAdvice.js";
 import { useVideoController } from "./use-video-controller.js";
 import { VideoPlayerControls } from "./VideoPlayerControls.js";
@@ -56,7 +60,11 @@ export function VideoView(props: VideoViewProps) {
         onTogglePlayback={controls.togglePlayback}
       />
       <ShortcutLegend
-        entries={[...FRAME_SHORTCUT_HELP, ...PLAYER_SHORTCUT_HELP]}
+        entries={[
+          ...FRAME_SHORTCUT_HELP,
+          ...PLAYBACK_SHORTCUT_HELP,
+          ...PLAYER_SHORTCUT_HELP,
+        ]}
       />
       <div className="clip-advice">
         {props.scene?.card ? (

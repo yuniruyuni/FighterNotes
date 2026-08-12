@@ -4,6 +4,7 @@ import type {
   AnalysisSide,
 } from "~/modules/analysis/contracts.js";
 import type { FrameNavigationAction } from "../../domain/frame-navigation.js";
+import { type PlaybackRate, stepPlaybackRate } from "../playback-rate.js";
 import { useResultsServices } from "../ResultsServicesProvider.js";
 import { useShortcutKeys } from "../use-shortcut-keys.js";
 import {
@@ -32,17 +33,30 @@ export function useDebugViewer(options: DebugViewerOptions) {
   const [frameInfo, setFrameInfo] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [playing, setPlaying] = useState(false);
+  const playingRef = useRef(false);
+  const [playbackRate, setPlaybackRateState] = useState<PlaybackRate>(1);
 
-  const navigate = useCallback((action: FrameNavigationAction) => {
-    const viewer = session.current;
-    if (!viewer) return;
-    const requestGeneration = generation.current;
-    void viewer.navigate(action).catch((cause) => {
-      if (generation.current === requestGeneration) {
-        setError(errorMessage(cause));
-      }
-    });
+  const applyPlaying = useCallback((next: boolean) => {
+    playingRef.current = next;
+    setPlaying(next);
   }, []);
+
+  const navigate = useCallback(
+    (action: FrameNavigationAction) => {
+      const viewer = session.current;
+      if (!viewer) return;
+      // session 側でも再生を止める。表示を合わせるためここでも落とす。
+      applyPlaying(false);
+      const requestGeneration = generation.current;
+      void viewer.navigate(action).catch((cause) => {
+        if (generation.current === requestGeneration) {
+          setError(errorMessage(cause));
+        }
+      });
+    },
+    [applyPlaying],
+  );
 
   const setOverlayVisibility = useCallback(
     (key: keyof DebugOverlayVisibility, enabled: boolean) => {
@@ -65,13 +79,39 @@ export function useDebugViewer(options: DebugViewerOptions) {
     session.current?.saveCurrentFrame();
   }, []);
 
+  const saveCurrentFrameData = useCallback(() => {
+    session.current?.saveCurrentFrameData();
+  }, []);
+
+  const togglePlayback = useCallback(() => {
+    const viewer = session.current;
+    if (!viewer) return;
+    const next = !playingRef.current;
+    applyPlaying(next);
+    viewer.setPlaying(next);
+  }, [applyPlaying]);
+
+  const changePlaybackRate = useCallback((rate: PlaybackRate) => {
+    setPlaybackRateState(rate);
+    session.current?.setPlaybackRate(rate);
+  }, []);
+
   useShortcutKeys(options.active, (action) => {
     switch (action.type) {
       case "frame":
         navigate(action.move);
         return true;
+      case "playback":
+        togglePlayback();
+        return true;
+      case "rate":
+        changePlaybackRate(stepPlaybackRate(playbackRate, action.direction));
+        return true;
       case "saveFrame":
         saveCurrentFrame();
+        return true;
+      case "saveFrameData":
+        saveCurrentFrameData();
         return true;
       // 動画プレイヤーだけが持つ操作。ここでは既定動作を止めない。
       default:
@@ -124,6 +164,9 @@ export function useDebugViewer(options: DebugViewerOptions) {
           onFrameInfo(label) {
             if (isCurrent()) setFrameInfo(label);
           },
+          onPlayingChange(nextPlaying) {
+            if (isCurrent()) applyPlaying(nextPlaying);
+          },
           onError(cause) {
             if (isCurrent()) setError(errorMessage(cause));
           },
@@ -153,6 +196,7 @@ export function useDebugViewer(options: DebugViewerOptions) {
       viewer?.destroy();
     };
   }, [
+    applyPlaying,
     debugFrameInspector,
     debugFrameSourceFactory,
     options.active,
@@ -167,6 +211,12 @@ export function useDebugViewer(options: DebugViewerOptions) {
     visibility,
     setOverlayVisibility,
     navigate,
+    playing,
+    playbackRate,
+    togglePlayback,
+    changePlaybackRate,
+    saveCurrentFrame,
+    saveCurrentFrameData,
     loading,
     error,
   };

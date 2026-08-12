@@ -8,16 +8,22 @@ import {
   FrameNavigation,
   type FrameNavigationAction,
 } from "../../domain/frame-navigation.js";
-import type {
-  DebugOverlayVisibility,
-  DebugViewerData,
+import type { PlaybackRate } from "../playback-rate.js";
+import {
+  type DebugOverlayVisibility,
+  type DebugViewerData,
+  frameDataAt,
 } from "./debug-viewer-model.js";
 import { DebugFrameRenderer } from "./rendering/frame-renderer.js";
 
 export interface DebugViewerSession {
   navigate(action: FrameNavigationAction): Promise<void>;
   setVisibility(visibility: DebugOverlayVisibility): Promise<void>;
+  /** 再生の開始・停止。復号が追いつかない分は駒を落として実時間へ寄せる。 */
+  setPlaying(playing: boolean): void;
+  setPlaybackRate(rate: PlaybackRate): void;
   saveCurrentFrame(): void;
+  saveCurrentFrameData(): void;
   destroy(): void;
 }
 
@@ -30,6 +36,7 @@ interface DebugViewerSessionOptions {
   frameSourceFactory: DebugFrameSourceFactory;
   frameInspector: DebugFrameInspector;
   onFrameInfo(label: string): void;
+  onPlayingChange(playing: boolean): void;
   onError(cause: unknown): void;
 }
 
@@ -42,18 +49,31 @@ export async function createDebugViewerSession({
   frameSourceFactory,
   frameInspector,
   onFrameInfo,
+  onPlayingChange,
   onError,
 }: DebugViewerSessionOptions): Promise<DebugViewerSession> {
   let frameIndex = 0;
   let latestRequest = 0;
   let currentVisibility = { ...visibility };
   let source: DebugFrameSource | undefined;
+  let playing = false;
+  let playbackRate: PlaybackRate = 1;
+  let playTimer: ReturnType<typeof setTimeout> | undefined;
   let sourceData: Parameters<DebugFrameSourceFactory["create"]>[0] | undefined;
   let destroyed = false;
+
+  const stopPlayback = (notify: boolean) => {
+    if (playTimer !== undefined) clearTimeout(playTimer);
+    playTimer = undefined;
+    if (!playing) return;
+    playing = false;
+    if (notify) onPlayingChange(false);
+  };
 
   const destroy = () => {
     if (destroyed) return;
     destroyed = true;
+    stopPlayback(false);
     latestRequest += 1;
     signal.removeEventListener("abort", destroy);
     source?.destroy();
@@ -127,9 +147,41 @@ export async function createDebugViewerSession({
     else activeSource.seekFallback(0);
     throwIfAborted(signal);
 
+    const tick = async () => {
+      playTimer = undefined;
+      if (destroyed || !playing) return;
+      if (frameIndex >= totalFrames - 1) {
+        stopPlayback(true);
+        return;
+      }
+      const startedAt = performance.now();
+      await seekTo(frameIndex + 1);
+      if (destroyed || !playing) return;
+      const remaining =
+        1000 / (FRAMES_PER_SECOND * playbackRate) -
+        (performance.now() - startedAt);
+      playTimer = setTimeout(() => void tick(), Math.max(0, remaining));
+    };
+
     return {
       navigate(action) {
+        // 手で動かしたら再生は止める。動画プレイヤーのコマ送りと同じ扱い。
+        stopPlayback(true);
         return seekTo(FrameNavigation.move(frameIndex, totalFrames, action));
+      },
+      setPlaying(nextPlaying) {
+        if (destroyed || playing === nextPlaying) return;
+        if (!nextPlaying) {
+          stopPlayback(true);
+          return;
+        }
+        playing = true;
+        // 末尾で押したら最初から見直す。
+        if (frameIndex >= totalFrames - 1) void seekTo(0);
+        void tick();
+      },
+      setPlaybackRate(rate) {
+        playbackRate = rate;
       },
       setVisibility(nextVisibility) {
         if (destroyed) return Promise.resolve();
@@ -144,6 +196,9 @@ export async function createDebugViewerSession({
       saveCurrentFrame() {
         if (!destroyed) downloadFrame(canvas, frameIndex);
       },
+      saveCurrentFrameData() {
+        if (!destroyed) downloadFrameData(data, frameIndex);
+      },
       destroy,
     };
   } catch (cause) {
@@ -153,16 +208,30 @@ export async function createDebugViewerSession({
   }
 }
 
+const FRAMES_PER_SECOND = 60;
+
+function downloadFrameData(data: DebugViewerData, frameIndex: number): void {
+  const json = JSON.stringify(frameDataAt(data, frameIndex), null, 2);
+  download(
+    new Blob([json], { type: "application/json" }),
+    `frame_${String(frameIndex).padStart(6, "0")}.json`,
+  );
+}
+
 function downloadFrame(canvas: HTMLCanvasElement, frameIndex: number): void {
   canvas.toBlob((blob) => {
     if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `frame_${String(frameIndex).padStart(6, "0")}.png`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    download(blob, `frame_${String(frameIndex).padStart(6, "0")}.png`);
   }, "image/png");
+}
+
+function download(blob: Blob, name: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = name;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 function throwIfAborted(signal: AbortSignal): void {

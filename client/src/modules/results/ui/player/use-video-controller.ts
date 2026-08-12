@@ -14,8 +14,8 @@ import {
   shouldLoopBack,
 } from "../../domain/frame-time.js";
 import type { SceneSelection } from "../../domain/scene-selection.js";
+import { type PlaybackRate, stepPlaybackRate } from "../playback-rate.js";
 import { useShortcutKeys } from "../use-shortcut-keys.js";
-import { type PlaybackRate, stepPlaybackRate } from "./playback-rate.js";
 
 interface VideoControllerOptions {
   active: boolean;

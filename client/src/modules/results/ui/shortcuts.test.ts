@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   DEBUG_SHORTCUT_HELP,
   FRAME_SHORTCUT_HELP,
+  PLAYBACK_SHORTCUT_HELP,
   PLAYER_SHORTCUT_HELP,
   shortcutActionForKey,
 } from "./shortcuts.js";
@@ -67,13 +68,15 @@ describe("結果画面のキー操作", () => {
     });
     expect(shortcutActionForKey("Home", plain)).toEqual({ type: "sceneStart" });
     expect(shortcutActionForKey("s", plain)).toEqual({ type: "saveFrame" });
+    expect(shortcutActionForKey("S", { ctrl: false, shift: true })).toEqual({
+      type: "saveFrameData",
+    });
   });
 
   test("Shiftを押した英字も同じ意味にする", () => {
     const shifted = { ctrl: false, shift: true };
     expect(shortcutActionForKey("K", shifted)).toEqual({ type: "playback" });
     expect(shortcutActionForKey("L", shifted)).toEqual({ type: "loop" });
-    expect(shortcutActionForKey("S", shifted)).toEqual({ type: "saveFrame" });
   });
 
   test("割り当てのないキーは受け取らない", () => {
@@ -88,14 +91,17 @@ describe("結果画面のキー操作", () => {
       { keys: "Shift + ← →", label: "10フレーム" },
       { keys: "Ctrl + ← →", label: "60フレーム" },
     ]);
-    expect(PLAYER_SHORTCUT_HELP).toEqual([
+    expect(PLAYBACK_SHORTCUT_HELP).toEqual([
       { keys: "Space / K", label: "再生・停止" },
-      { keys: "L", label: "区間ループ" },
       { keys: "↑ ↓", label: "再生速度" },
+    ]);
+    expect(PLAYER_SHORTCUT_HELP).toEqual([
+      { keys: "L", label: "区間ループ" },
       { keys: "Home", label: "場面の先頭" },
     ]);
     expect(DEBUG_SHORTCUT_HELP).toEqual([
-      { keys: "S", label: "表示中のフレームを保存" },
+      { keys: "S", label: "画像を保存" },
+      { keys: "Shift + S", label: "フレームデータを保存" },
     ]);
   });
 });

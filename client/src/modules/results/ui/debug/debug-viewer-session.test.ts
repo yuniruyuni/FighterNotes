@@ -63,6 +63,7 @@ describe("debug viewer request ordering", () => {
       frameSourceFactory: { create: () => source },
       frameInspector: inspector(),
       onFrameInfo,
+      onPlayingChange: () => undefined,
       onError: (cause) => {
         throw cause;
       },

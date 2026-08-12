@@ -118,7 +118,10 @@ React UI は concrete adapter を直接 import せず、application port を Pro
 結果画面のボタンとキーボード入力は UI が domain の navigation action へ変換し、
 domain model が action ごとの移動フレーム数とカーソル範囲を決定する。キー表は
 `modules/results/ui/shortcuts.ts` が単一の正本を持ち、動画プレイヤーと認識デバッグが
-同じ表を使う。その画面に無い操作は適用せず、browser の既定動作も止めない。
+同じ表を使う。移動、再生・停止、再生速度は両画面が持ち、区間ループと場面先頭は
+プレイヤー、フレームの画像・データ保存はデバッグだけが持つ。その画面に無い操作は
+適用せず、browser の既定動作も止めない。認識デバッグの再生は復号が追いつかない分の
+frame を落として実時間へ寄せ、手でコマ送りすると止まる。
 `bun run check:arch` は循環、layer の逆依存、module 内部への直接参照を検査する。
 
 ### 動画処理

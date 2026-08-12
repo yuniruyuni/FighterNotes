@@ -1,3 +1,4 @@
+import { Pause, Play, Save } from "lucide-react";
 import type { Ref } from "react";
 import type {
   AnalysisResult,
@@ -7,8 +8,13 @@ import {
   FrameNavigation,
   type FrameNavigationAction,
 } from "../../domain/frame-navigation.js";
+import { PlaybackRateControls } from "../PlaybackRateControls.js";
 import { ShortcutLegend } from "../ShortcutLegend.js";
-import { DEBUG_SHORTCUT_HELP, FRAME_SHORTCUT_HELP } from "../shortcuts.js";
+import {
+  DEBUG_SHORTCUT_HELP,
+  FRAME_SHORTCUT_HELP,
+  PLAYBACK_SHORTCUT_HELP,
+} from "../shortcuts.js";
 import { useDebugViewer } from "./use-debug-viewer.js";
 
 interface DebugViewProps {
@@ -26,6 +32,12 @@ export function DebugView(props: DebugViewProps) {
     visibility,
     setOverlayVisibility,
     navigate,
+    playing,
+    playbackRate,
+    togglePlayback,
+    changePlaybackRate,
+    saveCurrentFrame,
+    saveCurrentFrameData,
     loading,
     error,
   } = useDebugViewer(props);
@@ -60,6 +72,43 @@ export function DebugView(props: DebugViewProps) {
           <DebugStepButton action="step-forward" onNavigate={navigate} />
           <DebugStepButton action="skip-forward" onNavigate={navigate} />
           <DebugStepButton action="jump-forward" onNavigate={navigate} />
+          <button
+            type="button"
+            className="pbtn play"
+            title={playing ? "一時停止" : "再生"}
+            aria-label={playing ? "一時停止" : "再生"}
+            onClick={togglePlayback}
+          >
+            {playing ? (
+              <Pause size={17} aria-hidden="true" />
+            ) : (
+              <Play size={17} aria-hidden="true" />
+            )}
+          </button>
+          <PlaybackRateControls
+            rate={playbackRate}
+            onChange={changePlaybackRate}
+          />
+          <button
+            type="button"
+            className="pbtn"
+            title="表示中のフレームを画像で保存"
+            aria-label="表示中のフレームを画像で保存"
+            onClick={saveCurrentFrame}
+          >
+            <Save size={17} aria-hidden="true" />
+            <span>画像</span>
+          </button>
+          <button
+            type="button"
+            className="pbtn"
+            title="表示中のフレームデータを保存"
+            aria-label="表示中のフレームデータを保存"
+            onClick={saveCurrentFrameData}
+          >
+            <Save size={17} aria-hidden="true" />
+            <span>データ</span>
+          </button>
           <span className="player-time">{frameInfo}</span>
         </div>
         <div className="debug-toggles">
@@ -135,7 +184,11 @@ export function DebugView(props: DebugViewProps) {
           </label>
         </div>
         <ShortcutLegend
-          entries={[...FRAME_SHORTCUT_HELP, ...DEBUG_SHORTCUT_HELP]}
+          entries={[
+            ...FRAME_SHORTCUT_HELP,
+            ...PLAYBACK_SHORTCUT_HELP,
+            ...DEBUG_SHORTCUT_HELP,
+          ]}
         />
       </div>
     </section>
