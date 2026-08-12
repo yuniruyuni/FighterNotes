@@ -39,6 +39,17 @@ jobs:
           components: rustfmt, clippy
           targets: wasm32-unknown-unknown
 
+      # clippyとtestとwasm buildは同じ依存を何度もコンパイルし直す。
+      # cacheはmainでだけ保存する。PRで作ったcacheはそのPRからしか見えず、
+      # 他のPRが再利用できないまま容量を食う。
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          shared-key: ci
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # cargo installしたbinaryは専用cacheで持ち回すので二重に持たない。
+          cache-bin: false
+
       # 2つのcargo installはソースからのビルドで毎回3分かかる。版が同じなら
       # 同じbinaryなので、mutest-rsと同じように成果物ごと持ち回す。
       - name: Restore Rust CLI tools
