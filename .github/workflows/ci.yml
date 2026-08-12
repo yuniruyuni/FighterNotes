@@ -131,11 +131,30 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
+      # layer cacheはreleaseのbuildと同じscopeを使う。CIが先に同じcommitを
+      # buildするので、後から走るreleaseはそのlayerを読むだけで済む。
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
       - name: Build Docker image
-        run: docker build --build-arg "FIGHTER_NOTES_BUILD_SHA=${GITHUB_SHA}" -t fighter .
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          load: true
+          tags: fighter
+          build-args: FIGHTER_NOTES_BUILD_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=fighter
+          cache-to: type=gha,mode=max,scope=fighter
 
       - name: Build migration image
-        run: docker build -f Dockerfile.migration -t fighter-migration .
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: Dockerfile.migration
+          load: true
+          tags: fighter-migration
+          cache-from: type=gha,scope=fighter-migration
+          cache-to: type=gha,mode=max,scope=fighter-migration
 
       - name: Test Docker image
         run: |

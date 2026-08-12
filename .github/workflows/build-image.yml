@@ -47,9 +47,6 @@ jobs:
       REPO_OWNER: ${{ github.repository_owner }}
       IMAGE_NAME: ${{ inputs.image_name }}
       DOCKERFILE: ${{ inputs.dockerfile }}
-      # `${{ ... }}` を run: の中に直接展開すると shell injection 可能になるため、
-      # env で先に変数として受けて run の中では `$BUILD_ARGS` で参照する。
-      BUILD_ARGS: ${{ inputs.build_args }}
       SOURCE_SHA: ${{ inputs.source_sha }}
       TAG: ${{ inputs.image_tag }}
     steps:
@@ -84,18 +81,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      # build だけを buildx に任せ、image は daemon へ load する。push と digest の
+      # 取り出しは従来のまま行う。cache は CI の docker job と同じ scope を読む。
+      # 同じ commit を CI が先に build しているので、ここでは layer を読むだけで済む。
+      # `build_args` は改行区切りの "KEY=VALUE" 列。空なら追加引数なし。
       - name: Build image
-        # `build_args` は改行区切りの "KEY=VALUE" 列。空なら追加引数なし。
-        # `$BUILD_ARGS` は env 経由で渡す。
-        run: |
-          BUILD_ARG_FLAGS=""
-          if [ -n "$BUILD_ARGS" ]; then
-            while IFS= read -r line; do
-              [ -z "$line" ] && continue
-              BUILD_ARG_FLAGS="$BUILD_ARG_FLAGS --build-arg $line"
-            done <<< "$BUILD_ARGS"
-          fi
-          docker build $BUILD_ARG_FLAGS -f "$DOCKERFILE" -t "${IMAGE_NAME}:${TAG}" .
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: ${{ inputs.dockerfile }}
+          build-args: ${{ inputs.build_args }}
+          load: true
+          tags: ${{ inputs.image_name }}:${{ inputs.image_tag }}
+          cache-from: type=gha,scope=${{ inputs.image_name }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.image_name }}
 
       - name: Push to Artifact Registry
         id: push-artifact
