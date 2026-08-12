@@ -1,7 +1,9 @@
 export default {
   testRunner: "command",
   commandRunner: {
-    command: "cd server && bun test src/models",
+    // Stryker は終了コードだけで生死を決めるので、変異を殺す test が 1 つ
+    // 見つかれば残りは走らせなくてよい。
+    command: "cd server && bun test --bail src/models",
   },
   coverageAnalysis: "off",
   disableTypeChecks: true,

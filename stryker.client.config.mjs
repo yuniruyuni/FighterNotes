@@ -13,7 +13,9 @@ const pureLogicTests = [
 export default {
   testRunner: "command",
   commandRunner: {
-    command: `cd client && bun --config=bunfig.mutation.toml test ${pureLogicTests}`,
+    // Stryker は終了コードだけで生死を決めるので、変異を殺す test が 1 つ
+    // 見つかれば残りは走らせなくてよい。
+    command: `cd client && bun --config=bunfig.mutation.toml test --bail ${pureLogicTests}`,
   },
   coverageAnalysis: "off",
   disableTypeChecks: true,
