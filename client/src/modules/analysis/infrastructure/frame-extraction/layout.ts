@@ -325,9 +325,18 @@ export const SUPER_GAUGE_COPY_WINDOWS: readonly ScaledCopyWindow[] = [
  * ずれる画素が出るため、そこだけは合成に残してある。
  */
 export interface StripRect {
-  readonly src: { readonly x: number; readonly y: number };
-  readonly size: { readonly width: number; readonly height: number };
-  readonly dst: { readonly x: number; readonly y: number };
+  readonly src: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  };
+  readonly dst: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  };
 }
 
 /** 3 つの strip を縦に並べた 1 枚の中での、各 strip の先頭行。 */
@@ -348,23 +357,62 @@ function absoluteRect(
       readonly width: number;
       readonly height: number;
     };
-    readonly target: { readonly x: number; readonly y: number };
+    readonly target: {
+      readonly x: number;
+      readonly y: number;
+      readonly width: number;
+      readonly height: number;
+    };
   },
   band: number,
 ): StripRect {
   return {
-    src: { x: atlas.x + patch.source.x, y: atlas.y + patch.source.y },
-    size: { width: patch.source.width, height: patch.source.height },
-    dst: { x: patch.target.x, y: band + patch.target.y },
+    src: {
+      x: atlas.x + patch.source.x,
+      y: atlas.y + patch.source.y,
+      width: patch.source.width,
+      height: patch.source.height,
+    },
+    dst: {
+      x: patch.target.x,
+      y: band + patch.target.y,
+      width: patch.target.width,
+      height: patch.target.height,
+    },
   };
 }
 
+/**
+ * 重ね書きの手前までの数。
+ *
+ * SA ゲージと FIGHT は strip の上で HP バーの走査範囲と重なる。同じ
+ * ディスパッチに混ぜると、どちらが後に書くか決まらない。土台を書き終えて
+ * から重ねる。
+ */
+export const STRIP_BASE_RECTS = 1;
+
 export const STRIP_RECTS: readonly StripRect[] = [
   {
-    src: { x: 0, y: ANALYSIS_STRIPS.hud.y },
-    size: { width: ANALYSIS_WIDTH, height: ANALYSIS_STRIPS.hud.height },
-    dst: { x: 0, y: PACKED_BANDS.hud },
+    src: {
+      x: 0,
+      y: ANALYSIS_STRIPS.hud.y,
+      width: ANALYSIS_WIDTH,
+      height: ANALYSIS_STRIPS.hud.height,
+    },
+    dst: {
+      x: 0,
+      y: PACKED_BANDS.hud,
+      width: ANALYSIS_WIDTH,
+      height: ANALYSIS_STRIPS.hud.height,
+    },
   },
+  // SA ゲージと FIGHT は縮小して写す。ここだけ canvas の縮小と 1〜2 違う。
+  ...[SUPER_GAUGE_LAYOUT.left, SUPER_GAUGE_LAYOUT.right].flatMap((side) =>
+    [side.label, side.bar].map((patch) =>
+      absoluteRect(LOWER_ATLAS_LAYOUT.source, patch, PACKED_BANDS.hud),
+    ),
+  ),
+  absoluteRect({ x: 0, y: 0 }, FIGHT_MARKER_LAYOUT, PACKED_BANDS.hud),
   absoluteRect(
     LOWER_ATLAS_LAYOUT.source,
     LOWER_ATLAS_LAYOUT.meter,

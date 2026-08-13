@@ -20,6 +20,9 @@ export interface HudGpuResult {
  * GPU へ画素を渡す先。WebGPU そのものを差し替えられるようにしてある。
  */
 export interface HpScoreBackend {
+  /** 切り出した strip を持つテクスチャ。読み戻しに使う。 */
+  readonly texture: GPUTexture;
+  readonly device: GPUDevice;
   /** まとめの中の `layer` 枚目として画素を置く。 */
   writeLayer(pixels: ArrayBuffer, layer: number): void;
   /**

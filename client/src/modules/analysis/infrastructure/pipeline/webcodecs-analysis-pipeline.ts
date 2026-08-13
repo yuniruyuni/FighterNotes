@@ -68,21 +68,21 @@ export async function analyzeWithWebCodecs(
   // GPU のある環境では copyTo が GPU→CPU の読み戻しを強制し、canvas 経路より
   // 遅い。実機計測で canvas 2.19ms/frame に対し copyTo 8.49ms/frame。GPU の
   // 無い環境では逆に copyTo が速いが、既定は実利用者の環境へ合わせる。
+  // 復号フレームをそのまま GPU で切り出す。使えない環境だけ canvas へ合成する。
+  let resultWorkerSessionRef: AnalyzerWorkerSession | undefined;
+  const gpuExtractor = await HudGpu.create((batch) => {
+    resultWorkerSessionRef?.sendHudGpuBatch(batch);
+  });
   const extractor: StripFrameExtractor<VideoFrame, unknown> =
-    (await supportsRgbaCopy()) && preferCopyExtraction()
+    gpuExtractor ??
+    ((await supportsRgbaCopy()) && preferCopyExtraction()
       ? new CopyStripExtractor()
-      : new FrameStripExtractor();
+      : new FrameStripExtractor());
   // 独立した WASM インスタンスで、メーター・攻撃情報・HUD/入力を並列解析する。
   const workerUrl = new URL("./analyzer-worker.js", import.meta.url);
   const resultWorker = new Worker(workerUrl, { type: "module" });
   const meterWorker = new Worker(workerUrl, { type: "module" });
   const attackWorker = new Worker(workerUrl, { type: "module" });
-  // HUD の画素読み取りは、復号フレームをそのまま渡せる主スレッドの GPU が担う。
-  // 使えない環境では今までどおり WASM 側が strip を走査する。
-  let resultWorkerSessionRef: AnalyzerWorkerSession | undefined;
-  const hudGpu = await HudGpu.create((batch) => {
-    resultWorkerSessionRef?.sendHudGpuBatch(batch);
-  });
 
   return new Promise<AnalysisResult>((resolve, reject) => {
     let decoder: VideoDecoder | undefined;
@@ -126,14 +126,7 @@ export async function analyzeWithWebCodecs(
     let frameBridge!: WorkerFrameBridge;
     const frameDispatcher = new FrameDispatcher({
       extractor,
-      sendFrame: (frameIndex, pixels, frame) => {
-        // 切り出しは呼び出しの中で GPU へ積みきる。復号器の持ち玉は限られて
-        // いるので、戻り次第このフレームは手放す。
-        return Promise.all([
-          hudGpu?.push(frame, frameIndex),
-          frameBridge.send(frameIndex, pixels),
-        ]).then(() => undefined);
-      },
+      sendFrame: (frameIndex, pixels) => frameBridge.send(frameIndex, pixels),
       onError: fail,
     });
     frameBridge = new WorkerFrameBridge({
@@ -174,7 +167,7 @@ export async function analyzeWithWebCodecs(
           )
           // GPU の読み取りは最後のまとまりが残っている。解析を締める前に
           // 流しきり、結果を送り終える。
-          .then(() => hudGpu?.finish())
+          .then(() => gpuExtractor?.finish())
           .then(() =>
             Promise.all([
               meterWorkerSession.finish(),
@@ -305,7 +298,11 @@ export async function analyzeWithWebCodecs(
       { signal },
     );
 
-    resultWorkerSession.initialize(ownSide, analysisContext, hudGpu !== null);
+    resultWorkerSession.initialize(
+      ownSide,
+      analysisContext,
+      gpuExtractor !== null,
+    );
     meterWorkerSession.initialize(ownSide, analysisContext);
     attackWorkerSession.initialize(ownSide, analysisContext);
     try {

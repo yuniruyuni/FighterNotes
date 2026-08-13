@@ -6,7 +6,8 @@ import {
   PACKED_HEIGHT,
   STRIP_RECTS,
 } from "../frame-extraction/layout.js";
-import { HpScoreBatcher, type HudGpuBatch } from "./hp-score-batcher.js";
+import { GpuStripExtractor } from "./gpu-strip-extractor.js";
+import type { HudGpuBatch } from "./hp-score-batcher.js";
 import { createHpScoreBackend } from "./hp-score-webgpu.js";
 
 /**
@@ -21,15 +22,9 @@ import { createHpScoreBackend } from "./hp-score-webgpu.js";
  * 依存しないので、解析の側は受け取った順に置き場所へ入れるだけでよい。
  */
 export class HudGpu {
-  readonly #batcher: HpScoreBatcher;
-
-  private constructor(batcher: HpScoreBatcher) {
-    this.#batcher = batcher;
-  }
-
   static async create(
     onBatch: (batch: HudGpuBatch) => void,
-  ): Promise<HudGpu | null> {
+  ): Promise<GpuStripExtractor | null> {
     // WebGPU が無ければ表も要らない。主スレッドで WASM を読む前に降りる。
     if (!navigator.gpu) return null;
     // 表は参照実装が作る。GPU に除算をやり直させると、丸めが処理系依存に
@@ -53,20 +48,12 @@ export class HudGpu {
       rects: STRIP_RECTS,
     });
     if (!backend) return null;
-    return new HudGpu(new HpScoreBatcher(backend, onBatch));
-  }
-
-  /**
-   * フレームを 1 枚渡す。戻った時点で GPU へ積み終わっているので、
-   * 呼び出し側はフレームを閉じてよい。
-   */
-  push(frame: VideoFrame, frameIndex: number): Promise<void> {
-    return this.#batcher.push(frame, frameIndex);
-  }
-
-  /** 残りを流し終えるまで待つ。 */
-  finish(): Promise<void> {
-    return this.#batcher.finish();
+    return new GpuStripExtractor({
+      device: backend.device,
+      backend,
+      texture: backend.texture,
+      onBatch,
+    });
   }
 }
 

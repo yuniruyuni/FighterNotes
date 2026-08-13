@@ -9,6 +9,8 @@ import {
 
 /** 置かれた枚数をそのまま数え返す、順番だけを見る偽の GPU。 */
 class RecordingBackend implements HpScoreBackend {
+  readonly texture = null as unknown as GPUTexture;
+  readonly device = null as unknown as GPUDevice;
   readonly layers: Array<{ readonly layer: number; readonly mark: number }> =
     [];
   readonly batches: number[] = [];

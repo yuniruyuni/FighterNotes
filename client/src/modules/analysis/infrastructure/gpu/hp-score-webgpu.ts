@@ -1,4 +1,7 @@
-import type { StripRect } from "../frame-extraction/layout.js";
+import {
+  STRIP_BASE_RECTS,
+  type StripRect,
+} from "../frame-extraction/layout.js";
 import { DRIVE_COLUMN_SHADER } from "./drive-column-shader.js";
 import { HP_COLUMN_SHADER } from "./hp-column-shader.js";
 import {
@@ -85,7 +88,10 @@ interface Resources {
   readonly rois: Uint32Array;
   readonly stripWidth: number;
   readonly extractPipeline: GPUComputePipeline;
-  readonly bands: GPUBuffer[];
+  readonly extractLayout: GPUBindGroupLayout;
+  readonly sampler: GPUSampler;
+  readonly bands: GPUBuffer;
+  readonly slotStride: number;
   readonly rectBuffer: GPUBuffer;
   readonly rectCount: number;
   readonly extractSize: { readonly width: number; readonly height: number };
@@ -163,6 +169,7 @@ function buildColumnPass(
     }),
     stagings: Array.from({ length: HP_SCORE_IN_FLIGHT }, () =>
       device.createBuffer({
+        label: "column-readback",
         size: bytes,
         usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
       }),
@@ -184,44 +191,88 @@ function build(device: GPUDevice, layout: HpScoreRois): Resources {
     usage:
       GPUTextureUsage.TEXTURE_BINDING |
       GPUTextureUsage.COPY_DST |
+      GPUTextureUsage.COPY_SRC |
       GPUTextureUsage.STORAGE_BINDING,
   });
   // 復号フレームから直接切り出すパス。まとめの中の位置ごとに書き込む層が違う。
+  // 縮小する領域だけが使う。等倍の領域は textureLoad で読む。
+  const sampler = device.createSampler({
+    magFilter: "linear",
+    minFilter: "linear",
+  });
+  // 読み出し位置を動的に切り替えるので、束ね方は明示する。
+  const extractLayout = device.createBindGroupLayout({
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.COMPUTE, externalTexture: {} },
+      {
+        binding: 1,
+        visibility: GPUShaderStage.COMPUTE,
+        storageTexture: {
+          access: "write-only",
+          format: "rgba8uint",
+          viewDimension: "2d-array",
+        },
+      },
+      { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: {} },
+      {
+        binding: 3,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: { hasDynamicOffset: true, minBindingSize: 16 },
+      },
+      { binding: 4, visibility: GPUShaderStage.COMPUTE, sampler: {} },
+    ],
+  });
   const extractPipeline = device.createComputePipeline({
-    layout: "auto",
+    layout: device.createPipelineLayout({
+      bindGroupLayouts: [extractLayout],
+    }),
     compute: {
       module: device.createShaderModule({ code: STRIP_EXTRACT_SHADER }),
       entryPoint: "main",
     },
   });
   // 切り出す矩形は毎フレーム同じ。まとめの中で変わるのは書き込む層だけ。
-  const rectValues = new Uint32Array(new ArrayBuffer(16 * 4 * 4));
+  const rectValues = new Uint32Array(new ArrayBuffer(24 * 4 * 4));
   layout.rects.forEach((rect, index) => {
     rectValues.set(
-      [rect.src.x, rect.src.y, rect.size.width, rect.size.height],
+      [rect.src.x, rect.src.y, rect.src.width, rect.src.height],
       index * 8,
     );
-    rectValues.set([rect.dst.x, rect.dst.y], index * 8 + 4);
+    rectValues.set(
+      [rect.dst.x, rect.dst.y, rect.dst.width, rect.dst.height],
+      index * 8 + 4,
+    );
   });
   const rectBuffer = device.createBuffer({
     size: rectValues.byteLength,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   device.queue.writeBuffer(rectBuffer, 0, rectValues);
-  const bands = Array.from({ length: HP_SCORE_BATCH }, (_, layer) => {
-    const buffer = device.createBuffer({
-      size: 16,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-    const values = new Uint32Array(new ArrayBuffer(16));
-    values.set([layer]);
-    device.queue.writeBuffer(buffer, 0, values);
-    return buffer;
+  // 層ごとに「土台」と「重ね書き」の 2 つ。動的な読み出し位置で切り替える
+  // ので、束ねる操作はフレームあたり 1 回で済む。
+  const SLOT_STRIDE = 256;
+  const bands = device.createBuffer({
+    size: SLOT_STRIDE * HP_SCORE_BATCH * 2,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
+  for (let layer = 0; layer < HP_SCORE_BATCH; layer += 1) {
+    for (const [phase, first] of [
+      [0, 0],
+      [1, STRIP_BASE_RECTS],
+    ] as const) {
+      const values = new Uint32Array(new ArrayBuffer(16));
+      values.set([layer, first]);
+      device.queue.writeBuffer(
+        bands,
+        (layer * 2 + phase) * SLOT_STRIDE,
+        values,
+      );
+    }
+  }
   const extractSize = layout.rects.reduce(
     (largest, rect) => ({
-      width: Math.max(largest.width, rect.size.width),
-      height: Math.max(largest.height, rect.size.height),
+      width: Math.max(largest.width, rect.dst.width),
+      height: Math.max(largest.height, rect.dst.height),
     }),
     { width: 0, height: 0 },
   );
@@ -260,6 +311,7 @@ function build(device: GPUDevice, layout: HpScoreRois): Resources {
   });
   const stagings = Array.from({ length: HP_SCORE_IN_FLIGHT }, () =>
     device.createBuffer({
+      label: "score-readback",
       size: countBytes,
       usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
     }),
@@ -301,7 +353,10 @@ function build(device: GPUDevice, layout: HpScoreRois): Resources {
   return {
     device,
     extractPipeline,
+    extractLayout,
+    sampler,
     bands,
+    slotStride: SLOT_STRIDE,
     rectBuffer,
     rectCount: layout.rects.length,
     extractSize,
@@ -320,6 +375,14 @@ function build(device: GPUDevice, layout: HpScoreRois): Resources {
 
 class WebGpuHpScoreBackend implements HpScoreBackend {
   readonly #resources: Resources;
+
+  get texture(): GPUTexture {
+    return this.#resources.texture;
+  }
+
+  get device(): GPUDevice {
+    return this.#resources.device;
+  }
   #nextStaging = 0;
 
   constructor(resources: Resources) {
@@ -332,38 +395,45 @@ class WebGpuHpScoreBackend implements HpScoreBackend {
       extractPipeline,
       texture,
       bands,
+      slotStride,
       rectBuffer,
       rectCount,
       extractSize,
+      sampler,
+      extractLayout,
     } = this.#resources;
-    const band = bands[layer];
-    if (!band) throw new Error(`Unknown strip layer: ${layer}`);
     const encoder = device.createCommandEncoder();
     const pass = encoder.beginComputePass();
     pass.setPipeline(extractPipeline);
-    pass.setBindGroup(
-      0,
-      device.createBindGroup({
-        layout: extractPipeline.getBindGroupLayout(0),
-        entries: [
-          {
-            binding: 0,
-            resource: device.importExternalTexture({ source: frame }),
-          },
-          {
-            binding: 1,
-            resource: texture.createView({ dimension: "2d-array" }),
-          },
-          { binding: 2, resource: { buffer: rectBuffer } },
-          { binding: 3, resource: { buffer: band } },
-        ],
-      }),
-    );
-    pass.dispatchWorkgroups(
-      Math.ceil(extractSize.width / 64),
-      extractSize.height,
-      rectCount,
-    );
+    const bindGroup = device.createBindGroup({
+      layout: extractLayout,
+      entries: [
+        {
+          binding: 0,
+          resource: device.importExternalTexture({ source: frame }),
+        },
+        {
+          binding: 1,
+          resource: texture.createView({ dimension: "2d-array" }),
+        },
+        { binding: 2, resource: { buffer: rectBuffer } },
+        { binding: 3, resource: { buffer: bands, size: 16 } },
+        { binding: 4, resource: sampler },
+      ],
+    });
+    // 土台を書いてから重ねる。同じパスの中でも、積んだ順に実行される。
+    for (const [phase, count] of [
+      [0, STRIP_BASE_RECTS],
+      [1, rectCount - STRIP_BASE_RECTS],
+    ] as const) {
+      if (count <= 0) continue;
+      pass.setBindGroup(0, bindGroup, [(layer * 2 + phase) * slotStride]);
+      pass.dispatchWorkgroups(
+        Math.ceil(extractSize.width / 64),
+        extractSize.height,
+        count,
+      );
+    }
     pass.end();
     device.queue.submit([encoder.finish()]);
   }
