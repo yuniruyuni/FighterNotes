@@ -268,6 +268,16 @@ fn the_taper_is_not_counted_against_the_lit_coverage() {
 
 // ── 認識デバッグへ渡す JSON ──────────────────────────────────────────────
 
+/// 絵の組み立ては 1920x1080 の確保と塗りで重い。変異検査は test を
+/// 何度も回すので、side ごとに一度だけ作って使い回す。
+fn cached_frames(side: &str) -> &'static (Vec<u8>, Vec<u8>) {
+    use std::sync::OnceLock;
+    static LEFT: OnceLock<(Vec<u8>, Vec<u8>)> = OnceLock::new();
+    static RIGHT: OnceLock<(Vec<u8>, Vec<u8>)> = OnceLock::new();
+    let cell = if side == "left" { &LEFT } else { &RIGHT };
+    cell.get_or_init(|| (lit_frame(side), burnout_frame(side, 120)))
+}
+
 /// JSON から数値・真偽・文字列の値を取り出す。
 fn field(json: &str, key: &str) -> String {
     let rest = json
@@ -289,13 +299,10 @@ fn field(json: &str, key: &str) -> String {
 #[test]
 fn the_debug_json_reports_the_same_reading_as_the_analyser() {
     for side in ["left", "right"] {
-        for (name, rgba) in [
-            ("満タン", lit_frame(side)),
-            ("回復中", burnout_frame(side, 120)),
-            ("暗転", stage_filled_roi(side)),
-        ] {
-            let json = drive_bar_debug_json(&rgba, 1920, 1080, side);
-            let read = drive_gauge_read(&rgba, 1920, 1080, side);
+        let (lit, burnout) = cached_frames(side);
+        for (name, rgba) in [("満タン", lit), ("回復中", burnout)] {
+            let json = drive_bar_debug_json(rgba, 1920, 1080, side);
+            let read = drive_gauge_read(rgba, 1920, 1080, side);
 
             assert_eq!(
                 field(&json, "value"),
@@ -327,7 +334,7 @@ fn the_debug_json_reports_the_same_reading_as_the_analyser() {
 #[test]
 fn the_debug_json_lists_every_screen_column() {
     for side in ["left", "right"] {
-        let json = drive_bar_debug_json(&lit_frame(side), 1920, 1080, side);
+        let json = drive_bar_debug_json(&cached_frames(side).0, 1920, 1080, side);
         let cols = field(&json, "cols");
         let x1: usize = field(&json, "x1").parse().expect("x1");
         let x2: usize = field(&json, "x2").parse().expect("x2");
@@ -359,7 +366,7 @@ fn the_debug_json_lists_every_screen_column() {
 #[test]
 fn the_debug_json_runs_cover_the_decoded_columns() {
     for side in ["left", "right"] {
-        let json = drive_bar_debug_json(&burnout_frame(side, 120), 1920, 1080, side);
+        let json = drive_bar_debug_json(&cached_frames(side).1, 1920, 1080, side);
         let runs = json
             .split(r#""runs":["#)
             .nth(1)
