@@ -1,7 +1,11 @@
 import init, {
   Analyzer,
 } from "../../../../../../crates/wasm-bridge/pkg/wasm_bridge.js";
-import { ANALYSIS_STRIPS, ANALYSIS_WIDTH } from "../frame-extraction/layout.js";
+import {
+  ANALYSIS_WIDTH,
+  PACKED_HEIGHT,
+  STRIP_RECTS,
+} from "../frame-extraction/layout.js";
 import { HpScoreBatcher, type HudGpuBatch } from "./hp-score-batcher.js";
 import { createHpScoreBackend } from "./hp-score-webgpu.js";
 
@@ -45,8 +49,8 @@ export class HudGpu {
         ...(Analyzer.hp_column_scan("p2") as Uint32Array),
       ]),
       stripWidth: ANALYSIS_WIDTH,
-      stripHeight: ANALYSIS_STRIPS.hud.height,
-      stripY: ANALYSIS_STRIPS.hud.y,
+      stripHeight: PACKED_HEIGHT,
+      rects: STRIP_RECTS,
     });
     if (!backend) return null;
     return new HudGpu(new HpScoreBatcher(backend, onBatch));

@@ -316,3 +316,68 @@ export const SUPER_GAUGE_COPY_WINDOWS: readonly ScaledCopyWindow[] = [
     SUPER_GAUGE_LAYOUT.right.label,
   ),
 ];
+
+/**
+ * GPU が復号フレームから直接切り出す等倍の矩形。
+ *
+ * `src` はフレーム全体、`dst` は 3 つの strip を縦に並べた 1 枚の中の位置。
+ * 縮小の要る SA ゲージと FIGHT は含まない。canvas の高品質縮小と 1 だけ
+ * ずれる画素が出るため、そこだけは合成に残してある。
+ */
+export interface StripRect {
+  readonly src: { readonly x: number; readonly y: number };
+  readonly size: { readonly width: number; readonly height: number };
+  readonly dst: { readonly x: number; readonly y: number };
+}
+
+/** 3 つの strip を縦に並べた 1 枚の中での、各 strip の先頭行。 */
+export const PACKED_BANDS = {
+  hud: 0,
+  meter: ANALYSIS_STRIPS.hud.height,
+  input: ANALYSIS_STRIPS.hud.height + ANALYSIS_STRIPS.meter.height,
+} as const;
+
+export const PACKED_HEIGHT = PACKED_BANDS.input + ANALYSIS_STRIPS.input.height;
+
+function absoluteRect(
+  atlas: { readonly x: number; readonly y: number },
+  patch: {
+    readonly source: {
+      readonly x: number;
+      readonly y: number;
+      readonly width: number;
+      readonly height: number;
+    };
+    readonly target: { readonly x: number; readonly y: number };
+  },
+  band: number,
+): StripRect {
+  return {
+    src: { x: atlas.x + patch.source.x, y: atlas.y + patch.source.y },
+    size: { width: patch.source.width, height: patch.source.height },
+    dst: { x: patch.target.x, y: band + patch.target.y },
+  };
+}
+
+export const STRIP_RECTS: readonly StripRect[] = [
+  {
+    src: { x: 0, y: ANALYSIS_STRIPS.hud.y },
+    size: { width: ANALYSIS_WIDTH, height: ANALYSIS_STRIPS.hud.height },
+    dst: { x: 0, y: PACKED_BANDS.hud },
+  },
+  absoluteRect(
+    LOWER_ATLAS_LAYOUT.source,
+    LOWER_ATLAS_LAYOUT.meter,
+    PACKED_BANDS.meter,
+  ),
+  ...[ATTACK_INFO_LAYOUT.p1, ATTACK_INFO_LAYOUT.p2].flatMap((side) =>
+    [side.numeric, side.attribute].map((patch) =>
+      absoluteRect(MID_ATLAS_LAYOUT.source, patch, PACKED_BANDS.meter),
+    ),
+  ),
+  absoluteRect(
+    MID_ATLAS_LAYOUT.source,
+    MID_ATLAS_LAYOUT.input,
+    PACKED_BANDS.input,
+  ),
+];

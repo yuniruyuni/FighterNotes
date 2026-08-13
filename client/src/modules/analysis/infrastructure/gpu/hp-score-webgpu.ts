@@ -1,3 +1,4 @@
+import type { StripRect } from "../frame-extraction/layout.js";
 import { DRIVE_COLUMN_SHADER } from "./drive-column-shader.js";
 import { HP_COLUMN_SHADER } from "./hp-column-shader.js";
 import {
@@ -24,8 +25,8 @@ export interface HpScoreRois {
   readonly norm: Float32Array;
   readonly stripWidth: number;
   readonly stripHeight: number;
-  /** フレーム全体の中での strip の縦位置。 */
-  readonly stripY: number;
+  /** 復号フレームから切り出す等倍の矩形。 */
+  readonly rects: readonly StripRect[];
 }
 
 /**
@@ -85,6 +86,9 @@ interface Resources {
   readonly stripWidth: number;
   readonly extractPipeline: GPUComputePipeline;
   readonly bands: GPUBuffer[];
+  readonly rectBuffer: GPUBuffer;
+  readonly rectCount: number;
+  readonly extractSize: { readonly width: number; readonly height: number };
   readonly stripHeight: number;
 }
 
@@ -190,16 +194,38 @@ function build(device: GPUDevice, layout: HpScoreRois): Resources {
       entryPoint: "main",
     },
   });
+  // 切り出す矩形は毎フレーム同じ。まとめの中で変わるのは書き込む層だけ。
+  const rectValues = new Uint32Array(new ArrayBuffer(16 * 4 * 4));
+  layout.rects.forEach((rect, index) => {
+    rectValues.set(
+      [rect.src.x, rect.src.y, rect.size.width, rect.size.height],
+      index * 8,
+    );
+    rectValues.set([rect.dst.x, rect.dst.y], index * 8 + 4);
+  });
+  const rectBuffer = device.createBuffer({
+    size: rectValues.byteLength,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+  device.queue.writeBuffer(rectBuffer, 0, rectValues);
   const bands = Array.from({ length: HP_SCORE_BATCH }, (_, layer) => {
     const buffer = device.createBuffer({
       size: 16,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     const values = new Uint32Array(new ArrayBuffer(16));
-    values.set([layout.stripWidth, layout.stripHeight, layout.stripY, layer]);
+    values.set([layer]);
     device.queue.writeBuffer(buffer, 0, values);
     return buffer;
   });
+  const extractSize = layout.rects.reduce(
+    (largest, rect) => ({
+      width: Math.max(largest.width, rect.size.width),
+      height: Math.max(largest.height, rect.size.height),
+    }),
+    { width: 0, height: 0 },
+  );
+
   const countBytes = HP_SCORE_BATCH * HP_SCORE_VALUES_PER_FRAME * 4;
   const counts = device.createBuffer({
     size: countBytes,
@@ -276,6 +302,9 @@ function build(device: GPUDevice, layout: HpScoreRois): Resources {
     device,
     extractPipeline,
     bands,
+    rectBuffer,
+    rectCount: layout.rects.length,
+    extractSize,
     stripHeight: layout.stripHeight,
     pipeline,
     hpPass,
@@ -298,8 +327,15 @@ class WebGpuHpScoreBackend implements HpScoreBackend {
   }
 
   extractLayer(frame: VideoFrame, layer: number): void {
-    const { device, extractPipeline, texture, bands, stripWidth, stripHeight } =
-      this.#resources;
+    const {
+      device,
+      extractPipeline,
+      texture,
+      bands,
+      rectBuffer,
+      rectCount,
+      extractSize,
+    } = this.#resources;
     const band = bands[layer];
     if (!band) throw new Error(`Unknown strip layer: ${layer}`);
     const encoder = device.createCommandEncoder();
@@ -318,11 +354,16 @@ class WebGpuHpScoreBackend implements HpScoreBackend {
             binding: 1,
             resource: texture.createView({ dimension: "2d-array" }),
           },
-          { binding: 2, resource: { buffer: band } },
+          { binding: 2, resource: { buffer: rectBuffer } },
+          { binding: 3, resource: { buffer: band } },
         ],
       }),
     );
-    pass.dispatchWorkgroups(Math.ceil(stripWidth / 64), stripHeight, 1);
+    pass.dispatchWorkgroups(
+      Math.ceil(extractSize.width / 64),
+      extractSize.height,
+      rectCount,
+    );
     pass.end();
     device.queue.submit([encoder.finish()]);
   }
