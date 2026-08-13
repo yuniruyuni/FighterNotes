@@ -60,7 +60,7 @@ async function crateFeatures(): Promise<Set<string>> {
 
 let hasTestSupport = new Set<string>();
 
-async function runOne(crate: string): Promise<Result> {
+async function runOne(crate: string, parallel = true): Promise<Result> {
   const started = Date.now();
   const proc = Bun.spawn(
     [
@@ -80,7 +80,9 @@ async function runOne(crate: string): Promise<Result> {
       // 使わない出力なので止める。
       "--no-emit-metadata",
       // 変異の評価を並列に回す。結果は変わらず、実測で 2 倍以上速い。
-      "--parallel-mutants",
+      // 測り直しでは外す。mutest の timeout は無変異時の実行時間 + 1 秒しか
+      // 余裕が無く、並列評価の CPU 待ちだけで正常な変異が時間切れになる。
+      ...(parallel ? ["--parallel-mutants"] : []),
       ...(hasTestSupport.has(crate) ? ["--features", "test-support"] : []),
     ],
     { stdout: "pipe", stderr: "pipe" },
@@ -128,8 +130,12 @@ async function runOne(crate: string): Promise<Result> {
 async function runCrate(crate: string): Promise<Result> {
   const first = await runOne(crate);
   if (!needsTimeoutRetry(first)) return first;
-  console.log(`${crate}: ${first.timedOut} 変異が時間切れ。測り直す`);
-  const second = await runOne(crate);
+  // 並列評価をやめて測り直す。遅いが CPU 待ちが消えるので、本当に停止しない
+  // 変異だけが時間切れとして残る。
+  console.log(
+    `${crate}: ${first.timedOut} 変異が時間切れ。並列をやめて測り直す`,
+  );
+  const second = await runOne(crate, false);
   return { ...second, seconds: first.seconds + second.seconds, retried: true };
 }
 
