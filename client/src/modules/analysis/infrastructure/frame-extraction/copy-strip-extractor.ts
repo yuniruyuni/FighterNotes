@@ -160,6 +160,22 @@ interface InsetPixels {
 }
 
 /**
+ * copyTo での取り出しを選ぶか。
+ *
+ * copyTo は画素を CPU バッファへ書き出すため、GPU 上の復号フレームでは
+ * 読み戻しの待ちが入る。実機計測では canvas 2.19ms/frame に対し copyTo
+ * 8.49ms/frame で、GPU の無い環境の結果（canvas 21.7 対 copyTo 1.3）とは
+ * 逆になる。既定は実利用者の環境に合わせ、明示した場合だけ copyTo を使う。
+ */
+export function preferCopyExtraction(): boolean {
+  return (
+    typeof globalThis.location === "object" &&
+    new URLSearchParams(globalThis.location?.search ?? "").get("extraction") ===
+      "copy"
+  );
+}
+
+/**
  * `copyTo` の RGBA 変換に対応しているかを一度だけ確かめる。
  * 対応しない環境では従来の canvas 経路へ落とす。
  */

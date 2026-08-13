@@ -14,6 +14,7 @@ import type {
 import type { ValidatedVideoInput } from "../../domain/video-preflight.js";
 import {
   CopyStripExtractor,
+  preferCopyExtraction,
   supportsRgbaCopy,
 } from "../frame-extraction/copy-strip-extractor.js";
 import { FrameStripExtractor } from "../frame-extraction/strip-extractor.js";
@@ -62,9 +63,11 @@ export async function analyzeWithWebCodecs(
   // origin outside the demux source also captures any file materialization or
   // worker/decoder setup that precedes the first encoded sample.
   const analysisStartedAt = performance.now();
-  // copyTo で必要な領域だけ読む。対応しない環境だけ canvas 経路へ落とす。
+  // GPU のある環境では copyTo が GPU→CPU の読み戻しを強制し、canvas 経路より
+  // 遅い。実機計測で canvas 2.19ms/frame に対し copyTo 8.49ms/frame。GPU の
+  // 無い環境では逆に copyTo が速いが、既定は実利用者の環境へ合わせる。
   const extractor: StripFrameExtractor<VideoFrame, unknown> =
-    (await supportsRgbaCopy())
+    (await supportsRgbaCopy()) && preferCopyExtraction()
       ? new CopyStripExtractor()
       : new FrameStripExtractor();
   // 独立した WASM インスタンスでメーターと HUD・入力を並列解析する。
