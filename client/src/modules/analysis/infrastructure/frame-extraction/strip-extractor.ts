@@ -28,10 +28,34 @@ export interface StripPixels {
   readonly input: Uint8ClampedArray;
 }
 
+/** 3 つの strip を縦に並べた 1 枚の中での、各 strip の位置。 */
+const BANDS = {
+  hud: { y: 0, height: ANALYSIS_STRIPS.hud.height },
+  meter: {
+    y: ANALYSIS_STRIPS.hud.height,
+    height: ANALYSIS_STRIPS.meter.height,
+  },
+  input: {
+    y: ANALYSIS_STRIPS.hud.height + ANALYSIS_STRIPS.meter.height,
+    height: ANALYSIS_STRIPS.input.height,
+  },
+} as const;
+
+const PACKED_HEIGHT = BANDS.input.y + BANDS.input.height;
+
+/**
+ * 動画フレームから 3 つの strip を取り出す。
+ *
+ * 3 つの strip を 1 枚の canvas へ縦に並べ、読み戻しを 1 回にまとめる。
+ * `getImageData` の費用はほぼ全てが GPU との同期待ちで、実機計測では読む
+ * 範囲を 1 画素にしても 1 フレームあたり 1.11ms かかり、全域を読む 1.33ms と
+ * ほとんど変わらなかった。呼ぶ回数そのものが解析時間を決めている。
+ *
+ * 描画元の ImageBitmap は従来どおり `createBitmaps` で先に作る。生成は次の
+ * フレームの復号と重なるため、待ち時間は 10000 フレームで 18ms しかない。
+ */
 export class FrameStripExtractor {
-  readonly #hud = stripCanvas(ANALYSIS_STRIPS.hud.height);
-  readonly #meter = stripCanvas(ANALYSIS_STRIPS.meter.height);
-  readonly #input = stripCanvas(ANALYSIS_STRIPS.input.height);
+  readonly #packed = packedCanvas();
 
   createBitmaps(frame: VideoFrame, frameIndex: number): PendingStripBitmaps {
     return {
@@ -50,15 +74,28 @@ export class FrameStripExtractor {
       lowerAtlas: await pending.lowerAtlas,
       midAtlas: await pending.midAtlas,
     };
+    const { context } = this.#packed;
+    // 縮小するのは HUD 帯へ描く SA ゲージと FIGHT だけで、そこだけが高品質
+    // 補間だった。1 枚に束ねても品質の切り替えを帯ごとに保ち、strip の内容を
+    // 従来と同じにする。
+    context.imageSmoothingQuality = "high";
+    drawHud(context, bitmaps.hud, bitmaps.lowerAtlas, pending.fightFrame);
+    context.imageSmoothingQuality = "low";
+    drawMeter(context, bitmaps.lowerAtlas, bitmaps.midAtlas);
+    drawInput(context, bitmaps.midAtlas);
+    bitmaps.lowerAtlas.close();
+    bitmaps.midAtlas.close();
+
+    const pixels = context.getImageData(
+      0,
+      0,
+      ANALYSIS_WIDTH,
+      PACKED_HEIGHT,
+    ).data;
     return {
-      hud: drawHudBitmap(
-        this.#hud,
-        bitmaps.hud,
-        bitmaps.lowerAtlas,
-        pending.fightFrame,
-      ),
-      meter: drawMeterBitmap(this.#meter, bitmaps.lowerAtlas, bitmaps.midAtlas),
-      input: drawInputBitmap(this.#input, bitmaps.midAtlas),
+      hud: band(pixels, BANDS.hud),
+      meter: band(pixels, BANDS.meter),
+      input: band(pixels, BANDS.input),
     };
   }
 }
@@ -72,18 +109,22 @@ export function copyStripPixels(
   new Uint8Array(buffers.input).set(pixels.input);
 }
 
-interface StripCanvas {
-  readonly canvas: OffscreenCanvas;
-  readonly context: OffscreenCanvasRenderingContext2D;
+/** 読み戻した 1 枚は band ごとに連続しているので、strip へは view で渡す。 */
+function band(
+  pixels: Uint8ClampedArray,
+  target: { readonly y: number; readonly height: number },
+): Uint8ClampedArray {
+  const from = target.y * ANALYSIS_WIDTH * 4;
+  return pixels.subarray(from, from + target.height * ANALYSIS_WIDTH * 4);
 }
 
-function stripCanvas(height: number): StripCanvas {
-  const canvas = new OffscreenCanvas(ANALYSIS_WIDTH, height);
+function packedCanvas() {
+  const canvas = new OffscreenCanvas(ANALYSIS_WIDTH, PACKED_HEIGHT);
   // `willReadFrequently` は canvas を CPU 側へ置く。GPU 上の ImageBitmap を
   // 描くたびに転送と software 合成が起き、実機計測で 1 フレーム 6.24ms の
-  // うち 5.2ms を占めていた。読み戻し自体は 0.37ms しかかからないので、
-  // GPU 側に置いたまま描いて最後に読み戻す方が速い。
+  // うち 5.2ms を占めていた。GPU 側に置いたまま描いて最後に読み戻す方が速い。
   const context = canvas.getContext("2d") as OffscreenCanvasRenderingContext2D;
+  context.imageSmoothingEnabled = true;
   return { canvas, context };
 }
 
@@ -106,32 +147,18 @@ function createPatchBitmap(
   return createImageBitmap(frame, patch.x, patch.y, patch.width, patch.height);
 }
 
-function drawHudBitmap(
-  target: StripCanvas,
+function drawHud(
+  context: OffscreenCanvasRenderingContext2D,
   bitmap: ImageBitmap,
   lowerAtlas: ImageBitmap,
   fightFrame: VideoFrame | undefined,
-): Uint8ClampedArray {
-  target.context.drawImage(bitmap, 0, 0);
+): void {
+  context.drawImage(bitmap, 0, BANDS.hud.y);
   bitmap.close();
-  target.context.imageSmoothingEnabled = true;
-  target.context.imageSmoothingQuality = "high";
-  drawSuperGauge(target.context, lowerAtlas);
+  drawSuperGauge(context, lowerAtlas);
   if (fightFrame) {
-    const { source, target: destination } = FIGHT_MARKER_LAYOUT;
-    target.context.drawImage(
-      fightFrame,
-      source.x,
-      source.y,
-      source.width,
-      source.height,
-      destination.x,
-      destination.y,
-      destination.width,
-      destination.height,
-    );
+    drawPatch(context, fightFrame, FIGHT_MARKER_LAYOUT, BANDS.hud.y);
   }
-  return readPixels(target);
 }
 
 function drawSuperGauge(
@@ -143,42 +170,18 @@ function drawSuperGauge(
     SUPER_GAUGE_LAYOUT.right,
   ] as const) {
     for (const patch of [side.label, side.bar]) {
-      const { source, target } = patch;
-      context.drawImage(
-        lowerAtlas,
-        source.x,
-        source.y,
-        source.width,
-        source.height,
-        target.x,
-        target.y,
-        target.width,
-        target.height,
-      );
+      drawPatch(context, lowerAtlas, patch, BANDS.hud.y);
     }
   }
 }
 
-function drawMeterBitmap(
-  target: StripCanvas,
+function drawMeter(
+  context: OffscreenCanvasRenderingContext2D,
   lowerAtlas: ImageBitmap,
   midAtlas: ImageBitmap,
-): Uint8ClampedArray {
-  const { source, target: destination } = LOWER_ATLAS_LAYOUT.meter;
-  target.context.drawImage(
-    lowerAtlas,
-    source.x,
-    source.y,
-    source.width,
-    source.height,
-    destination.x,
-    destination.y,
-    destination.width,
-    destination.height,
-  );
-  drawAttackInfo(target.context, midAtlas);
-  lowerAtlas.close();
-  return readPixels(target);
+): void {
+  drawPatch(context, lowerAtlas, LOWER_ATLAS_LAYOUT.meter, BANDS.meter.y);
+  drawAttackInfo(context, midAtlas);
 }
 
 function drawAttackInfo(
@@ -187,47 +190,47 @@ function drawAttackInfo(
 ): void {
   for (const side of [ATTACK_INFO_LAYOUT.p1, ATTACK_INFO_LAYOUT.p2] as const) {
     for (const patch of [side.numeric, side.attribute]) {
-      const { source, target } = patch;
-      context.drawImage(
-        midAtlas,
-        source.x,
-        source.y,
-        source.width,
-        source.height,
-        target.x,
-        target.y,
-        target.width,
-        target.height,
-      );
+      drawPatch(context, midAtlas, patch, BANDS.meter.y);
     }
   }
 }
 
-function drawInputBitmap(
-  target: StripCanvas,
+function drawInput(
+  context: OffscreenCanvasRenderingContext2D,
   midAtlas: ImageBitmap,
-): Uint8ClampedArray {
-  const { source, target: destination } = MID_ATLAS_LAYOUT.input;
-  target.context.drawImage(
-    midAtlas,
-    source.x,
-    source.y,
-    source.width,
-    source.height,
-    destination.x,
-    destination.y,
-    destination.width,
-    destination.height,
-  );
-  midAtlas.close();
-  return readPixels(target);
+): void {
+  drawPatch(context, midAtlas, MID_ATLAS_LAYOUT.input, BANDS.input.y);
 }
 
-function readPixels(target: StripCanvas): Uint8ClampedArray {
-  return target.context.getImageData(
-    0,
-    0,
-    target.canvas.width,
-    target.canvas.height,
-  ).data;
+/** strip 内の座標で書かれた配置を、束ねた 1 枚の中の位置へずらして描く。 */
+function drawPatch(
+  context: OffscreenCanvasRenderingContext2D,
+  image: CanvasImageSource,
+  patch: {
+    readonly source: {
+      readonly x: number;
+      readonly y: number;
+      readonly width: number;
+      readonly height: number;
+    };
+    readonly target: {
+      readonly x: number;
+      readonly y: number;
+      readonly width: number;
+      readonly height: number;
+    };
+  },
+  bandY: number,
+): void {
+  context.drawImage(
+    image,
+    patch.source.x,
+    patch.source.y,
+    patch.source.width,
+    patch.source.height,
+    patch.target.x,
+    bandY + patch.target.y,
+    patch.target.width,
+    patch.target.height,
+  );
 }
