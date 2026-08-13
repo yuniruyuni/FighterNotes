@@ -4,9 +4,9 @@ import {
   ATTACK_INFO_COPY_WINDOWS,
   type CopyWindow,
   FIGHT_MARKER_LAYOUT,
-  LOWER_ATLAS_LAYOUT,
   METER_COPY_WINDOW,
-  SUPER_GAUGE_LAYOUT,
+  type ScaledCopyWindow,
+  SUPER_GAUGE_COPY_WINDOWS,
 } from "./layout.js";
 import type { StripPixels } from "./strip-extractor.js";
 
@@ -26,7 +26,7 @@ export class CopyStripExtractor {
   readonly #meter = new Uint8ClampedArray(ANALYSIS_STRIPS.meter.byteLength);
   readonly #input = new Uint8ClampedArray(ANALYSIS_STRIPS.input.byteLength);
   readonly #meterRow = new Uint8ClampedArray(ANALYSIS_STRIPS.meter.byteLength);
-  readonly #patches = new Map<string, Uint8ClampedArray>();
+  readonly #patches = new Map<string, Uint8ClampedArray<ArrayBuffer>>();
   readonly #insets = insetCanvas();
 
   /**
@@ -34,18 +34,7 @@ export class CopyStripExtractor {
    * copyTo は書き込み先を共有しているため、直列区間の readBitmaps で行う。
    */
   createBitmaps(frame: VideoFrame, frameIndex: number): PendingCopies {
-    const { source } = LOWER_ATLAS_LAYOUT;
-    return {
-      frame,
-      frameIndex,
-      atlas: createImageBitmap(
-        frame,
-        source.x,
-        source.y,
-        source.width,
-        source.height,
-      ),
-    };
+    return { frame, frameIndex };
   }
 
   async readBitmaps(pending: PendingCopies): Promise<StripPixels> {
@@ -88,31 +77,54 @@ export class CopyStripExtractor {
     return { hud: this.#hud, meter: this.#meter, input: this.#input };
   }
 
-  #patchBuffer(window: CopyWindow): Uint8ClampedArray {
+  #patchBuffer(window: CopyWindow): Uint8ClampedArray<ArrayBuffer> {
     const existing = this.#patches.get(window.key);
     if (existing) return existing;
     const created = new Uint8ClampedArray(
-      window.readWidth * window.source.height * 4,
+      new ArrayBuffer(window.readWidth * window.source.height * 4),
     );
     this.#patches.set(window.key, created);
     return created;
   }
 
-  /** 縮小が要る領域だけを1枚の ImageBitmap から描き、その小領域だけ読み戻す。 */
+  /**
+   * 縮小が要る領域だけを描き、その小領域だけ読み戻す。
+   *
+   * 元領域を `copyTo` で読んでから小さな bitmap を作る。フレームを
+   * `createImageBitmap` へ渡すと切り出し範囲に関係なく全体を変換するため、
+   * 実測で 9.3ms/frame かかっていたものが 1.0ms/frame で済む。
+   */
   async #drawInsets(pending: PendingCopies): Promise<readonly InsetPixels[]> {
     const { context } = this.#insets;
-    const atlas = await pending.atlas;
     const targets: InsetTarget[] = [];
-    for (const side of [
-      SUPER_GAUGE_LAYOUT.left,
-      SUPER_GAUGE_LAYOUT.right,
-    ] as const) {
-      for (const patch of [side.label, side.bar]) {
-        drawPatch(context, atlas, patch);
-        targets.push(patch.target);
-      }
+    for (const window of SUPER_GAUGE_COPY_WINDOWS) {
+      const buffer = this.#scaledBuffer(window);
+      await pending.frame.copyTo(buffer, {
+        rect: {
+          x: window.readX,
+          y: window.readY,
+          width: window.readWidth,
+          height: window.readHeight,
+        },
+        format: "RGBA",
+      });
+      const bitmap = await createImageBitmap(
+        new ImageData(buffer, window.readWidth, window.readHeight),
+      );
+      context.drawImage(
+        bitmap,
+        window.offsetX,
+        window.offsetY,
+        window.source.width,
+        window.source.height,
+        window.target.x,
+        window.target.y,
+        window.target.width,
+        window.target.height,
+      );
+      bitmap.close();
+      targets.push(window.target);
     }
-    atlas.close();
 
     if (pending.frameIndex % FIGHT_MARKER_LAYOUT.sampleInterval === 0) {
       drawPatch(context, pending.frame, FIGHT_MARKER_LAYOUT);
@@ -128,6 +140,17 @@ export class CopyStripExtractor {
         target.height,
       ).data,
     }));
+  }
+
+  #scaledBuffer(window: ScaledCopyWindow): Uint8ClampedArray<ArrayBuffer> {
+    const existing = this.#patches.get(window.key);
+    if (existing) return existing;
+    // ImageData は ArrayBuffer 由来の配列だけを受け取る。
+    const created = new Uint8ClampedArray(
+      new ArrayBuffer(window.readWidth * window.readHeight * 4),
+    );
+    this.#patches.set(window.key, created);
+    return created;
   }
 }
 
@@ -161,7 +184,6 @@ export async function supportsRgbaCopy(): Promise<boolean> {
 export interface PendingCopies {
   readonly frame: VideoFrame;
   readonly frameIndex: number;
-  readonly atlas: Promise<ImageBitmap>;
 }
 
 interface InsetTarget {

@@ -228,3 +228,91 @@ export const METER_COPY_WINDOW: CopyWindow = copyWindowOf(
   LOWER_ATLAS_LAYOUT.source,
   LOWER_ATLAS_LAYOUT.meter,
 );
+
+/**
+ * 縮小して詰める領域を、動画フレームの絶対座標へ直した読み出し窓。
+ *
+ * 縮小は canvas でしかできないが、`createImageBitmap` にフレームを渡すと
+ * 切り出し範囲に関係なくフレーム全体を変換する。元領域だけ `copyTo` で
+ * 読み、その画素から小さな bitmap を作れば、費用は領域の大きさで収まる。
+ *
+ * `readX` / `readY` は I420 の彩度に合わせて偶数へ広げた読み出し原点で、
+ * `offsetX` / `offsetY` だけずらした先が本来の領域になる。
+ */
+export interface ScaledCopyWindow {
+  readonly key: string;
+  readonly readX: number;
+  readonly readY: number;
+  readonly readWidth: number;
+  readonly readHeight: number;
+  readonly offsetX: number;
+  readonly offsetY: number;
+  readonly source: { readonly width: number; readonly height: number };
+  readonly target: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  };
+}
+
+function scaledCopyWindowOf(
+  key: string,
+  atlas: { readonly x: number; readonly y: number },
+  patch: {
+    readonly source: {
+      readonly x: number;
+      readonly y: number;
+      readonly width: number;
+      readonly height: number;
+    };
+    readonly target: {
+      readonly x: number;
+      readonly y: number;
+      readonly width: number;
+      readonly height: number;
+    };
+  },
+): ScaledCopyWindow {
+  const x = atlas.x + patch.source.x;
+  const y = atlas.y + patch.source.y;
+  const readX = x - (x % 2);
+  const readY = y - (y % 2);
+  const offsetX = x - readX;
+  const offsetY = y - readY;
+  return {
+    key,
+    readX,
+    readY,
+    readWidth: alignUpToEven(patch.source.width + offsetX),
+    readHeight: alignUpToEven(patch.source.height + offsetY),
+    offsetX,
+    offsetY,
+    source: { width: patch.source.width, height: patch.source.height },
+    target: patch.target,
+  };
+}
+
+/** SA ゲージの数値・CA ラベルと部分ゲージ。HUD strip の未使用域へ縮小して詰める。 */
+export const SUPER_GAUGE_COPY_WINDOWS: readonly ScaledCopyWindow[] = [
+  scaledCopyWindowOf(
+    "left-label",
+    LOWER_ATLAS_LAYOUT.source,
+    SUPER_GAUGE_LAYOUT.left.label,
+  ),
+  scaledCopyWindowOf(
+    "left-bar",
+    LOWER_ATLAS_LAYOUT.source,
+    SUPER_GAUGE_LAYOUT.left.bar,
+  ),
+  scaledCopyWindowOf(
+    "right-bar",
+    LOWER_ATLAS_LAYOUT.source,
+    SUPER_GAUGE_LAYOUT.right.bar,
+  ),
+  scaledCopyWindowOf(
+    "right-label",
+    LOWER_ATLAS_LAYOUT.source,
+    SUPER_GAUGE_LAYOUT.right.label,
+  ),
+];
