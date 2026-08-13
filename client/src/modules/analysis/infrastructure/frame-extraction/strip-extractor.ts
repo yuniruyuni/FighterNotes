@@ -79,9 +79,11 @@ interface StripCanvas {
 
 function stripCanvas(height: number): StripCanvas {
   const canvas = new OffscreenCanvas(ANALYSIS_WIDTH, height);
-  const context = canvas.getContext("2d", {
-    willReadFrequently: true,
-  }) as OffscreenCanvasRenderingContext2D;
+  // `willReadFrequently` は canvas を CPU 側へ置く。GPU 上の ImageBitmap を
+  // 描くたびに転送と software 合成が起き、実機計測で 1 フレーム 6.24ms の
+  // うち 5.2ms を占めていた。読み戻し自体は 0.37ms しかかからないので、
+  // GPU 側に置いたまま描いて最後に読み戻す方が速い。
+  const context = canvas.getContext("2d") as OffscreenCanvasRenderingContext2D;
   return { canvas, context };
 }
 

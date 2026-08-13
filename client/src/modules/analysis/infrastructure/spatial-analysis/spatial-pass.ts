@@ -34,9 +34,9 @@ export async function decodeSpatialWindows(options: {
   readonly signal: AbortSignal;
 }): Promise<SpatialDecodeStats> {
   const canvas = new OffscreenCanvas(SPATIAL_WIDTH, SPATIAL_HEIGHT);
-  const context = canvas.getContext("2d", {
-    willReadFrequently: true,
-  }) as OffscreenCanvasRenderingContext2D;
+  // 第一段と同じ理由で GPU 側へ置く。読み戻しは 1 フレーム 1 回だけで、
+  // 描画のたびに CPU へ転送する方が高くつく。
+  const context = canvas.getContext("2d") as OffscreenCanvasRenderingContext2D;
   const totalFrames = options.windows.reduce(
     (sum, window) => sum + window.end_frame - window.start_frame + 1,
     0,
