@@ -97,7 +97,7 @@ async function handleMessage(
     }
     case "resultFrame": {
       requireRole(state, "result");
-      const timing = state.resultWasm.analyzeResultFrame(
+      const timing = await state.resultWasm.analyzeResultFrame(
         message.frameIndex,
         {
           hud: message.hudBuf,
@@ -134,7 +134,7 @@ async function handleMessage(
       break;
     case "finish": {
       requireRole(state, "result");
-      const result = state.resultWasm.finishFirstPass(
+      const result = await state.resultWasm.finishFirstPass(
         message.meterTimeline,
         message.attackInfo,
       );

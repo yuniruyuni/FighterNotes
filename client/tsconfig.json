@@ -12,7 +12,7 @@
     "paths": {
       "~/*": ["src/*"]
     },
-    "types": ["@types/bun"]
+    "types": ["@types/bun", "@webgpu/types"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "matchers.d.ts"]
 }

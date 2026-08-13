@@ -34,9 +34,10 @@ pub use frame_features::{
     hp_bar_debug_json, hp_bar_score, hp_bar_score_from_hud_strip, hp_col_active, hp_col_orange,
     hp_col_pixel_detail_json, hp_col_yellow, hp_damage_fill, hp_damage_fill_from_hud_strip,
     hp_fill_ratio, hp_fill_ratio_from_hud_strip, hp_fill_ratio_with_quality,
-    hp_fill_ratio_with_quality_from_hud_strip, hp_parallelogram, super_gauge_debug_json,
-    super_gauge_read, super_gauge_read_from_hud_strip, DriveGaugeRead, FrameFeatures,
-    HpParallelogram, SuperGaugeRead, HP_ROI_P1, HP_ROI_P2, HUD_STRIP_H, HUD_STRIP_Y,
+    hp_fill_ratio_with_quality_from_hud_strip, hp_parallelogram, hp_score_decision_table,
+    hp_score_roi_in_strip, super_gauge_debug_json, super_gauge_read,
+    super_gauge_read_from_hud_strip, DriveGaugeRead, FrameFeatures, HpParallelogram,
+    SuperGaugeRead, HP_ROI_P1, HP_ROI_P2, HUD_STRIP_H, HUD_STRIP_Y,
 };
 pub use input_history::{
     input_history_debug_json, read_input_row0_from_strip, read_input_rows, BadgeColor, BadgeMark,

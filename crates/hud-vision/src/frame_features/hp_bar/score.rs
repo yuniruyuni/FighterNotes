@@ -49,6 +49,34 @@ pub(crate) fn hp_bar_score_impl(
     }
 }
 
+/// `hp_bar_score_impl` の画素判定を、明るさの最大値と最小値だけで引ける表にする。
+///
+/// 判定に使う彩度と明度は 3 チャンネルの最大値と最小値だけで決まる。GPU 側で
+/// 同じ判定をさせると f32 の除算精度が処理系依存になるため、参照実装である
+/// この関数で表を作り、GPU には整数の索引だけをさせる。
+///
+/// 索引は `max * 256 + min`。
+pub fn hp_score_decision_table() -> Vec<u8> {
+    let mut table = vec![0u8; 256 * 256];
+    for max in 0..256usize {
+        for min in 0..=max {
+            // 最大値と最小値さえ同じなら、どの画素でも彩度と明度は同じ値になる。
+            let [_, s, v] = rgb_to_hsv(max as f32, min as f32, min as f32);
+            if strictly_above(s, 45.0) && strictly_above(v, 80.0) {
+                table[max * 256 + min] = 1;
+            }
+        }
+    }
+    table
+}
+
+/// GPU へ渡す、strip 内での HP スコア走査範囲 (x1, y1, x2, y2)。
+pub fn hp_score_roi_in_strip(side: &str) -> (u32, u32, u32, u32) {
+    let (x1_base, x2_base, y1_base, y2_base) = hp_roi_base(side);
+    let (x1, x2, y1, y2) = scale_roi(x1_base, x2_base, y1_base, y2_base, 1920, 1080);
+    (x1, y1 - HUD_STRIP_Y, x2, y2 - HUD_STRIP_Y)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -70,5 +98,39 @@ mod tests {
         );
         assert_eq!(hp_bar_score(&solid_frame([80, 0, 0]), 192, 108, "p1"), 0.0);
         assert_eq!(hp_bar_score(&solid_frame([81, 0, 0]), 192, 108, "p1"), 1.0);
+    }
+
+    /// 表は画素走査の言い換えでなければならない。ずれていると GPU 側だけが
+    /// 違う答えを出し、しかも見た目には気づけない。
+    #[test]
+    fn the_decision_table_answers_exactly_as_the_pixel_scan_does() {
+        let table = hp_score_decision_table();
+
+        for rgb in [
+            [255, 210, 210],
+            [80, 0, 0],
+            [81, 0, 0],
+            [204, 100, 100],
+            [205, 100, 100],
+            [120, 119, 118],
+            [0, 0, 0],
+            [255, 255, 255],
+        ] {
+            let scanned = hp_bar_score(&solid_frame(rgb), 192, 108, "p1");
+            let max = rgb.iter().copied().max().expect("3 チャンネル") as usize;
+            let min = rgb.iter().copied().min().expect("3 チャンネル") as usize;
+            let looked_up = f32::from(table[max * 256 + min]);
+
+            assert_eq!(scanned, looked_up, "{rgb:?} で答えが違う");
+        }
+    }
+
+    /// 走査範囲は strip の先頭からの座標で渡す。フレーム全体の座標のままだと
+    /// GPU 側が 64 行ずれたところを読む。
+    #[test]
+    fn the_roi_is_given_in_strip_coordinates() {
+        let (_, y1, _, y2) = hp_score_roi_in_strip("p1");
+
+        assert_eq!((y1, y2), (0, 95 - HUD_STRIP_Y));
     }
 }

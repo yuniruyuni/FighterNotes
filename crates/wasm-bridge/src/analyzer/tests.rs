@@ -106,3 +106,33 @@ fn paint_vertical_one(rgba: &mut [u8], x: usize) {
         }
     }
 }
+
+/// GPU が数えた結果を入れた解析器は、走査していた頃と同じ特徴量になる。
+/// ここがずれると試合画面の判定が変わり、ラウンド境界ごと動く。
+#[test]
+fn applied_gpu_counts_match_what_the_pixel_scan_produced() {
+    let mut scanned = Analyzer::new("p1");
+    let mut applied = Analyzer::new("p1");
+    applied.use_gpu_hp_scores();
+
+    for frame_index in 0..3 {
+        scanned.push_hud_features_inplace(1920, 1080, frame_index);
+        applied.push_hud_features_inplace(1920, 1080, frame_index);
+    }
+
+    // 走査した側と同じ割合になる数を渡す。strip は空なので一致は 0。
+    let counts: Vec<u32> = (0..3).flat_map(|_| [0, 100, 0, 100]).collect();
+    applied.apply_hp_score_counts_impl(&counts).unwrap();
+
+    assert_eq!(applied.get_features_json(), scanned.get_features_json());
+}
+
+/// 数が合わない結果は断る。黙って詰めるとフレームと特徴量がずれる。
+#[test]
+fn a_mismatched_count_length_is_refused() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_hp_scores();
+    analyzer.push_hud_features_inplace(1920, 1080, 0);
+
+    assert!(analyzer.apply_hp_score_counts_impl(&[0, 1]).is_err());
+}

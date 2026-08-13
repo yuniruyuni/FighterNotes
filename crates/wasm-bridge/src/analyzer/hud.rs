@@ -44,18 +44,26 @@ impl Analyzer {
         } else {
             (right_hp, left_hp)
         };
-        let left_hp_score = video_analyzer::hp_bar_score_from_hud_strip(
-            &self.hud_buf,
-            full_width,
-            full_height,
-            "p1",
-        );
-        let right_hp_score = video_analyzer::hp_bar_score_from_hud_strip(
-            &self.hud_buf,
-            full_width,
-            full_height,
-            "p2",
-        );
+        // GPU が数える取り決めなら、ここでは走査しない。値は解析の最後に
+        // まとめて入る。
+        let (left_hp_score, right_hp_score) = if self.hp_scores_come_from_gpu {
+            (0.0, 0.0)
+        } else {
+            (
+                video_analyzer::hp_bar_score_from_hud_strip(
+                    &self.hud_buf,
+                    full_width,
+                    full_height,
+                    "p1",
+                ),
+                video_analyzer::hp_bar_score_from_hud_strip(
+                    &self.hud_buf,
+                    full_width,
+                    full_height,
+                    "p2",
+                ),
+            )
+        };
         let left_drive = video_analyzer::drive_gauge_read_from_hud_strip(
             &self.hud_buf,
             full_width,
@@ -100,6 +108,62 @@ impl Analyzer {
             right_hp_raw_quality: if right_uncertain { 1.0 } else { 0.0 },
         });
         self.total_frames = video_frame + 1;
+    }
+
+    /// HP スコアの画素数えを GPU 側へ任せると決める。
+    pub fn use_gpu_hp_scores(&mut self) {
+        self.hp_scores_come_from_gpu = true;
+    }
+
+    /// GPU が引く画素判定表を返す。索引は `max * 256 + min`。
+    ///
+    /// 判定に使う彩度と明度の計算を GPU でやり直すと、除算の丸めが処理系
+    /// 依存になる。参照実装で表を作り、GPU には索引だけをさせる。
+    pub fn hp_score_table() -> Vec<u8> {
+        video_analyzer::hp_score_decision_table()
+    }
+
+    /// GPU へ渡す走査範囲を `[p1_x1, p1_y1, p1_x2, p1_y2, p2_...]` で返す。
+    pub fn hp_score_rois() -> Vec<u32> {
+        let (a, b, c, d) = video_analyzer::hp_score_roi_in_strip("p1");
+        let (e, f, g, h) = video_analyzer::hp_score_roi_in_strip("p2");
+        vec![a, b, c, d, e, f, g, h]
+    }
+
+    /// GPU が数えた画素数から HP スコアを入れる。
+    ///
+    /// 並びは 1 フレームあたり `[p1_一致, p1_全体, p2_一致, p2_全体]`。割り算は
+    /// 走査していた頃と同じ式で行い、試合画面かどうかも入れ直す。
+    pub fn apply_hp_score_counts(&mut self, counts: &[u32]) -> Result<(), JsValue> {
+        self.apply_hp_score_counts_impl(counts)
+            .map_err(|error| JsValue::from_str(&error))
+    }
+}
+
+impl Analyzer {
+    pub(crate) fn apply_hp_score_counts_impl(&mut self, counts: &[u32]) -> Result<(), String> {
+        if counts.len() != self.features.len() * 4 {
+            return Err(format!(
+                "hp score counts mismatch: expected {} values, got {}",
+                self.features.len() * 4,
+                counts.len()
+            ));
+        }
+        for (feature, counted) in self.features.iter_mut().zip(counts.chunks_exact(4)) {
+            feature.left_hp_score = ratio(counted[0], counted[1]);
+            feature.right_hp_score = ratio(counted[2], counted[3]);
+            feature.is_match_screen =
+                feature.left_hp_score >= 0.035 && feature.right_hp_score >= 0.025;
+        }
+        Ok(())
+    }
+}
+
+fn ratio(matched: u32, total: u32) -> f32 {
+    if total == 0 {
+        0.0
+    } else {
+        matched as f32 / total as f32
     }
 }
 

@@ -29,6 +29,10 @@ const expectedAnalyzerMethods = [
   "finish_meter_timeline(): string;",
   "get_features_json(): string;",
   "get_attack_info_json(): string;",
+  "apply_hp_score_counts(counts: Uint32Array): void;",
+  "use_gpu_hp_scores(): void;",
+  "static hp_score_rois(): Uint32Array;",
+  "static hp_score_table(): Uint8Array;",
   "set_attack_info_json(observations_json: string): void;",
   "get_fight_markers_json(): string;",
   "get_regression_events_json(): string;",
@@ -83,7 +87,7 @@ function classMethods(name: string): string[] {
     .map((line) => line.trim())
     .filter(
       (line) =>
-        /^(?:constructor|\w+)\(.*\)(?:: .+)?;$/.test(line) &&
+        /^(?:static )?(?:constructor|\w+)\(.*\)(?:: .+)?;$/.test(line) &&
         line !== "free(): void;",
     );
 }
