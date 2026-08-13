@@ -265,3 +265,120 @@ fn the_taper_is_not_counted_against_the_lit_coverage() {
         read.value
     );
 }
+
+// ── 認識デバッグへ渡す JSON ──────────────────────────────────────────────
+
+/// JSON から数値・真偽・文字列の値を取り出す。
+fn field(json: &str, key: &str) -> String {
+    let rest = json
+        .split(&format!(r#""{key}":"#))
+        .nth(1)
+        .unwrap_or_else(|| panic!("{key} が無い: {json}"));
+    let value = rest
+        .split([',', '}'])
+        .next()
+        .expect("値")
+        .trim_matches('"')
+        .to_string();
+    value
+}
+
+/// デバッグ出力の読み取り結果は、解析が使う読み取りと同じでなければ
+/// ならない。片方だけ列の向きやリムの落とし方を間違えると、画面では
+/// 正しく見えるのに解析だけずれる、という最も気付きにくい壊れ方をする。
+#[test]
+fn the_debug_json_reports_the_same_reading_as_the_analyser() {
+    for side in ["left", "right"] {
+        for (name, rgba) in [
+            ("満タン", lit_frame(side)),
+            ("回復中", burnout_frame(side, 120)),
+            ("暗転", stage_filled_roi(side)),
+        ] {
+            let json = drive_bar_debug_json(&rgba, 1920, 1080, side);
+            let read = drive_gauge_read(&rgba, 1920, 1080, side);
+
+            assert_eq!(
+                field(&json, "value"),
+                format!("{:.3}", read.value),
+                "{side}/{name}: デバッグの残量が解析と違う: {json}"
+            );
+            assert_eq!(
+                field(&json, "burnout"),
+                read.burnout.to_string(),
+                "{side}/{name}: デバッグのバーンアウトが解析と違う"
+            );
+            assert_eq!(
+                field(&json, "recovery"),
+                format!("{:.3}", read.recovery),
+                "{side}/{name}: デバッグの回復が解析と違う"
+            );
+            assert_eq!(
+                field(&json, "uncertain"),
+                read.uncertain.to_string(),
+                "{side}/{name}: デバッグの確信度が解析と違う"
+            );
+        }
+    }
+}
+
+/// 列の並びは画面順で、ROI の幅ぶんある。可視化はこの並びをそのまま
+/// 画面へ重ねるので、向きや長さが変わると当たっていない列を指す。
+/// 読み取りが使うアンカー起点の並びとは向きが違う。
+#[test]
+fn the_debug_json_lists_every_screen_column() {
+    for side in ["left", "right"] {
+        let json = drive_bar_debug_json(&lit_frame(side), 1920, 1080, side);
+        let cols = field(&json, "cols");
+        let x1: usize = field(&json, "x1").parse().expect("x1");
+        let x2: usize = field(&json, "x2").parse().expect("x2");
+        assert_eq!(cols.len(), x2 - x1, "{side}: 列数が ROI の幅と違う");
+
+        // 画面順をアンカー起点へ戻すと、どちらの側でも同じ並びになる。
+        let anchored: String = if side == "left" {
+            cols.chars().rev().collect()
+        } else {
+            cols.clone()
+        };
+        assert!(
+            anchored[..TAPER].chars().all(|c| c == 'o'),
+            "{side}: アンカー側の欠けた列が Outside になっていない: {anchored:.20}"
+        );
+        assert!(
+            anchored[TAPER..COLUMNS].chars().all(|c| c == 'L'),
+            "{side}: 満タンの点灯が続いていない"
+        );
+        assert!(
+            anchored[COLUMNS..].chars().all(|c| c == 'F'),
+            "{side}: リムの外まで読み取り列に入れている"
+        );
+    }
+}
+
+/// run はアンカー起点で並び、幅は開始と終了から決まる。リムを落とした
+/// 後の列だけを覆うので、合計は読み取りに使った列数と一致する。
+#[test]
+fn the_debug_json_runs_cover_the_decoded_columns() {
+    for side in ["left", "right"] {
+        let json = drive_bar_debug_json(&burnout_frame(side, 120), 1920, 1080, side);
+        let runs = json
+            .split(r#""runs":["#)
+            .nth(1)
+            .and_then(|rest| rest.rsplit(']').nth(1))
+            .expect("runs");
+
+        let mut covered = 0usize;
+        let mut expected_start = 0usize;
+        for run in runs.split("},{") {
+            let start: usize = field(run, "s").parse().expect("s");
+            let end: usize = field(run, "e").parse().expect("e");
+            let width: usize = field(run, "w").parse().expect("w");
+
+            assert_eq!(start, expected_start, "{side}: run が連続していない");
+            assert_eq!(width, end - start + 1, "{side}: run の幅が両端と合わない");
+            covered += width;
+            expected_start = end + 1;
+        }
+
+        assert_eq!(covered, COLUMNS, "{side}: run が読み取り列を覆っていない");
+    }
+}

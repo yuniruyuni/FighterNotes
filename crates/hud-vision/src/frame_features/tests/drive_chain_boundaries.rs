@@ -311,3 +311,24 @@ fn a_wide_foreign_object_over_the_recovery_bar_is_an_occlusion() {
     assert!(!sliver.uncertain, "背景の透けで読み取りを諦めている");
     assert!(occluder.uncertain, "遮蔽を無視して回復量を出している");
 }
+
+// ── アンカーの位置 ───────────────────────────────────────────────────────
+
+/// 埋まり具合はアンカーから遠端までで測る。ROI から欠けたアンカー側の
+/// 列を分母に入れると、実際は隙間なく光っているゲージでも薄く見え、
+/// 残量が出るべきところで読めなくなる。
+#[test]
+fn the_coverage_is_measured_from_the_anchor_not_from_the_roi_edge() {
+    // 欠けた 40 列の先で、35 列中 30 列が光る。実セル幅（35）に届く
+    // ランは無いので、判定は埋まり具合だけで決まる。
+    let read = decode_drive_runs(
+        &runs(&[(Outside, 40), (Lit, 15), (Rest, 5), (Lit, 15)]),
+        COLUMNS,
+    );
+
+    assert!(
+        !read.uncertain,
+        "アンカーより手前の欠けを分母に入れて、埋まったゲージを諦めている"
+    );
+    assert!(read.value > 0.0, "残量が出ていない: {}", read.value);
+}
