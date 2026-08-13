@@ -519,7 +519,9 @@ describe("Mp4VideoSource", () => {
     expect(source.statistics.readCount).toBe(totalSamples + 1);
     expect(source.statistics.deliveredSamples).toBe(totalSamples);
     source.stop();
-  });
+    // 主張しているのは操作回数が線形であることで、速さではない。混んだ
+    // ランナーでは 1 万件を回すだけで既定の 5 秒を超える。
+  }, 30_000);
 
   test("reads exact video samples without retaining audio-like gaps", async () => {
     const parser = new FakeSparseIsoFile(

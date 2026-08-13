@@ -127,6 +127,50 @@ fn applied_gpu_counts_match_what_the_pixel_scan_produced() {
     assert_eq!(applied.get_features_json(), scanned.get_features_json());
 }
 
+/// 数えた画素の割合がそのままスコアになる。ここが崩れると試合画面の
+/// 判定が全フレームで狂う。
+#[test]
+fn the_applied_score_is_the_share_of_matching_pixels() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_hp_scores();
+    for frame_index in 0..4 {
+        analyzer.push_hud_features_inplace(1920, 1080, frame_index);
+    }
+
+    analyzer
+        .apply_hp_score_counts_impl(&[
+            // 両方ちょうど境界。境目は「以上」で通る。
+            35, 1000, 25,
+            1000, // 左だけ境界を割る。片方欠けたら試合画面ではない。
+            34, 1000, 25, 1000, // 右だけ境界を割る。
+            35, 1000, 24, 1000, // 数えた画素が無いときは 0 割りにしない。
+            0, 0, 0, 0,
+        ])
+        .unwrap();
+
+    let scores: Vec<(f32, f32, bool)> = analyzer
+        .features
+        .iter()
+        .map(|feature| {
+            (
+                feature.left_hp_score,
+                feature.right_hp_score,
+                feature.is_match_screen,
+            )
+        })
+        .collect();
+
+    assert_eq!(
+        scores,
+        vec![
+            (0.035, 0.025, true),
+            (0.034, 0.025, false),
+            (0.035, 0.024, false),
+            (0.0, 0.0, false),
+        ]
+    );
+}
+
 /// 数が合わない結果は断る。黙って詰めるとフレームと特徴量がずれる。
 #[test]
 fn a_mismatched_count_length_is_refused() {

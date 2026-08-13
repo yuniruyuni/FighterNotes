@@ -133,4 +133,16 @@ mod tests {
 
         assert_eq!((y1, y2), (0, 95 - HUD_STRIP_Y));
     }
+
+    /// 左右で別の範囲を返す。取り違えると相手のバーを自分のスコアとして
+    /// 数える。
+    #[test]
+    fn each_side_gets_its_own_range() {
+        let (p1_x1, _, p1_x2, _) = hp_score_roi_in_strip("p1");
+        let (p2_x1, _, p2_x2, _) = hp_score_roi_in_strip("p2");
+
+        assert_eq!((p1_x1, p1_x2), (HP_ROI_P1.0, HP_ROI_P1.1));
+        assert_eq!((p2_x1, p2_x2), (HP_ROI_P2.0, HP_ROI_P2.1));
+        assert!(p1_x2 <= p2_x1, "左右の範囲が重なっている");
+    }
 }
