@@ -383,6 +383,27 @@ fn an_imported_meter_is_used_instead_of_the_local_tracker() {
 /// 外から渡された中央攻撃表示を使う。渡されていなければ自分で追った
 /// ものを使う。
 #[test]
+fn a_set_attack_info_fills_the_timeline_it_was_split_from() {
+    let mut analyzer = Analyzer::new("p1");
+    let mut meter = Analyzer::new("p1");
+    analyzer
+        .set_meter_timeline(&meter.finish_meter_timeline())
+        .unwrap();
+    let observations = serde_json::to_string(&vec![AttackInfoObservation {
+        frame_index: 7,
+        p1: attack_info_side(0, 0),
+        p2: attack_info_side(800, 800),
+    }])
+    .unwrap();
+    analyzer.set_attack_info_json(&observations).unwrap();
+
+    let timeline: serde_json::Value = serde_json::from_str(&analyzer.get_timeline()).unwrap();
+    assert_eq!(timeline["attack_info"][0]["frame_index"], 7);
+    assert_eq!(timeline["left"]["side"], "left");
+    assert_eq!(analyzer.get_attack_info_json(), observations);
+}
+
+#[test]
 fn an_imported_attack_info_replaces_the_tracked_one() {
     let mut analyzer = analyzer_with_features("p1");
     analyzer.fight_markers = Some(vec![marker(50), marker(250)]);

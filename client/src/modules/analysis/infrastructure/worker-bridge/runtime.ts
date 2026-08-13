@@ -44,7 +44,7 @@ async function handleMessage(
     case "init": {
       if (state.role) throw new Error("Analyzer worker is already initialized");
       state.role = message.role;
-      if (message.role === "meter") {
+      if (message.role === "meter" || message.role === "attackInfo") {
         await state.meterWasm.initialize(message.ownSide);
       } else {
         await state.resultWasm.initialize({
@@ -68,6 +68,25 @@ async function handleMessage(
         scope,
         {
           type: "meterFrameResult",
+          slot: message.slot,
+          ...timing,
+          meterBuf: message.meterBuf,
+        },
+        [message.meterBuf],
+      );
+      break;
+    }
+    case "attackFrame": {
+      requireRole(state, "attackInfo");
+      const timing = state.meterWasm.analyzeAttackFrame(
+        message.frameIndex,
+        message.meterBuf,
+        { width: ANALYSIS_WIDTH, height: ANALYSIS_HEIGHT },
+      );
+      respond(
+        scope,
+        {
+          type: "attackFrameResult",
           slot: message.slot,
           ...timing,
           meterBuf: message.meterBuf,
@@ -106,9 +125,19 @@ async function handleMessage(
         timeline: state.meterWasm.finish(),
       });
       break;
+    case "finishAttack":
+      requireRole(state, "attackInfo");
+      respond(scope, {
+        type: "attackDone",
+        attackInfo: state.meterWasm.finishAttackInfo(),
+      });
+      break;
     case "finish": {
       requireRole(state, "result");
-      const result = state.resultWasm.finishFirstPass(message.meterTimeline);
+      const result = state.resultWasm.finishFirstPass(
+        message.meterTimeline,
+        message.attackInfo,
+      );
       state.firstPassPayload = result.payload;
       respond(scope, {
         type: "firstPass",

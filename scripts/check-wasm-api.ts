@@ -23,11 +23,13 @@ const expectedExports = [
 const expectedAnalyzerMethods = [
   "analyze_input_inplace(full_width: number, _full_height: number, _video_frame: number): void;",
   "analyze_meter_inplace(full_width: number, full_height: number, video_frame: number): void;",
+  "analyze_attack_info_inplace(full_width: number, video_frame: number): void;",
   "constructor(own_side: string);",
   "finish(): string;",
   "finish_meter_timeline(): string;",
   "get_features_json(): string;",
   "get_attack_info_json(): string;",
+  "set_attack_info_json(observations_json: string): void;",
   "get_fight_markers_json(): string;",
   "get_regression_events_json(): string;",
   "get_spatial_windows_json(): string;",

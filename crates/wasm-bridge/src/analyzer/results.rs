@@ -234,6 +234,33 @@ impl Analyzer {
             .unwrap_or_else(|| "null".to_string())
     }
 
+    /// Takes the attack info observations read by another worker.
+    ///
+    /// meter のタイムラインとは別の経路で届くため、`set_meter_timeline` の
+    /// 後に呼ぶ。タイムライン側が運ぶ観測を上書きする。
+    pub fn set_attack_info_json(&mut self, observations_json: &str) -> Result<(), JsValue> {
+        if self.events.is_some() {
+            return Err(JsValue::from_str(
+                "attack info cannot be changed after finalization",
+            ));
+        }
+        let observations: Vec<video_analyzer::AttackInfoObservation> =
+            serde_json::from_str(observations_json)
+                .map_err(|error| JsValue::from_str(&format!("invalid attack info: {error}")))?;
+        // 成果物のタイムラインは観測を同梱する形で決まっている。読み手が
+        // 別ワーカーへ移っても、その形は変えない。
+        if let Some(raw) = &self.imported_timeline_json {
+            if let Ok(mut timeline) = serde_json::from_str::<serde_json::Value>(raw) {
+                if let Ok(value) = serde_json::to_value(&observations) {
+                    timeline["attack_info"] = value;
+                    self.imported_timeline_json = Some(timeline.to_string());
+                }
+            }
+        }
+        self.imported_attack_info = Some(observations);
+        Ok(())
+    }
+
     pub fn get_attack_info_json(&self) -> String {
         serde_json::to_string(
             self.imported_attack_info

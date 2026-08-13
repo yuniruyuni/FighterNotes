@@ -28,6 +28,13 @@ export interface MeterFrameResult {
   readonly meterBuf: ArrayBuffer;
 }
 
+export interface AttackFrameResult {
+  readonly slot: number;
+  readonly tCopy: number;
+  readonly tAttack: number;
+  readonly meterBuf: ArrayBuffer;
+}
+
 interface WorkerSessionCallbacks {
   readonly onFrameResult: (result: ResultFrameResult) => void;
   readonly onError: (error: unknown) => void;
@@ -35,6 +42,11 @@ interface WorkerSessionCallbacks {
 
 interface MeterWorkerSessionCallbacks {
   readonly onFrameResult: (result: MeterFrameResult) => void;
+  readonly onError: (error: unknown) => void;
+}
+
+interface AttackWorkerSessionCallbacks {
+  readonly onFrameResult: (result: AttackFrameResult) => void;
   readonly onError: (error: unknown) => void;
 }
 
@@ -104,11 +116,12 @@ export class AnalyzerWorkerSession {
     return waiter.promise;
   }
 
-  finishFirstPass(meterTimeline: string): void {
+  finishFirstPass(meterTimeline: string, attackInfo: string): void {
     this.#throwIfTerminated();
     postAnalyzerWorkerMessage(this.#worker, {
       type: "finish",
       meterTimeline,
+      attackInfo,
     });
   }
 
@@ -336,6 +349,115 @@ export class MeterWorkerSession {
         break;
       case "meterDone":
         this.#timeline.resolve(message.timeline);
+        break;
+    }
+  }
+
+  #fail(error: unknown): void {
+    this.terminate(error);
+    this.#callbacks.onError(error);
+  }
+
+  #throwIfTerminated(): void {
+    if (this.#terminated) throw this.#terminationReason;
+  }
+}
+
+/**
+ * 攻撃情報だけを読むワーカー。
+ *
+ * 読み取りは meter strip だけで決まる純粋な処理で、実機計測では meter
+ * ワーカーの費用の半分（1 フレーム 1.1ms）を占めていた。別のワーカーへ
+ * 出しても結果は変わらない。
+ */
+export class AttackWorkerSession {
+  readonly #worker: Worker;
+  readonly #callbacks: AttackWorkerSessionCallbacks;
+  readonly #ready = deferred<void>();
+  readonly #attackInfo = deferred<string>();
+  readonly #frameDrainWaiters: Array<Deferred<void>> = [];
+  #pendingFrames = 0;
+  #terminated = false;
+  #terminationReason: unknown;
+
+  constructor(worker: Worker, callbacks: AttackWorkerSessionCallbacks) {
+    this.#worker = worker;
+    this.#callbacks = callbacks;
+    worker.onerror = (event) => this.#fail(event);
+    worker.onmessage = (event: MessageEvent<AnalyzerWorkerResponse>) => {
+      this.#receive(event.data);
+    };
+  }
+
+  initialize(ownSide: string, analysisContext: AnalysisContext): void {
+    this.#throwIfTerminated();
+    postAnalyzerWorkerMessage(this.#worker, {
+      type: "init",
+      role: "attackInfo",
+      ownSide,
+      analysisContext,
+    });
+  }
+
+  async sendFrame(options: {
+    readonly slot: number;
+    readonly frameIndex: number;
+    readonly meterBuf: ArrayBuffer;
+  }): Promise<void> {
+    this.#throwIfTerminated();
+    await this.#ready.promise;
+    this.#throwIfTerminated();
+    this.#pendingFrames += 1;
+    postAnalyzerWorkerMessage(
+      this.#worker,
+      { type: "attackFrame", ...options },
+      [options.meterBuf],
+    );
+  }
+
+  drainFrames(): Promise<void> {
+    if (this.#terminated) return rejected(this.#terminationReason);
+    if (this.#pendingFrames === 0) return Promise.resolve();
+    const waiter = deferred<void>();
+    this.#frameDrainWaiters.push(waiter);
+    return waiter.promise;
+  }
+
+  finish(): Promise<string> {
+    if (this.#terminated) return rejected(this.#terminationReason);
+    postAnalyzerWorkerMessage(this.#worker, { type: "finishAttack" });
+    return this.#attackInfo.promise;
+  }
+
+  terminate(reason: unknown = new Error("解析Workerを終了しました")): void {
+    if (this.#terminated) return;
+    this.#terminated = true;
+    this.#terminationReason = reason;
+    this.#worker.onerror = null;
+    this.#worker.onmessage = null;
+    this.#worker.terminate();
+    this.#ready.reject(reason);
+    this.#attackInfo.reject(reason);
+    rejectWaiters(this.#frameDrainWaiters, reason);
+    this.#pendingFrames = 0;
+  }
+
+  #receive(message: AnalyzerWorkerResponse): void {
+    if (this.#terminated) return;
+    switch (message.type) {
+      case "error":
+        this.#fail(new Error(message.message));
+        break;
+      case "ready":
+        this.#ready.resolve();
+        break;
+      case "attackFrameResult":
+        this.#pendingFrames -= 1;
+        this.#callbacks.onFrameResult(message);
+        if (this.#pendingFrames === 0) drain(this.#frameDrainWaiters);
+        break;
+      case "attackDone":
+        this.#attackInfo.resolve(message.attackInfo);
         break;
     }
   }

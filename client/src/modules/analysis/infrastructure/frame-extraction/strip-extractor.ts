@@ -106,6 +106,9 @@ export function copyStripPixels(
 ): void {
   new Uint8Array(buffers.hud).set(pixels.hud);
   new Uint8Array(buffers.meter).set(pixels.meter);
+  // 攻撃情報のワーカーは meter strip をそのまま読む。転送すると所有権が移る
+  // ため、同じ画素をもう 1 枚渡す。
+  new Uint8Array(buffers.attack).set(pixels.meter);
   new Uint8Array(buffers.input).set(pixels.input);
 }
 

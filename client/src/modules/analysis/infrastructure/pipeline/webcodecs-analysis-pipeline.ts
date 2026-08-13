@@ -26,6 +26,7 @@ import {
 import { SampleTimestampIndex } from "../video-decoding/sample-timestamp-index.js";
 import {
   AnalyzerWorkerSession,
+  AttackWorkerSession,
   MeterWorkerSession,
 } from "../worker-bridge/client.js";
 import { abortReason, throwIfAborted } from "./abort.js";
@@ -70,10 +71,11 @@ export async function analyzeWithWebCodecs(
     (await supportsRgbaCopy()) && preferCopyExtraction()
       ? new CopyStripExtractor()
       : new FrameStripExtractor();
-  // 独立した WASM インスタンスでメーターと HUD・入力を並列解析する。
+  // 独立した WASM インスタンスで、メーター・攻撃情報・HUD/入力を並列解析する。
   const workerUrl = new URL("./analyzer-worker.js", import.meta.url);
   const resultWorker = new Worker(workerUrl, { type: "module" });
   const meterWorker = new Worker(workerUrl, { type: "module" });
+  const attackWorker = new Worker(workerUrl, { type: "module" });
 
   return new Promise<AnalysisResult>((resolve, reject) => {
     let decoder: VideoDecoder | undefined;
@@ -89,6 +91,7 @@ export async function analyzeWithWebCodecs(
 
     let resultWorkerSession: AnalyzerWorkerSession;
     let meterWorkerSession: MeterWorkerSession;
+    let attackWorkerSession: AttackWorkerSession;
     let videoSource: Mp4VideoSource | undefined;
 
     const cleanup = (reason?: unknown) => {
@@ -97,6 +100,7 @@ export async function analyzeWithWebCodecs(
       decodePump.stop();
       resultWorkerSession?.terminate(reason);
       meterWorkerSession?.terminate(reason);
+      attackWorkerSession?.terminate(reason);
       if (decoder && decoder.state !== "closed") decoder.close();
     };
     const fail = (error: unknown) => {
@@ -120,6 +124,7 @@ export async function analyzeWithWebCodecs(
     });
     frameBridge = new WorkerFrameBridge({
       sendMeter: (message) => meterWorkerSession.sendFrame(message),
+      sendAttack: (message) => attackWorkerSession.sendFrame(message),
       sendResult: (message) => resultWorkerSession.sendFrame(message),
       totalSamples: () => totalSamples,
       drawTime: () => frameDispatcher.drawTime,
@@ -150,11 +155,17 @@ export async function analyzeWithWebCodecs(
             Promise.all([
               resultWorkerSession.drainFrames(),
               meterWorkerSession.drainFrames(),
+              attackWorkerSession.drainFrames(),
             ]),
           )
-          .then(() => meterWorkerSession.finish())
-          .then((meterTimeline) =>
-            resultWorkerSession.finishFirstPass(meterTimeline),
+          .then(() =>
+            Promise.all([
+              meterWorkerSession.finish(),
+              attackWorkerSession.finish(),
+            ]),
+          )
+          .then(([meterTimeline, attackInfo]) =>
+            resultWorkerSession.finishFirstPass(meterTimeline, attackInfo),
           )
           .catch(fail);
       },
@@ -171,6 +182,12 @@ export async function analyzeWithWebCodecs(
       onError: fail,
       onFrameResult(message) {
         if (!settled) frameBridge.acceptMeter(message);
+      },
+    });
+    attackWorkerSession = new AttackWorkerSession(attackWorker, {
+      onError: fail,
+      onFrameResult(message) {
+        if (!settled) frameBridge.acceptAttack(message);
       },
     });
     signal.addEventListener("abort", onAbort, { once: true });
@@ -272,6 +289,7 @@ export async function analyzeWithWebCodecs(
 
     resultWorkerSession.initialize(ownSide, analysisContext);
     meterWorkerSession.initialize(ownSide, analysisContext);
+    attackWorkerSession.initialize(ownSide, analysisContext);
     try {
       videoSource.start(analysisStartedAt);
     } catch (error) {

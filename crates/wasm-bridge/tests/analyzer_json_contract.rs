@@ -23,6 +23,7 @@ fn analyzer_keeps_buffer_and_json_contracts() {
     assert_eq!(analyzer.progress(), 0.0);
 
     analyzer.analyze_meter_inplace(1920, 1080, 0);
+    analyzer.analyze_attack_info_inplace(1920, 0);
     analyzer.analyze_input_inplace(1920, 1080, 0);
     analyzer.push_hud_features_inplace(1920, 1080, 0);
     assert_eq!(analyzer.progress(), 1.0);

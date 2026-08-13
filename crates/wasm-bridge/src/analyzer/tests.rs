@@ -45,20 +45,30 @@ fn analysis_context_json_preserves_player_metadata() {
 fn split_meter_session_matches_combined_analysis() {
     let mut combined = Analyzer::new("p1");
     let mut meter = Analyzer::new("p1");
+    let mut attack = Analyzer::new("p1");
     let mut result = Analyzer::new("p1");
 
     for frame_index in 0..3 {
         combined.analyze_meter_inplace(1920, 1080, frame_index);
+        combined.analyze_attack_info_inplace(1920, frame_index);
         combined.push_hud_features_inplace(1920, 1080, frame_index);
         combined.analyze_input_inplace(1920, 1080, frame_index);
 
         meter.analyze_meter_inplace(1920, 1080, frame_index);
+        attack.analyze_attack_info_inplace(1920, frame_index);
         result.push_hud_features_inplace(1920, 1080, frame_index);
         result.analyze_input_inplace(1920, 1080, frame_index);
     }
 
     let meter_timeline = meter.finish_meter_timeline();
     result.set_meter_timeline(&meter_timeline).unwrap();
+    result
+        .set_attack_info_json(&attack.get_attack_info_json())
+        .unwrap();
+    assert_eq!(
+        result.get_attack_info_json(),
+        combined.get_attack_info_json()
+    );
 
     assert_eq!(result.finish(), combined.finish());
     assert_eq!(result.get_timeline(), combined.get_timeline());

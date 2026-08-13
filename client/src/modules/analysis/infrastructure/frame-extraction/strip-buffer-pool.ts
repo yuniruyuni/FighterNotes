@@ -3,6 +3,8 @@ import { ANALYSIS_STRIPS } from "./layout.js";
 export interface AnalysisTransferBuffers {
   readonly hud: ArrayBuffer;
   readonly meter: ArrayBuffer;
+  /** meter strip の複製。攻撃情報を読むワーカーへ渡す。 */
+  readonly attack: ArrayBuffer;
   readonly input: ArrayBuffer;
 }
 
@@ -75,6 +77,7 @@ function createBuffers(): AnalysisTransferBuffers {
   return {
     hud: new ArrayBuffer(ANALYSIS_STRIPS.hud.byteLength),
     meter: new ArrayBuffer(ANALYSIS_STRIPS.meter.byteLength),
+    attack: new ArrayBuffer(ANALYSIS_STRIPS.meter.byteLength),
     input: new ArrayBuffer(ANALYSIS_STRIPS.input.byteLength),
   };
 }

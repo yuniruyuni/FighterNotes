@@ -44,6 +44,14 @@ impl Analyzer {
             self.tracker.digit_window_hint(),
         );
         self.tracker.update(video_frame as i64, left, right);
+    }
+
+    /// Reads the attack info windows from the reusable meter strip buffer.
+    ///
+    /// フレームメーターの追跡とは違い、読み取りは strip だけで決まる。実機
+    /// 計測では 1 フレーム 1.1ms かかり meter ワーカーの費用の半分を占めて
+    /// いたので、別のワーカーへ出せるよう分けてある。
+    pub fn analyze_attack_info_inplace(&mut self, full_width: u32, video_frame: u32) {
         let attack_info =
             video_analyzer::read_attack_info_from_meter_strip(&self.meter_buf, full_width);
         self.attack_info_tracker.observe(video_frame, &attack_info);

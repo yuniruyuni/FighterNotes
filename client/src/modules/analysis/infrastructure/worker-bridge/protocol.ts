@@ -2,7 +2,7 @@ import type { AnalysisContext } from "../../domain/context.js";
 import type { SpatialFrameHints } from "../../domain/result.js";
 import type { SpatialPerformanceStats } from "../spatial-analysis/backpressure.js";
 
-export type AnalyzerWorkerRole = "meter" | "result";
+export type AnalyzerWorkerRole = "meter" | "attackInfo" | "result";
 
 export type AnalyzerWorkerRequest =
   | {
@@ -18,6 +18,12 @@ export type AnalyzerWorkerRequest =
       readonly meterBuf: ArrayBuffer;
     }
   | {
+      readonly type: "attackFrame";
+      readonly slot: number;
+      readonly frameIndex: number;
+      readonly meterBuf: ArrayBuffer;
+    }
+  | {
       readonly type: "resultFrame";
       readonly slot: number;
       readonly frameIndex: number;
@@ -25,7 +31,12 @@ export type AnalyzerWorkerRequest =
       readonly inputBuf: ArrayBuffer;
     }
   | { readonly type: "finishMeter" }
-  | { readonly type: "finish"; readonly meterTimeline: string }
+  | { readonly type: "finishAttack" }
+  | {
+      readonly type: "finish";
+      readonly meterTimeline: string;
+      readonly attackInfo: string;
+    }
   | { readonly type: "spatialReset" }
   | {
       readonly type: "spatialFrame";
@@ -63,6 +74,13 @@ export type AnalyzerWorkerResponse =
       readonly meterBuf: ArrayBuffer;
     }
   | {
+      readonly type: "attackFrameResult";
+      readonly slot: number;
+      readonly tCopy: number;
+      readonly tAttack: number;
+      readonly meterBuf: ArrayBuffer;
+    }
+  | {
       readonly type: "resultFrameResult";
       readonly slot: number;
       readonly tCopy: number;
@@ -71,6 +89,7 @@ export type AnalyzerWorkerResponse =
       readonly inputBuf: ArrayBuffer;
     }
   | { readonly type: "meterDone"; readonly timeline: string }
+  | { readonly type: "attackDone"; readonly attackInfo: string }
   | { readonly type: "spatialResetReady" }
   | { readonly type: "spatialFrameResult" }
   | {

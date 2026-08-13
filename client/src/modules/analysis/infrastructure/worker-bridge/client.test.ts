@@ -77,7 +77,9 @@ describe("AnalyzerWorkerSession", () => {
     );
     expect(worker.terminateCount).toBe(1);
     expect(callbackErrors).toEqual([]);
-    expect(() => workerSession.finishFirstPass("{}")).toThrow("cancelled");
+    expect(() => workerSession.finishFirstPass("{}", "[]")).toThrow(
+      "cancelled",
+    );
     await expect(workerSession.drainFrames()).rejects.toBe(reason);
   });
 

@@ -10,8 +10,12 @@ const pixels: StripPixels = {
 };
 
 describe("WorkerFrameBridge", () => {
-  test("completes a frame only after both workers return their buffers", async () => {
+  test("completes a frame only after every worker returns its buffers", async () => {
     const meterMessages: Array<{
+      readonly slot: number;
+      readonly meterBuf: ArrayBuffer;
+    }> = [];
+    const attackMessages: Array<{
       readonly slot: number;
       readonly meterBuf: ArrayBuffer;
     }> = [];
@@ -24,6 +28,9 @@ describe("WorkerFrameBridge", () => {
     const bridge = new WorkerFrameBridge({
       sendMeter: async (message) => {
         meterMessages.push(message);
+      },
+      sendAttack: async (message) => {
+        attackMessages.push(message);
       },
       sendResult: async (message) => {
         resultMessages.push(message);
@@ -39,8 +46,12 @@ describe("WorkerFrameBridge", () => {
 
     await bridge.send(0, pixels);
     const meter = meterMessages[0];
+    const attack = attackMessages[0];
     const result = resultMessages[0];
-    if (!meter || !result) throw new Error("worker message was not sent");
+    if (!meter || !attack || !result) {
+      throw new Error("worker message was not sent");
+    }
+    expect(attack.meterBuf).not.toBe(meter.meterBuf);
 
     bridge.acceptResult({
       ...result,
@@ -55,11 +66,19 @@ describe("WorkerFrameBridge", () => {
       tCopy: 5,
       tMeter: 7,
     });
+    expect(bridge.completedFrames).toBe(0);
+
+    bridge.acceptAttack({
+      ...attack,
+      tCopy: 1,
+      tAttack: 11,
+    });
     expect(bridge.completedFrames).toBe(1);
     expect(completed).toBe(1);
     expect(bridge.timing).toEqual({
-      tCopy: 7,
+      tCopy: 8,
       tMeter: 7,
+      tAttack: 11,
       tHud: 3,
     });
   });
@@ -68,6 +87,7 @@ describe("WorkerFrameBridge", () => {
     const controller = new AbortController();
     const bridge = new WorkerFrameBridge({
       sendMeter: async () => {},
+      sendAttack: async () => {},
       sendResult: async () => {},
       totalSamples: () => 3,
       drawTime: () => 0,

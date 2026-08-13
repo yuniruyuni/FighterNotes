@@ -5,6 +5,7 @@ import {
   type StripPixels,
 } from "../frame-extraction/strip-extractor.js";
 import type {
+  AttackFrameResult,
   MeterFrameResult,
   ResultFrameResult,
 } from "../worker-bridge/client.js";
@@ -12,11 +13,17 @@ import { throwIfAborted } from "./abort.js";
 
 interface PartialWorkerFrameResult {
   meter?: MeterFrameResult;
+  attack?: AttackFrameResult;
   result?: ResultFrameResult;
 }
 
 interface WorkerFrameBridgeOptions {
   readonly sendMeter: (message: {
+    readonly slot: number;
+    readonly frameIndex: number;
+    readonly meterBuf: ArrayBuffer;
+  }) => Promise<void>;
+  readonly sendAttack: (message: {
     readonly slot: number;
     readonly frameIndex: number;
     readonly meterBuf: ArrayBuffer;
@@ -41,6 +48,7 @@ export class WorkerFrameBridge {
   #completedFrames = 0;
   #copyTime = 0;
   #meterTime = 0;
+  #attackTime = 0;
   #hudTime = 0;
 
   constructor(options: WorkerFrameBridgeOptions) {
@@ -55,6 +63,7 @@ export class WorkerFrameBridge {
     return {
       tCopy: this.#copyTime,
       tMeter: this.#meterTime,
+      tAttack: this.#attackTime,
       tHud: this.#hudTime,
     };
   }
@@ -67,6 +76,17 @@ export class WorkerFrameBridge {
       throw new Error(`Duplicate meter frame result for slot ${result.slot}`);
     }
     partial.meter = result;
+    this.#completeIfReady(result.slot, partial);
+  }
+
+  acceptAttack(result: AttackFrameResult): void {
+    this.#copyTime += result.tCopy;
+    this.#attackTime += result.tAttack;
+    const partial = this.#partialResult(result.slot);
+    if (partial.attack) {
+      throw new Error(`Duplicate attack frame result for slot ${result.slot}`);
+    }
+    partial.attack = result;
     this.#completeIfReady(result.slot, partial);
   }
 
@@ -93,6 +113,11 @@ export class WorkerFrameBridge {
         frameIndex,
         meterBuf: buffers.meter,
       }),
+      this.#options.sendAttack({
+        slot,
+        frameIndex,
+        meterBuf: buffers.attack,
+      }),
       this.#options.sendResult({
         slot,
         frameIndex,
@@ -115,11 +140,12 @@ export class WorkerFrameBridge {
   }
 
   #completeIfReady(slot: number, partial: PartialWorkerFrameResult): void {
-    if (!partial.meter || !partial.result) return;
+    if (!partial.meter || !partial.attack || !partial.result) return;
     this.#partialResults.delete(slot);
     this.#bufferPool.release(slot, {
       hud: partial.result.hudBuf,
       meter: partial.meter.meterBuf,
+      attack: partial.attack.meterBuf,
       input: partial.result.inputBuf,
     });
     this.#completedFrames += 1;
@@ -129,7 +155,7 @@ export class WorkerFrameBridge {
   #logProgress(frameCount: number): void {
     const ms = (value: number) => `${value.toFixed(0)}ms`;
     console.log(
-      `[perf] ${frameCount}f 累計: draw+get=${ms(this.#options.drawTime())} worker_copy=${ms(this.#copyTime)} meter=${ms(this.#meterTime)} hud=${ms(this.#hudTime)}`,
+      `[perf] ${frameCount}f 累計: draw+get=${ms(this.#options.drawTime())} worker_copy=${ms(this.#copyTime)} meter=${ms(this.#meterTime)} attack=${ms(this.#attackTime)} hud=${ms(this.#hudTime)}`,
     );
   }
 }

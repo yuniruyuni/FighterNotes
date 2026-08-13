@@ -22,6 +22,11 @@ export interface WasmMeterFrameTiming {
   readonly tMeter: number;
 }
 
+export interface WasmAttackFrameTiming {
+  readonly tCopy: number;
+  readonly tAttack: number;
+}
+
 export interface WasmFirstPassPayload {
   readonly report: string;
   readonly timeline: string;
@@ -104,9 +109,14 @@ export class AnalyzerWasmSession {
     return { tCopy: t1 - t0, tHud: t2 - t1 };
   }
 
-  finishFirstPass(meterTimeline: string): WasmFirstPassResult {
+  finishFirstPass(
+    meterTimeline: string,
+    attackInfo: string,
+  ): WasmFirstPassResult {
     const { analyzer } = this.#requireState();
     analyzer.set_meter_timeline(meterTimeline);
+    // タイムラインが運ぶ観測は空なので、読み取ったワーカーの結果で置き換える。
+    analyzer.set_attack_info_json(attackInfo);
     const report = analyzer.finish();
     const timeline = analyzer.get_timeline();
     const features = analyzer.get_features_json();
@@ -211,6 +221,24 @@ export class MeterWasmSession {
 
   finish(): string {
     return this.#requireState().analyzer.finish_meter_timeline();
+  }
+
+  analyzeAttackFrame(
+    frameIndex: number,
+    meterBuffer: ArrayBuffer,
+    dimensions: { readonly width: number; readonly height: number },
+  ): WasmAttackFrameTiming {
+    const state = this.#requireState();
+    const t0 = performance.now();
+    copyToWasm(state, state.meterPtr, state.meterLen, meterBuffer);
+    const t1 = performance.now();
+    state.analyzer.analyze_attack_info_inplace(dimensions.width, frameIndex);
+    const t2 = performance.now();
+    return { tCopy: t1 - t0, tAttack: t2 - t1 };
+  }
+
+  finishAttackInfo(): string {
+    return this.#requireState().analyzer.get_attack_info_json();
   }
 
   #requireState(): MeterWasmState {
