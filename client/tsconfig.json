@@ -14,5 +14,5 @@
     },
     "types": ["@types/bun", "@webgpu/types"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "matchers.d.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "matchers.d.ts", "wgsl.d.ts"]
 }

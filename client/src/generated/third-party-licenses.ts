@@ -4,7 +4,7 @@ export const thirdPartyNoticeMetadata = {
     "43c29be6e4a577990add3e3c7d22eaac0f6cf5dfe3086ae3d1870c9f7f8fafde",
   cargoAboutVersion: "0.9.1",
   cargoLockSha256:
-    "ee5c6b924dc249f878c69e21e08306324e7245027bc2e09acfa5ae790c5b9c71",
+    "1032cbbae5cf2dbef0bd46364ce7c5c8ce6d237ce81d6084146c45f8e1ff4c74",
   npmLicenseCheckerVersion: "5.0.1",
 } as const;
 
@@ -380,7 +380,7 @@ export const thirdPartyComponents = [
     ],
     ecosystem: "Cargo",
     name: "wasm-bindgen",
-    version: "0.2.125",
+    version: "0.2.127",
     license: "MIT OR Apache-2.0",
     source: "https://github.com/wasm-bindgen/wasm-bindgen",
     targets: ["browser/WASM"],
@@ -401,7 +401,7 @@ export const thirdPartyComponents = [
     ],
     ecosystem: "Cargo",
     name: "wasm-bindgen-macro",
-    version: "0.2.125",
+    version: "0.2.127",
     license: "MIT OR Apache-2.0",
     source:
       "https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro",
@@ -423,7 +423,7 @@ export const thirdPartyComponents = [
     ],
     ecosystem: "Cargo",
     name: "wasm-bindgen-macro-support",
-    version: "0.2.125",
+    version: "0.2.127",
     license: "MIT OR Apache-2.0",
     source:
       "https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro-support",
@@ -445,7 +445,7 @@ export const thirdPartyComponents = [
     ],
     ecosystem: "Cargo",
     name: "wasm-bindgen-shared",
-    version: "0.2.125",
+    version: "0.2.127",
     license: "MIT OR Apache-2.0",
     source:
       "https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared",
@@ -958,10 +958,10 @@ export const thirdPartyLicenseDocuments = [
       "bumpalo 3.20.3",
       "cfg-if 1.0.4",
       "once_cell 1.21.4",
-      "wasm-bindgen 0.2.125",
-      "wasm-bindgen-macro 0.2.125",
-      "wasm-bindgen-macro-support 0.2.125",
-      "wasm-bindgen-shared 0.2.125",
+      "wasm-bindgen 0.2.127",
+      "wasm-bindgen-macro 0.2.127",
+      "wasm-bindgen-macro-support 0.2.127",
+      "wasm-bindgen-shared 0.2.127",
     ],
     id: "license-text-143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4",
     names: ["LICENSE-APACHE"],
@@ -1012,10 +1012,10 @@ export const thirdPartyLicenseDocuments = [
   {
     components: [
       "cfg-if 1.0.4",
-      "wasm-bindgen 0.2.125",
-      "wasm-bindgen-macro 0.2.125",
-      "wasm-bindgen-macro-support 0.2.125",
-      "wasm-bindgen-shared 0.2.125",
+      "wasm-bindgen 0.2.127",
+      "wasm-bindgen-macro 0.2.127",
+      "wasm-bindgen-macro-support 0.2.127",
+      "wasm-bindgen-shared 0.2.127",
     ],
     id: "license-text-378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
     names: ["LICENSE-MIT"],

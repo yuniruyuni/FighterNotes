@@ -79,6 +79,13 @@ jobs:
       - name: Check release workflow contracts
         run: bun test scripts/release-workflows.test.ts
 
+      # 認識の shader は GPU が無いと走らせられない。lavapipe (ソフトウェアの
+      # Vulkan 実装) を入れて、参照実装との突き合わせを CI でも回す。
+      - name: Install a software Vulkan driver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers
+
       - name: Run Rust checks
         run: bun run check:rust
 
