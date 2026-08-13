@@ -33,6 +33,7 @@ const expectedAnalyzerMethods = [
   "use_gpu_hp_scores(): void;",
   "use_gpu_hp_columns(): void;",
   "apply_hp_columns(first_frame: number, columns: Uint32Array): void;",
+  "push_hp_score_counts(first_frame: number, counts: Uint32Array): void;",
   "hp_columns_from_strip(side: string): Uint8Array;",
   "static hp_column_scan(side: string): Uint32Array;",
   "static hsv_sv_table(): Float32Array;",

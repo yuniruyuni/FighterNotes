@@ -81,14 +81,29 @@ export class AnalyzerWorkerSession {
     };
   }
 
-  initialize(ownSide: string, analysisContext: AnalysisContext): void {
+  initialize(
+    ownSide: string,
+    analysisContext: AnalysisContext,
+    hudFromGpu = false,
+  ): void {
     this.#throwIfTerminated();
     postAnalyzerWorkerMessage(this.#worker, {
       type: "init",
       role: "result",
       ownSide,
       analysisContext,
+      hudFromGpu,
     });
+  }
+
+  /** 主スレッドの GPU が読み取ったまとまりを送る。 */
+  sendHudGpuBatch(batch: {
+    readonly firstFrame: number;
+    readonly scores: Uint32Array;
+    readonly columns: Uint32Array;
+  }): void {
+    if (this.#terminated) return;
+    postAnalyzerWorkerMessage(this.#worker, { type: "hudGpuBatch", ...batch });
   }
 
   async sendFrame(options: {

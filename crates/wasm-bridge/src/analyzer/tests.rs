@@ -442,3 +442,79 @@ fn an_unread_bar_is_marked_as_such() {
         "読めなかった側をそのまま残量にしている"
     );
 }
+
+/// まとまりごとに届く数え上げは、先頭のフレーム番号の位置から入る。
+#[test]
+fn each_batch_of_counts_lands_at_the_frame_it_starts_at() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_hp_scores();
+    analyzer.use_gpu_hp_columns();
+    for frame_index in 0..3 {
+        analyzer.push_hud_features_inplace(1920, 1080, frame_index);
+    }
+    analyzer.hp_fills = vec![(0.0, true, 0.0, true); 3];
+    analyzer.ca_gates = vec![(false, false, false, false); 3];
+
+    // 後のまとまりから先に届いても、置き場所は変わらない。
+    analyzer
+        .push_hp_score_counts_impl(2, &[35, 1000, 25, 1000])
+        .unwrap();
+    analyzer
+        .push_hp_score_counts_impl(0, &[0, 1000, 0, 1000])
+        .unwrap();
+    analyzer.apply_hp_fills().unwrap();
+
+    let screens: Vec<bool> = analyzer
+        .features
+        .iter()
+        .map(|feature| feature.is_match_screen)
+        .collect();
+    assert_eq!(screens, vec![false, false, true]);
+    assert_eq!(analyzer.features[2].left_hp_score, 0.035);
+}
+
+/// フレーム 1 枚分に満たない切れ端は断る。詰めると以降が全部ずれる。
+#[test]
+fn counts_that_do_not_fill_whole_frames_are_refused() {
+    let mut analyzer = Analyzer::new("p1");
+
+    assert!(analyzer.push_hp_score_counts_impl(0, &[1, 2, 3]).is_err());
+}
+
+/// 届かなかったフレームは数えていない扱いのまま。0 と言い切らない。
+#[test]
+fn frames_whose_counts_never_arrived_score_nothing() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_hp_scores();
+
+    analyzer
+        .push_hp_score_counts_impl(1, &[35, 1000, 25, 1000])
+        .unwrap();
+
+    assert_eq!(analyzer.hp_score_counts[0], [0, 0, 0, 0]);
+    assert_eq!(analyzer.hp_score_counts[1], [35, 1000, 25, 1000]);
+}
+
+/// 続けて届くまとまりは、フレームを飛ばさずに並ぶ。
+#[test]
+fn consecutive_batches_fill_consecutive_frames() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_hp_scores();
+
+    analyzer
+        .push_hp_score_counts_impl(0, &[1, 10, 2, 20, 3, 30, 4, 40])
+        .unwrap();
+    analyzer
+        .push_hp_score_counts_impl(2, &[5, 50, 6, 60, 7, 70, 8, 80])
+        .unwrap();
+
+    assert_eq!(
+        analyzer.hp_score_counts,
+        vec![
+            [1, 10, 2, 20],
+            [3, 30, 4, 40],
+            [5, 50, 6, 60],
+            [7, 70, 8, 80],
+        ]
+    );
+}

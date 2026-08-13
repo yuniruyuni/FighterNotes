@@ -14,6 +14,7 @@ interface FrameDispatcherOptions<Frame, Pending> {
   readonly sendFrame: (
     frameIndex: number,
     pixels: StripPixels,
+    frame: Frame,
   ) => Promise<void>;
   readonly onError: (error: unknown) => void;
   readonly now?: () => number;
@@ -67,7 +68,9 @@ export class FrameDispatcher<Frame extends ClosableFrame, Pending> {
       const pixels = await this.#options.extractor.readBitmaps(pending);
       if (!this.#failure) {
         this.#drawTime += this.#now() - startedAt;
-        await this.#options.sendFrame(frameIndex, pixels);
+        // 復号フレームも渡す。GPU 側の切り出しはこの呼び出しの中で積まれ、
+        // 戻った後にこちらが閉じる。
+        await this.#options.sendFrame(frameIndex, pixels, frame);
       }
     } catch (error) {
       failure = { reason: error };

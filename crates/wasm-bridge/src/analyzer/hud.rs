@@ -190,6 +190,18 @@ impl Analyzer {
         self.apply_hp_score_counts_impl(counts)
             .map_err(|error| JsValue::from_str(&error))
     }
+
+    /// GPU が数えた画素数を、まとまりごとに受け取る。
+    ///
+    /// 先頭のフレーム番号で置き場所を決める。特徴量へ入れるのは解析の最後。
+    pub fn push_hp_score_counts(
+        &mut self,
+        first_frame: u32,
+        counts: &[u32],
+    ) -> Result<(), JsValue> {
+        self.push_hp_score_counts_impl(first_frame, counts)
+            .map_err(|error| JsValue::from_str(&error))
+    }
 }
 
 impl Analyzer {
@@ -212,6 +224,33 @@ impl Analyzer {
 }
 
 impl Analyzer {
+    pub(crate) fn push_hp_score_counts_impl(
+        &mut self,
+        first_frame: u32,
+        counts: &[u32],
+    ) -> Result<(), String> {
+        if !counts.len().is_multiple_of(4) {
+            return Err(format!(
+                "hp score counts must arrive in whole frames of 4 values, got {}",
+                counts.len()
+            ));
+        }
+        for (offset, frame_counts) in counts.chunks_exact(4).enumerate() {
+            let frame = first_frame as usize + offset;
+            if self.hp_score_counts.len() <= frame {
+                // 届かなかったフレームは「数えていない」ままにする。
+                self.hp_score_counts.resize(frame + 1, [0, 0, 0, 0]);
+            }
+            self.hp_score_counts[frame] = [
+                frame_counts[0],
+                frame_counts[1],
+                frame_counts[2],
+                frame_counts[3],
+            ];
+        }
+        Ok(())
+    }
+
     pub(crate) fn apply_hp_columns_impl(
         &mut self,
         first_frame: u32,
@@ -243,8 +282,12 @@ impl Analyzer {
         Ok(())
     }
 
-    /// 受け取った充填率を特徴量へ入れる。
+    /// 受け取った充填率とスコアを特徴量へ入れる。
     pub(crate) fn apply_hp_fills(&mut self) -> Result<(), String> {
+        if self.hp_scores_come_from_gpu && !self.hp_score_counts.is_empty() {
+            let counts: Vec<u32> = self.hp_score_counts.concat();
+            self.apply_hp_score_counts_impl(&counts)?;
+        }
         if !self.hp_fills_come_from_gpu {
             return Ok(());
         }

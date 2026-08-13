@@ -10,6 +10,8 @@ export type AnalyzerWorkerRequest =
       readonly role: AnalyzerWorkerRole;
       readonly ownSide: string;
       readonly analysisContext: AnalysisContext;
+      /** HUD の画素読み取りを主スレッドの GPU が担うか。 */
+      readonly hudFromGpu?: boolean;
     }
   | {
       readonly type: "meterFrame";
@@ -29,6 +31,12 @@ export type AnalyzerWorkerRequest =
       readonly frameIndex: number;
       readonly hudBuf: ArrayBuffer;
       readonly inputBuf: ArrayBuffer;
+    }
+  | {
+      readonly type: "hudGpuBatch";
+      readonly firstFrame: number;
+      readonly scores: Uint32Array;
+      readonly columns: Uint32Array;
     }
   | { readonly type: "finishMeter" }
   | { readonly type: "finishAttack" }

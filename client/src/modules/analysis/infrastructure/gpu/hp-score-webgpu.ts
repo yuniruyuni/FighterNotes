@@ -6,6 +6,7 @@ import {
   type HpScoreBackend,
   type HudGpuResult,
 } from "./hp-score-batcher.js";
+import { STRIP_EXTRACT_SHADER } from "./strip-extract-shader.js";
 
 export interface HpScoreRois {
   /** `[p1_x1, p1_y1, p1_x2, p1_y2, p2_x1, p2_y1, p2_x2, p2_y2]` (strip 座標)。 */
@@ -20,6 +21,8 @@ export interface HpScoreRois {
   readonly norm: Float32Array;
   readonly stripWidth: number;
   readonly stripHeight: number;
+  /** フレーム全体の中での strip の縦位置。 */
+  readonly stripY: number;
 }
 
 /**
@@ -72,6 +75,9 @@ interface Resources {
   readonly rois: Uint32Array;
   readonly stripWidth: number;
   readonly roiWidth: number;
+  readonly extractPipeline: GPUComputePipeline;
+  readonly bands: GPUBuffer[];
+  readonly stripHeight: number;
 }
 
 /**
@@ -103,7 +109,28 @@ function build(device: GPUDevice, layout: HpScoreRois): Resources {
   const texture = device.createTexture({
     size: [layout.stripWidth, layout.stripHeight, HP_SCORE_BATCH],
     format: "rgba8uint",
-    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    usage:
+      GPUTextureUsage.TEXTURE_BINDING |
+      GPUTextureUsage.COPY_DST |
+      GPUTextureUsage.STORAGE_BINDING,
+  });
+  // 復号フレームから直接切り出すパス。まとめの中の位置ごとに書き込む層が違う。
+  const extractPipeline = device.createComputePipeline({
+    layout: "auto",
+    compute: {
+      module: device.createShaderModule({ code: STRIP_EXTRACT_SHADER }),
+      entryPoint: "main",
+    },
+  });
+  const bands = Array.from({ length: HP_SCORE_BATCH }, (_, layer) => {
+    const buffer = device.createBuffer({
+      size: 16,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    const values = new Uint32Array(new ArrayBuffer(16));
+    values.set([layout.stripWidth, layout.stripHeight, layout.stripY, layer]);
+    device.queue.writeBuffer(buffer, 0, values);
+    return buffer;
   });
   const countBytes = HP_SCORE_BATCH * HP_SCORE_VALUES_PER_FRAME * 4;
   const counts = device.createBuffer({
@@ -206,6 +233,9 @@ function build(device: GPUDevice, layout: HpScoreRois): Resources {
 
   return {
     device,
+    extractPipeline,
+    bands,
+    stripHeight: layout.stripHeight,
     pipeline,
     columnPipeline,
     columns,
@@ -227,6 +257,36 @@ class WebGpuHpScoreBackend implements HpScoreBackend {
 
   constructor(resources: Resources) {
     this.#resources = resources;
+  }
+
+  extractLayer(frame: VideoFrame, layer: number): void {
+    const { device, extractPipeline, texture, bands, stripWidth, stripHeight } =
+      this.#resources;
+    const band = bands[layer];
+    if (!band) throw new Error(`Unknown strip layer: ${layer}`);
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(extractPipeline);
+    pass.setBindGroup(
+      0,
+      device.createBindGroup({
+        layout: extractPipeline.getBindGroupLayout(0),
+        entries: [
+          {
+            binding: 0,
+            resource: device.importExternalTexture({ source: frame }),
+          },
+          {
+            binding: 1,
+            resource: texture.createView({ dimension: "2d-array" }),
+          },
+          { binding: 2, resource: { buffer: band } },
+        ],
+      }),
+    );
+    pass.dispatchWorkgroups(Math.ceil(stripWidth / 64), stripHeight, 1);
+    pass.end();
+    device.queue.submit([encoder.finish()]);
   }
 
   writeLayer(pixels: ArrayBuffer, layer: number): void {

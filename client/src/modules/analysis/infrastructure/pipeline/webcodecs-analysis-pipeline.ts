@@ -18,6 +18,7 @@ import {
   supportsRgbaCopy,
 } from "../frame-extraction/copy-strip-extractor.js";
 import { FrameStripExtractor } from "../frame-extraction/strip-extractor.js";
+import { HudGpu } from "../gpu/hud-gpu.js";
 import { createAnalysisVideoDecoder } from "../video-decoding/analysis-video-decoder.js";
 import {
   Mp4VideoSource,
@@ -76,6 +77,12 @@ export async function analyzeWithWebCodecs(
   const resultWorker = new Worker(workerUrl, { type: "module" });
   const meterWorker = new Worker(workerUrl, { type: "module" });
   const attackWorker = new Worker(workerUrl, { type: "module" });
+  // HUD の画素読み取りは、復号フレームをそのまま渡せる主スレッドの GPU が担う。
+  // 使えない環境では今までどおり WASM 側が strip を走査する。
+  let resultWorkerSessionRef: AnalyzerWorkerSession | undefined;
+  const hudGpu = await HudGpu.create((batch) => {
+    resultWorkerSessionRef?.sendHudGpuBatch(batch);
+  });
 
   return new Promise<AnalysisResult>((resolve, reject) => {
     let decoder: VideoDecoder | undefined;
@@ -119,7 +126,14 @@ export async function analyzeWithWebCodecs(
     let frameBridge!: WorkerFrameBridge;
     const frameDispatcher = new FrameDispatcher({
       extractor,
-      sendFrame: (frameIndex, pixels) => frameBridge.send(frameIndex, pixels),
+      sendFrame: (frameIndex, pixels, frame) => {
+        // 切り出しは呼び出しの中で GPU へ積みきる。復号器の持ち玉は限られて
+        // いるので、戻り次第このフレームは手放す。
+        return Promise.all([
+          hudGpu?.push(frame, frameIndex),
+          frameBridge.send(frameIndex, pixels),
+        ]).then(() => undefined);
+      },
       onError: fail,
     });
     frameBridge = new WorkerFrameBridge({
@@ -158,6 +172,9 @@ export async function analyzeWithWebCodecs(
               attackWorkerSession.drainFrames(),
             ]),
           )
+          // GPU の読み取りは最後のまとまりが残っている。解析を締める前に
+          // 流しきり、結果を送り終える。
+          .then(() => hudGpu?.finish())
           .then(() =>
             Promise.all([
               meterWorkerSession.finish(),
@@ -190,6 +207,7 @@ export async function analyzeWithWebCodecs(
         if (!settled) frameBridge.acceptAttack(message);
       },
     });
+    resultWorkerSessionRef = resultWorkerSession;
     signal.addEventListener("abort", onAbort, { once: true });
     if (signal.aborted) {
       onAbort();
@@ -287,7 +305,7 @@ export async function analyzeWithWebCodecs(
       { signal },
     );
 
-    resultWorkerSession.initialize(ownSide, analysisContext);
+    resultWorkerSession.initialize(ownSide, analysisContext, hudGpu !== null);
     meterWorkerSession.initialize(ownSide, analysisContext);
     attackWorkerSession.initialize(ownSide, analysisContext);
     try {

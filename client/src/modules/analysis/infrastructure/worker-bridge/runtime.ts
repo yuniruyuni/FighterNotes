@@ -50,6 +50,7 @@ async function handleMessage(
         await state.resultWasm.initialize({
           ownSide: message.ownSide,
           analysisContext: message.analysisContext,
+          hudFromGpu: message.hudFromGpu ?? false,
           spatialWidth: SPATIAL_WIDTH,
           spatialHeight: SPATIAL_HEIGHT,
         });
@@ -118,6 +119,14 @@ async function handleMessage(
       );
       break;
     }
+    case "hudGpuBatch":
+      requireRole(state, "result");
+      state.resultWasm.acceptHudGpuBatch(
+        message.firstFrame,
+        message.scores,
+        message.columns,
+      );
+      break;
     case "finishMeter":
       requireRole(state, "meter");
       respond(scope, {

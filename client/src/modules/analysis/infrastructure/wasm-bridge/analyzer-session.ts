@@ -5,9 +5,6 @@ import init, {
 } from "../../../../../../crates/wasm-bridge/pkg/wasm_bridge.js";
 import type { AnalysisContext } from "../../domain/context.js";
 import type { SpatialFrameHints } from "../../domain/result.js";
-import { ANALYSIS_STRIPS, ANALYSIS_WIDTH } from "../frame-extraction/layout.js";
-import { HpScoreBatcher } from "../gpu/hp-score-batcher.js";
-import { createHpScoreBackend } from "../gpu/hp-score-webgpu.js";
 import { buildHpDebugSnapshot } from "./hp-debug-snapshot.js";
 
 export interface WasmResultFrameBuffers {
@@ -59,13 +56,15 @@ interface AnalyzerWasmState {
 
 export class AnalyzerWasmSession {
   #state: AnalyzerWasmState | null = null;
-  #hpScores: HpScoreBatcher | null = null;
+  #hudFromGpu = false;
 
   async initialize(options: {
     readonly ownSide: string;
     readonly analysisContext: AnalysisContext;
     readonly spatialWidth: number;
     readonly spatialHeight: number;
+    /** HUD の画素読み取りを主スレッドの GPU が担うか。 */
+    readonly hudFromGpu: boolean;
   }): Promise<void> {
     await init();
     const analyzer = new Analyzer(options.ownSide);
@@ -86,24 +85,8 @@ export class AnalyzerWasmSession {
       spatialPtr: spatialAnalyzer.rgba_buf_ptr() as number,
       spatialLen: spatialAnalyzer.rgba_buf_len() as number,
     };
-    // GPU が使えるときだけ、HP スコアの画素数えをそちらへ回す。使えない
-    // 環境では今までどおり WASM 側が走査する。
-    const backend = await createHpScoreBackend({
-      rois: Analyzer.hp_score_rois() as Uint32Array,
-      table: Analyzer.hp_score_table() as Uint8Array,
-      sv: Analyzer.hsv_sv_table() as Float32Array,
-      norm: Analyzer.channel_norm_table() as Float32Array,
-      scans: Uint32Array.from([
-        ...(Analyzer.hp_column_scan("p1") as Uint32Array),
-        ...(Analyzer.hp_column_scan("p2") as Uint32Array),
-      ]),
-      stripWidth: ANALYSIS_WIDTH,
-      stripHeight: ANALYSIS_STRIPS.hud.height,
-    });
-    if (backend) {
-      this.#hpScores = new HpScoreBatcher(backend, (firstFrame, columns) => {
-        analyzer.apply_hp_columns(firstFrame, columns);
-      });
+    this.#hudFromGpu = options.hudFromGpu;
+    if (options.hudFromGpu) {
       analyzer.use_gpu_hp_scores();
       analyzer.use_gpu_hp_columns();
     }
@@ -115,7 +98,6 @@ export class AnalyzerWasmSession {
     dimensions: { readonly width: number; readonly height: number },
   ): Promise<WasmResultFrameTiming> {
     const state = this.#requireState();
-    await this.#hpScores?.push(buffers.hud, frameIndex);
     const t0 = performance.now();
     copyToWasm(state, state.hudPtr, state.hudLen, buffers.hud);
     copyToWasm(state, state.inputPtr, state.inputLen, buffers.input);
@@ -140,9 +122,6 @@ export class AnalyzerWasmSession {
     attackInfo: string,
   ): Promise<WasmFirstPassResult> {
     const { analyzer } = this.#requireState();
-    if (this.#hpScores) {
-      analyzer.apply_hp_score_counts(await this.#hpScores.finish());
-    }
     analyzer.set_meter_timeline(meterTimeline);
     // タイムラインが運ぶ観測は空なので、読み取ったワーカーの結果で置き換える。
     analyzer.set_attack_info_json(attackInfo);
@@ -161,6 +140,18 @@ export class AnalyzerWasmSession {
       },
       spatialWindows: analyzer.get_spatial_windows_json(),
     };
+  }
+
+  /** 主スレッドの GPU が読み取ったまとまりを受け取る。 */
+  acceptHudGpuBatch(
+    firstFrame: number,
+    scores: Uint32Array,
+    columns: Uint32Array,
+  ): void {
+    if (!this.#hudFromGpu) return;
+    const { analyzer } = this.#requireState();
+    analyzer.push_hp_score_counts(firstFrame, scores);
+    analyzer.apply_hp_columns(firstFrame, columns);
   }
 
   resetSpatialWindow(): void {

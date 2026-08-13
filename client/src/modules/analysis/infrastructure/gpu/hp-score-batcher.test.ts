@@ -3,6 +3,8 @@ import {
   HP_SCORE_BATCH,
   type HpScoreBackend,
   HpScoreBatcher,
+  type HudGpuBatch,
+  type HudGpuResult,
 } from "./hp-score-batcher.js";
 
 /** 置かれた枚数をそのまま数え返す、順番だけを見る偽の GPU。 */
@@ -16,10 +18,11 @@ class RecordingBackend implements HpScoreBackend {
     this.layers.push({ layer, mark: new Uint8Array(pixels)[0] ?? 0 });
   }
 
-  count(frames: number): Promise<{
-    readonly scores: Uint32Array;
-    readonly columns: Uint32Array;
-  }> {
+  extractLayer(): void {
+    throw new Error("この試験は画素を直接置く経路だけを見る");
+  }
+
+  count(frames: number): Promise<HudGpuResult> {
     this.batches.push(frames);
     const marks = this.layers.slice(-frames).map((entry) => entry.mark);
     const values = Uint32Array.from(
@@ -27,7 +30,7 @@ class RecordingBackend implements HpScoreBackend {
     );
     return new Promise((resolve) => {
       this.#resolvers.push(() =>
-        resolve({ scores: values, columns: new Uint32Array(0) }),
+        resolve({ scores: values, columns: Uint32Array.from(marks) }),
       );
     });
   }
@@ -46,9 +49,12 @@ function frame(mark: number): ArrayBuffer {
 }
 
 describe("HpScoreBatcher", () => {
-  test("keeps every frame's values at its own place", async () => {
+  test("hands each batch over with the frame it starts at", async () => {
     const backend = new RecordingBackend();
-    const batcher = new HpScoreBatcher(backend);
+    const batches: HudGpuBatch[] = [];
+    const batcher = new HpScoreBatcher(backend, (batch) => {
+      batches.push(batch);
+    });
 
     const pushes: Array<Promise<void>> = [];
     for (let index = 0; index < HP_SCORE_BATCH + 3; index += 1) {
@@ -58,15 +64,21 @@ describe("HpScoreBatcher", () => {
     await Promise.all(pushes);
     const finished = batcher.finish();
     backend.settleAll();
-    const values = await finished;
+    await finished;
 
     expect(backend.batches).toEqual([HP_SCORE_BATCH, 3]);
-    expect(values.length).toBe((HP_SCORE_BATCH + 3) * 4);
-    // 3 枚目のフレームの値が 3 枚目の位置にある。
-    expect([...values.slice(8, 12)]).toEqual([3, 100, 6, 200]);
-    // 最後のまとまりの先頭も同じ。
-    const last = HP_SCORE_BATCH * 4;
-    expect([...values.slice(last, last + 4)]).toEqual([9, 100, 18, 200]);
+    expect(batches.map((batch) => batch.firstFrame)).toEqual([
+      0,
+      HP_SCORE_BATCH,
+    ]);
+    // 3 枚目のフレームの値が、最初のまとまりの 3 番目にある。
+    expect([...(batches[0]?.scores.slice(8, 12) ?? [])]).toEqual([
+      3, 100, 6, 200,
+    ]);
+    // 後のまとまりは 9 枚目から始まる。
+    expect([...(batches[1]?.scores.slice(0, 4) ?? [])]).toEqual([
+      9, 100, 18, 200,
+    ]);
   });
 
   test("refuses frames that arrive out of order", async () => {
@@ -80,10 +92,11 @@ describe("HpScoreBatcher", () => {
 
   test("has nothing to count when no frame arrived", async () => {
     const backend = new RecordingBackend();
+    const batches: HudGpuBatch[] = [];
 
-    const values = await new HpScoreBatcher(backend).finish();
+    await new HpScoreBatcher(backend, (batch) => batches.push(batch)).finish();
 
-    expect(values.length).toBe(0);
+    expect(batches).toEqual([]);
     expect(backend.batches).toEqual([]);
   });
 });
