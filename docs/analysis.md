@@ -79,9 +79,11 @@ WebCodecs の `VideoDecoder` は encoded sample を順に decode し、各 `Vide
 
 切り出しは `VideoFrame.copyTo` で必要な領域だけを読む。`createImageBitmap` は切り出し範囲に
 関係なくフレーム全体を変換するため、実測で1回あたり約6msかかり、1フレーム3回呼ぶ以前の経路は
-21.7ms/frameを占めていた。等倍でよい領域は `copyTo` で直接読み、縮小が要る SA ゲージと FIGHT
-だけを1枚の ImageBitmap から描いて小領域を読み戻す。I420 の彩度は 2px 単位なので、奇数 x の
-領域は偶数境界から読んで1pxずらして書き写す。これを守れば strip の内容は canvas 経路と一致する。
+21.7ms/frameを占めていた。等倍でよい領域は `copyTo` で直接読む。縮小が要る SA
+ゲージも元領域だけを `copyTo` で読み、その画素から作った小さな ImageBitmap を縮小描画してから、
+詰めた小領域だけを読み戻す。フレーム全体を変換する `createImageBitmap` は、FIGHT を 4 フレームに
+1 回描くときだけ通る。I420 の彩度は 2px 単位なので、奇数の座標から始まる領域は偶数境界へ広げて
+読み、ずらして書き写す。これを守れば strip の内容は canvas 経路と一致する。
 `copyTo` の RGBA 変換に対応しない環境だけ、従来の canvas 経路へ落とす。
 
 main thread は描画と buffer 転送を担当し、`client/src/entrypoints/analyzer-worker.ts` から
