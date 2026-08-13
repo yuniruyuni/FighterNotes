@@ -71,18 +71,25 @@ impl Analyzer {
                 ),
             )
         };
-        let left_drive = video_analyzer::drive_gauge_read_from_hud_strip(
-            &self.hud_buf,
-            full_width,
-            full_height,
-            "left",
-        );
-        let right_drive = video_analyzer::drive_gauge_read_from_hud_strip(
-            &self.hud_buf,
-            full_width,
-            full_height,
-            "right",
-        );
+        // GPU が列を分類する取り決めなら、ゲージの値も後からまとめて入る。
+        let (left_drive, right_drive) = if self.drive_comes_from_gpu {
+            (unread_drive(), unread_drive())
+        } else {
+            (
+                video_analyzer::drive_gauge_read_from_hud_strip(
+                    &self.hud_buf,
+                    full_width,
+                    full_height,
+                    "left",
+                ),
+                video_analyzer::drive_gauge_read_from_hud_strip(
+                    &self.hud_buf,
+                    full_width,
+                    full_height,
+                    "right",
+                ),
+            )
+        };
         let left_super =
             video_analyzer::super_gauge_read_from_hud_strip(&self.hud_buf, full_width, "left");
         let right_super =
@@ -141,6 +148,31 @@ impl Analyzer {
     /// HP の充填率も GPU が分類した列から求めると決める。
     pub fn use_gpu_hp_columns(&mut self) {
         self.hp_fills_come_from_gpu = true;
+    }
+
+    /// ドライブゲージも GPU が分類した列から求めると決める。
+    pub fn use_gpu_drive(&mut self) {
+        self.drive_comes_from_gpu = true;
+    }
+
+    /// GPU へ渡すドライブゲージの走査の形。
+    pub fn drive_column_scan(side: &str) -> Vec<u32> {
+        video_analyzer::drive_column_scan(side)
+    }
+
+    /// いま持っている strip から、CPU 側で分類したドライブの列を返す。
+    pub fn drive_columns_from_strip(&self, side: &str) -> Vec<u8> {
+        video_analyzer::drive_columns_from_strip(&self.hud_buf, side)
+    }
+
+    /// GPU が分類したドライブの列を受け取る。並びは左・右の順。
+    pub fn apply_drive_columns(
+        &mut self,
+        first_frame: u32,
+        columns: &[u32],
+    ) -> Result<(), JsValue> {
+        self.apply_drive_columns_impl(first_frame, columns)
+            .map_err(|error| JsValue::from_str(&error))
     }
 
     /// GPU が分類した列を受け取り、フレームごとの充填率にする。
@@ -251,6 +283,36 @@ impl Analyzer {
         Ok(())
     }
 
+    pub(crate) fn apply_drive_columns_impl(
+        &mut self,
+        first_frame: u32,
+        columns: &[u32],
+    ) -> Result<(), String> {
+        let width = video_analyzer::drive_column_scan("left")[1] as usize;
+        let per_frame = width * 2;
+        if per_frame == 0 || !columns.len().is_multiple_of(per_frame) {
+            return Err(format!(
+                "drive columns must arrive in whole frames of {per_frame} values, got {}",
+                columns.len()
+            ));
+        }
+        for (offset, frame_columns) in columns.chunks_exact(per_frame).enumerate() {
+            let codes: Vec<u8> = frame_columns.iter().map(|&code| code as u8).collect();
+            let frame = first_frame as usize + offset;
+            if self.drive_reads.len() <= frame {
+                // 届かなかったフレームは「読めなかった」にしておく。
+                self.drive_reads
+                    .resize(frame + 1, (unread_drive(), unread_drive()));
+            }
+            let (left_codes, right_codes) = codes.split_at(width);
+            self.drive_reads[frame] = (
+                video_analyzer::drive_read_from_columns(left_codes, "left"),
+                video_analyzer::drive_read_from_columns(right_codes, "right"),
+            );
+        }
+        Ok(())
+    }
+
     pub(crate) fn apply_hp_columns_impl(
         &mut self,
         first_frame: u32,
@@ -287,6 +349,23 @@ impl Analyzer {
         if self.hp_scores_come_from_gpu && !self.hp_score_counts.is_empty() {
             let counts: Vec<u32> = self.hp_score_counts.concat();
             self.apply_hp_score_counts_impl(&counts)?;
+        }
+        if self.drive_comes_from_gpu {
+            if self.drive_reads.len() != self.features.len() {
+                return Err(format!(
+                    "drive reads mismatch: expected {} frames, got {}",
+                    self.features.len(),
+                    self.drive_reads.len()
+                ));
+            }
+            for (feature, (left, right)) in self.features.iter_mut().zip(self.drive_reads.iter()) {
+                feature.left_drive_ratio = normalized_drive(left);
+                feature.right_drive_ratio = normalized_drive(right);
+                feature.left_burnout = left.burnout;
+                feature.right_burnout = right.burnout;
+                feature.left_drive_uncertain = left.uncertain;
+                feature.right_drive_uncertain = right.uncertain;
+            }
         }
         if !self.hp_fills_come_from_gpu {
             return Ok(());
@@ -328,6 +407,16 @@ impl Analyzer {
             feature.right_ca_ready = right_critical || (right_gate && hp_is_low(right_hp));
         }
         Ok(())
+    }
+}
+
+/// まだ読み取りが届いていないゲージ。
+fn unread_drive() -> video_analyzer::DriveGaugeRead {
+    video_analyzer::DriveGaugeRead {
+        value: 0.0,
+        burnout: false,
+        recovery: 0.0,
+        uncertain: true,
     }
 }
 

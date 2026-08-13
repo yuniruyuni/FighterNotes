@@ -37,6 +37,7 @@ export type AnalyzerWorkerRequest =
       readonly firstFrame: number;
       readonly scores: Uint32Array;
       readonly columns: Uint32Array;
+      readonly drive: Uint32Array;
     }
   | { readonly type: "finishMeter" }
   | { readonly type: "finishAttack" }

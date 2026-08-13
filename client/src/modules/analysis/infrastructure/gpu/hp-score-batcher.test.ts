@@ -30,7 +30,11 @@ class RecordingBackend implements HpScoreBackend {
     );
     return new Promise((resolve) => {
       this.#resolvers.push(() =>
-        resolve({ scores: values, columns: Uint32Array.from(marks) }),
+        resolve({
+          scores: values,
+          columns: Uint32Array.from(marks),
+          drive: Uint32Array.from(marks),
+        }),
       );
     });
   }

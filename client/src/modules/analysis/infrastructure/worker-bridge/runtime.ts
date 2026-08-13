@@ -125,6 +125,7 @@ async function handleMessage(
         message.firstFrame,
         message.scores,
         message.columns,
+        message.drive,
       );
       break;
     case "finishMeter":

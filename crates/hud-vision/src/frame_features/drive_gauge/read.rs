@@ -1,7 +1,7 @@
 use super::{
     classification::{classify_drive_col, segment_drive_runs},
     decode::decode_drive_runs,
-    model::DriveGaugeRead,
+    model::{DriveColClass, DriveGaugeRead},
     scale_roi, SlantedRoi, DRIVE_BAR_SLOPE, DRIVE_ROI_LEFT, DRIVE_ROI_RIGHT,
 };
 
@@ -26,6 +26,20 @@ pub(crate) fn drive_gauge_read_impl(
     side: &str,
     y_strip_start: usize,
 ) -> DriveGaugeRead {
+    let cols = classify_drive_columns(rgba, width, height, side, y_strip_start);
+    drive_read_from_classes(cols, side)
+}
+
+/// 画素から列を分類するところだけを取り出したもの。
+///
+/// GPU 側が置き換えるのはここで、突き合わせの基準にもなる。
+pub(crate) fn classify_drive_columns(
+    rgba: &[u8],
+    width: u32,
+    height: u32,
+    side: &str,
+    y_strip_start: usize,
+) -> Vec<DriveColClass> {
     let is_left = side == "left";
     let (x1_base, x2_base, y1_base, y2_base) = if is_left {
         DRIVE_ROI_LEFT
@@ -39,9 +53,10 @@ pub(crate) fn drive_gauge_read_impl(
     let y1 = y1u as usize;
     let roi_w = x2 - x1;
     let roi_h = y2u as usize - y1;
-    let slope: f32 = match side {
-        "left" => DRIVE_BAR_SLOPE,
-        _ => -DRIVE_BAR_SLOPE,
+    let slope: f32 = if is_left {
+        DRIVE_BAR_SLOPE
+    } else {
+        -DRIVE_BAR_SLOPE
     };
     let roi = SlantedRoi {
         rgba,
@@ -52,20 +67,19 @@ pub(crate) fn drive_gauge_read_impl(
         strip_y: y_strip_start,
         slope,
     };
+    (0..roi_w)
+        .map(|column| classify_drive_col(&roi, column))
+        .collect()
+}
 
-    // 全列をアンカー起点（index 0 = 画面中央側）で分類。
-    // 左ゲージはアンカーが右端なので逆順、右ゲージは左端なのでそのまま。
-    let mut column = 0usize;
-    let mut cols = Vec::new();
-    cols.resize_with(roi_w, || {
-        let class = classify_drive_col(&roi, column);
-        column += 1;
-        class
-    });
-    if is_left {
+/// 列の並びからゲージを読む。
+///
+/// 左ゲージはアンカーが右端なので逆順、右ゲージは左端なのでそのまま。
+pub(crate) fn drive_read_from_classes(mut cols: Vec<DriveColClass>, side: &str) -> DriveGaugeRead {
+    let roi_w = cols.len();
+    if side == "left" {
         cols.reverse();
     }
-
     cols.truncate(cells_span(roi_w));
 
     let runs = segment_drive_runs(&cols);

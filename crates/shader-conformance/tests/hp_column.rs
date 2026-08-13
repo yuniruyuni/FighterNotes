@@ -8,12 +8,41 @@
 //! 除算の丸めは処理系ごとに違いうる。この試験が守るのは shader の筋であって、
 //! 数値の一致は実機での突き合わせで別途確かめている。
 
-use hud_vision::frame_features::{hp_column_scan, hp_columns_from_strip};
+use hud_vision::frame_features::{
+    drive_column_scan, drive_columns_from_strip, hp_column_scan, hp_columns_from_strip,
+};
 use wgpu::util::DeviceExt as _;
 
 const WIDTH: u32 = 1920;
 const STRIP_HEIGHT: u32 = 70;
-const SHADER: &str = include_str!("../../hud-vision/shaders/hp_column.wgsl");
+const HP_SHADER: &str = include_str!("../../hud-vision/shaders/hp_column.wgsl");
+const DRIVE_SHADER: &str = include_str!("../../hud-vision/shaders/drive_column.wgsl");
+
+/// 突き合わせる読み取り。走査の形と参照実装が対になっている。
+struct Recogniser {
+    name: &'static str,
+    shader: &'static str,
+    scan: fn(&str) -> Vec<u32>,
+    reference: fn(&[u8], &str) -> Vec<u8>,
+    sides: [&'static str; 2],
+}
+
+const RECOGNISERS: [Recogniser; 2] = [
+    Recogniser {
+        name: "HP バー",
+        shader: HP_SHADER,
+        scan: hp_column_scan,
+        reference: hp_columns_from_strip,
+        sides: ["p1", "p2"],
+    },
+    Recogniser {
+        name: "ドライブゲージ",
+        shader: DRIVE_SHADER,
+        scan: drive_column_scan,
+        reference: drive_columns_from_strip,
+        sides: ["left", "right"],
+    },
+];
 
 /// 一面の色、白い枠、斜めの縞。斜めの縞は走査の傾きを踏む。
 fn strips() -> Vec<(&'static str, Vec<u8>)> {
@@ -114,8 +143,14 @@ fn painted(color: impl Fn(u32, u32) -> [u8; 3]) -> Vec<u8> {
 }
 
 #[test]
-fn the_shader_classifies_columns_exactly_as_the_reference_does() {
-    let Some(gpu) = Gpu::open() else {
+fn every_shader_classifies_columns_exactly_as_the_reference_does() {
+    for recogniser in RECOGNISERS {
+        check(&recogniser);
+    }
+}
+
+fn check(recogniser: &Recogniser) {
+    let Some(gpu) = Gpu::open(recogniser) else {
         panic!(
             "ソフトウェアの Vulkan 実装が見つからない。lavapipe (mesa-vulkan-drivers / vulkan-swrast) を入れること"
         );
@@ -123,8 +158,8 @@ fn the_shader_classifies_columns_exactly_as_the_reference_does() {
 
     for (name, strip) in strips() {
         let from_shader = gpu.classify(&strip);
-        for (side_index, side) in ["p1", "p2"].into_iter().enumerate() {
-            let expected = hp_columns_from_strip(&strip, side);
+        for (side_index, side) in recogniser.sides.into_iter().enumerate() {
+            let expected = (recogniser.reference)(&strip, side);
             let width = expected.len();
             let actual = &from_shader[side_index * width..(side_index + 1) * width];
 
@@ -133,7 +168,8 @@ fn the_shader_classifies_columns_exactly_as_the_reference_does() {
                 .collect();
             assert!(
                 differing.is_empty(),
-                "{name} の {side} で {} 列ずれた。最初は列 {} (参照 {} / shader {})",
+                "{} の {name} の {side} で {} 列ずれた。最初は列 {} (参照 {} / shader {})",
+                recogniser.name,
                 differing.len(),
                 differing[0],
                 expected[differing[0]],
@@ -148,10 +184,12 @@ struct Gpu {
     queue: wgpu::Queue,
     pipeline: wgpu::ComputePipeline,
     columns_per_frame: u32,
+    scan: fn(&str) -> Vec<u32>,
+    sides: [&'static str; 2],
 }
 
 impl Gpu {
-    fn open() -> Option<Self> {
+    fn open(recogniser: &Recogniser) -> Option<Self> {
         let instance = wgpu::Instance::default();
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::None,
@@ -163,7 +201,7 @@ impl Gpu {
             pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()?;
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("hp_column"),
-            source: wgpu::ShaderSource::Wgsl(SHADER.into()),
+            source: wgpu::ShaderSource::Wgsl(recogniser.shader.into()),
         });
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("hp_column"),
@@ -173,12 +211,14 @@ impl Gpu {
             compilation_options: Default::default(),
             cache: None,
         });
-        let columns_per_frame = hp_column_scan("p1")[1];
+        let columns_per_frame = (recogniser.scan)(recogniser.sides[0])[1];
         Some(Self {
             device,
             queue,
             pipeline,
             columns_per_frame,
+            scan: recogniser.scan,
+            sides: recogniser.sides,
         })
     }
 
@@ -210,8 +250,8 @@ impl Gpu {
 
         // uniform は 16 バイト単位。走査の形も 4 つずつに詰める。
         let mut scans = [0u32; 16];
-        for (side_index, side) in ["p1", "p2"].into_iter().enumerate() {
-            let scan = hp_column_scan(side);
+        for (side_index, side) in self.sides.into_iter().enumerate() {
+            let scan = (self.scan)(side);
             scans[side_index * 8..side_index * 8 + 4].copy_from_slice(&scan[..4]);
             scans[side_index * 8 + 4..side_index * 8 + 6].copy_from_slice(&scan[4..6]);
         }

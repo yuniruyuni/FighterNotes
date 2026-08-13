@@ -36,6 +36,10 @@ export class HudGpu {
       table: Analyzer.hp_score_table() as Uint8Array,
       sv: Analyzer.hsv_sv_table() as Float32Array,
       norm: Analyzer.channel_norm_table() as Float32Array,
+      driveScans: Uint32Array.from([
+        ...(Analyzer.drive_column_scan("left") as Uint32Array),
+        ...(Analyzer.drive_column_scan("right") as Uint32Array),
+      ]),
       scans: Uint32Array.from([
         ...(Analyzer.hp_column_scan("p1") as Uint32Array),
         ...(Analyzer.hp_column_scan("p2") as Uint32Array),

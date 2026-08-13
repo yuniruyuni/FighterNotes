@@ -1,3 +1,4 @@
+import { DRIVE_COLUMN_SHADER } from "./drive-column-shader.js";
 import { HP_COLUMN_SHADER } from "./hp-column-shader.js";
 import {
   HP_SCORE_BATCH,
@@ -15,6 +16,8 @@ export interface HpScoreRois {
   readonly table: Uint8Array;
   /** 列走査の形。p1・p2 の順に `[x1, roi_w, strip_y1, row_start, row_end, 右下がりか]`。 */
   readonly scans: Uint32Array;
+  /** ドライブゲージの走査の形。左・右の順。 */
+  readonly driveScans: Uint32Array;
   /** `max * 256 + min` で引く彩度と明度。 */
   readonly sv: Float32Array;
   /** チャンネル値を 0..1 へ正規化した値。 */
@@ -61,20 +64,25 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 `;
 
+interface ColumnPass {
+  readonly pipeline: GPUComputePipeline;
+  readonly bindGroup: GPUBindGroup;
+  readonly buffer: GPUBuffer;
+  readonly stagings: GPUBuffer[];
+  readonly width: number;
+}
+
 interface Resources {
   readonly device: GPUDevice;
   readonly pipeline: GPUComputePipeline;
-  readonly columnPipeline: GPUComputePipeline;
+  readonly hpPass: ColumnPass;
+  readonly drivePass: ColumnPass;
   readonly texture: GPUTexture;
   readonly counts: GPUBuffer;
-  readonly columns: GPUBuffer;
   readonly bindGroup: GPUBindGroup;
-  readonly columnBindGroup: GPUBindGroup;
   readonly stagings: GPUBuffer[];
-  readonly columnStagings: GPUBuffer[];
   readonly rois: Uint32Array;
   readonly stripWidth: number;
-  readonly roiWidth: number;
   readonly extractPipeline: GPUComputePipeline;
   readonly bands: GPUBuffer[];
   readonly stripHeight: number;
@@ -96,6 +104,66 @@ export async function createHpScoreBackend(
     device.destroy();
     return null;
   }
+}
+
+/**
+ * 列分類のパスを組み立てる。HP バーもドライブゲージも、走査の形が違うだけで
+ * 同じ形をしている。
+ */
+function buildColumnPass(
+  device: GPUDevice,
+  code: string,
+  scanValues: Uint32Array,
+  texture: GPUTexture,
+  sv: GPUBuffer,
+  norm: GPUBuffer,
+): ColumnPass {
+  const width = scanValues[1] ?? 0;
+  const pipeline = device.createComputePipeline({
+    layout: "auto",
+    compute: {
+      module: device.createShaderModule({ code }),
+      entryPoint: "main",
+    },
+  });
+  const bytes = HP_SCORE_BATCH * 2 * width * 4;
+  const buffer = device.createBuffer({
+    size: bytes,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+  });
+  // uniform は 16 バイト単位で読むので、走査の形も 4 つずつに詰める。
+  const scans = device.createBuffer({
+    size: 4 * 4 * 4,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+  const packed = new Uint32Array(new ArrayBuffer(4 * 4 * 4));
+  for (const side of [0, 1]) {
+    const at = side * 6;
+    packed.set(scanValues.subarray(at, at + 4), side * 8);
+    packed.set(scanValues.subarray(at + 4, at + 6), side * 8 + 4);
+  }
+  device.queue.writeBuffer(scans, 0, packed);
+  return {
+    pipeline,
+    buffer,
+    width,
+    bindGroup: device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: texture.createView({ dimension: "2d-array" }) },
+        { binding: 1, resource: { buffer: scans } },
+        { binding: 2, resource: { buffer } },
+        { binding: 3, resource: { buffer: sv } },
+        { binding: 4, resource: { buffer: norm } },
+      ],
+    }),
+    stagings: Array.from({ length: HP_SCORE_IN_FLIGHT }, () =>
+      device.createBuffer({
+        size: bytes,
+        usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+      }),
+    ),
+  };
 }
 
 function build(device: GPUDevice, layout: HpScoreRois): Resources {
@@ -171,32 +239,6 @@ function build(device: GPUDevice, layout: HpScoreRois): Resources {
     }),
   );
 
-  // 列分類。同じ strip を読むので、画素を渡すのは 1 回で済む。
-  const roiWidth = layout.scans[1] ?? 0;
-  const columnPipeline = device.createComputePipeline({
-    layout: "auto",
-    compute: {
-      module: device.createShaderModule({ code: HP_COLUMN_SHADER }),
-      entryPoint: "main",
-    },
-  });
-  const columnBytes = HP_SCORE_BATCH * 2 * roiWidth * 4;
-  const columns = device.createBuffer({
-    size: columnBytes,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
-  });
-  // uniform は 16 バイト単位で読むので、走査の形も 4 つずつに詰める。
-  const scans = device.createBuffer({
-    size: 4 * 4 * 4,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-  });
-  const scanValues = new Uint32Array(new ArrayBuffer(4 * 4 * 4));
-  for (const side of [0, 1]) {
-    const at = side * 6;
-    scanValues.set(layout.scans.subarray(at, at + 4), side * 8);
-    scanValues.set(layout.scans.subarray(at + 4, at + 6), side * 8 + 4);
-  }
-  device.queue.writeBuffer(scans, 0, scanValues);
   const svBuffer = device.createBuffer({
     size: layout.sv.length * 4,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
@@ -211,24 +253,23 @@ function build(device: GPUDevice, layout: HpScoreRois): Resources {
   const normValues = new Float32Array(new ArrayBuffer(layout.norm.length * 4));
   normValues.set(layout.norm);
   device.queue.writeBuffer(normBuffer, 0, normValues);
-  const columnBindGroup = device.createBindGroup({
-    layout: columnPipeline.getBindGroupLayout(0),
-    entries: [
-      {
-        binding: 0,
-        resource: texture.createView({ dimension: "2d-array" }),
-      },
-      { binding: 1, resource: { buffer: scans } },
-      { binding: 2, resource: { buffer: columns } },
-      { binding: 3, resource: { buffer: svBuffer } },
-      { binding: 4, resource: { buffer: normBuffer } },
-    ],
-  });
-  const columnStagings = Array.from({ length: HP_SCORE_IN_FLIGHT }, () =>
-    device.createBuffer({
-      size: columnBytes,
-      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-    }),
+
+  // 列分類。同じ strip を読むので、画素を渡すのは 1 回で済む。
+  const hpPass = buildColumnPass(
+    device,
+    HP_COLUMN_SHADER,
+    layout.scans,
+    texture,
+    svBuffer,
+    normBuffer,
+  );
+  const drivePass = buildColumnPass(
+    device,
+    DRIVE_COLUMN_SHADER,
+    layout.driveScans,
+    texture,
+    svBuffer,
+    normBuffer,
   );
 
   return {
@@ -237,11 +278,8 @@ function build(device: GPUDevice, layout: HpScoreRois): Resources {
     bands,
     stripHeight: layout.stripHeight,
     pipeline,
-    columnPipeline,
-    columns,
-    columnBindGroup,
-    columnStagings,
-    roiWidth,
+    hpPass,
+    drivePass,
     texture,
     counts,
     bindGroup,
@@ -304,21 +342,19 @@ class WebGpuHpScoreBackend implements HpScoreBackend {
     const {
       device,
       pipeline,
-      columnPipeline,
       counts,
-      columns,
       bindGroup,
-      columnBindGroup,
       stagings,
-      columnStagings,
       rois,
-      roiWidth,
+      hpPass,
+      drivePass,
     } = this.#resources;
     const slot = this.#nextStaging % stagings.length;
     this.#nextStaging += 1;
     const staging = stagings[slot];
-    const columnStaging = columnStagings[slot];
-    if (!staging || !columnStaging) {
+    const hpStaging = hpPass.stagings[slot];
+    const driveStaging = drivePass.stagings[slot];
+    if (!staging || !hpStaging || !driveStaging) {
       throw new Error("HP score staging buffer is missing");
     }
 
@@ -330,28 +366,43 @@ class WebGpuHpScoreBackend implements HpScoreBackend {
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, bindGroup);
     pass.dispatchWorkgroups(Math.ceil(width / 64), height, frames * 2);
-    pass.setPipeline(columnPipeline);
-    pass.setBindGroup(0, columnBindGroup);
-    pass.dispatchWorkgroups(Math.ceil(roiWidth / 64), 1, frames * 2);
+    for (const columnPass of [hpPass, drivePass]) {
+      pass.setPipeline(columnPass.pipeline);
+      pass.setBindGroup(0, columnPass.bindGroup);
+      pass.dispatchWorkgroups(Math.ceil(columnPass.width / 64), 1, frames * 2);
+    }
     pass.end();
     const wantedCounts = frames * HP_SCORE_VALUES_PER_FRAME * 4;
-    const wantedColumns = frames * 2 * roiWidth * 4;
+    const wantedHp = frames * 2 * hpPass.width * 4;
+    const wantedDrive = frames * 2 * drivePass.width * 4;
     encoder.copyBufferToBuffer(counts, 0, staging, 0, wantedCounts);
-    encoder.copyBufferToBuffer(columns, 0, columnStaging, 0, wantedColumns);
+    encoder.copyBufferToBuffer(hpPass.buffer, 0, hpStaging, 0, wantedHp);
+    encoder.copyBufferToBuffer(
+      drivePass.buffer,
+      0,
+      driveStaging,
+      0,
+      wantedDrive,
+    );
     device.queue.submit([encoder.finish()]);
 
     await Promise.all([
       staging.mapAsync(GPUMapMode.READ, 0, wantedCounts),
-      columnStaging.mapAsync(GPUMapMode.READ, 0, wantedColumns),
+      hpStaging.mapAsync(GPUMapMode.READ, 0, wantedHp),
+      driveStaging.mapAsync(GPUMapMode.READ, 0, wantedDrive),
     ]);
     const scores = Uint32Array.from(
       new Uint32Array(staging.getMappedRange(0, wantedCounts)),
     );
-    const columnValues = Uint32Array.from(
-      new Uint32Array(columnStaging.getMappedRange(0, wantedColumns)),
+    const columns = Uint32Array.from(
+      new Uint32Array(hpStaging.getMappedRange(0, wantedHp)),
+    );
+    const drive = Uint32Array.from(
+      new Uint32Array(driveStaging.getMappedRange(0, wantedDrive)),
     );
     staging.unmap();
-    columnStaging.unmap();
-    return { scores, columns: columnValues };
+    hpStaging.unmap();
+    driveStaging.unmap();
+    return { scores, columns, drive };
   }
 }

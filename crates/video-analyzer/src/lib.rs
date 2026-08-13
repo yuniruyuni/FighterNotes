@@ -29,10 +29,11 @@ pub use attack_info::{
 pub use context::{AnalysisContext, PlayerContext};
 pub use frame_data::{character_names, punish_options, StrikeKind};
 pub use frame_features::{
-    channel_norm_table, correct_hp_retroactive, drive_bar_debug_json, drive_fill_ratio,
-    drive_fill_ratio_from_hud_strip, drive_gauge_read, drive_gauge_read_from_hud_strip,
-    hp_bar_debug_json, hp_bar_score, hp_bar_score_from_hud_strip, hp_col_active, hp_col_orange,
-    hp_col_pixel_detail_json, hp_col_yellow, hp_column_scan, hp_columns_from_strip, hp_damage_fill,
+    channel_norm_table, correct_hp_retroactive, drive_bar_debug_json, drive_column_scan,
+    drive_columns_from_strip, drive_fill_ratio, drive_fill_ratio_from_hud_strip, drive_gauge_read,
+    drive_gauge_read_from_hud_strip, drive_read_from_columns, hp_bar_debug_json, hp_bar_score,
+    hp_bar_score_from_hud_strip, hp_col_active, hp_col_orange, hp_col_pixel_detail_json,
+    hp_col_yellow, hp_column_scan, hp_columns_from_strip, hp_damage_fill,
     hp_damage_fill_from_hud_strip, hp_fill_ratio, hp_fill_ratio_from_columns,
     hp_fill_ratio_from_hud_strip, hp_fill_ratio_with_quality,
     hp_fill_ratio_with_quality_from_hud_strip, hp_parallelogram, hp_score_decision_table,

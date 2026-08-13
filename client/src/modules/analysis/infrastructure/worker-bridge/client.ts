@@ -101,6 +101,7 @@ export class AnalyzerWorkerSession {
     readonly firstFrame: number;
     readonly scores: Uint32Array;
     readonly columns: Uint32Array;
+    readonly drive: Uint32Array;
   }): void {
     if (this.#terminated) return;
     postAnalyzerWorkerMessage(this.#worker, { type: "hudGpuBatch", ...batch });

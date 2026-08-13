@@ -12,6 +12,8 @@ export interface HudGpuResult {
   readonly scores: Uint32Array;
   /** 1 フレームあたり p1・p2 の順に並ぶ列の色。 */
   readonly columns: Uint32Array;
+  /** 1 フレームあたり左・右の順に並ぶドライブゲージの列。 */
+  readonly drive: Uint32Array;
 }
 
 /**

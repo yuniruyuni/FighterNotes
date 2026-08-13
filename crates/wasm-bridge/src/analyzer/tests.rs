@@ -518,3 +518,138 @@ fn consecutive_batches_fill_consecutive_frames() {
         ]
     );
 }
+
+/// GPU が分類したドライブの列は、画素を走査していた頃と同じ特徴量になる。
+#[test]
+fn applied_gpu_drive_columns_match_what_the_pixel_scan_produced() {
+    let mut scanned = Analyzer::new("p1");
+    let mut applied = Analyzer::new("p1");
+    applied.use_gpu_drive();
+
+    for frame_index in 0..3 {
+        scanned.push_hud_features_inplace(1920, 1080, frame_index);
+        applied.push_hud_features_inplace(1920, 1080, frame_index);
+    }
+
+    // strip は空なので、走査した側と同じ「ROI に収まらない」列になる。
+    let width = video_analyzer::drive_column_scan("left")[1] as usize;
+    applied
+        .apply_drive_columns_impl(0, &vec![4u32; 3 * width * 2])
+        .unwrap();
+    applied.apply_hp_fills().unwrap();
+
+    assert_eq!(applied.get_features_json(), scanned.get_features_json());
+}
+
+/// 左右で別の並びを渡せば、左右で別の値になる。取り違えると相手の
+/// ゲージを自分のものとして読む。
+#[test]
+fn each_sides_drive_columns_land_on_that_side() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_drive();
+    analyzer.push_hud_features_inplace(1920, 1080, 0);
+    let width = video_analyzer::drive_column_scan("left")[1] as usize;
+    let mut left_lit = vec![3u32; width * 2];
+    left_lit[..width].fill(0);
+    let mut right_lit = vec![3u32; width * 2];
+    right_lit[width..].fill(0);
+
+    analyzer.push_hud_features_inplace(1920, 1080, 1);
+    analyzer.apply_drive_columns_impl(0, &left_lit).unwrap();
+    analyzer.apply_drive_columns_impl(1, &right_lit).unwrap();
+    analyzer.apply_hp_fills().unwrap();
+
+    assert_eq!(
+        (
+            analyzer.features[0].left_drive_ratio,
+            analyzer.features[0].right_drive_ratio
+        ),
+        (1.0, 0.0),
+        "左だけ点灯させた結果になっていない"
+    );
+    assert_eq!(
+        (
+            analyzer.features[1].left_drive_ratio,
+            analyzer.features[1].right_drive_ratio
+        ),
+        (0.0, 1.0),
+        "右だけ点灯させた結果になっていない"
+    );
+}
+
+/// 続けて届くまとまりは、フレームを飛ばさずに並ぶ。
+#[test]
+fn consecutive_drive_batches_fill_consecutive_frames() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_drive();
+    let width = video_analyzer::drive_column_scan("left")[1] as usize;
+    let lit = vec![0u32; width * 2 * 2];
+    let rest = vec![3u32; width * 2 * 2];
+
+    analyzer.apply_drive_columns_impl(0, &lit).unwrap();
+    analyzer.apply_drive_columns_impl(2, &rest).unwrap();
+
+    assert_eq!(analyzer.drive_reads.len(), 4);
+    assert_eq!(analyzer.drive_reads[1].0.value, 6.0, "1 枚目が満タンでない");
+    assert_eq!(analyzer.drive_reads[2].0.value, 0.0, "3 枚目が空でない");
+}
+
+/// フレーム数の合わない列は断る。詰めると以降が全部ずれる。
+#[test]
+fn drive_columns_that_do_not_fill_whole_frames_are_refused() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_drive();
+
+    assert!(analyzer.apply_drive_columns_impl(0, &[0, 1, 2]).is_err());
+}
+
+/// 届かなかったフレームは「読めなかった」にしておく。
+#[test]
+fn drive_frames_that_never_arrived_stay_unread() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_drive();
+    let width = video_analyzer::drive_column_scan("left")[1] as usize;
+
+    analyzer
+        .apply_drive_columns_impl(2, &vec![3u32; width * 2])
+        .unwrap();
+
+    assert_eq!(analyzer.drive_reads.len(), 3);
+    // 読めなかった印だけを立て、値や状態は勝手に決めない。
+    assert!(analyzer.drive_reads[0].0.uncertain);
+    assert!(
+        !analyzer.drive_reads[0].0.burnout,
+        "バーンアウト扱いにしている"
+    );
+    assert_eq!(analyzer.drive_reads[0].0.value, 0.0);
+    assert_eq!(analyzer.drive_reads[0].0.recovery, 0.0);
+    assert!(analyzer.drive_reads[1].1.uncertain);
+}
+
+/// 後から前のまとまりが届いても、既に入った分を壊さない。
+#[test]
+fn a_late_drive_batch_does_not_wipe_the_frames_after_it() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_drive();
+    let width = video_analyzer::drive_column_scan("left")[1] as usize;
+
+    analyzer
+        .apply_drive_columns_impl(2, &vec![0u32; width * 2])
+        .unwrap();
+    analyzer
+        .apply_drive_columns_impl(0, &vec![3u32; width * 2])
+        .unwrap();
+
+    assert_eq!(analyzer.drive_reads.len(), 3, "後の分を切り落としている");
+    assert_eq!(analyzer.drive_reads[2].0.value, 6.0);
+}
+
+/// 数が合わない受け取りは断る。
+#[test]
+fn drive_reads_must_cover_every_frame() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_drive();
+    analyzer.push_hud_features_inplace(1920, 1080, 0);
+
+    assert!(analyzer.apply_hp_fills().is_err());
+}

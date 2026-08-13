@@ -89,6 +89,7 @@ export class AnalyzerWasmSession {
     if (options.hudFromGpu) {
       analyzer.use_gpu_hp_scores();
       analyzer.use_gpu_hp_columns();
+      analyzer.use_gpu_drive();
     }
   }
 
@@ -147,11 +148,13 @@ export class AnalyzerWasmSession {
     firstFrame: number,
     scores: Uint32Array,
     columns: Uint32Array,
+    drive: Uint32Array,
   ): void {
     if (!this.#hudFromGpu) return;
     const { analyzer } = this.#requireState();
     analyzer.push_hp_score_counts(firstFrame, scores);
     analyzer.apply_hp_columns(firstFrame, columns);
+    analyzer.apply_drive_columns(firstFrame, drive);
   }
 
   resetSpatialWindow(): void {

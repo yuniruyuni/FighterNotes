@@ -92,3 +92,49 @@ pub fn drive_fill_ratio_from_hud_strip(
         d.value / 6.0
     }
 }
+
+/// GPU が分類した列からドライブゲージを読む。
+///
+/// 色は `DriveColClass` の並び順の番号で受け取る。
+pub fn drive_read_from_columns(columns: &[u8], side: &str) -> DriveGaugeRead {
+    let classes = columns
+        .iter()
+        .map(|&code| match code {
+            0 => model::DriveColClass::Lit,
+            1 => model::DriveColClass::Gray,
+            2 => model::DriveColClass::Foreign,
+            4 => model::DriveColClass::Outside,
+            _ => model::DriveColClass::Rest,
+        })
+        .collect();
+    read::drive_read_from_classes(classes, side)
+}
+
+/// GPU へ渡す列走査の形。
+///
+/// `[x1, roi_w, strip_y1, roi_h, gray_row_start, 右下がりか]`。
+pub fn drive_column_scan(side: &str) -> Vec<u32> {
+    let (x1_base, x2_base, y1_base, y2_base) = if side == "left" {
+        DRIVE_ROI_LEFT
+    } else {
+        DRIVE_ROI_RIGHT
+    };
+    let (x1, x2, y1, y2) = scale_roi(x1_base, x2_base, y1_base, y2_base, 1920, 1080);
+    let roi_h = (y2 - y1) as usize;
+    vec![
+        x1,
+        x2 - x1,
+        y1 - HUD_STRIP_Y,
+        roi_h as u32,
+        burnout_row_start(roi_h) as u32,
+        u32::from(side == "left"),
+    ]
+}
+
+/// strip から列の分類を番号で取り出す。GPU の答え合わせに使う。
+pub fn drive_columns_from_strip(strip: &[u8], side: &str) -> Vec<u8> {
+    read::classify_drive_columns(strip, 1920, 1080, side, HUD_STRIP_Y as usize)
+        .into_iter()
+        .map(|class| class as u8)
+        .collect()
+}
