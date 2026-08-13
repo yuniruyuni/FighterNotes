@@ -31,20 +31,11 @@ const rustJob = workflow.jobs.rust;
 const shards = rustJob.strategy.matrix.include;
 const sharded = shards.flatMap((shard) => shard.crates.split(/\s+/)).filter(Boolean);
 
-/**
- * 実装を持たない crate。変異させる中身が無いので対象から外す。
- *
- * ここへ足すのは「テストだけの crate」に限る。実装がある crate を入れると、
- * 検査されないまま緑になるという、この確認が防いでいる状態そのものになる。
- */
-const TEST_ONLY_CRATES = ["shader-conformance"];
-
 const metadata = await new Response(
   Bun.spawn(["cargo", "metadata", "--no-deps", "--format-version", "1"]).stdout,
 ).json();
 const crates: string[] = metadata.packages
   .map((crate: { name: string }) => crate.name)
-  .filter((name: string) => !TEST_ONLY_CRATES.includes(name))
   .sort();
 
 const problems: string[] = [];

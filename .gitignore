@@ -17,6 +17,8 @@ node_modules/
 
 # Build output
 /target/
+# 適合テストの crate は本体のワークスペースから外してあり、生成物も別に出る。
+crates/shader-conformance/target/
 /crates/wasm-bridge/pkg/
 /client/static/
 /server/dist/

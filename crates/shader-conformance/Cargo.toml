@@ -1,3 +1,8 @@
+# 本体のワークスペースからは切り離してある。wgpu は他のプラットフォーム向けの
+# 依存まで lock に載せるため、同じワークスペースに置くと本体の取得や
+# ライセンス表記の生成まで巻き込む。試験だけの crate なので分けておく。
+[workspace]
+
 [package]
 name = "shader-conformance"
 version = "0.1.0"
@@ -9,6 +14,8 @@ publish = false
 hud-vision = { path = "../hud-vision" }
 
 [dev-dependencies]
-wgpu = "27"
+# 走らせるのは CI とローカルの Vulkan だけ。既定の機能のままだと他の
+# プラットフォーム向けの依存まで lock に入り、CI の取得が止まる。
+wgpu = { version = "27", default-features = false, features = ["vulkan", "wgsl"] }
 pollster = "0.4"
 bytemuck = "1"

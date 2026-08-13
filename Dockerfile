@@ -22,6 +22,8 @@ COPY client/ /work/client/
 COPY DATA_NOTICE.md /work/DATA_NOTICE.md
 COPY THIRD_PARTY_NOTICES.md /work/THIRD_PARTY_NOTICES.md
 COPY --from=build-wasm /work/crates/wasm-bridge/pkg/ /work/crates/wasm-bridge/pkg/
+# 認識の shader。参照実装である Rust の隣に置いてあり、束ねる際に読み込む。
+COPY crates/hud-vision/shaders/ /work/crates/hud-vision/shaders/
 WORKDIR /work/client
 RUN bun run build:app
 

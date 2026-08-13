@@ -16,7 +16,6 @@ members = [
     "crates/match-event-model",
     "crates/meter-tracker",
     "crates/pixel-color",
-    "crates/shader-conformance",
     "crates/spatial-refine",
     "crates/temporal-confirm",
     "crates/video-analyzer",

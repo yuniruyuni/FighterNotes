@@ -4,7 +4,7 @@ export const thirdPartyNoticeMetadata = {
     "43c29be6e4a577990add3e3c7d22eaac0f6cf5dfe3086ae3d1870c9f7f8fafde",
   cargoAboutVersion: "0.9.1",
   cargoLockSha256:
-    "1032cbbae5cf2dbef0bd46364ce7c5c8ce6d237ce81d6084146c45f8e1ff4c74",
+    "83a9386b0f693886ea90652af139a16029e2beb5e5e60b685d03cfd5c0d0d2bc",
   npmLicenseCheckerVersion: "5.0.1",
 } as const;
 
