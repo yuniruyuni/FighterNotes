@@ -91,12 +91,21 @@ export class AnalyzerWasmSession {
     const backend = await createHpScoreBackend({
       rois: Analyzer.hp_score_rois() as Uint32Array,
       table: Analyzer.hp_score_table() as Uint8Array,
+      sv: Analyzer.hsv_sv_table() as Float32Array,
+      norm: Analyzer.channel_norm_table() as Float32Array,
+      scans: Uint32Array.from([
+        ...(Analyzer.hp_column_scan("p1") as Uint32Array),
+        ...(Analyzer.hp_column_scan("p2") as Uint32Array),
+      ]),
       stripWidth: ANALYSIS_WIDTH,
       stripHeight: ANALYSIS_STRIPS.hud.height,
     });
     if (backend) {
-      this.#hpScores = new HpScoreBatcher(backend);
+      this.#hpScores = new HpScoreBatcher(backend, (firstFrame, columns) => {
+        analyzer.apply_hp_columns(firstFrame, columns);
+      });
       analyzer.use_gpu_hp_scores();
+      analyzer.use_gpu_hp_columns();
     }
   }
 

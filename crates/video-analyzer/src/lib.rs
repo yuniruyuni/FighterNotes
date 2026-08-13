@@ -29,14 +29,14 @@ pub use attack_info::{
 pub use context::{AnalysisContext, PlayerContext};
 pub use frame_data::{character_names, punish_options, StrikeKind};
 pub use frame_features::{
-    correct_hp_retroactive, drive_bar_debug_json, drive_fill_ratio,
+    channel_norm_table, correct_hp_retroactive, drive_bar_debug_json, drive_fill_ratio,
     drive_fill_ratio_from_hud_strip, drive_gauge_read, drive_gauge_read_from_hud_strip,
     hp_bar_debug_json, hp_bar_score, hp_bar_score_from_hud_strip, hp_col_active, hp_col_orange,
-    hp_col_pixel_detail_json, hp_col_yellow, hp_column_scan, hp_damage_fill,
+    hp_col_pixel_detail_json, hp_col_yellow, hp_column_scan, hp_columns_from_strip, hp_damage_fill,
     hp_damage_fill_from_hud_strip, hp_fill_ratio, hp_fill_ratio_from_columns,
     hp_fill_ratio_from_hud_strip, hp_fill_ratio_with_quality,
     hp_fill_ratio_with_quality_from_hud_strip, hp_parallelogram, hp_score_decision_table,
-    hp_score_roi_in_strip, super_gauge_debug_json, super_gauge_read,
+    hp_score_roi_in_strip, hsv_sv_table, super_gauge_debug_json, super_gauge_read,
     super_gauge_read_from_hud_strip, DriveGaugeRead, FrameFeatures, HpParallelogram,
     SuperGaugeRead, HP_ROI_P1, HP_ROI_P2, HUD_STRIP_H, HUD_STRIP_Y,
 };

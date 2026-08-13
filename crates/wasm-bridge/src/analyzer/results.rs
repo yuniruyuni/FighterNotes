@@ -178,6 +178,9 @@ impl Analyzer {
     }
 
     pub fn finish(&mut self) -> Result<String, JsValue> {
+        // GPU から届いた充填率は、解析を組み立てる前に入れておく。
+        self.apply_hp_fills()
+            .map_err(|error| JsValue::from_str(&error))?;
         self.ensure_events()
             .map_err(|error| JsValue::from_str(&error))?;
         Ok(self.report_json())

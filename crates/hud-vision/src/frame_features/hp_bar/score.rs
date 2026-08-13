@@ -112,6 +112,38 @@ pub fn hp_column_scan(side: &str) -> Vec<u32> {
     ]
 }
 
+/// GPU が引く彩度と明度の表。索引は `max * 256 + min`、値は `[s, v]`。
+///
+/// どちらも 3 チャンネルの最大値と最小値だけで決まる。GPU で計算し直すと
+/// 除算の丸めが処理系依存になるため、参照実装の値をそのまま渡す。
+pub fn hsv_sv_table() -> Vec<f32> {
+    let mut table = vec![0.0f32; 256 * 256 * 2];
+    for max in 0..256usize {
+        for min in 0..=max {
+            let [_, s, v] = rgb_to_hsv(max as f32, min as f32, min as f32);
+            table[(max * 256 + min) * 2] = s;
+            table[(max * 256 + min) * 2 + 1] = v;
+        }
+    }
+    table
+}
+
+/// GPU が引く、チャンネル値を 0..1 へ正規化した表。
+///
+/// `rgb_to_hsv` は各チャンネルを 255 で割ってから色相を出す。この割り算も
+/// GPU では丸めがずれるため、値そのものを渡す。
+pub fn channel_norm_table() -> Vec<f32> {
+    (0..256).map(|value| value as f32 / 255.0).collect()
+}
+
+/// strip から列の色を番号で取り出す。GPU 側の答え合わせに使う。
+pub fn hp_columns_from_strip(strip: &[u8], side: &str) -> Vec<u8> {
+    super::decode::classify_columns(strip, 1920, 1080, side, HUD_STRIP_Y as usize)
+        .into_iter()
+        .map(|color| color as u8)
+        .collect()
+}
+
 fn hp_col_color(code: u8) -> HpColColor {
     match code {
         0 => HpColColor::White,

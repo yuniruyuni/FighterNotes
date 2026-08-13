@@ -180,3 +180,265 @@ fn a_mismatched_count_length_is_refused() {
 
     assert!(analyzer.apply_hp_score_counts_impl(&[0, 1]).is_err());
 }
+
+/// GPU が分類した列を渡した解析器は、画素を走査していた頃と同じ特徴量に
+/// なる。CA の判定は HP を見るので、後から入れる順番を間違えると
+/// ここだけが静かにずれる。
+#[test]
+fn applied_gpu_columns_match_what_the_pixel_scan_produced() {
+    let mut scanned = Analyzer::new("p1");
+    let mut applied = Analyzer::new("p1");
+    applied.use_gpu_hp_scores();
+    applied.use_gpu_hp_columns();
+
+    for frame_index in 0..3 {
+        scanned.push_hud_features_inplace(1920, 1080, frame_index);
+        applied.push_hud_features_inplace(1920, 1080, frame_index);
+    }
+
+    // strip は空なので、走査した側と同じ「読めない」列になる。
+    let width = video_analyzer::hp_column_scan("p1")[1] as usize;
+    // 5 は「空き」。空の strip を走査したときと同じ分類になる。
+    let columns: Vec<u32> = vec![5; 3 * width * 2];
+    applied.apply_hp_columns_impl(0, &columns).unwrap();
+    applied
+        .apply_hp_score_counts_impl(&(0..3).flat_map(|_| [0, 100, 0, 100]).collect::<Vec<_>>())
+        .unwrap();
+    applied.apply_hp_fills().unwrap();
+
+    assert_eq!(applied.get_features_json(), scanned.get_features_json());
+}
+
+/// フレーム数の合わない列は断る。詰めると以降のフレームが全部ずれる。
+#[test]
+fn columns_that_do_not_fill_whole_frames_are_refused() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_hp_columns();
+
+    assert!(analyzer.apply_hp_columns_impl(0, &[0, 1, 2]).is_err());
+}
+
+/// CA は「SA ゲージが溜まっている」かつ「HP が残り少ない」で灯る。
+/// どちらか一方では灯らないし、CA 発動中の表示は HP に関わらず灯る。
+#[test]
+fn the_critical_art_light_needs_both_a_full_gauge_and_low_health() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_hp_columns();
+    for frame_index in 0..4 {
+        analyzer.push_hud_features_inplace(1920, 1080, frame_index);
+    }
+    analyzer.hp_fills = vec![
+        // 溜まっている + 瀕死 → 灯る
+        (0.2, false, 0.2, false),
+        // 溜まっている + 余裕あり → 灯らない
+        (0.9, false, 0.9, false),
+        // 溜まっていない + 瀕死 → 灯らない
+        (0.2, false, 0.2, false),
+        // CA 発動中の表示は HP を問わない
+        (0.9, false, 0.9, false),
+    ];
+    analyzer.ca_gates = vec![
+        (false, true, false, true),
+        (false, true, false, true),
+        (false, false, false, false),
+        (true, false, true, false),
+    ];
+
+    analyzer.apply_hp_fills().unwrap();
+
+    let lights: Vec<(bool, bool)> = analyzer
+        .features
+        .iter()
+        .map(|feature| (feature.left_ca_ready, feature.right_ca_ready))
+        .collect();
+    assert_eq!(
+        lights,
+        vec![(true, true), (false, false), (false, false), (true, true)]
+    );
+}
+
+/// 境目は 25.5%。ここを跨ぐと灯り方が変わる。
+#[test]
+fn the_health_gate_sits_at_a_quarter_of_the_bar() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_hp_columns();
+    for frame_index in 0..2 {
+        analyzer.push_hud_features_inplace(1920, 1080, frame_index);
+    }
+    analyzer.hp_fills = vec![(0.255, false, 0.256, false), (0.0, false, 0.0, false)];
+    analyzer.ca_gates = vec![(false, true, false, true), (false, true, false, true)];
+
+    analyzer.apply_hp_fills().unwrap();
+
+    assert_eq!(
+        (
+            analyzer.features[0].left_ca_ready,
+            analyzer.features[0].right_ca_ready
+        ),
+        (true, false),
+        "ちょうど 25.5% は含み、それを超えたら含まない"
+    );
+    assert!(analyzer.features[1].left_ca_ready, "HP 0 でも灯る");
+}
+
+/// 数の合わない受け取りは断る。詰めるとフレームと HP がずれる。
+#[test]
+fn fills_and_gates_must_cover_every_frame() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_hp_columns();
+    analyzer.push_hud_features_inplace(1920, 1080, 0);
+
+    analyzer.hp_fills = Vec::new();
+    analyzer.ca_gates = vec![(false, false, false, false)];
+    assert!(analyzer.apply_hp_fills().is_err(), "充填率が足りていない");
+
+    analyzer.hp_fills = vec![(0.5, false, 0.5, false)];
+    analyzer.ca_gates = Vec::new();
+    assert!(
+        analyzer.apply_hp_fills().is_err(),
+        "CA の条件が足りていない"
+    );
+}
+
+/// GPU を使っていない解析器は、後から入れる手続きを素通りする。
+#[test]
+fn an_analyzer_reading_pixels_itself_needs_nothing_applied() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.push_hud_features_inplace(1920, 1080, 0);
+
+    assert!(analyzer.apply_hp_fills().is_ok());
+}
+
+/// 白枠から充填が続く列を渡せば、その割合が充填率になる。
+#[test]
+fn applied_columns_become_the_fill_of_that_frame() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_hp_columns();
+    let width = video_analyzer::hp_column_scan("p2")[1] as usize;
+    let mut frame = vec![5u32; width * 2];
+    // P2 側だけ、端の白枠・充填・充填端の白線・遠端の白枠を並べる。
+    for (at, value) in [
+        (0..3, 0u32),
+        (3..width / 2, 1),
+        (width / 2..width / 2 + 2, 0),
+    ] {
+        frame[width + at.start..width + at.end].fill(value);
+    }
+    frame[width * 2 - 3..].fill(0);
+
+    analyzer.apply_hp_columns_impl(0, &frame).unwrap();
+
+    let (_, _, right, right_uncertain) = analyzer.hp_fills[0];
+    assert!(!right_uncertain, "読めなかった");
+    assert!((0.45..=0.55).contains(&right), "充填が {right} になった");
+}
+
+/// 左右で違う並びを渡せば、左右で違う充填率になる。取り違えると
+/// 相手の残量を自分のものとして読む。
+#[test]
+fn each_sides_columns_land_on_that_side() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_hp_columns();
+    let width = video_analyzer::hp_column_scan("p1")[1] as usize;
+    let mut frame = vec![5u32; width * 2];
+    // P1 はアンカーが右端なので、白枠と充填を右から並べる。
+    frame[width - 3..width].fill(0);
+    frame[width / 2..width - 3].fill(1);
+    frame[width / 2 - 2..width / 2].fill(0);
+    frame[0..3].fill(0);
+
+    analyzer.apply_hp_columns_impl(0, &frame).unwrap();
+
+    let (left, left_uncertain, right, right_uncertain) = analyzer.hp_fills[0];
+    assert!(!left_uncertain, "P1 が読めなかった");
+    assert!((0.45..=0.55).contains(&left), "P1 の充填が {left} になった");
+    assert!(right_uncertain, "空きだけの P2 が読めたことになっている");
+    assert_eq!(right, 0.0);
+}
+
+/// まとまりが飛んで届いても、間のフレームは「読めなかった」にする。
+/// 0% と言い切ると、欠けた区間が瀕死として扱われる。
+#[test]
+fn frames_that_never_arrived_stay_unread() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_hp_columns();
+    let width = video_analyzer::hp_column_scan("p1")[1] as usize;
+
+    analyzer
+        .apply_hp_columns_impl(2, &vec![5u32; width * 2])
+        .unwrap();
+
+    assert_eq!(analyzer.hp_fills.len(), 3, "3 フレーム目までの場所ができる");
+    assert_eq!(analyzer.hp_fills[0], (0.0, true, 0.0, true));
+    assert_eq!(analyzer.hp_fills[1], (0.0, true, 0.0, true));
+}
+
+/// 試合画面かどうかは左右どちらが欠けても成り立たない。
+#[test]
+fn the_match_screen_needs_both_bars() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_hp_scores();
+    for frame_index in 0..2 {
+        analyzer.push_hud_features_inplace(1920, 1080, frame_index);
+    }
+
+    analyzer
+        .apply_hp_score_counts_impl(&[35, 1000, 24, 1000, 34, 1000, 25, 1000])
+        .unwrap();
+
+    assert!(!analyzer.features[0].is_match_screen, "右が足りていない");
+    assert!(!analyzer.features[1].is_match_screen, "左が足りていない");
+}
+
+/// 後から前のまとまりが届いても、既に入った分を壊さない。
+#[test]
+fn a_late_batch_does_not_wipe_the_frames_after_it() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_hp_columns();
+    let width = video_analyzer::hp_column_scan("p1")[1] as usize;
+
+    analyzer
+        .apply_hp_columns_impl(2, &vec![5u32; width * 2])
+        .unwrap();
+    analyzer
+        .apply_hp_columns_impl(0, &vec![5u32; width * 2])
+        .unwrap();
+
+    assert_eq!(analyzer.hp_fills.len(), 3, "後の分を切り落としている");
+}
+
+/// 自分がどちら側かで、左右のどちらを自分の残量として読むかが決まる。
+#[test]
+fn the_players_own_bar_depends_on_which_side_they_are() {
+    let mut analyzer = Analyzer::new("p2");
+    analyzer.use_gpu_hp_columns();
+    analyzer.push_hud_features_inplace(1920, 1080, 0);
+    analyzer.hp_fills = vec![(0.25, false, 0.75, false)];
+    analyzer.ca_gates = vec![(false, false, false, false)];
+
+    analyzer.apply_hp_fills().unwrap();
+
+    assert_eq!(analyzer.features[0].own_hp, 0.75, "P2 は右側が自分");
+    assert_eq!(analyzer.features[0].opponent_hp, 0.25);
+    assert_eq!(analyzer.features[0].left_hp_raw, 0.25);
+    assert_eq!(analyzer.features[0].right_hp_raw, 0.75);
+}
+
+/// 読めなかった側は、読めた側と区別できるように印を残す。
+#[test]
+fn an_unread_bar_is_marked_as_such() {
+    let mut analyzer = Analyzer::new("p1");
+    analyzer.use_gpu_hp_columns();
+    analyzer.push_hud_features_inplace(1920, 1080, 0);
+    analyzer.hp_fills = vec![(0.5, true, 0.5, false)];
+    analyzer.ca_gates = vec![(false, false, false, false)];
+
+    analyzer.apply_hp_fills().unwrap();
+
+    assert_eq!(analyzer.features[0].left_hp_raw_quality, 1.0);
+    assert_eq!(analyzer.features[0].right_hp_raw_quality, 0.0);
+    assert_ne!(
+        analyzer.features[0].own_hp, 0.5,
+        "読めなかった側をそのまま残量にしている"
+    );
+}

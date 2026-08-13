@@ -16,14 +16,19 @@ class RecordingBackend implements HpScoreBackend {
     this.layers.push({ layer, mark: new Uint8Array(pixels)[0] ?? 0 });
   }
 
-  count(frames: number): Promise<Uint32Array> {
+  count(frames: number): Promise<{
+    readonly scores: Uint32Array;
+    readonly columns: Uint32Array;
+  }> {
     this.batches.push(frames);
     const marks = this.layers.slice(-frames).map((entry) => entry.mark);
     const values = Uint32Array.from(
       marks.flatMap((mark) => [mark, 100, mark * 2, 200]),
     );
     return new Promise((resolve) => {
-      this.#resolvers.push(() => resolve(values));
+      this.#resolvers.push(() =>
+        resolve({ scores: values, columns: new Uint32Array(0) }),
+      );
     });
   }
 

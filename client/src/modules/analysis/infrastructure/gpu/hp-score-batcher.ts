@@ -10,11 +10,18 @@ export const HP_SCORE_VALUES_PER_FRAME = 4;
 /**
  * GPU へ画素を渡す先。WebGPU そのものを差し替えられるようにしてある。
  */
+export interface HudGpuResult {
+  /** 1 フレームあたり [p1 一致, p1 全体, p2 一致, p2 全体]。 */
+  readonly scores: Uint32Array;
+  /** 1 フレームあたり p1・p2 の順に並ぶ列の色。 */
+  readonly columns: Uint32Array;
+}
+
 export interface HpScoreBackend {
   /** まとめの中の `layer` 枚目として画素を置く。 */
   writeLayer(pixels: ArrayBuffer, layer: number): void;
-  /** 置いた `frames` 枚を数え、フレームごとの値を順に返す。 */
-  count(frames: number): Promise<Uint32Array>;
+  /** 置いた `frames` 枚を読み、フレームごとの値を順に返す。 */
+  count(frames: number): Promise<HudGpuResult>;
 }
 
 /**
@@ -25,14 +32,19 @@ export interface HpScoreBackend {
  */
 export class HpScoreBatcher {
   readonly #backend: HpScoreBackend;
+  readonly #onColumns: (firstFrame: number, columns: Uint32Array) => void;
   readonly #results: number[] = [];
   readonly #pending: Array<Promise<void>> = [];
   #filled = 0;
   #firstFrameOfBatch = 0;
   #nextFrame = 0;
 
-  constructor(backend: HpScoreBackend) {
+  constructor(
+    backend: HpScoreBackend,
+    onColumns: (firstFrame: number, columns: Uint32Array) => void = () => {},
+  ) {
     this.#backend = backend;
+    this.#onColumns = onColumns;
   }
 
   async push(pixels: ArrayBuffer, frameIndex: number): Promise<void> {
@@ -60,8 +72,9 @@ export class HpScoreBatcher {
     const frames = this.#filled;
     const from = this.#firstFrameOfBatch;
     this.#filled = 0;
-    const counted = this.#backend.count(frames).then((values) => {
-      this.#store(from, values);
+    const counted = this.#backend.count(frames).then((result) => {
+      this.#store(from, result.scores);
+      this.#onColumns(from, result.columns);
     });
     this.#pending.push(counted);
     // 走らせすぎると読み戻し先が足りなくなる。古いものから待つ。

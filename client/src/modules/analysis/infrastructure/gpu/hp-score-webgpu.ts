@@ -1,8 +1,10 @@
+import { HP_COLUMN_SHADER } from "./hp-column-shader.js";
 import {
   HP_SCORE_BATCH,
   HP_SCORE_IN_FLIGHT,
   HP_SCORE_VALUES_PER_FRAME,
   type HpScoreBackend,
+  type HudGpuResult,
 } from "./hp-score-batcher.js";
 
 export interface HpScoreRois {
@@ -10,6 +12,12 @@ export interface HpScoreRois {
   readonly rois: Uint32Array;
   /** `max * 256 + min` で引く画素判定表。 */
   readonly table: Uint8Array;
+  /** 列走査の形。p1・p2 の順に `[x1, roi_w, strip_y1, row_start, row_end, 右下がりか]`。 */
+  readonly scans: Uint32Array;
+  /** `max * 256 + min` で引く彩度と明度。 */
+  readonly sv: Float32Array;
+  /** チャンネル値を 0..1 へ正規化した値。 */
+  readonly norm: Float32Array;
   readonly stripWidth: number;
   readonly stripHeight: number;
 }
@@ -53,12 +61,17 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 interface Resources {
   readonly device: GPUDevice;
   readonly pipeline: GPUComputePipeline;
+  readonly columnPipeline: GPUComputePipeline;
   readonly texture: GPUTexture;
   readonly counts: GPUBuffer;
+  readonly columns: GPUBuffer;
   readonly bindGroup: GPUBindGroup;
+  readonly columnBindGroup: GPUBindGroup;
   readonly stagings: GPUBuffer[];
+  readonly columnStagings: GPUBuffer[];
   readonly rois: Uint32Array;
   readonly stripWidth: number;
+  readonly roiWidth: number;
 }
 
 /**
@@ -130,9 +143,75 @@ function build(device: GPUDevice, layout: HpScoreRois): Resources {
       usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
     }),
   );
+
+  // 列分類。同じ strip を読むので、画素を渡すのは 1 回で済む。
+  const roiWidth = layout.scans[1] ?? 0;
+  const columnPipeline = device.createComputePipeline({
+    layout: "auto",
+    compute: {
+      module: device.createShaderModule({ code: HP_COLUMN_SHADER }),
+      entryPoint: "main",
+    },
+  });
+  const columnBytes = HP_SCORE_BATCH * 2 * roiWidth * 4;
+  const columns = device.createBuffer({
+    size: columnBytes,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+  });
+  // uniform は 16 バイト単位で読むので、走査の形も 4 つずつに詰める。
+  const scans = device.createBuffer({
+    size: 4 * 4 * 4,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+  const scanValues = new Uint32Array(new ArrayBuffer(4 * 4 * 4));
+  for (const side of [0, 1]) {
+    const at = side * 6;
+    scanValues.set(layout.scans.subarray(at, at + 4), side * 8);
+    scanValues.set(layout.scans.subarray(at + 4, at + 6), side * 8 + 4);
+  }
+  device.queue.writeBuffer(scans, 0, scanValues);
+  const svBuffer = device.createBuffer({
+    size: layout.sv.length * 4,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
+  const svValues = new Float32Array(new ArrayBuffer(layout.sv.length * 4));
+  svValues.set(layout.sv);
+  device.queue.writeBuffer(svBuffer, 0, svValues);
+  const normBuffer = device.createBuffer({
+    size: layout.norm.length * 4,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
+  const normValues = new Float32Array(new ArrayBuffer(layout.norm.length * 4));
+  normValues.set(layout.norm);
+  device.queue.writeBuffer(normBuffer, 0, normValues);
+  const columnBindGroup = device.createBindGroup({
+    layout: columnPipeline.getBindGroupLayout(0),
+    entries: [
+      {
+        binding: 0,
+        resource: texture.createView({ dimension: "2d-array" }),
+      },
+      { binding: 1, resource: { buffer: scans } },
+      { binding: 2, resource: { buffer: columns } },
+      { binding: 3, resource: { buffer: svBuffer } },
+      { binding: 4, resource: { buffer: normBuffer } },
+    ],
+  });
+  const columnStagings = Array.from({ length: HP_SCORE_IN_FLIGHT }, () =>
+    device.createBuffer({
+      size: columnBytes,
+      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+    }),
+  );
+
   return {
     device,
     pipeline,
+    columnPipeline,
+    columns,
+    columnBindGroup,
+    columnStagings,
+    roiWidth,
     texture,
     counts,
     bindGroup,
@@ -161,12 +240,27 @@ class WebGpuHpScoreBackend implements HpScoreBackend {
     );
   }
 
-  async count(frames: number): Promise<Uint32Array> {
-    const { device, pipeline, counts, bindGroup, stagings, rois } =
-      this.#resources;
-    const staging = stagings[this.#nextStaging % stagings.length];
+  async count(frames: number): Promise<HudGpuResult> {
+    const {
+      device,
+      pipeline,
+      columnPipeline,
+      counts,
+      columns,
+      bindGroup,
+      columnBindGroup,
+      stagings,
+      columnStagings,
+      rois,
+      roiWidth,
+    } = this.#resources;
+    const slot = this.#nextStaging % stagings.length;
     this.#nextStaging += 1;
-    if (!staging) throw new Error("HP score staging buffer is missing");
+    const staging = stagings[slot];
+    const columnStaging = columnStagings[slot];
+    if (!staging || !columnStaging) {
+      throw new Error("HP score staging buffer is missing");
+    }
 
     const width = Math.max(rois[2] - rois[0], rois[6] - rois[4]);
     const height = Math.max(rois[3] - rois[1], rois[7] - rois[5]);
@@ -176,16 +270,28 @@ class WebGpuHpScoreBackend implements HpScoreBackend {
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, bindGroup);
     pass.dispatchWorkgroups(Math.ceil(width / 64), height, frames * 2);
+    pass.setPipeline(columnPipeline);
+    pass.setBindGroup(0, columnBindGroup);
+    pass.dispatchWorkgroups(Math.ceil(roiWidth / 64), 1, frames * 2);
     pass.end();
-    const wanted = frames * HP_SCORE_VALUES_PER_FRAME * 4;
-    encoder.copyBufferToBuffer(counts, 0, staging, 0, wanted);
+    const wantedCounts = frames * HP_SCORE_VALUES_PER_FRAME * 4;
+    const wantedColumns = frames * 2 * roiWidth * 4;
+    encoder.copyBufferToBuffer(counts, 0, staging, 0, wantedCounts);
+    encoder.copyBufferToBuffer(columns, 0, columnStaging, 0, wantedColumns);
     device.queue.submit([encoder.finish()]);
 
-    await staging.mapAsync(GPUMapMode.READ, 0, wanted);
-    const values = Uint32Array.from(
-      new Uint32Array(staging.getMappedRange(0, wanted)),
+    await Promise.all([
+      staging.mapAsync(GPUMapMode.READ, 0, wantedCounts),
+      columnStaging.mapAsync(GPUMapMode.READ, 0, wantedColumns),
+    ]);
+    const scores = Uint32Array.from(
+      new Uint32Array(staging.getMappedRange(0, wantedCounts)),
+    );
+    const columnValues = Uint32Array.from(
+      new Uint32Array(columnStaging.getMappedRange(0, wantedColumns)),
     );
     staging.unmap();
-    return values;
+    columnStaging.unmap();
+    return { scores, columns: columnValues };
   }
 }
