@@ -15,7 +15,7 @@ pub(crate) use classification::{classify_hp_col, classify_hp_pixel, segment_zone
 pub use columns::*;
 #[cfg(test)]
 pub(crate) use decode::decode_hp_zones;
-pub(crate) use decode::{hp_bar_decode, hp_fill_ratio_impl};
+pub(crate) use decode::{decode_from_columns, hp_bar_decode, hp_fill_ratio_impl};
 pub(crate) use geometry::hp_roi_base;
 pub use geometry::{hp_parallelogram, HpParallelogram};
 pub(crate) use model::*;

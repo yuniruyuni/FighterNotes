@@ -77,9 +77,65 @@ pub fn hp_score_roi_in_strip(side: &str) -> (u32, u32, u32, u32) {
     (x1, y1 - HUD_STRIP_Y, x2, y2 - HUD_STRIP_Y)
 }
 
+/// GPU が分類した列の色から HP の充填率を読む。
+///
+/// 色は `HpColColor` の並び順の番号で受け取る。範囲外の値は「空き」にする。
+/// 画素を分類するところだけが GPU 側へ移り、並びの読み方は変わらない。
+pub fn hp_fill_ratio_from_columns(columns: &[u8], side: &str) -> (f32, bool) {
+    let hue = if side == "p1" {
+        HpFillHue::Red
+    } else {
+        HpFillHue::Blue
+    };
+    let colors: Vec<HpColColor> = columns.iter().map(|&code| hp_col_color(code)).collect();
+    let decode = decode_from_columns(colors, columns.len(), hue);
+    (decode.fill_ratio, decode.uncertain)
+}
+
+/// GPU へ渡す列走査の形。
+///
+/// `[x1, roi_w, strip_y1, row_start, row_end]` と、傾きが右下がりかどうか。
+/// 走査する行と斜めのずらし方を GPU 側と一致させるために使う。
+pub fn hp_column_scan(side: &str) -> Vec<u32> {
+    let (x1_base, x2_base, y1_base, y2_base) = hp_roi_base(side);
+    let (x1, x2, y1, y2) = scale_roi(x1_base, x2_base, y1_base, y2_base, 1920, 1080);
+    let roi_h = (y2 - y1) as usize;
+    let row_start = HP_COL_ROW_SKIP_TOP.min(roi_h);
+    let row_end = roi_h.saturating_sub(HP_COL_ROW_SKIP_BOTTOM).max(row_start);
+    vec![
+        x1,
+        x2 - x1,
+        y1 - HUD_STRIP_Y,
+        row_start as u32,
+        row_end as u32,
+        u32::from(side == "p1"),
+    ]
+}
+
+fn hp_col_color(code: u8) -> HpColColor {
+    match code {
+        0 => HpColColor::White,
+        1 => HpColColor::Fill,
+        2 => HpColColor::Ghost,
+        3 => HpColColor::YellowWhite,
+        4 => HpColColor::Orange,
+        _ => HpColColor::Dark,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// HUD strip 1 枚分。
+    fn solid_strip(rgb: [u8; 3]) -> Vec<u8> {
+        let mut rgba = vec![0u8; 1920 * 70 * 4];
+        for pixel in rgba.chunks_exact_mut(4) {
+            pixel[..3].copy_from_slice(&rgb);
+            pixel[3] = 255;
+        }
+        rgba
+    }
 
     fn solid_frame(rgb: [u8; 3]) -> Vec<u8> {
         let mut rgba = vec![0u8; 192 * 108 * 4];
@@ -132,6 +188,102 @@ mod tests {
         let (_, y1, _, y2) = hp_score_roi_in_strip("p1");
 
         assert_eq!((y1, y2), (0, 95 - HUD_STRIP_Y));
+    }
+
+    /// 列の色から読んだ充填率は、画素から読んだものと同じでなければ
+    /// ならない。GPU 側へ分類を移しても答えが変わらないことの土台になる。
+    /// 端の白枠・充填・充填端の白線・遠端の白枠、という並びを読む。
+    fn capped_columns(roi_w: usize, fill_end: usize) -> Vec<u8> {
+        let mut columns = vec![HpColColor::Dark as u8; roi_w];
+        columns[0..3].fill(HpColColor::White as u8);
+        columns[3..fill_end].fill(HpColColor::Fill as u8);
+        columns[fill_end..fill_end + 2].fill(HpColColor::White as u8);
+        columns[roi_w - 3..].fill(HpColColor::White as u8);
+        columns
+    }
+
+    /// 白いキャップから充填が続く並びを、GPU が出す列の色として渡す。
+    #[test]
+    fn a_capped_run_of_fill_reads_as_that_share_of_the_bar() {
+        let roi_w = hp_column_scan("p2")[1] as usize;
+        let columns = capped_columns(roi_w, roi_w / 2);
+
+        let (ratio, uncertain) = hp_fill_ratio_from_columns(&columns, "p2");
+
+        assert!(!uncertain, "読めなかった");
+        assert!((0.45..=0.55).contains(&ratio), "充填が {ratio} になった");
+    }
+
+    /// 同じ並びでも左右で読む向きが違う。取り違えると充填率が逆になる。
+    #[test]
+    fn the_two_sides_read_the_same_columns_from_opposite_ends() {
+        let roi_w = hp_column_scan("p1")[1] as usize;
+        let columns = capped_columns(roi_w, roi_w / 2);
+
+        let p1 = hp_fill_ratio_from_columns(&columns, "p1");
+        let p2 = hp_fill_ratio_from_columns(&columns, "p2");
+
+        assert_ne!(p1, p2, "左右で同じ答えになっている");
+    }
+
+    /// 列が来なければ読めない。空を「充填 0」と読むと、解析の頭が
+    /// まるごと満タン扱いになる。
+    #[test]
+    fn no_columns_at_all_cannot_be_read() {
+        let (ratio, _) = hp_fill_ratio_from_columns(&[], "p2");
+
+        assert_eq!(ratio, 0.0);
+    }
+
+    /// ROI の列は一本残らず色が付く。数が足りないと、その分だけ
+    /// 充填率が短く出る。
+    #[test]
+    fn every_column_of_the_roi_gets_a_colour() {
+        let strip = solid_strip([220, 40, 40]);
+
+        let columns =
+            super::super::decode::classify_columns(&strip, 1920, 1080, "p2", HUD_STRIP_Y as usize);
+
+        assert_eq!(columns.len(), hp_column_scan("p2")[1] as usize);
+        assert!(
+            columns.iter().all(|color| *color == columns[0]),
+            "一面の同じ色が列ごとに違う色へ分かれている"
+        );
+    }
+
+    /// 画素から分類した列は、画素から直接読んだ答えと一致する。
+    #[test]
+    fn reading_from_columns_matches_reading_from_pixels() {
+        let strip = solid_strip([220, 40, 40]);
+        for side in ["p1", "p2"] {
+            let columns: Vec<u8> = super::super::decode::classify_columns(
+                &strip,
+                1920,
+                1080,
+                side,
+                HUD_STRIP_Y as usize,
+            )
+            .into_iter()
+            .map(|color| color as u8)
+            .collect();
+
+            let from_columns = hp_fill_ratio_from_columns(&columns, side);
+            let from_pixels = hp_fill_ratio_with_quality_from_hud_strip(&strip, 1920, 1080, side);
+
+            assert_eq!(from_columns, from_pixels, "{side} で答えが違う");
+        }
+    }
+
+    /// 走査する行は上下を除いた内側だけ。ここがずれると枠の白を数えて
+    /// しまう。
+    #[test]
+    fn the_scan_skips_the_bar_edges() {
+        let scan = hp_column_scan("p1");
+
+        assert_eq!(scan[3], HP_COL_ROW_SKIP_TOP as u32);
+        assert_eq!(scan[4], (95 - 64) - HP_COL_ROW_SKIP_BOTTOM as u32);
+        assert_eq!(scan[5], 1, "p1 は右下がり");
+        assert_eq!(hp_column_scan("p2")[5], 0);
     }
 
     /// 左右で別の範囲を返す。取り違えると相手のバーを自分のスコアとして

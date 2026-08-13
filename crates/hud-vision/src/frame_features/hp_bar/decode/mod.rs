@@ -19,46 +19,63 @@ pub(crate) fn hp_bar_decode(
     side: &str,
     y_strip_start: usize,
 ) -> HpBarDecode {
+    let col_colors = classify_columns(rgba, width, height, side, y_strip_start);
+    let roi_w = col_colors.len();
+    let hue = if side == "p1" {
+        HpFillHue::Red
+    } else {
+        HpFillHue::Blue
+    };
+    decode_from_columns(col_colors, roi_w, hue)
+}
+
+/// 画素から列の色を求めるところだけを取り出したもの。
+///
+/// GPU 側が置き換えるのはここで、突き合わせの基準にもなる。
+pub(crate) fn classify_columns(
+    rgba: &[u8],
+    width: u32,
+    height: u32,
+    side: &str,
+    y_strip_start: usize,
+) -> Vec<HpColColor> {
     let (x1_base, x2_base, y1_base, y2_base) = hp_roi_base(side);
-    // 潰れた ROI はゾーンが一つも取れず、そのまま「読めなかった」に落ちる。
     let (x1u, x2u, y1u, y2u) = scale_roi(x1_base, x2_base, y1_base, y2_base, width, height);
     let x1 = x1u as usize;
     let x2 = x2u as usize;
     let y1 = y1u as usize;
-    let roi_w = x2 - x1;
-    let roi_h = y2u as usize - y1;
-    let slope: f32 = if side == "p1" {
-        HP_BAR_SLOPE
-    } else {
-        -HP_BAR_SLOPE
-    };
     let is_p1 = side == "p1";
     let roi = SlantedRoi {
         rgba,
         frame_width: width as usize,
         x: std::ops::Range { start: x1, end: x2 },
         y_start: y1,
-        height: roi_h,
+        height: y2u as usize - y1,
         strip_y: y_strip_start,
-        slope,
+        slope: if is_p1 { HP_BAR_SLOPE } else { -HP_BAR_SLOPE },
     };
-
-    // 全列をアンカー起点（index 0 = cap 端）で分類。
-    // P1 はアンカーが画面右端なので cy を逆順に、P2 は左端なのでそのまま読む。
-    // 以降の処理はサイド非依存（fill 色の差は classify_hp_col の hue で吸収済み）。
     let hue = if is_p1 {
         HpFillHue::Red
     } else {
         HpFillHue::Blue
     };
-    let mut column = 0usize;
-    let mut col_colors = Vec::new();
-    col_colors.resize_with(roi_w, || {
-        let color = classify_hp_col(&roi, column, hue);
-        column += 1;
-        color
-    });
-    if is_p1 {
+    (0..x2 - x1)
+        .map(|column| classify_hp_col(&roi, column, hue))
+        .collect()
+}
+
+/// 列の色並びから HP バーを読む。
+///
+/// 画素を分類するところまでと、その並びを読むところを分けてある。前者は
+/// 列ごとに独立した数え上げで GPU 側でも行えるが、後者は並びを順に辿る
+/// 処理で、分ける意味がない。
+pub(crate) fn decode_from_columns(
+    mut col_colors: Vec<HpColColor>,
+    roi_w: usize,
+    hue: HpFillHue,
+) -> HpBarDecode {
+    // P1 はアンカーが画面右端なので、読む向きを揃えてから並びを辿る。
+    if matches!(hue, HpFillHue::Red) {
         col_colors.reverse();
     }
 
