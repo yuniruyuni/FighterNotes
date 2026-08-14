@@ -1,7 +1,13 @@
-import { ANALYSIS_STRIPS } from "./layout.js";
+import {
+  ANALYSIS_STRIPS,
+  ANALYSIS_WIDTH,
+  SUPER_BAND_HEIGHT,
+} from "./layout.js";
 
 export interface AnalysisTransferBuffers {
   readonly hud: ArrayBuffer;
+  /** 等倍で置いた SA ゲージ。 */
+  readonly super: ArrayBuffer;
   readonly meter: ArrayBuffer;
   /** meter strip の複製。攻撃情報を読むワーカーへ渡す。 */
   readonly attack: ArrayBuffer;
@@ -76,6 +82,7 @@ function abortReason(signal: AbortSignal): Error {
 function createBuffers(): AnalysisTransferBuffers {
   return {
     hud: new ArrayBuffer(ANALYSIS_STRIPS.hud.byteLength),
+    super: new ArrayBuffer(ANALYSIS_WIDTH * SUPER_BAND_HEIGHT * 4),
     meter: new ArrayBuffer(ANALYSIS_STRIPS.meter.byteLength),
     attack: new ArrayBuffer(ANALYSIS_STRIPS.meter.byteLength),
     input: new ArrayBuffer(ANALYSIS_STRIPS.input.byteLength),

@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { ANALYSIS_STRIPS } from "../frame-extraction/layout.js";
+import {
+  ANALYSIS_STRIPS,
+  ANALYSIS_WIDTH,
+  SUPER_BAND_HEIGHT,
+} from "../frame-extraction/layout.js";
 import type { StripPixels } from "../frame-extraction/strip-extractor.js";
 import { WorkerFrameBridge } from "./worker-frame-bridge.js";
 
 const pixels: StripPixels = {
   hud: new Uint8ClampedArray(ANALYSIS_STRIPS.hud.byteLength),
+  super: new Uint8ClampedArray(ANALYSIS_WIDTH * SUPER_BAND_HEIGHT * 4),
   meter: new Uint8ClampedArray(ANALYSIS_STRIPS.meter.byteLength),
   input: new Uint8ClampedArray(ANALYSIS_STRIPS.input.byteLength),
 };
@@ -22,6 +27,7 @@ describe("WorkerFrameBridge", () => {
     const resultMessages: Array<{
       readonly slot: number;
       readonly hudBuf: ArrayBuffer;
+      readonly superBuf: ArrayBuffer;
       readonly inputBuf: ArrayBuffer;
     }> = [];
     let completed = 0;

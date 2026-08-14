@@ -5,7 +5,10 @@ import {
   FIGHT_MARKER_LAYOUT,
   LOWER_ATLAS_LAYOUT,
   MID_ATLAS_LAYOUT,
+  PACKED_BANDS,
+  SUPER_BAND_HEIGHT,
   SUPER_GAUGE_LAYOUT,
+  SUPER_NATIVE_RECTS,
 } from "./layout.js";
 import type { AnalysisTransferBuffers } from "./strip-buffer-pool.js";
 
@@ -15,7 +18,11 @@ interface StripBitmaps {
   readonly midAtlas: ImageBitmap;
 }
 
+/** SA ゲージを等倍で取るための切り出し。偶数境界から取る。 */
+const SUPER_SOURCE = { x: 0, y: 954, width: ANALYSIS_WIDTH, height: 78 };
+
 interface PendingStripBitmaps {
+  readonly superSource: Promise<ImageBitmap>;
   readonly hud: Promise<ImageBitmap>;
   readonly lowerAtlas: Promise<ImageBitmap>;
   readonly midAtlas: Promise<ImageBitmap>;
@@ -24,6 +31,8 @@ interface PendingStripBitmaps {
 
 export interface StripPixels {
   readonly hud: Uint8ClampedArray;
+  /** 等倍で置いた SA ゲージ。 */
+  readonly super: Uint8ClampedArray;
   readonly meter: Uint8ClampedArray;
   readonly input: Uint8ClampedArray;
 }
@@ -31,6 +40,7 @@ export interface StripPixels {
 /** 3 つの strip を縦に並べた 1 枚の中での、各 strip の位置。 */
 const BANDS = {
   hud: { y: 0, height: ANALYSIS_STRIPS.hud.height },
+  super: { y: PACKED_BANDS.super, height: SUPER_BAND_HEIGHT },
   meter: {
     y: ANALYSIS_STRIPS.hud.height,
     height: ANALYSIS_STRIPS.meter.height,
@@ -41,7 +51,7 @@ const BANDS = {
   },
 } as const;
 
-const PACKED_HEIGHT = BANDS.input.y + BANDS.input.height;
+const CANVAS_HEIGHT = PACKED_BANDS.super + SUPER_BAND_HEIGHT;
 
 /**
  * 動画フレームから 3 つの strip を取り出す。
@@ -59,6 +69,7 @@ export class FrameStripExtractor {
 
   createBitmaps(frame: VideoFrame, frameIndex: number): PendingStripBitmaps {
     return {
+      superSource: createPatchBitmap(frame, SUPER_SOURCE),
       hud: createStripBitmap(frame, ANALYSIS_STRIPS.hud),
       lowerAtlas: createPatchBitmap(frame, LOWER_ATLAS_LAYOUT.source),
       midAtlas: createPatchBitmap(frame, MID_ATLAS_LAYOUT.source),
@@ -74,6 +85,7 @@ export class FrameStripExtractor {
       lowerAtlas: await pending.lowerAtlas,
       midAtlas: await pending.midAtlas,
     };
+    const superSource = await pending.superSource;
     const { context } = this.#packed;
     // 縮小するのは HUD 帯へ描く SA ゲージと FIGHT だけで、そこだけが高品質
     // 補間だった。1 枚に束ねても品質の切り替えを帯ごとに保ち、strip の内容を
@@ -83,6 +95,22 @@ export class FrameStripExtractor {
     context.imageSmoothingQuality = "low";
     drawMeter(context, bitmaps.lowerAtlas, bitmaps.midAtlas);
     drawInput(context, bitmaps.midAtlas);
+    // SA ゲージは等倍で置く。彩度は 2px 単位で持たれているので、偶数境界から
+    // 切り出したものを使う。
+    for (const rect of SUPER_NATIVE_RECTS) {
+      context.drawImage(
+        superSource,
+        rect.src.x - SUPER_SOURCE.x,
+        rect.src.y - SUPER_SOURCE.y,
+        rect.src.width,
+        rect.src.height,
+        rect.dst.x,
+        rect.dst.y,
+        rect.dst.width,
+        rect.dst.height,
+      );
+    }
+    superSource.close();
     bitmaps.lowerAtlas.close();
     bitmaps.midAtlas.close();
 
@@ -90,9 +118,10 @@ export class FrameStripExtractor {
       0,
       0,
       ANALYSIS_WIDTH,
-      PACKED_HEIGHT,
+      CANVAS_HEIGHT,
     ).data;
     return {
+      super: band(pixels, BANDS.super),
       hud: band(pixels, BANDS.hud),
       meter: band(pixels, BANDS.meter),
       input: band(pixels, BANDS.input),
@@ -105,6 +134,7 @@ export function copyStripPixels(
   buffers: AnalysisTransferBuffers,
 ): void {
   new Uint8Array(buffers.hud).set(pixels.hud);
+  new Uint8Array(buffers.super).set(pixels.super);
   new Uint8Array(buffers.meter).set(pixels.meter);
   // 攻撃情報のワーカーは meter strip をそのまま読む。転送すると所有権が移る
   // ため、同じ画素をもう 1 枚渡す。
@@ -122,7 +152,7 @@ function band(
 }
 
 function packedCanvas() {
-  const canvas = new OffscreenCanvas(ANALYSIS_WIDTH, PACKED_HEIGHT);
+  const canvas = new OffscreenCanvas(ANALYSIS_WIDTH, CANVAS_HEIGHT);
   // `willReadFrequently` は canvas を CPU 側へ置く。GPU 上の ImageBitmap を
   // 描くたびに転送と software 合成が起き、実機計測で 1 フレーム 6.24ms の
   // うち 5.2ms を占めていた。GPU 側に置いたまま描いて最後に読み戻す方が速い。

@@ -9,6 +9,7 @@ import { buildHpDebugSnapshot } from "./hp-debug-snapshot.js";
 
 export interface WasmResultFrameBuffers {
   readonly hud: ArrayBuffer;
+  readonly super: ArrayBuffer;
   readonly input: ArrayBuffer;
 }
 
@@ -48,6 +49,8 @@ interface AnalyzerWasmState {
   readonly memory: WebAssembly.Memory;
   readonly hudPtr: number;
   readonly hudLen: number;
+  readonly superPtr: number;
+  readonly superLen: number;
   readonly inputPtr: number;
   readonly inputLen: number;
   readonly spatialPtr: number;
@@ -80,6 +83,8 @@ export class AnalyzerWasmSession {
       memory: wasm_memory() as WebAssembly.Memory,
       hudPtr: analyzer.hud_buf_ptr() as number,
       hudLen: analyzer.hud_buf_len() as number,
+      superPtr: analyzer.super_buf_ptr() as number,
+      superLen: analyzer.super_buf_len() as number,
       inputPtr: analyzer.input_buf_ptr() as number,
       inputLen: analyzer.input_buf_len() as number,
       spatialPtr: spatialAnalyzer.rgba_buf_ptr() as number,
@@ -101,6 +106,7 @@ export class AnalyzerWasmSession {
     const state = this.#requireState();
     const t0 = performance.now();
     copyToWasm(state, state.hudPtr, state.hudLen, buffers.hud);
+    copyToWasm(state, state.superPtr, state.superLen, buffers.super);
     copyToWasm(state, state.inputPtr, state.inputLen, buffers.input);
     const t1 = performance.now();
 

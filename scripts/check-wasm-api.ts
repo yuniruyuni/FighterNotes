@@ -52,6 +52,8 @@ const expectedAnalyzerMethods = [
   "get_tracked_inputs(): string;",
   "hud_buf_len(): number;",
   "hud_buf_ptr(): number;",
+  "super_buf_ptr(): number;",
+  "super_buf_len(): number;",
   "input_buf_len(): number;",
   "input_buf_ptr(): number;",
   "meter_buf_len(): number;",

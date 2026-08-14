@@ -15,6 +15,7 @@ import { postAnalyzerWorkerMessage } from "./protocol.js";
 
 export interface ResultFrameResult {
   readonly slot: number;
+  readonly superBuf: ArrayBuffer;
   readonly tCopy: number;
   readonly tHud: number;
   readonly hudBuf: ArrayBuffer;
@@ -111,7 +112,9 @@ export class AnalyzerWorkerSession {
     readonly slot: number;
     readonly frameIndex: number;
     readonly hudBuf: ArrayBuffer;
+    readonly superBuf: ArrayBuffer;
     readonly inputBuf: ArrayBuffer;
+    readonly frame?: VideoFrame;
   }): Promise<void> {
     this.#throwIfTerminated();
     await this.#ready.promise;

@@ -90,10 +90,14 @@ impl Analyzer {
                 ),
             )
         };
+        // SA ゲージは等倍で置いた帯から読む。縮小を挟まないので画素を落とさない。
         let left_super =
-            video_analyzer::super_gauge_read_from_hud_strip(&self.hud_buf, full_width, "left");
-        let right_super =
-            video_analyzer::super_gauge_read_from_hud_strip(&self.hud_buf, full_width, "right");
+            video_analyzer::super_gauge_read_from_native_strip(&self.super_buf, full_width, "left");
+        let right_super = video_analyzer::super_gauge_read_from_native_strip(
+            &self.super_buf,
+            full_width,
+            "right",
+        );
         self.features.push(video_analyzer::FrameFeatures {
             frame_index: video_frame,
             fps: 60.0,

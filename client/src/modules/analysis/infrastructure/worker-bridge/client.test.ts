@@ -53,6 +53,7 @@ describe("AnalyzerWorkerSession", () => {
       slot: 0,
       frameIndex: 0,
       hudBuf: new ArrayBuffer(1),
+      superBuf: new ArrayBuffer(1),
       inputBuf: new ArrayBuffer(1),
     });
     const frameDrain = workerSession.drainFrames();
@@ -101,6 +102,7 @@ describe("AnalyzerWorkerSession", () => {
         slot: 0,
         frameIndex: 0,
         hudBuf: new ArrayBuffer(1),
+        superBuf: new ArrayBuffer(1),
         inputBuf: new ArrayBuffer(1),
       }),
     ).rejects.toBe(reason);
@@ -118,6 +120,7 @@ describe("AnalyzerWorkerSession", () => {
       slot: 0,
       frameIndex: 0,
       hudBuf: new ArrayBuffer(1),
+      superBuf: new ArrayBuffer(1),
       inputBuf: new ArrayBuffer(1),
     });
     const frameDrain = workerSession.drainFrames();

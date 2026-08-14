@@ -12,6 +12,14 @@ impl Analyzer {
         self.hud_buf.len() as u32
     }
 
+    pub fn super_buf_ptr(&self) -> u32 {
+        self.super_buf.as_ptr() as u32
+    }
+
+    pub fn super_buf_len(&self) -> u32 {
+        self.super_buf.len() as u32
+    }
+
     pub fn meter_buf_ptr(&self) -> u32 {
         self.meter_buf.as_ptr() as u32
     }

@@ -30,7 +30,10 @@ export type AnalyzerWorkerRequest =
       readonly slot: number;
       readonly frameIndex: number;
       readonly hudBuf: ArrayBuffer;
+      readonly superBuf: ArrayBuffer;
       readonly inputBuf: ArrayBuffer;
+      /** GPU 側で strip を切り出すための復号フレーム。 */
+      readonly frame?: VideoFrame;
     }
   | {
       readonly type: "hudGpuBatch";
@@ -95,6 +98,7 @@ export type AnalyzerWorkerResponse =
       readonly tCopy: number;
       readonly tHud: number;
       readonly hudBuf: ArrayBuffer;
+      readonly superBuf: ArrayBuffer;
       readonly inputBuf: ArrayBuffer;
     }
   | { readonly type: "meterDone"; readonly timeline: string }

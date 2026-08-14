@@ -102,6 +102,7 @@ async function handleMessage(
         message.frameIndex,
         {
           hud: message.hudBuf,
+          super: message.superBuf,
           input: message.inputBuf,
         },
         { width: ANALYSIS_WIDTH, height: ANALYSIS_HEIGHT },
@@ -113,9 +114,10 @@ async function handleMessage(
           slot: message.slot,
           ...timing,
           hudBuf: message.hudBuf,
+          superBuf: message.superBuf,
           inputBuf: message.inputBuf,
         },
-        [message.hudBuf, message.inputBuf],
+        [message.hudBuf, message.superBuf, message.inputBuf],
       );
       break;
     }

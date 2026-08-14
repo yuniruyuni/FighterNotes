@@ -12,11 +12,6 @@ import type {
   VideoCodecConfig,
 } from "../../domain/result.js";
 import type { ValidatedVideoInput } from "../../domain/video-preflight.js";
-import {
-  CopyStripExtractor,
-  preferCopyExtraction,
-  supportsRgbaCopy,
-} from "../frame-extraction/copy-strip-extractor.js";
 import { FrameStripExtractor } from "../frame-extraction/strip-extractor.js";
 import { HudGpu } from "../gpu/hud-gpu.js";
 import { createAnalysisVideoDecoder } from "../video-decoding/analysis-video-decoder.js";
@@ -65,19 +60,13 @@ export async function analyzeWithWebCodecs(
   // origin outside the demux source also captures any file materialization or
   // worker/decoder setup that precedes the first encoded sample.
   const analysisStartedAt = performance.now();
-  // GPU のある環境では copyTo が GPU→CPU の読み戻しを強制し、canvas 経路より
-  // 遅い。実機計測で canvas 2.19ms/frame に対し copyTo 8.49ms/frame。GPU の
-  // 無い環境では逆に copyTo が速いが、既定は実利用者の環境へ合わせる。
   // 復号フレームをそのまま GPU で切り出す。使えない環境だけ canvas へ合成する。
   let resultWorkerSessionRef: AnalyzerWorkerSession | undefined;
   const gpuExtractor = await HudGpu.create((batch) => {
     resultWorkerSessionRef?.sendHudGpuBatch(batch);
   });
   const extractor: StripFrameExtractor<VideoFrame, unknown> =
-    gpuExtractor ??
-    ((await supportsRgbaCopy()) && preferCopyExtraction()
-      ? new CopyStripExtractor()
-      : new FrameStripExtractor());
+    gpuExtractor ?? new FrameStripExtractor();
   // 独立した WASM インスタンスで、メーター・攻撃情報・HUD/入力を並列解析する。
   const workerUrl = new URL("./analyzer-worker.js", import.meta.url);
   const resultWorker = new Worker(workerUrl, { type: "module" });

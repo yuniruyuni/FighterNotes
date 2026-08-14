@@ -344,9 +344,41 @@ export const PACKED_BANDS = {
   hud: 0,
   meter: ANALYSIS_STRIPS.hud.height,
   input: ANALYSIS_STRIPS.hud.height + ANALYSIS_STRIPS.meter.height,
+  /** SA ゲージを等倍で置く帯。hud 帯は 70 行しかなく、ラベルの 75 行が入らない。 */
+  super:
+    ANALYSIS_STRIPS.hud.height +
+    ANALYSIS_STRIPS.meter.height +
+    ANALYSIS_STRIPS.input.height,
 } as const;
 
-export const PACKED_HEIGHT = PACKED_BANDS.input + ANALYSIS_STRIPS.input.height;
+/** 等倍で置く SA ゲージの帯の高さ。ラベルが 75 行で最も高い。 */
+export const SUPER_BAND_HEIGHT = 75;
+
+/**
+ * SA ゲージを等倍で写す矩形。補間が挟まらないので、縮小で画素が変わらない。
+ * 元の位置は参照実装が持っているフレーム座標に合わせてある。
+ */
+export const SUPER_NATIVE_RECTS: readonly StripRect[] = (
+  [
+    [55, 955, 90, 75, 0],
+    [145, 975, 265, 50, 100],
+    [1510, 975, 265, 50, 1555],
+    [1775, 955, 90, 75, 1830],
+  ] as const
+).map(([srcX, srcY, width, height, dstX]) => ({
+  src: { x: srcX, y: srcY, width, height },
+  dst: {
+    x: dstX,
+    y:
+      ANALYSIS_STRIPS.hud.height +
+      ANALYSIS_STRIPS.meter.height +
+      ANALYSIS_STRIPS.input.height,
+    width,
+    height,
+  },
+}));
+
+export const PACKED_HEIGHT = PACKED_BANDS.super + SUPER_BAND_HEIGHT;
 
 function absoluteRect(
   atlas: { readonly x: number; readonly y: number },
@@ -406,12 +438,9 @@ export const STRIP_RECTS: readonly StripRect[] = [
       height: ANALYSIS_STRIPS.hud.height,
     },
   },
-  // SA ゲージと FIGHT は縮小して写す。ここだけ canvas の縮小と 1〜2 違う。
-  ...[SUPER_GAUGE_LAYOUT.left, SUPER_GAUGE_LAYOUT.right].flatMap((side) =>
-    [side.label, side.bar].map((patch) =>
-      absoluteRect(LOWER_ATLAS_LAYOUT.source, patch, PACKED_BANDS.hud),
-    ),
-  ),
+  // SA ゲージは等倍で写す。縮小すると画素が落ち、CA 判定から被ダメージの
+  // 読みまで影響する。
+  ...SUPER_NATIVE_RECTS,
   absoluteRect({ x: 0, y: 0 }, FIGHT_MARKER_LAYOUT, PACKED_BANDS.hud),
   absoluteRect(
     LOWER_ATLAS_LAYOUT.source,

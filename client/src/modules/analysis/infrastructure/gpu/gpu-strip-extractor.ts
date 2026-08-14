@@ -3,6 +3,7 @@ import {
   ANALYSIS_WIDTH,
   PACKED_BANDS,
   PACKED_HEIGHT,
+  SUPER_BAND_HEIGHT,
 } from "../frame-extraction/layout.js";
 import type { StripPixels } from "../frame-extraction/strip-extractor.js";
 import {
@@ -85,6 +86,7 @@ export class GpuStripExtractor {
       hud: band(pixels, PACKED_BANDS.hud, ANALYSIS_STRIPS.hud.height),
       meter: band(pixels, PACKED_BANDS.meter, ANALYSIS_STRIPS.meter.height),
       input: band(pixels, PACKED_BANDS.input, ANALYSIS_STRIPS.input.height),
+      super: band(pixels, PACKED_BANDS.super, SUPER_BAND_HEIGHT),
     };
   }
 

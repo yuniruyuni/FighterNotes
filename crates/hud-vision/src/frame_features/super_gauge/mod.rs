@@ -46,6 +46,13 @@ const FULL_LABEL_RIGHT: Patch = Patch {
     height: 75,
 };
 
+/// 等倍で置いた帯の中での位置。縮小していないので、フレームと同じ大きさ。
+pub const SUPER_STRIP_H: u32 = 75;
+pub(crate) const NATIVE_LABEL_LEFT: (usize, usize, usize, usize) = (0, 0, 90, 75);
+pub(crate) const NATIVE_BAR_LEFT: (usize, usize, usize, usize) = (100, 0, 265, 50);
+pub(crate) const NATIVE_BAR_RIGHT: (usize, usize, usize, usize) = (1555, 0, 265, 50);
+pub(crate) const NATIVE_LABEL_RIGHT: (usize, usize, usize, usize) = (1830, 0, 90, 75);
+
 pub(crate) const PACKED_LABEL_LEFT: (usize, usize, usize, usize) = (0, 0, 90, 70);
 pub(crate) const PACKED_BAR_LEFT: (usize, usize, usize, usize) = (100, 32, 265, 38);
 pub(crate) const PACKED_BAR_RIGHT: (usize, usize, usize, usize) = (1555, 32, 265, 38);
@@ -98,6 +105,43 @@ pub fn super_gauge_read_from_hud_strip(
             full_width as usize,
             patch(PACKED_LABEL_RIGHT),
             patch(PACKED_BAR_RIGHT),
+            false,
+        )
+    }
+}
+
+/// 等倍で置いた帯から SA ゲージを読む。
+///
+/// 縮小した strip から読む経路と違い、画素を落としていない。読み取りの判定は
+/// どれも比率で書かれているので、行数が増えてもそのまま成り立つ。
+pub fn super_gauge_read_from_native_strip(
+    strip: &[u8],
+    full_width: u32,
+    side: &str,
+) -> SuperGaugeRead {
+    let patch = |(x, y, width, height)| Patch {
+        x,
+        y,
+        width,
+        height,
+    };
+    if full_width != 1920 {
+        return SuperGaugeRead::default();
+    }
+    if side == "left" {
+        read_gauge(
+            strip,
+            full_width as usize,
+            patch(NATIVE_LABEL_LEFT),
+            patch(NATIVE_BAR_LEFT),
+            true,
+        )
+    } else {
+        read_gauge(
+            strip,
+            full_width as usize,
+            patch(NATIVE_LABEL_RIGHT),
+            patch(NATIVE_BAR_RIGHT),
             false,
         )
     }

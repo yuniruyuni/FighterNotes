@@ -32,6 +32,7 @@ interface WorkerFrameBridgeOptions {
     readonly slot: number;
     readonly frameIndex: number;
     readonly hudBuf: ArrayBuffer;
+    readonly superBuf: ArrayBuffer;
     readonly inputBuf: ArrayBuffer;
   }) => Promise<void>;
   readonly totalSamples: () => number;
@@ -122,6 +123,7 @@ export class WorkerFrameBridge {
         slot,
         frameIndex,
         hudBuf: buffers.hud,
+        superBuf: buffers.super,
         inputBuf: buffers.input,
       }),
     ]);
@@ -144,6 +146,7 @@ export class WorkerFrameBridge {
     this.#partialResults.delete(slot);
     this.#bufferPool.release(slot, {
       hud: partial.result.hudBuf,
+      super: partial.result.superBuf,
       meter: partial.meter.meterBuf,
       attack: partial.attack.meterBuf,
       input: partial.result.inputBuf,

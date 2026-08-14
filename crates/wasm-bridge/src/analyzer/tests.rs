@@ -83,8 +83,9 @@ fn split_meter_session_matches_combined_analysis() {
 #[test]
 fn reads_both_super_gauges_on_every_frame() {
     let mut analyzer = Analyzer::new("p1");
-    paint_vertical_one(&mut analyzer.hud_buf, 68);
-    paint_vertical_one(&mut analyzer.hud_buf, 22 + 1830);
+    // SA ゲージは等倍で置いた帯から読む。
+    paint_vertical_one(&mut analyzer.super_buf, 68);
+    paint_vertical_one(&mut analyzer.super_buf, 22 + 1830);
 
     // 旧実装の 10 フレーム間引きでは frame 1 は未読になっていた。
     analyzer.push_hud_features_inplace(1920, 1080, 1);
