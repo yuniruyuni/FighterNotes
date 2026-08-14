@@ -1,7 +1,4 @@
-import {
-  STRIP_BASE_RECTS,
-  type StripRect,
-} from "../frame-extraction/layout.js";
+import type { StripRect } from "../frame-extraction/layout.js";
 import { DRIVE_COLUMN_SHADER } from "./drive-column-shader.js";
 import { HP_COLUMN_SHADER } from "./hp-column-shader.js";
 import {
@@ -94,7 +91,10 @@ interface Resources {
   readonly slotStride: number;
   readonly rectBuffer: GPUBuffer;
   readonly rectCount: number;
-  readonly extractSize: { readonly width: number; readonly height: number };
+  readonly rectSizes: ReadonlyArray<{
+    readonly width: number;
+    readonly height: number;
+  }>;
   readonly stripHeight: number;
 }
 
@@ -251,20 +251,18 @@ function build(device: GPUDevice, layout: HpScoreRois): Resources {
   // 層ごとに「土台」と「重ね書き」の 2 つ。動的な読み出し位置で切り替える
   // ので、束ねる操作はフレームあたり 1 回で済む。
   const SLOT_STRIDE = 256;
+  const rectCount = layout.rects.length;
   const bands = device.createBuffer({
-    size: SLOT_STRIDE * HP_SCORE_BATCH * 2,
+    size: SLOT_STRIDE * HP_SCORE_BATCH * rectCount,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   for (let layer = 0; layer < HP_SCORE_BATCH; layer += 1) {
-    for (const [phase, first] of [
-      [0, 0],
-      [1, STRIP_BASE_RECTS],
-    ] as const) {
+    for (let rect = 0; rect < rectCount; rect += 1) {
       const values = new Uint32Array(new ArrayBuffer(16));
-      values.set([layer, first]);
+      values.set([layer, rect]);
       device.queue.writeBuffer(
         bands,
-        (layer * 2 + phase) * SLOT_STRIDE,
+        (layer * rectCount + rect) * SLOT_STRIDE,
         values,
       );
     }
@@ -358,8 +356,8 @@ function build(device: GPUDevice, layout: HpScoreRois): Resources {
     bands,
     slotStride: SLOT_STRIDE,
     rectBuffer,
-    rectCount: layout.rects.length,
-    extractSize,
+    rectCount,
+    rectSizes: layout.rects.map((rect) => rect.dst),
     stripHeight: layout.stripHeight,
     pipeline,
     hpPass,
@@ -398,7 +396,7 @@ class WebGpuHpScoreBackend implements HpScoreBackend {
       slotStride,
       rectBuffer,
       rectCount,
-      extractSize,
+      rectSizes,
       sampler,
       extractLayout,
     } = this.#resources;
@@ -421,18 +419,15 @@ class WebGpuHpScoreBackend implements HpScoreBackend {
         { binding: 4, resource: sampler },
       ],
     });
-    // 土台を書いてから重ねる。同じパスの中でも、積んだ順に実行される。
-    for (const [phase, count] of [
-      [0, STRIP_BASE_RECTS],
-      [1, rectCount - STRIP_BASE_RECTS],
-    ] as const) {
-      if (count <= 0) continue;
-      pass.setBindGroup(0, bindGroup, [(layer * 2 + phase) * slotStride]);
-      pass.dispatchWorkgroups(
-        Math.ceil(extractSize.width / 64),
-        extractSize.height,
-        count,
-      );
+    // 矩形ごとに、その大きさだけ投げる。表に並べた順に実行されるので、
+    // 土台の後に重ね書きが来る並びがそのまま書き込み順になる。
+    for (let rect = 0; rect < rectCount; rect += 1) {
+      const size = rectSizes[rect];
+      if (!size) continue;
+      pass.setBindGroup(0, bindGroup, [
+        (layer * rectCount + rect) * slotStride,
+      ]);
+      pass.dispatchWorkgroups(Math.ceil(size.width / 64), size.height, 1);
     }
     pass.end();
     device.queue.submit([encoder.finish()]);

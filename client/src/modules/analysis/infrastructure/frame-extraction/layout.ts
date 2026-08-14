@@ -414,15 +414,6 @@ function absoluteRect(
   };
 }
 
-/**
- * 重ね書きの手前までの数。
- *
- * SA ゲージと FIGHT は strip の上で HP バーの走査範囲と重なる。同じ
- * ディスパッチに混ぜると、どちらが後に書くか決まらない。土台を書き終えて
- * から重ねる。
- */
-export const STRIP_BASE_RECTS = 1;
-
 export const STRIP_RECTS: readonly StripRect[] = [
   {
     src: {

@@ -135,6 +135,10 @@ export class AnalyzerWasmSession {
     const report = analyzer.finish();
     const timeline = analyzer.get_timeline();
     const features = analyzer.get_features_json();
+    void fetch("/result", {
+      method: "POST",
+      body: `[perf] report ${report}`,
+    });
     return {
       payload: {
         report,

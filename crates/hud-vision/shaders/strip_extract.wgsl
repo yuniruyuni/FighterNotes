@@ -28,7 +28,11 @@ struct Rect {
 @group(0) @binding(0) var frame: texture_external;
 @group(0) @binding(1) var strip: texture_storage_2d_array<rgba8uint, write>;
 @group(0) @binding(2) var<uniform> rects: array<vec4<u32>, 24>;
-/// `slot.x` は書き込む層、`slot.y` は矩形表のどこから使うか。
+/// `slot.x` は書き込む層、`slot.y` は写す矩形。
+///
+/// 矩形ごとにその大きさでディスパッチする。まとめて最大の大きさで投げると、
+/// 範囲外で即座に降りるだけのスレッドが大量に走る。実 GPU では安いが、
+/// ソフトウェア実装では実費がかかり、試験が桁違いに遅くなる。
 @group(0) @binding(3) var<uniform> slot: vec4<u32>;
 @group(0) @binding(4) var samp: sampler;
 
@@ -40,7 +44,7 @@ fn rect_of(index: u32) -> Rect {
 
 @compute @workgroup_size(64, 1, 1)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
-  let rect = rect_of(slot.y + id.z);
+  let rect = rect_of(slot.y);
   if (id.x >= rect.dst_width || id.y >= rect.dst_height) { return; }
 
   var value = vec4<f32>(0.0);

@@ -80,6 +80,8 @@ interface CliOptions {
   readonly cdpUrl?: string;
   readonly browserExecutable?: string;
   readonly headed: boolean;
+  /** WebGPU をソフトウェア実装で動かし、本番と同じ取り出し経路を通す。 */
+  readonly gpu: boolean;
   readonly measuredRuns?: number;
   readonly warmupRuns?: number;
 }
@@ -467,9 +469,14 @@ function parseArgs(args: readonly string[]): CliOptions {
   let measuredRuns: number | undefined;
   let warmupRuns: number | undefined;
   let headed = false;
+  let gpu = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
+    if (argument === "--gpu") {
+      gpu = true;
+      continue;
+    }
     if (argument === "--headed") {
       headed = true;
       continue;
@@ -512,6 +519,7 @@ function parseArgs(args: readonly string[]): CliOptions {
     ...(measuredRuns === undefined ? {} : { measuredRuns }),
     ...(warmupRuns === undefined ? {} : { warmupRuns }),
     headed,
+    gpu,
   };
 }
 
@@ -602,6 +610,17 @@ async function openBrowser(options: CliOptions): Promise<BrowserHandle> {
       ...(options.headed ? [] : ["--headless=new"]),
       "--no-sandbox",
       "--disable-dev-shm-usage",
+      // `--gpu` を付けたときだけ、WebGPU をソフトウェア実装で動かして本番と
+      // 同じ取り出し経路を通す。1 画素ずつ色変換するため canvas 経路の 14 倍
+      // かかるので、既定では通さない。数値は実機の GPU を代弁しないが、
+      // 経路の壊れ (真っ黒な strip・座標ずれ・書き込み順) はここで捕まる。
+      ...(options.gpu
+        ? [
+            "--enable-unsafe-swiftshader",
+            "--use-angle=swiftshader",
+            "--enable-features=Vulkan,VulkanFromANGLE",
+          ]
+        : []),
       "--disable-background-timer-throttling",
       "--disable-renderer-backgrounding",
       `--remote-debugging-port=${cdpPort}`,
