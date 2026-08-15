@@ -87,6 +87,12 @@ jobs:
       APP_IMAGE_DIGEST: ${{ needs.build-app.outputs.artifact_image_digest }}
       MIGRATION_IMAGE_NAME: fighter-migration
       MIGRATION_IMAGE_DIGEST: ${{ needs.build-migration.outputs.artifact_image_digest }}
+      # Cloudflare Access の client_id は CF-Access-Client-Id ヘッダで送る識別子で、
+      # 認証には client_secret が要る。Secret Manager は active version 数で課金
+      # されるため client_id はここから埋め込む (workload 毎の分離は secret 側で維持)。
+      CF_RUNTIME_CLIENT_ID: ${{ secrets.CF_DB_ACCESS_CLIENT_ID_RUNTIME }}
+      CF_MIGRATION_CLIENT_ID: ${{ secrets.CF_DB_ACCESS_CLIENT_ID_MIGRATION }}
+      CF_CLEANUP_CLIENT_ID: ${{ secrets.CF_DB_ACCESS_CLIENT_ID_CLEANUP }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -126,8 +132,20 @@ jobs:
             fi
           }
 
+          validate_client_id() {
+            local label="$1"
+            local value="$2"
+            if ! printf '%s' "$value" | grep -Eq '^[0-9a-f]{32}\.access$'; then
+              echo "$label must be a Cloudflare Access service token client ID" >&2
+              exit 1
+            fi
+          }
+
           validate_digest "Application image digest" "$APP_IMAGE_DIGEST"
           validate_digest "Migration image digest" "$MIGRATION_IMAGE_DIGEST"
+          validate_client_id "Runtime client ID" "$CF_RUNTIME_CLIENT_ID"
+          validate_client_id "Migration client ID" "$CF_MIGRATION_CLIENT_ID"
+          validate_client_id "Cleanup client ID" "$CF_CLEANUP_CLIENT_ID"
           validate_component "GCP region" "$GCP_REGION"
           validate_component "GCP project ID" "$GCP_PROJECT_ID"
           validate_component "Application image name" "$APP_IMAGE_NAME"
@@ -158,6 +176,12 @@ jobs:
         if: steps.current-main.outputs.should_release == 'true'
         run: |
           sed -i "s|IMAGE_PLACEHOLDER|$MIGRATION_IMAGE_REF|g" cloudrun-job.yaml
+          sed -i "s|CF_MIGRATION_CLIENT_ID_PLACEHOLDER|$CF_MIGRATION_CLIENT_ID|g" cloudrun-job.yaml
+          # 置換漏れは cloudflared の認証失敗として実行時にしか現れないのでここで落とす
+          if grep -q CF_MIGRATION_CLIENT_ID_PLACEHOLDER cloudrun-job.yaml; then
+            echo "CF_MIGRATION_CLIENT_ID_PLACEHOLDER was not substituted" >&2
+            exit 1
+          fi
           gcloud run jobs replace cloudrun-job.yaml \
             --region "$GCP_REGION" \
             --project "$GCP_PROJECT_ID"
@@ -171,6 +195,12 @@ jobs:
         if: steps.current-main.outputs.should_release == 'true'
         run: |
           sed -i "s|IMAGE_PLACEHOLDER|$APP_IMAGE_REF|g" cloudrun-cleanup-job.yaml
+          sed -i "s|CF_CLEANUP_CLIENT_ID_PLACEHOLDER|$CF_CLEANUP_CLIENT_ID|g" cloudrun-cleanup-job.yaml
+          # 置換漏れは cloudflared の認証失敗として実行時にしか現れないのでここで落とす
+          if grep -q CF_CLEANUP_CLIENT_ID_PLACEHOLDER cloudrun-cleanup-job.yaml; then
+            echo "CF_CLEANUP_CLIENT_ID_PLACEHOLDER was not substituted" >&2
+            exit 1
+          fi
           gcloud run jobs replace cloudrun-cleanup-job.yaml \
             --region "$GCP_REGION" \
             --project "$GCP_PROJECT_ID"
@@ -180,6 +210,12 @@ jobs:
         if: steps.current-main.outputs.should_release == 'true'
         run: |
           sed -i "s|IMAGE_PLACEHOLDER|$APP_IMAGE_REF|g" cloudrun.yaml
+          sed -i "s|CF_RUNTIME_CLIENT_ID_PLACEHOLDER|$CF_RUNTIME_CLIENT_ID|g" cloudrun.yaml
+          # 置換漏れは cloudflared の認証失敗として実行時にしか現れないのでここで落とす
+          if grep -q CF_RUNTIME_CLIENT_ID_PLACEHOLDER cloudrun.yaml; then
+            echo "CF_RUNTIME_CLIENT_ID_PLACEHOLDER was not substituted" >&2
+            exit 1
+          fi
           gcloud run services replace cloudrun.yaml \
             --region "$GCP_REGION" \
             --project "$GCP_PROJECT_ID"
