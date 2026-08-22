@@ -1,0 +1,75 @@
+// yunirun のデプロイ宣言。
+//
+// ここに書くのは「アプリだけが知っていること」に限る。ホスト側のポートや uid、
+// DB とロールの名前は yunirun が導出するので現れない。秘密の値も書かない。
+{
+  "app": {
+    // GHCR に push している image 名。
+    "image": "fighter",
+
+    // PostgreSQL を使う。DB 名とロール名はアプリ名から導かれ、
+    // fighter / fighter / fighter_app になる。既存のものと一致するので
+    // databaseName は書かない。
+    "database": true,
+
+    // 秘密でない設定。値は cloudrun.yaml から引き継いだもの。
+    //
+    // DB の接続情報 (DB_USER / DB_NAME / PGHOST / PGPORT) と DB_PASSWORD は
+    // yunirun が渡すのでここには書かない。PORT も同様。
+    "env": {
+      "PUBLIC_BASE_URL": "https://fighter.yuniruyuni.net",
+
+      // CF-Connecting-IP を信じる。コンテナは loopback にだけ束縛され、
+      // その手前に HAProxy と cloudflared がいるので、この経路以外から
+      // ヘッダを差し込めない。
+      "TRUST_CLOUDFLARE_CONNECTING_IP": "true",
+
+      "SHARE_RESULTS_ENABLED": "true",
+      "SHARE_RETENTION_DAYS": "30",
+      "SHARE_CREATE_RATE_LIMIT_PER_MINUTE": "10",
+      "SHARE_DELETE_RATE_LIMIT_PER_MINUTE": "10",
+      "SHARE_GET_RATE_LIMIT_PER_MINUTE": "120",
+      "SHARE_ARGON2_CONCURRENCY": "2",
+      "SHARE_ARGON2_QUEUE_LIMIT": "8",
+      "SHARE_ARGON2_WAIT_MS": "250",
+      "SHARE_DAILY_CREATE_LIMIT": "1000",
+      "SHARE_ACTIVE_LIMIT": "50000",
+      "SHARE_STORAGE_LIMIT_BYTES": "1073741824",
+
+      "PGPOOL_MAX": "5",
+      "PG_CONNECTION_TIMEOUT_MS": "5000",
+      "PG_IDLE_TIMEOUT_MS": "30000",
+      "PG_STATEMENT_TIMEOUT_MS": "15000",
+      "PG_LOCK_TIMEOUT_MS": "5000",
+      "PG_IDLE_IN_TRANSACTION_SESSION_TIMEOUT_MS": "30000"
+    }
+  },
+
+  "workloads": {
+    // schema の適用。owner ロールで繋ぐ必要があるので role を明示する。
+    "migration": {
+      "image": "fighter-migration",
+      "role": "owner"
+    },
+
+    // 期限切れ共有データの削除。Cloud Scheduler の "23 2 * * *" (JST) を
+    // systemd timer に置き換えたもの。
+    //
+    // image を書かないのでアプリ本体と同じものが使われる。引数だけを変えて
+    // 別の入口で起動する形。
+    "cleanup": {
+      "schedule": "02:23",
+      "args": ["--batch=cleanup"],
+
+      // app.env はワークロードにも渡る。ここに書くのは違う値が要るものだけ。
+      // 1 本の長い処理なので接続は 1 つで足り、文が長いぶん statement の
+      // 上限を伸ばす。
+      "env": {
+        "CLEANUP_BATCH_SIZE": "500",
+        "CLEANUP_MAX_BATCHES": "1000",
+        "PGPOOL_MAX": "1",
+        "PG_STATEMENT_TIMEOUT_MS": "30000"
+      }
+    }
+  }
+}

@@ -1,0 +1,52 @@
+# GHCR へ image を push する。
+#
+# 既存の build-image.yml とは別に置く。あちらは Artifact Registry を正とし、
+# タグに run id と attempt を含める Cloud Run 向けの形で、GHCR へは archive
+# として push しているだけ。yunirun は生の commit SHA をタグとして受け取る
+# ので噛み合わない。
+#
+# Cloud Run を撤去したらあちらを消して、こちらに一本化する。
+name: Build and Push to GHCR
+
+on:
+  workflow_call:
+    inputs:
+      dockerfile:
+        required: true
+        type: string
+      image_name:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      REPO_OWNER: ${{ github.repository_owner }}
+      IMAGE_NAME: ${{ inputs.image_name }}
+      DOCKERFILE: ${{ inputs.dockerfile }}
+      SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Login to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        run: docker build -f "$DOCKERFILE" -t "${IMAGE_NAME}:${SHA}" .
+
+      - name: Push to GHCR
+        run: |
+          GHCR_TAG="ghcr.io/${REPO_OWNER}/${IMAGE_NAME}:${SHA}"
+          docker tag "${IMAGE_NAME}:${SHA}" "$GHCR_TAG"
+          docker push "$GHCR_TAG"
