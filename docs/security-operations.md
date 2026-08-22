@@ -1,17 +1,17 @@
 # セキュリティ運用
 
-最終確認: 2026-08-03
+最終確認: 2026-08-22
 
 ## 適用範囲
 
-この文書は、共有結果を扱う server、PostgreSQL、Cloud Run service / Job、Cloudflare Access、
+この文書は、共有結果を扱う server、PostgreSQL、VPS 上の yunirun workload、Cloudflare、
 GitHub Actions の運用判断を扱う。browser 内の動画解析そのものは server へ動画を送らない。
 
 次の3種類を混同しない。
 
-- repository manifest: code review できる目標状態
-- external infrastructure code: IAM、Cloudflare、DB login、Scheduler の宣言
-- live state: 現在有効な policy、secret version、revision、Job 実行結果、alert
+- repository manifest: code review できる目標状態 (`yunirun.jsonc`、`schema/`、workflow)
+- external infrastructure code: アプリの取り込み、Cloudflare、DB login、agenix の宣言
+- live state: 現在動いている unit と timer、コンテナの image、秘密の実体、実行結果、alert
 
 インシデント判断では3つを照合する。manifest に名前があるだけで、live 環境の deny、rotation、
 監視設定が成立しているとはみなさない。
@@ -25,7 +25,7 @@ GitHub Actions の運用判断を扱う。browser 内の動画解析そのもの
 | 公開用集計 | public URL で誰でも閲覧可能。SA/CAはlevel・結果・自分側文脈のcountだけとし、不完全な場合は下限と明示する。個人情報、自由文、正確なdamage、最終gaugeを入れない |
 | 共有 ID | 公開 URL の識別子。認証 credential とみなさない |
 | 削除コード | secret。結果画面、localStorage、create / delete request だけで扱い、DB には Argon2id hash だけを置く |
-| DB / Cloudflare / GitHub credential | secret manager または GitHub secret だけで管理する |
+| DB / GitHub credential | DB password は yunirun がホスト上で暗号化して保持し、その他の秘密は agenix と GitHub secret で管理する |
 
 共有の closed schema と保持期間は [sharing.md](./sharing.md) を参照する。
 
@@ -33,19 +33,29 @@ GitHub Actions の運用判断を扱う。browser 内の動画解析そのもの
 
 | Identity | 必要な責務 | 持たせない権限 |
 | --- | --- | --- |
-| GitHub builder | source checkout、Artifact Registry / GHCR への image push | Cloud Run 更新、production secret access、DB access |
-| GitHub deployer | Cloud Run service / Job の置換、migration Job 実行 | image build 用の常設 credential、DB password の直接読取 |
-| `fighter-runtime` | runtime 用 DB password と専用 Cloudflare Access token の参照 | DB owner、DDL、migration / cleanup token |
-| `fighter-migration` | owner password と専用 DB Access token、schema apply | runtime / cleanup token、application traffic |
-| `fighter-cleanup` | app role password と専用 DB Access token、Job 実行 | DB owner、DDL、runtime / migration token |
-| Scheduler identity | `fighter-cleanup` の実行 | service 更新、secret 読取、他 Job 実行 |
+| GitHub build job | source checkout、GHCR への image push | VPS への SSH、DB access |
+| GitHub deploy job | OIDC からの短命 SSH 証明書、`yunirun deploy` の実行 | 長期の SSH 鍵、owner password の読取、他アプリへの deploy |
+| `yunirun-fighter` (アプリのユーザ) | runtime env ファイル (app role password) の読取、blue/green と cleanup の起動 | DB owner、DDL、owner password の読取 |
+| migration (root 側の unit) | owner password の読取、schema apply | application traffic、常時稼働 |
+| cleanup (timer) | app role での DML、期限切れ row の削除 | DB owner、DDL、公開 traffic の受付 |
+
+per-workload の権限分離の考え方は Cloud Run のときと同じである。runtime と cleanup は DML だけ、
+migration だけが DDL できる。実現手段が service account と Secret Manager から、yunirun の
+ユーザ分離と env ファイルの権限へ変わった。owner password の env ファイルは root 所有、runtime の
+env ファイルはアプリのユーザ所有で、どちらも mode `0400` で tmpfs 上に置く。migration の unit を
+アプリのユーザ側に作らないので、deploy 経路から owner の値を読み出す手段が無い。
+
+DB へは同じホストの Unix socket で直結する。workload ごとに分けていた Cloudflare Access の
+service token 3本と、その sidecar は使わなくなったので削除した。
 
 application role `fighter_app` の権限は `schema/` の明示的な `GRANT` に限定する。
-role の login policy と password は外部 DB infrastructure が所有する。
+role の login policy は外部 DB infrastructure が所有し、password は yunirun がホスト鍵と
+管理者鍵で暗号化して保持する。
 
-GitHubのbuilder secretはrepository / organization scope、deployer secretは`production` environment scopeに
-分離する。reusable build workflowへ全secretを継承せず、builder identityではCloud Run service / Jobの
-参照・更新を拒否し、deployer identityではArtifact Registry / GHCRへのpushを拒否する。
+deploy に GCP の資格情報を使わないので、builder / deployer secret の分離は無くなった。代わりに、
+deploy job へ `environment:` を付けないこと (付けると OIDC の `sub` が変わり VPS 側の認可と
+一致しなくなる) と、GHCR token を argv ではなく stdin で渡すことを contract test で固定する。
+誰が deploy できるかは VPS 側の取り込み宣言と opkssh の認可先が決める。
 
 third-party Actionとcontainerはreview済みcommit / manifest digestへ固定する。更新時はversion commentと
 digestを同じPRで変更し、Renovateの差分をupstream releaseと照合する。緊急時も`latest`やmajor tagへ
@@ -55,7 +65,7 @@ digestを同じPRで変更し、Renovateの差分をupstream releaseと照合す
 
 server log に次を追加しない。
 
-- 削除コード、hash、DB password、Cloudflare token
+- 削除コード、hash、DB password、GHCR token
 - 共有 payload、共有 ID、公開 URL
 - raw IP address、forwarded header 全体、request body
 - 元ファイル名、動画 metadata、frame、詳細 report
@@ -71,14 +81,14 @@ live alert の有無と通知先を定期的に棚卸しする。
 
 | Signal | 確認内容 |
 | --- | --- |
-| Service availability | `/health` の失敗、5xx、revision 起動失敗、latency |
+| Service availability | `/health` の失敗、5xx、blue/green の起動失敗、latency |
 | DB path | `/ready`、共有 read / create / delete、connection / statement / lock timeout |
 | Abuse control | bucket別429/503、Argon2 capacity、daily / active / storage quota 到達理由 |
-| Cleanup | Scheduler 最終成功時刻、Job exit、削除件数、batch 安全上限、backlog |
-| Capacity | logical bytes、active row数、物理relation size、DB connection、Cloud Run instance数 |
-| Identity | IAM policy 変更、Secret Manager access、Workload Identity の失敗 |
-| DB tunnel | Cloudflare Access deny、token 認証失敗、sidecar startup probe 失敗 |
-| Delivery | 対象CI run / SHA、production environment実行者、image digest、migration / cleanup / deployの結果 |
+| Cleanup | timer の最終実行、service の exit、削除件数、batch 安全上限、backlog |
+| Capacity | logical bytes、active row数、物理relation size、DB connection、VPS の memory / disk |
+| Identity | 取り込み宣言と opkssh 認可先の変更、SSH 証明書発行の失敗、deploy の失敗 |
+| 公開経路 | cloudflared tunnel の切断、HAProxy backend の down、片系だけの稼働 |
+| Delivery | deploy した SHA、GHCR への push、migration / blue-green 入替 / smoke の結果 |
 
 `/health` は DB を query しない。`/ready`はruntime app roleのread-only queryで利用列、default、
 constraint、PK/FK、cleanup index、必要grantのcatalog contractを確認する。どちらも`no-store`で、失敗時も
@@ -87,15 +97,15 @@ read / create / deleteを確認し、実利用者の共有IDや削除コード�
 
 ## 共有の緊急停止
 
-濫用、意図しない公開項目、共有 read の脆弱性が疑われる場合は、Web service の
-`SHARE_RESULTS_ENABLED` を `false` にする。
+濫用、意図しない公開項目、共有 read の脆弱性が疑われる場合は、`yunirun.jsonc` の
+`SHARE_RESULTS_ENABLED` を `false` にして `main` へ push する。環境変数は宣言から渡るので、
+反映にはデプロイ1回分の時間がかかる。
+
+それより早く止める必要がある場合は、VPS 上でアプリのユーザとしてコンテナを停止する。
+この場合は共有だけでなく静的配信と `/health` も止まる。
 
 ```bash
-gcloud run services update fighter \
-  --region us-west1 \
-  --project "$GCP_PROJECT_ID" \
-  --container app \
-  --update-env-vars SHARE_RESULTS_ENABLED=false
+systemctl --user stop fighter-blue.service fighter-green.service
 ```
 
 この状態では新しい共有作成と `/s/:id` の取得が無効になり、既存 URL は `404` になる。
@@ -103,10 +113,11 @@ gcloud run services update fighter \
 
 停止後は次を行う。
 
-1. 新 revision と環境変数、公開 URL の `404` を確認する。
+1. 新しいコンテナの環境変数と、公開 URL の `404` を確認する。
 2. cache purge が必要か Cloudflare の live 設定を確認する。
-3. 原因、影響した ruleset / schema / revision、公開期間を特定する。
-4. 修正と再開条件を review し、`cloudrun.yaml` も同じ状態へ同期する。
+3. 原因、影響した ruleset / schema / image、公開期間を特定する。
+4. 修正と再開条件を review する。`yunirun.jsonc` が正本なので、そこを戻すまで再開しない。
+   コンテナ停止で止めた場合は次の deploy で起動し直ることに注意する。
 5. 再開時に create、GET、delete、期限、cache header を一式確認する。
 
 公開先や crawler が保持した preview、screenshot、cache は、DB 削除や緊急停止だけでは回収できない。
@@ -116,23 +127,23 @@ gcloud run services update fighter \
 1. 漏えい候補の credential と consumer を1つに絞る。
 2. audit log で利用時刻、source、対象 resource を確認する。
 3. 新 credential / secret version を作り、その consumer だけを更新する。
-4. 新 revision または Job を起動し、正常系と deny 系を確認する。
+4. コンテナと workload を起動し直し、正常系と deny 系を確認する。
 5. 旧 credential を disable する。
 6. rollback window 後に旧 version を破棄し、原因を修正する。
 
-`secretKeyRef.key: latest` を使う workload は、新 version 作成だけでは既存 instance が切り替わらない。
-service は新 revision、Job は定義更新または再起動で新値を読むことを確認する。
+env ファイルは unit の起動時に読まれるので、値を書き換えただけでは動作中のコンテナは切り替わらない。
+blue/green の両方を再起動し、新しい値で healthy になることを確認する。
 
-DB app password、DB owner password、runtime / migration / cleanup の Cloudflare token を一度に
-rotation しない。owner credential を application の復旧用に配布せず、default service account や
-共有 token へ一時的に権限を広げない。
+DB app password と DB owner password を一度に rotation しない。password は yunirun がホスト上で
+保持するので、rotation は VPS 側の操作になる。owner credential を application の復旧用に配布せず、
+アプリのユーザから読める場所へ一時的に置かない。
 
 ## DB incident
 
 不正 query、権限逸脱、data corruption が疑われる場合は次の順で扱う。
 
-1. application revision、Job execution、DB session、Cloudflare Access event の時刻を揃える。
-2. 影響する workload の共有停止、Job 停止、token disable の最小 containment を行う。
+1. コンテナの起動、migration / cleanup の実行、DB session、HAProxy と cloudflared の log の時刻を揃える。
+2. 影響する workload の共有停止、timer 停止、コンテナ停止の最小 containment を行う。
 3. `fighter_app` の grant と実際の role membership を比較する。
 4. table row、relation size、create event、schema version を read-only に確認する。
 5. backup / point-in-time recovery の復元先を別 DB に作り、整合性を検証する。
@@ -143,17 +154,16 @@ production DB 上で原因調査と同時に手動 DDL や大量削除を行わ�
 
 ## Cleanup failure
 
-最初に Cloud Scheduler の対象、identity、最終実行、Cloud Run Job の revision と image を確認する。
-次に sidecar、DB timeout、batch 安全上限、期限切れ row の backlog を確認する。
+最初に timer の最終実行、service の exit、動いている image を確認する。次に DB timeout、
+batch 安全上限、期限切れ row の backlog を確認する。
 
 ```bash
-gcloud run jobs execute fighter-cleanup \
-  --region us-west1 \
-  --project "$GCP_PROJECT_ID" \
-  --wait
+systemctl --user list-timers fighter-cleanup.timer
+systemctl --user start fighter-cleanup.service
+journalctl --user -u fighter-cleanup.service -n 200
 ```
 
-手動実行を繰り返す前に、1回の Job が一部削除後に失敗したのか、接続前に失敗したのかを log で分ける。
+手動実行を繰り返す前に、1回の実行が一部削除後に失敗したのか、接続前に失敗したのかを log で分ける。
 cleanup は短い batch と `ON DELETE CASCADE` を使うため再実行可能だが、安全上限の引き上げは DB load と
 quota event prune の順序を確認してから行う。
 
@@ -171,7 +181,7 @@ SELECT
 FROM published_analyses;
 ```
 
-閾値到達時はSchedulerの最終成功とJob logを確認し、cleanupを1回実行する。`logical_bytes`はDELETEの
+閾値到達時はtimerの最終実行とlogを確認し、cleanupを1回実行する。`logical_bytes`はDELETEの
 commit直後に減るため、その値と新規createを再確認する。物理relation fileが縮まらなくてもquota回復に
 `VACUUM FULL`は不要である。DB diskの警告が別途残る場合はautovacuum状況を確認し、必要ならonlineの
 `VACUUM (ANALYZE)`で再利用と統計更新を促す。blocking maintenanceはDB運用手順として別に計画する。
@@ -180,15 +190,15 @@ commit直後に減るため、その値と新規createを再確認する。物�
 
 少なくとも四半期ごと、または IAM / schema / network 変更後に次を確認する。
 
-- builder が deploy できず、deployer が image push や secret 読取をできないこと
-- builder jobからproduction environmentのdeployer secretを参照できないこと
-- 対象SHAのCI失敗時にreleaseが起動せず、開始済みmigrationが後続pushでcancelされないこと
+- build job が VPS へ入れず、deploy 経路から owner password を読めないこと
+- deploy job に `environment:` が付いておらず、opkssh の認可先が deploy 用ユーザに限られていること
+- 開始済みのデプロイが後続pushでcancelされないこと
 - runtime / cleanup が DDL できず、migration だけが schema apply できること
-- 各 Cloudflare token が別 workload から利用できないこと
-- Scheduler identity が cleanup Job 以外を起動できないこと
+- runtime と migration の env ファイルの所有者と mode が分かれていること
+- timer が cleanup 以外を起動しないこと
 - sharing disable、期限切れ、誤った削除コード、quota 超過が fail closed になること
 - DB backup の復元 test と、旧 image / 新 schema の rollback 互換性
 - secret version、不要な role binding、古い image、失敗した Job execution の棚卸し
-- RenovateがActions、pgschema、PostgreSQL service、Cloud Run sidecarの更新PRを作成できること
+- RenovateがActions、pgschema、PostgreSQL service imageの更新PRを作成できること
 
 supply chain と CI の未実装項目は [DEPLOY.md](./DEPLOY.md) の残余リスクを参照する。

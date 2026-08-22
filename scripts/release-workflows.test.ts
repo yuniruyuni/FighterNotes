@@ -36,20 +36,6 @@ describe("release workflow safety contracts", () => {
       }
     }
 
-    for (const file of [
-      "cloudrun.yaml",
-      "cloudrun-job.yaml",
-      "cloudrun-cleanup-job.yaml",
-    ]) {
-      const source = read(file);
-      for (const match of source.matchAll(/^\s*image:\s*([^\s#]+)/gm)) {
-        const image = match[1];
-        if (!image || image === "IMAGE_PLACEHOLDER") continue;
-        expect(image, `${file}: ${image}`).toMatch(digestPattern);
-      }
-      expect(source).not.toContain("cloudflare/cloudflared:latest");
-    }
-
     for (const file of ["Dockerfile", "Dockerfile.migration"]) {
       const source = read(file);
       for (const match of source.matchAll(/^FROM\s+([^\s]+)/gm)) {
@@ -138,79 +124,46 @@ describe("release workflow safety contracts", () => {
     }
   });
 
-  test("production release is CI-gated, digest-based, and non-canceling", () => {
-    const deploy = read(".github/workflows/deploy.yml");
-    const build = read(".github/workflows/build-image.yml");
-    expect(deploy).toMatch(/on:\n\s+workflow_run:/);
-    expect(deploy).toContain(
-      "github.event.workflow_run.conclusion == 'success'",
-    );
-    expect(deploy).toContain("github.event.workflow_run.head_sha");
-    expect(deploy).toContain("group: fighter-production-release");
+  test("デプロイは途中で打ち切らず、公開先の健全性まで見る", () => {
+    const deploy = read(".github/workflows/deploy-yunirun.yml");
+    // 中断は blue/green の入れ替えを中途半端な状態で止めうる。
     expect(deploy).toContain("cancel-in-progress: false");
-    expect(deploy).not.toContain("secrets: inherit");
-    expect(deploy).toContain("artifact_image_digest");
-    expect(deploy).toContain("environment: production");
+    // 入れ替えが済んだことを外から確かめる。
     expect(deploy).toContain("https://fighter.yuniruyuni.net/health");
-    expect(deploy).toContain("https://fighter.yuniruyuni.net/ready");
-    expect(deploy).toContain("--connect-timeout 5 --max-time 15");
-    expect(deploy).toContain(
-      "--retry 5 --retry-delay 2 --retry-max-time 90 --retry-all-errors",
-    );
-    expect(deploy).toContain('curl "${SMOKE_CURL_OPTIONS[@]}"');
-    expect(build).toContain("workflow_call:");
-    expect(build).toContain("GCP_BUILDER_WORKLOAD_IDENTITY_PROVIDER:");
-    expect(build).toContain("GCP_BUILDER_SERVICE_ACCOUNT:");
   });
 
-  test("Cloudflare client IP is trusted only behind internal Cloud Run ingress", () => {
-    const service = read("cloudrun.yaml");
-    expect(service).toContain("run.googleapis.com/ingress: internal");
-    expect(service).toMatch(
-      /- name: PUBLIC_BASE_URL\n\s+value: https:\/\/fighter\.yuniruyuni\.net/,
-    );
-    expect(service).toMatch(
-      /- name: TRUST_CLOUDFLARE_CONNECTING_IP\n\s+value: "true"/,
+  test("デプロイ job に environment を付けない", () => {
+    // environment を使うと OIDC の sub が ...:environment:<name> に変わり、
+    // VPS 側の認可と一致しなくなって ssh に入れなくなる。
+    const deploy = read(".github/workflows/deploy-yunirun.yml");
+    expect(deploy).not.toMatch(/^\s+environment:/m);
+  });
+
+  test("GHCR のトークンは argv ではなく stdin で渡す", () => {
+    // argv に載せると ps から見える。
+    const deploy = read(".github/workflows/deploy-yunirun.yml");
+    expect(deploy).toContain("--arg token");
+    expect(deploy).not.toMatch(/ssh .*\$GHCR_TOKEN/);
+  });
+
+  test("Cloudflare client IP を信じる条件が宣言に揃っている", () => {
+    // CF-Connecting-IP を信じてよいのは Cloudflare 経由でしか到達できない
+    // ときだけ。VPS ではコンテナが loopback にだけ束縛され、その手前に
+    // HAProxy と cloudflared がいることでこれが成り立つ。アプリ側は公開 URL
+    // が HTTPS であることを起動時に確かめるので、両方が揃っている必要がある。
+    const manifest = read("yunirun.jsonc");
+    expect(manifest).toContain('"TRUST_CLOUDFLARE_CONNECTING_IP": "true"');
+    expect(manifest).toContain(
+      '"PUBLIC_BASE_URL": "https://fighter.yuniruyuni.net"',
     );
   });
 
-  test("image builds pass only non-secret digests into the release job", () => {
-    const deploy = read(".github/workflows/deploy.yml");
-    const build = read(".github/workflows/build-image.yml");
-
-    expect(build).toContain("Non-secret digest returned by Artifact Registry");
-    expect(build).toContain(
-      `artifact_image_digest: \${{ steps.push-artifact.outputs.digest }}`,
-    );
-    expect(build).toContain('echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"');
-    expect(build).toContain("Artifact Registry digest:");
-    expect(build).not.toContain("artifact_image_ref");
-    expect(build).not.toContain("ARTIFACT_IMAGE_REF");
-    expect(build).not.toContain("outputs.image_ref");
-    expect(build).not.toMatch(/image_ref=.*GITHUB_OUTPUT/);
-
-    expect(deploy).toContain(
-      `APP_IMAGE_DIGEST: \${{ needs.build-app.outputs.artifact_image_digest }}`,
-    );
-    expect(deploy).toContain(
-      `MIGRATION_IMAGE_DIGEST: \${{ needs.build-migration.outputs.artifact_image_digest }}`,
-    );
-    expect(deploy).not.toContain("outputs.artifact_image_ref");
-    expect(deploy).not.toMatch(/APP_IMAGE_REF:\s*\$\{\{/);
-    expect(deploy).not.toMatch(/MIGRATION_IMAGE_REF:\s*\$\{\{/);
-    expect(deploy).toContain("Validate and compose immutable image references");
-    expect(deploy).toContain("^sha256:[0-9a-f]{64}$");
-    expect(deploy).toContain(
-      `IMAGE_REPOSITORY="\${GCP_REGION}-docker.pkg.dev/\${GCP_PROJECT_ID}/fighter"`,
-    );
-    expect(deploy).toContain("printf 'APP_IMAGE_REF=%s/%s@%s\\n'");
-    expect(deploy).toContain("printf 'MIGRATION_IMAGE_REF=%s/%s@%s\\n'");
-    expect(deploy).toContain('>> "$GITHUB_ENV"');
-    expect(deploy).toContain("Application digest:");
-    expect(deploy).toContain("Migration digest:");
-    expect(deploy).not.toContain('echo "- Application: \\`$APP_IMAGE_REF\\`"');
-    expect(deploy).not.toContain(
-      'echo "- Migration: \\`$MIGRATION_IMAGE_REF\\`"',
-    );
+  test("cleanup は定期実行として宣言されている", () => {
+    // Cloud Scheduler の 23 2 * * * (JST) を systemd timer へ移した。
+    // schedule が抜けると、期限切れの共有データが溜まり続ける。
+    const manifest = read("yunirun.jsonc");
+    expect(manifest).toContain('"cleanup": {');
+    expect(manifest).toContain('"schedule": "02:23"');
+    expect(manifest).toContain('"--batch=cleanup"');
   });
 });

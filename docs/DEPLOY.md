@@ -1,53 +1,66 @@
 # デプロイ
 
-最終確認: 2026-08-03
+最終確認: 2026-08-22
 
 ## 対象と正本
 
-この文書は、この repository にある GitHub Actions と Cloud Run manifest の release 手順を扱う。
+この文書は、この repository にある GitHub Actions と yunirun 宣言による release 手順を扱う。
 
 - application / migration image: `Dockerfile`、`Dockerfile.migration`
 - CI/CD: `.github/workflows/`
-- Cloud Run service / Job: `cloudrun.yaml`、`cloudrun-job.yaml`、`cloudrun-cleanup-job.yaml`
+- デプロイ宣言: `yunirun.jsonc`
+- VPS の既知ホスト鍵: `ssh/known_hosts`
 - schema: `schema/`、`.pgschemaignore`、`bin/migrate.sh`
 
-Cloudflare、PostgreSQL login、Secret Manager、IAM binding、cleanup の Scheduler は
-`yuniruyuni/yuniruyuni.net` 側の Terraform / NixOS と live inventory が正本である。
-この repository の service account 名や secret 参照は接続契約であり、実在や権限付与の証明ではない。
+このアプリは Cloud Run から、VPS 上のデプロイシステム yunirun へ移した。Cloud Run、
+Cloud Scheduler、Artifact Registry、Workload Identity、Secret Manager は使わない。
+
+アプリの取り込み宣言、uid と port の割り当て、PostgreSQL の login、HAProxy、Cloudflare の
+tunnel と route、agenix の秘密は `yuniruyuni/yuniruyuni.net` 側の NixOS 設定と live inventory が
+正本である。この repository の宣言は接続契約であり、実在や権限付与の証明ではない。
 
 ## Release 構成
 
-| Workload | Manifest | Image | DB role | Service account |
-| --- | --- | --- | --- | --- |
-| Web service `fighter` | `cloudrun.yaml` | `fighter` | `fighter_app` | `fighter-runtime` |
-| Migration Job `fighter-migration` | `cloudrun-job.yaml` | `fighter-migration` | DB owner `fighter` | `fighter-migration` |
-| Cleanup Job `fighter-cleanup` | `cloudrun-cleanup-job.yaml` | `fighter` | `fighter_app` | `fighter-cleanup` |
+| Workload | 起動 | Image | DB role |
+| --- | --- | --- | --- |
+| Web app `fighter` | blue/green の2コンテナを片方ずつ入れ替える | `ghcr.io/yuniruyuni/fighter` | `fighter_app` |
+| migration | 入れ替えの前に1回だけ実行する | `ghcr.io/yuniruyuni/fighter-migration` | owner `fighter` |
+| cleanup | systemd timer (`yunirun.jsonc` の `"schedule": "02:23"`) | `ghcr.io/yuniruyuni/fighter` を `--batch=cleanup` で起動 | `fighter_app` |
 
-各 workload は `cloudflared access tcp` sidecar を通して `db.yuniruyuni.net` へ接続する。
-runtime と cleanup は DML 用 password、migration だけが DDL 用 owner password を使う。
+DB 名とロールは `fighter`、owner の `fighter`、app の `fighter_app` である。各 workload は
+同じ VPS 上の PostgreSQL へ Unix socket で直結する。Cloud Run 時代の `cloudflared access tcp`
+sidecar と DB 用の Cloudflare Access tunnel は不要になったので使わない。
 
-Web service は internal ingress、最大 2 instance、container concurrency 80、timeout 60 秒である。
-外部公開経路は Cloud Run manifest の外側にある。`CF-Connecting-IP` をrate-limit keyとして
-信頼するのは、internal ingressを維持し、Cloudflare経路だけがoriginへ到達できる構成に限る。
-`TRUST_CLOUDFLARE_CONNECTING_IP=true` のreleaseではlive ingressとCloudflare tunnel / routeを
-監査し、Cloud Runへの別経路が無いことを確認する。
+DB password は yunirun がホスト鍵と管理者鍵で暗号化して保持する。runtime と cleanup へは
+app role の password だけを渡し、owner password は root だけが読める env ファイルに置く。
+migration は root 側の unit として実行するので、アプリのユーザから owner の資格情報へは届かない。
+
+公開経路は Cloudflare tunnel から VPS の HAProxy (frontend `127.0.0.1:8260`) を通り、
+blue/green のコンテナへ入る。コンテナは loopback にだけ publish するので、この経路以外から
+origin へ到達できない。`CF-Connecting-IP` を rate-limit key として信頼できるのはこの構成に限る。
+`TRUST_CLOUDFLARE_CONNECTING_IP=true` のまま公開経路を変更する場合は、HAProxy の bind、
+tunnel の route、コンテナの publish 先を監査し、別経路が無いことを確認する。
 
 ## GitHub 設定
 
-値は文書や log に残さず、consumer ごとに次の scope へ分ける。
+deploy 用の長期資格情報をこの repository に置かない。
 
-| Secret | Scope |
+| 用途 | 使うもの |
 | --- | --- |
-| `GCP_PROJECT_ID` | repository または organization |
-| `GCP_BUILDER_WORKLOAD_IDENTITY_PROVIDER` | repository または organization |
-| `GCP_BUILDER_SERVICE_ACCOUNT` | repository または organization |
-| `GCP_DEPLOYER_WORKLOAD_IDENTITY_PROVIDER` | `production` environment のみ |
-| `GCP_DEPLOYER_SERVICE_ACCOUNT` | `production` environment のみ |
+| GHCR への image push | `GITHUB_TOKEN` (`packages: write`) |
+| VPS への SSH | OIDC token (`id-token: write`) から opkssh が発行する短命の SSH 証明書 |
+| VPS からの GHCR pull | deploy job の `GITHUB_TOKEN` を stdin で渡す。job 終了とともに失効する |
 
-reusable build workflow は `workflow_call.secrets` で builder 用3項目だけを受け取り、caller も個別に渡す。
-`secrets: inherit` は使わない。deployer secret は `production` environment の直列 release job だけから
-参照する。builder は image push、deployer は Cloud Run service / Job の置換と Job 実行に必要な最小権限
-だけを持たせる。実際の IAM binding は外部 infrastructure repository と GCP live policy で確認する。
+長期の SSH 秘密鍵も、GCP の Workload Identity provider / service account も使わない。誰が
+deploy できるかは VPS 側の取り込み宣言と opkssh の認可先が決めるので、repository secret を
+足しても deploy 権限は増えない。
+
+deploy job に `environment:` を付けない。付けると OIDC の `sub` が `...:environment:<name>` へ
+変わり、VPS 側の認可と一致しなくなって ssh に入れない。GHCR token は argv ではなく stdin で
+渡す。argv に載せると `ps` から見える。どちらも `scripts/release-workflows.test.ts` で固定してある。
+
+opkssh の version は VPS 側と揃える。証明書の principals の扱いが version で変わり、
+食い違うと sshd 側で拒否される。
 
 ## CI gate
 
@@ -65,21 +78,23 @@ image build は test の完了を待たない。同じ commit を別々に検証
 `cargo install` する CLI、Rust の build 成果物、image の layer は cache から復元する。cache は
 `main` の push でだけ保存する。pull request で作った cache はその pull request からしか見えず、
 他へ再利用されないまま容量を占める。cache は成果物の再現手段であり、release の入力ではない。
-release が配置する image は毎回 Artifact Registry へ push した digest で固定する。
+release が配置するのは、その commit SHA を tag として GHCR へ push した image である。
 
 `/health` は process の HTTP 応答だけを確認し、DB query は行わない。DB を含む read / create / delete は
-PostgreSQL integration testで確認する。production deployはさらに`/ready`でruntime app roleからの
-read-only query、利用列の型/nullability、critical constraint/default、PK/FK/indexと最小grantを
-短いtimeout内に確認する。smoke testのcurl自体にも接続・全体timeoutと有限retryを設定する。
+PostgreSQL integration testで確認する。`/ready`はruntime app roleからのread-only query、利用列の
+型/nullability、critical constraint/default、PK/FK/indexと最小grantを短いtimeout内に確認する。
 
-`deploy.yml` は `main` pushを直接契機にせず、同じSHAに対する `CI` workflowの `push` runが成功した
-`workflow_run` だけを受け付ける。branch protectionでは `CI / test`、`CI / security`、`CI / docker` と、
-全pull requestで `Schema Plan / plan` を必須にする。GitHubのlive branch ruleはrepository外の状態なので、
+`deploy-yunirun.yml` は `main` への push で走り、同じ push の `CI` workflow とは並行する。CI の成功は
+デプロイの前提になっていない。壊れた commit を `main` へ入れないことは pull request 側の必須 check で
+担保する。branch protection では `CI / test`、`CI / security`、`CI / docker` と、全 pull request で
+`Schema Plan / plan` を必須にする。GitHub の live branch rule は repository 外の状態なので、
 設定変更後と四半期棚卸し時に実在を確認する。
 
-`scripts/release-workflows.test.ts` は全workflowのthird-party Actionが40桁commit SHAとversion commentを
-持つこと、service / release containerがdigest固定されていること、schema planとreleaseの安全条件を
-検査する。`CI / test` がこのcontract testを直接実行する。
+`scripts/release-workflows.test.ts` は全 workflow の third-party Action が40桁 commit SHA と version
+comment を持つこと、workflow の service / container image が digest 固定であること、schema plan の
+安全条件、そしてデプロイ側の契約 (中断しない、`/health` を確認する、`environment:` を付けない、
+token を stdin で渡す、`yunirun.jsonc` に cleanup の schedule と Cloudflare client IP の前提が
+揃っている) を検査する。`CI / test` がこの contract test を直接実行する。
 
 ## Schema 変更
 
@@ -100,48 +115,53 @@ commentはbest-effortのreview補助であり、その成否でplan/enforce結�
 enforceが失敗したcheckは、commentの成否にかかわらず必ず失敗する。branch protectionでは全PRに対して
 `Schema Plan / plan`を必須checkにする。これはデータ移行、lock時間、rollback可能性の判断を代替しない。
 
-migration は application より先に production DB へ適用される。したがって schema 変更は、少なくとも
-直前の application image と新しい image の両方から利用できる後方互換な段階に分ける。
-列削除や制約強化は、利用コードの release と rollback window が終わった後の別 release にする。
+migration は blue/green の入れ替えより先に実行されるので、schema は必ず新しい application より先に
+production DB へ入る。したがって schema 変更は、少なくとも直前の application image と新しい image の
+両方から利用できる後方互換な段階に分ける。列削除や制約強化は、利用コードの release と rollback window が
+終わった後の別 release にする。
 
 ## 自動デプロイ
 
-`main` pushの `CI` workflowが成功すると `deploy.yml` が動く。release対象はCI runの40桁SHAへ固定し、
-image tagは `<git-sha>-<deploy-run-id>-<run-attempt>` で再実行を含め一意にする。配置時にはpush応答から
-得たArtifact Registry digestへ置き換え、tagの再利用には依存しない。
+`main` への push、または `main` に対する `workflow_dispatch` で `deploy-yunirun.yml` が走る。
+VPS 側の認可は `main` の ref に限ってあるので、別 branch から起動しても ssh に入れない。
 
-1. application image と migration image を build する。
-2. 両 image を Artifact Registry と archive 用 GHCR へ push する。
-3. production release lockを取得し、対象SHAが現在の`main`であることを再確認する。
-4. migration Job manifest をmigration image digestで置換し、Jobを同期実行する。
-5. cleanup Job manifest をapplication image digestで置換する。
-6. Web service manifest を同じapplication image digestで置換する。
-7. `https://fighter.yuniruyuni.net/health`と`/ready`をsmoke testする。
+1. `build-ghcr.yml` を2回呼び、`Dockerfile` と `Dockerfile.migration` から image を build して
+   `ghcr.io/yuniruyuni/fighter` と `ghcr.io/yuniruyuni/fighter-migration` へ push する。tag は
+   その commit の SHA そのものである。
+2. deploy job が cloudflared と opkssh を入れ、`ssh/known_hosts` を配置し、`opkssh login github` で
+   OIDC token から短命の SSH 証明書を受け取る。
+3. `yunirun-fighter@ssh.yuniruyuni.net` へ ssh し、`yunirun deploy <sha>` を実行する。GHCR token と
+   `yunirun.jsonc` の内容は stdin の JSON で渡す。VPS が GitHub を取りに行かないので、manifest 取得用の
+   資格情報を VPS 側へ置かずに済む。
+4. `https://fighter.yuniruyuni.net/health` を smoke test する。
 
-imageのbuildはbuildxで行い、layer cacheをCIのimage buildと共有する。同じcommitをCIが先に
-buildしているため、releaseのbuildは残ったlayerを読むだけで済む。buildxへ任せるのはbuildと
-daemonへのloadまでで、Artifact RegistryとGHCRへのpush、digestの取り出しは従来どおり行う。
+VPS 側の `yunirun deploy` は次の順で進む。
 
-build jobは並行できるが、migration、cleanup、service更新、smoke testは1つの
-`fighter-production-release` concurrency groupで直列実行し、後続pushから開始済みreleaseをcancelしない。
-lock待機中に古くなったSHAはmigration前に見送り、現在の`main`を後から古いrevisionで上書きしない。
-Jobとserviceの置換はGitHub `production` environmentのdeployer identityで行う。job summaryには対象SHA、
-両image digest、migration / cleanup / service / smokeの各結果を残す。
+1. 受け取った `yunirun.jsonc` を保存し、宣言を反映する (unit と HAProxy 設定の書き直し)。
+2. GHCR へ login し、application と migration の image を pull する。
+3. migration を root 側の unit で1回実行する。
+4. blue、green の順に片方ずつ再起動し、それぞれが healthy になるのを待つ。
 
-## Immutable dependency の更新
+順序には理由がある。宣言の反映が後だと古い unit のまま起動する。migration が入れ替えより後だと
+新旧が食い違う。片側が healthy になる前にもう片側を落とすと無停止でなくなる。migration が失敗した
+時点で停止し、稼働中のコンテナには触れない。
 
-GitHub Actionsは40桁commit SHAで固定し、review時に追跡できるrelease versionを同じ行のcommentへ残す。
-GitHub ActionsのPostgreSQL service、`Dockerfile.migration`の`pgschema`、Cloud Runの`cloudflared`は
-`version@sha256:digest`で固定する。application / migration imageもbuild後のArtifact Registry digestで
-配置するため、同じrepository commitの再実行でmutable tagをproductionへ持ち込まない。
+concurrency group は `deploy-yunirun-<ref>` で、`cancel-in-progress: false` にする。途中で中断すると
+blue/green の入れ替えが片側だけ終わった状態で止まりうる。
 
-`renovate.json`はActions、Dockerfile、workflow service imageに加え、custom managerで3つのCloud Run
-manifestの`cloudflared`を更新対象にする。Renovate GitHub Appまたは同等runnerがrepositoryで有効であることは
-live設定で確認する。更新PRではversionとdigestの両方、upstream release note、schema plan、CI、Cloud Run
-sidecar startup、cleanup smokeを確認する。緊急security updateでもtagだけへ戻さず、検証したdigestを直接更新する。
+## 依存の固定
 
-rollbackはrelease summaryとCloud Run revisionに記録されたapplication / sidecar digestを使う。
-古いmutable tagからdigestを再解決してはならない。
+GitHub Actions は40桁 commit SHA で固定し、review 時に追跡できる release version を同じ行の comment へ
+残す。GitHub Actions の PostgreSQL service image と `Dockerfile` / `Dockerfile.migration` の `FROM` は
+`version@sha256:digest` で固定する。opkssh の binary は version と SHA-256 を workflow 内で照合する。
+
+application と migration の image は commit SHA を tag にして GHCR へ push し、同じ SHA を指して deploy する。
+digest 指定ではないので、同じ SHA で workflow を再実行すると build し直した image が同じ tag へ入る。
+
+`renovate.json` は Actions、Dockerfile、workflow の service image を更新対象にする。Renovate GitHub App
+または同等 runner が repository で有効であることは live 設定で確認する。更新PRでは version と digest の
+両方、upstream release note、schema plan、CI を確認する。緊急security updateでも tag だけへ戻さず、
+検証した digest を直接更新する。
 
 ## Release 後確認
 
@@ -158,53 +178,63 @@ rollbackはrelease summaryとCloud Run revisionに記録されたapplication / s
 共有 payload に動画、画像、ファイル名、詳細レポート、frame/input、SA/CAの正確なdamage値と
 最終gauge量が含まれず、ruleset v9以降ではavailability付き集計だけが含まれることもNetwork panelで確認する。
 
-## Cleanup
-
-deploy workflow は `fighter-cleanup` Job を install / update するが、定期実行 Scheduler は作らない。
-production では外部 infrastructure repository と Cloud Scheduler live inventory で、対象 Job、region、
-実行 identity、頻度、最終成功時刻を確認する。
-
-手動実行は次のとおり。
+VPS 上での確認は、アプリのユーザ (`yunirun-fighter`) の systemd user unit を見る。
 
 ```bash
-gcloud run jobs execute fighter-cleanup \
-  --region us-west1 \
-  --project "$GCP_PROJECT_ID" \
-  --wait
+systemctl --user status fighter-blue.service fighter-green.service
+journalctl --user -u fighter-blue.service -n 100
+```
+
+blue/green の片方だけが動いている状態は、入れ替えの途中か、片側が healthy にならずに止まったことを
+意味する。HAProxy はヘルスチェックで振り分けを追従するので、片系でも公開は続く。
+
+## Cleanup
+
+cleanup は `yunirun.jsonc` の `"schedule": "02:23"` から systemd timer として作られる。旧 Cloud Scheduler の
+`23 2 * * *` (JST) を移したものである。timer は停止中に予定時刻を過ぎていれば起動後に一度実行し、
+複数アプリが同時刻に集中しないよう最大15分の遅延を入れる。実行時刻はその分ずれる。
+
+```bash
+systemctl --user list-timers fighter-cleanup.timer
+systemctl --user start fighter-cleanup.service
+journalctl --user -u fighter-cleanup.service -n 200
 ```
 
 成功 log は `expired`、`rate_limits`、`quota_events`、`batches` を出力する。batch安全上限に達した場合は失敗終了し、
 quota event の prune へ進まない。原因と backlog を確認してから設定または実装を変更する。
 
+cleanup は application 本体と同じ image を `--batch=cleanup` で起動し、`yunirun.jsonc` で `PGPOOL_MAX=1`、
+`PG_STATEMENT_TIMEOUT_MS=30000` を上書きする。1本の長い処理なので接続は1つで足り、文が長いぶん
+statement の上限を伸ばす。
+
 10,000件backlogのintegration testは期限用indexと2 workerの全batch処理を検証する。さらに、
 active 100,000件よりexpires_at順で後方にあるretention対象をcreated_at専用indexから取得する病的分布も
-30秒未満に制限する。production Jobのtimeoutは600秒だが、release後は実データのrow幅、cascade対象、
-DB負荷を含む実行時間と`EXPLAIN (ANALYZE, BUFFERS)`を別途確認する。
+30秒未満に制限する。release後は実データのrow幅、cascade対象、DB負荷を含む実行時間と
+`EXPLAIN (ANALYZE, BUFFERS)`を別途確認する。
 
 ## Rollback
 
-1. 直前に正常だった application image の digest をrelease summaryまたはCloud Run revisionから特定する。
-2. その image を指定して `fighter` service を更新する。
+1. 直前に正常だった commit を特定する。
+2. その状態へ戻す revert commit を `main` へ入れる。deploy は `main` の push で走り、VPS 側の認可も
+   `main` の ref に限られているので、過去の commit や別 branch を選んで deploy する経路は無い。
 3. `/health` だけでなく共有 read / create / delete と browser 解析を確認する。
-4. cleanup Job も不具合のある application image を参照している場合は、正常 image へ戻す。
 
-```bash
-gcloud run services update fighter \
-  --region us-west1 \
-  --project "$GCP_PROJECT_ID" \
-  --container app \
-  --image "$PREVIOUS_IMAGE"
-```
+cleanup はアプリ本体と同じ image を使うので、application を戻せば cleanup も同じ image に戻る。
 
-schema は application より先に更新済みである。旧 image が新 schema と互換でない場合は単純 rollback せず、
-forward fix または検証済み backup restore を選ぶ。破壊的 DDL をその場の手動 SQL で戻さない。
+rollback でも migration は旧 commit の schema で走り直す。後方互換でない schema 変更を含む release を
+戻すと、DDL の巻き戻しが production DB に対して実行される。旧 image が新 schema と互換でない場合や、
+戻す側の plan が破壊的な場合は単純 rollback せず、forward fix または検証済み backup restore を選ぶ。
+破壊的 DDL をその場の手動 SQL で戻さない。
 
 ## Repository から確認できる残余リスク
 
+- deploy は同じ push の CI 成功を待たない。壊れた commit を `main` へ入れないことは pull request 側の
+  必須 check に依存する。
+- image は commit SHA tag で指しており、digest 固定ではない。
 - CI の dependency 検査は `bun audit` が中心で、Rust audit、secret scan、container scan はない。
 - SBOM、provenance、署名、attestation の生成・検証はない。
 - browser E2E と visual regression は release gate にない。
-- edge rate limit、audit log、IAM、Scheduler、DB backup の live 状態はこの repository では証明できない。
+- edge rate limit、VPS 上の unit / timer / 秘密 / DB backup の live 状態は、この repository では証明できない。
 
 これらを変更した場合は [security-operations.md](./security-operations.md) と外部 infrastructure の
 運用手順も同時に更新する。
