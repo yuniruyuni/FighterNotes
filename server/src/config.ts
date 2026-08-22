@@ -73,12 +73,25 @@ export const RuntimeConfig = {
       "TRUST_CLOUDFLARE_CONNECTING_IP",
       false,
     );
+    // CF-Connecting-IP を信じてよいのは、アプリへ Cloudflare 経由でしか
+    // 到達できないときだけ。直接叩ける場所でこれを信じると、送信元 IP を
+    // 詐称してレート制限を回避できてしまう。
+    //
+    // かつては K_SERVICE の有無で「Cloud Run 上か」を見ていた。ingress を
+    // 絞った Cloud Run ではそれが到達経路の保証になっていたが、VPS 上でも
+    // 同じ性質は成り立つ (コンテナは loopback にだけ束縛され、その手前に
+    // HAProxy と cloudflared がいる)。K_SERVICE はその性質の代理でしかなく、
+    // 環境を移すと成り立たなくなるので見ない。
+    //
+    // 到達経路そのものはアプリからは確かめようがない。この変数を true に
+    // すること自体が運用側の宣言であり、公開 URL が HTTPS であることだけを
+    // 取り違えの歯止めとして残す。
     if (
       trustCloudflareConnectingIp &&
-      (!environment.K_SERVICE || configuredPublicBaseUrl.protocol !== "https:")
+      configuredPublicBaseUrl.protocol !== "https:"
     ) {
       throw new Error(
-        "TRUST_CLOUDFLARE_CONNECTING_IP requires Cloud Run and an HTTPS public URL",
+        "TRUST_CLOUDFLARE_CONNECTING_IP requires an HTTPS public URL",
       );
     }
     return {
@@ -184,9 +197,18 @@ function databaseSettings(environment: Environment): DatabaseSettings {
   return {
     host: environment.PGHOST ?? "localhost",
     port: integerSetting(environment, "PGPORT", 5432, 1, 65_535),
-    user: environment.PGUSER ?? application,
+    // DB_USER / DB_NAME も見る。yunirun は接続先をこの名前で渡すため。
+    //
+    // これが無いと、接続ユーザが DB_APP_NAME (= DB 名 = owner ロール名) へ
+    // フォールバックする。owner は DDL 用のロールで、runtime が名乗ってよい
+    // ものではない。bin/migrate.sh が PGUSER="$DB_USER" と書いているのと
+    // 同じ規約に揃える。
+    //
+    // PGUSER / PGDATABASE を先に見るのは、Cloud Run 側がそちらを設定して
+    // いるため。移行が済めば環境変数はどちらか一方しか来ない。
+    user: environment.PGUSER ?? environment.DB_USER ?? application,
     password: environment.PGPASSWORD ?? environment.DB_PASSWORD ?? "template",
-    database: environment.PGDATABASE ?? application,
+    database: environment.PGDATABASE ?? environment.DB_NAME ?? application,
     max: integerSetting(environment, "PGPOOL_MAX", 5, 1, 20),
     connectionTimeoutMillis: integerSetting(
       environment,
