@@ -57,7 +57,7 @@ SPA の配信、軽量な共有結果の保存と公開、期限切れデータ�
 | Video analyzer | `crates/video-analyzer` | 各層のパイプライン結線と公開 API |
 | Server | `server/src` | 静的配信、共有 API、公開ページ、rate limit、cleanup batch |
 | Database | `schema` | 共有結果、指摘、戦術統計、SA/CA公開集計、作成 quota event、共有rate-limit counterの保存 |
-| Delivery | `Dockerfile`、`cloudrun*.yaml`、`.github/workflows` | build、migration、Cloud Run service / Job のリリース |
+| Delivery | `Dockerfile`、`yunirun.jsonc`、`.github/workflows` | build、migration、yunirun による VPS へのリリース |
 
 ## ブラウザ側
 
@@ -272,8 +272,8 @@ production image は multi-stage build で作る。
 3. Bun で server を単一 executable に compile
 4. distroless nonroot image へ executable と static files だけを配置
 
-Cloud Run では application service、schema migration Job、cleanup Job を分ける。
-各 workload の PostgreSQL 接続は Cloudflare Access TCP sidecar を経由する。
+yunirun は application コンテナ、schema migration、cleanup を別の workload として分ける。
+どの workload も同じ VPS 上の PostgreSQL へ Unix socket で直結する。
 詳細は [DEPLOY.md](./DEPLOY.md) を参照する。
 
 ## 維持する境界

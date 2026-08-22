@@ -1,11 +1,6 @@
 # GHCR へ image を push する。
 #
-# 既存の build-image.yml とは別に置く。あちらは Artifact Registry を正とし、
-# タグに run id と attempt を含める Cloud Run 向けの形で、GHCR へは archive
-# として push しているだけ。yunirun は生の commit SHA をタグとして受け取る
-# ので噛み合わない。
-#
-# Cloud Run を撤去したらあちらを消して、こちらに一本化する。
+# タグは生の commit SHA。VPS 上の yunirun がこの形で image を取りに来る。
 name: Build and Push to GHCR
 
 on:

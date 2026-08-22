@@ -171,8 +171,8 @@ rate-limit counterと2 UTC 日より古いcreate quota eventを削除する。re
 | error response | `no-store` |
 | `/health`、`/ready` | 成否とも`no-store` |
 
-application rate limiter は PostgreSQL の原子的 upsert を使う固定窓で、Cloud Run instance と
-cold start をまたいで共有する。create、delete、public read は別 bucket とし、client key は
+application rate limiter は PostgreSQL の原子的 upsert を使う固定窓で、blue/green の両コンテナと
+再起動をまたいで共有する。create、delete、public read は別 bucket とし、client key は
 SHA-256 digest だけを保存する。counter store が利用できない場合は共有 request だけを `503` で
 fail closed にし、静的配信と `/health` は継続する。
 
@@ -200,7 +200,7 @@ parentに保存する。物理relation file sizeとは分離しているため�
 | `SHARE_CREATE_RATE_LIMIT_PER_MINUTE` | `10` | create の共有DB固定窓 limit |
 | `SHARE_DELETE_RATE_LIMIT_PER_MINUTE` | `10` | delete の共有DB固定窓 limit |
 | `SHARE_GET_RATE_LIMIT_PER_MINUTE` | `120` | `/s/:id` の共有DB固定窓 limit |
-| `TRUST_CLOUDFLARE_CONNECTING_IP` | `false` | internal Cloud Run ingress + HTTPS originでだけCloudflare client IPを信頼 |
+| `TRUST_CLOUDFLARE_CONNECTING_IP` | `false` | コンテナがloopbackにだけbindし、HTTPS originのときだけCloudflare client IPを信頼 |
 | `SHARE_ARGON2_CONCURRENCY` | `2` | hash / verify 合計同時実行数 |
 | `SHARE_ARGON2_QUEUE_LIMIT` | `8` | Argon2待機 request 上限 |
 | `SHARE_ARGON2_WAIT_MS` | `250` | Argon2待機時間上限 |

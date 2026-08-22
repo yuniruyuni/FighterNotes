@@ -73,7 +73,7 @@ crates/
 client/              browser SPA、動画 decode、Worker、表示、local storage
 server/              static 配信、共有 API / page、cleanup batch
 schema/              PostgreSQL の desired schema
-.github/workflows/   CI、schema plan、image build、Cloud Run deploy
+.github/workflows/   CI、schema plan、GHCR への image build、yunirun でのデプロイ
 ```
 
 全体のデータフローは [システムアーキテクチャ](docs/architecture.md) に記載しています。
@@ -114,7 +114,7 @@ bun test scripts/
 | [analysis.md](docs/analysis.md) | 認識、event、advice、空間解析、限界 |
 | [sharing.md](docs/sharing.md) | 公開 payload、保持、削除、quota |
 | [development.md](docs/development.md) | build、test、frame data contract |
-| [DEPLOY.md](docs/DEPLOY.md) | CI/CD、migration、Cloud Run、rollback |
+| [DEPLOY.md](docs/DEPLOY.md) | CI/CD、migration、yunirun でのデプロイ、rollback |
 | [security-operations.md](docs/security-operations.md) | 監視、緊急停止、credential / DB incident |
 | [DATA_NOTICE.md](DATA_NOTICE.md) | 正規化済みframe data・認識用統計モデルの取扱い |
 
