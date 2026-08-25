@@ -29,6 +29,7 @@ export function initDatabase(
     password: settings.password,
     database: settings.database,
     max: settings.max,
+    min: settings.min,
     connectionTimeoutMillis: settings.connectionTimeoutMillis,
     idleTimeoutMillis: settings.idleTimeoutMillis,
     statement_timeout: settings.statementTimeoutMillis,

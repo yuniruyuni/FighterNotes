@@ -29,6 +29,7 @@ export interface DatabaseSettings {
   password: string;
   database: string;
   max: number;
+  min: number;
   connectionTimeoutMillis: number;
   idleTimeoutMillis: number;
   statementTimeoutMillis: number;
@@ -210,6 +211,15 @@ function databaseSettings(environment: Environment): DatabaseSettings {
     password: environment.PGPASSWORD ?? environment.DB_PASSWORD ?? "template",
     database: environment.PGDATABASE ?? environment.DB_NAME ?? application,
     max: integerSetting(environment, "PGPOOL_MAX", 5, 1, 20),
+    // 接続を最低 1 本保つ。
+    //
+    // 0 だと idleTimeoutMillis 経過で接続が閉じ、次の要求は接続の確立から
+    // やり直しになる。scram-sha-256 の認証 (PBKDF2 4096 回) が毎回走るので
+    // 数十ミリ秒かかる。SCRAM は意図的に遅い設計。
+    //
+    // 実測 (StreamerPost): 間を空けると 73〜100ms、連続だと 11〜18ms。
+    // 代償は 1 本あたり約 1MB (実測 PSS)。
+    min: integerSetting(environment, "PGPOOL_MIN", 1, 0, 5),
     connectionTimeoutMillis: integerSetting(
       environment,
       "PG_CONNECTION_TIMEOUT_MS",
