@@ -21,6 +21,8 @@ fn confirmed_drive_rush_is_preferred_as_the_throw_approach() {
         horizontal_order: Some(HorizontalOrder::P1Left),
         projectile_candidates: vec![],
         motion_regions: vec![],
+        contact: None,
+        camera: None,
     };
     let mut events = empty_events();
     events.drive_rushes.push(DriveRushEvent {

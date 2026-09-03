@@ -2,6 +2,7 @@ import type {
   FrameSample,
   SpatialCandidateWindow,
   SpatialFrameHints,
+  SpatialFrameRange,
   SpatialHintRange,
 } from "../../domain/result.js";
 import { precedingKeyframeIndex } from "../video-decoding/frame-decode-plan.js";
@@ -59,10 +60,16 @@ export function spatialHintsAt(
         frameIndex >= range.start_frame &&
         frameIndex <= range.end_frame,
     );
+  const inRange = (ranges: readonly SpatialFrameRange[]) =>
+    ranges.some(
+      (range) =>
+        frameIndex >= range.start_frame && frameIndex <= range.end_frame,
+    );
   return {
     p1Teleport: active(window.teleport_hints, 1),
     p2Teleport: active(window.teleport_hints, 2),
     p1Airborne: active(window.airborne_hints, 1),
     p2Airborne: active(window.airborne_hints, 2),
+    contact: inRange(window.contact_hints),
   };
 }

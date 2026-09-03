@@ -19,6 +19,8 @@ fn missed_punish_reach_requires_overlap() {
         horizontal_order: Some(HorizontalOrder::P1Left),
         projectile_candidates: vec![],
         motion_regions: vec![],
+        contact: None,
+        camera: None,
     };
     let candidate = || PunishChance {
         frame: 200,

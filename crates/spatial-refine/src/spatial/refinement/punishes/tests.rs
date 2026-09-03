@@ -231,6 +231,8 @@ fn observation(frame_index: u32, band: DistanceBand) -> SpatialObservation {
         horizontal_order: None,
         projectile_candidates: Vec::new(),
         motion_regions: Vec::new(),
+        contact: None,
+        camera: None,
     }
 }
 

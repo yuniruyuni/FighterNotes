@@ -189,6 +189,7 @@ export class AnalyzerWasmSession {
       hints.p2Teleport,
       hints.p1Airborne,
       hints.p2Airborne,
+      hints.contact,
     );
   }
 

@@ -24,6 +24,7 @@ pub(super) fn throw_windows(
                     .min(bounds.end),
                 teleport_hints: vec![],
                 airborne_hints: vec![],
+                contact_hints: vec![],
             }
         })
         .collect()
@@ -46,6 +47,7 @@ pub(super) fn drive_rush_windows(
                     .min(bounds.end),
                 teleport_hints: vec![],
                 airborne_hints: vec![],
+                contact_hints: vec![],
             }
         })
         .collect()

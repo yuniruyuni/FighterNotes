@@ -21,4 +21,9 @@ pub struct ActorHint {
 pub struct SpatialHints {
     pub p1: ActorHint,
     pub p2: ActorHint,
+    /// The first stage confirmed a hit/block contact at or near this frame
+    /// (hitstop). Bright, saturated motion regions may then be read as the
+    /// contact spark instead of being ignored as noise. Set this only from
+    /// meter/HP contact evidence; stage effects can otherwise be misread.
+    pub contact_effect: bool,
 }

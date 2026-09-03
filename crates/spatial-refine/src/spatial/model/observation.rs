@@ -45,6 +45,35 @@ pub struct MotionRegionObservation {
     pub effect_color_fraction: f32,
 }
 
+/// A hit-effect (spark) location observed during a hinted contact frame.
+///
+/// During hitstop both bodies and the camera freeze, so frame differencing
+/// isolates the effect. The centroid of bright, saturated changed cells is
+/// the best single-point estimate of where the attack connected. This is
+/// evidence about the contact already confirmed by the first stage, never a
+/// contact detection of its own.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ContactObservation {
+    /// Centroid of the effect-colored changed cells, normalized 0..1.
+    pub center: SpatialPoint,
+    pub bounds: SpatialRect,
+    pub effect_cells: u32,
+    pub confidence: f32,
+}
+
+/// Camera motion between the previous and the current frame, estimated by
+/// correlating world-anchored background strips. `pan_dx` is the horizontal
+/// shift of the background in normalized screen x (positive = the camera
+/// moved left), `zoom_ratio` the frame-to-frame scale factor. Integrating
+/// these over a window relates screen distance to game distance and reveals
+/// the pan clamp near a stage wall.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CameraMotion {
+    pub pan_dx: f32,
+    pub zoom_ratio: f32,
+    pub confidence: f32,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SpatialObservation {
     pub frame_index: u32,
@@ -56,4 +85,11 @@ pub struct SpatialObservation {
     pub projectile_candidates: Vec<ProjectileCandidate>,
     #[serde(default)]
     pub motion_regions: Vec<MotionRegionObservation>,
+    /// Present only when the frame carried a contact hint and an effect
+    /// region passed the spark criteria.
+    #[serde(default)]
+    pub contact: Option<ContactObservation>,
+    /// Camera motion versus the previous frame, when it could be estimated.
+    #[serde(default)]
+    pub camera: Option<CameraMotion>,
 }

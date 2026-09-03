@@ -30,6 +30,8 @@ fn refinement_records_candidate_and_unique_sampled_frames() {
         horizontal_order: usable.then_some(HorizontalOrder::P1Left),
         projectile_candidates: vec![],
         motion_regions: vec![],
+        contact: None,
+        camera: None,
     };
 
     refine_match_events_with_spatial(

@@ -9,6 +9,15 @@ pub struct SpatialHintRange {
     pub end_frame: u32,
 }
 
+/// Frame interval in which the first pass confirmed a hit or block contact
+/// (hitstop). Both bodies freeze there, so the extractor may read a bright,
+/// saturated motion region as the contact spark.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpatialFrameRange {
+    pub start_frame: u32,
+    pub end_frame: u32,
+}
+
 /// Short range selected by the deterministic first pass for spatial decoding.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpatialCandidateWindow {
@@ -16,4 +25,6 @@ pub struct SpatialCandidateWindow {
     pub end_frame: u32,
     pub teleport_hints: Vec<SpatialHintRange>,
     pub airborne_hints: Vec<SpatialHintRange>,
+    #[serde(default)]
+    pub contact_hints: Vec<SpatialFrameRange>,
 }

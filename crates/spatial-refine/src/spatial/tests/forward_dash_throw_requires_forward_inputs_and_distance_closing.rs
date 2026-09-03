@@ -20,6 +20,8 @@ fn forward_dash_throw_requires_forward_inputs_and_distance_closing() {
         horizontal_order: Some(HorizontalOrder::P1Left),
         projectile_candidates: vec![],
         motion_regions: vec![],
+        contact: None,
+        camera: None,
     };
     let mut events = empty_events();
     events.throw_actions.push(ThrowActionEvent {

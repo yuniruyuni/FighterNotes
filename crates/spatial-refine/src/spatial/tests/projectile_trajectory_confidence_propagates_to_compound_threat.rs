@@ -43,6 +43,8 @@ fn projectile_trajectory_confidence_propagates_to_compound_threat() {
             confidence: 0.8,
         }],
         motion_regions: vec![],
+        contact: None,
+        camera: None,
     }];
 
     refine_match_events_with_spatial(&mut events, &observations, &AnalysisContext::default());

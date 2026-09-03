@@ -1,11 +1,12 @@
 mod approaches;
+mod contacts;
 mod jumps;
 mod model;
 mod punishes;
 mod round_bounds;
 mod teleports;
 
-pub use model::{SpatialCandidateWindow, SpatialHintRange};
+pub use model::{SpatialCandidateWindow, SpatialFrameRange, SpatialHintRange};
 
 use crate::match_events::MatchEvents;
 
@@ -27,7 +28,9 @@ pub fn spatial_candidate_windows(events: &MatchEvents) -> Vec<SpatialCandidateWi
         &events.drive_rushes,
         &events.rounds,
     ));
-    merge_adjacent(windows)
+    let mut windows = merge_adjacent(windows);
+    contacts::annotate(&mut windows, &events.contacts);
+    windows
 }
 
 fn merge_adjacent(mut windows: Vec<SpatialCandidateWindow>) -> Vec<SpatialCandidateWindow> {
@@ -75,6 +78,7 @@ mod tests {
                 end_frame,
             }],
             airborne_hints: vec![],
+            contact_hints: vec![],
         }
     }
 

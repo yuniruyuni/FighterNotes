@@ -32,6 +32,7 @@ fn airborne_region_requires_jump_hint_for_ground_track() {
                     allow_airborne: true,
                 },
                 p2: ActorHint::default(),
+                contact_effect: false,
             },
         )
         .unwrap();

@@ -19,6 +19,8 @@ fn region(left: f32, right: f32, bottom: f32, changed_cells: u32) -> MotionRegio
         changed_cells,
         energy: changed_cells as u64 * 100,
         effect_cells: 0,
+        effect_x_sum: 0.0,
+        effect_y_sum: 0.0,
     }
 }
 
@@ -242,7 +244,7 @@ fn an_explicit_discontinuity_allows_a_distant_reacquire() {
 #[test]
 fn leaving_the_ground_needs_a_jump_hint() {
     let p1 = track_at(0.30, 0.9);
-    let regions = vec![region(0.28, 0.38, 0.75, 100)];
+    let regions = vec![region(0.28, 0.38, 0.62, 100)];
 
     let without_hint = assign_regions(
         [Some(&p1), None],
@@ -510,4 +512,37 @@ fn staying_exactly_on_the_ground_threshold_needs_no_jump_hint() {
         )[0],
         Some(0)
     );
+}
+
+/// 接地の判定はどちらの側も境界を含む。トラックが基準ちょうどに立って
+/// いれば地上であり、塊の足元が基準ちょうどに届いていれば空中ではない。
+#[test]
+fn ground_boundary_is_inclusive_on_both_sides() {
+    let ground = config().actor_ground_y;
+
+    // 基準ちょうどのトラックは地上扱いで、空中の塊にはヒントが要る。
+    let at_ground = track_at(0.30, ground);
+    let airborne = vec![region(0.28, 0.38, 0.42, 100)];
+    let assigned = assign_regions(
+        [Some(&at_ground), None],
+        [false, false],
+        [false, false],
+        &airborne,
+        &[0],
+        &config(),
+    );
+    assert_eq!(assigned[0], None, "基準ちょうどを地上と数えていない");
+
+    // 足元が基準ちょうどに届く塊は空中ではないので、ヒント無しで続く。
+    let grounded_region = vec![region(0.28, 0.38, ground, 100)];
+    let from_high = track_at(0.30, 0.9);
+    let assigned = assign_regions(
+        [Some(&from_high), None],
+        [false, false],
+        [false, false],
+        &grounded_region,
+        &[0],
+        &config(),
+    );
+    assert_eq!(assigned[0], Some(0), "基準ちょうどの塊を空中にしている");
 }

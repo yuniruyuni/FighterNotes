@@ -19,9 +19,11 @@ pub use config::SpatialConfig;
 pub use error::SpatialError;
 pub use extraction::SpatialExtractor;
 pub use model::{
-    ActorHint, ActorObservation, DistanceBand, HorizontalMotion, HorizontalOrder,
-    MotionRegionObservation, ProjectileCandidate, SpatialHints, SpatialObservation, SpatialPoint,
-    SpatialRect,
+    ActorHint, ActorObservation, CameraMotion, ContactObservation, DistanceBand, HorizontalMotion,
+    HorizontalOrder, MotionRegionObservation, ProjectileCandidate, SpatialHints,
+    SpatialObservation, SpatialPoint, SpatialRect,
 };
 pub use refinement::refine_match_events_with_spatial;
-pub use window_planning::{spatial_candidate_windows, SpatialCandidateWindow, SpatialHintRange};
+pub use window_planning::{
+    spatial_candidate_windows, SpatialCandidateWindow, SpatialFrameRange, SpatialHintRange,
+};

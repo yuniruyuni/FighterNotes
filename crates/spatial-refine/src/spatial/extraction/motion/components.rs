@@ -24,6 +24,8 @@ pub(super) fn connected_regions(
         let mut changed_cells = 0u32;
         let mut total_energy = 0u64;
         let mut effect_cells = 0u32;
+        let mut effect_x_sum = 0.0f32;
+        let mut effect_y_sum = 0.0f32;
         while let Some(index) = queue.pop_front() {
             let x = index % mask.width;
             let y = index / mask.width;
@@ -39,6 +41,8 @@ pub(super) fn connected_regions(
                 let low = cell.r.min(cell.g).min(cell.b);
                 if high >= 145 && high.saturating_sub(low) >= 65 {
                     effect_cells += 1;
+                    effect_x_sum += (x as f32 + 0.5) * cell_size as f32 / source_width as f32;
+                    effect_y_sum += (y as f32 + 0.5) * cell_size as f32 / source_height as f32;
                 }
             }
             for neighbor in neighbors(x, y, mask.width, mask.height) {
@@ -61,6 +65,8 @@ pub(super) fn connected_regions(
             changed_cells,
             energy: total_energy,
             effect_cells,
+            effect_x_sum,
+            effect_y_sum,
         });
     }
     regions

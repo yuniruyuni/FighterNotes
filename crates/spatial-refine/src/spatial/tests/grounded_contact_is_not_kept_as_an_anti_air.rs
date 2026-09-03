@@ -19,6 +19,8 @@ fn grounded_contact_is_not_kept_as_an_anti_air() {
         horizontal_order: Some(HorizontalOrder::P1Left),
         projectile_candidates: vec![],
         motion_regions: vec![],
+        contact: None,
+        camera: None,
     };
     let context = AnalysisContext::from_characters("p2", Some("LUKE"), Some("CHUN_LI"));
 
@@ -59,6 +61,8 @@ fn grounded_contact_is_not_kept_as_an_anti_air() {
             horizontal_order: None,
             projectile_candidates: vec![],
             motion_regions: vec![],
+            contact: None,
+            camera: None,
         })
         .collect();
     refine_match_events_with_spatial(&mut obscured, &obscured_observations, &context);

@@ -26,6 +26,8 @@ fn strike_whiff_accepts_stable_mid_but_rejects_far() {
         horizontal_order: Some(HorizontalOrder::P1Left),
         projectile_candidates: vec![],
         motion_regions: vec![],
+        contact: None,
+        camera: None,
     };
     let candidate = || PunishChance {
         frame: 200,

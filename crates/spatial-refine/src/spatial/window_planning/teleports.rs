@@ -49,6 +49,7 @@ pub(super) fn windows(
                     end_frame: teleport.inv_end_frame.saturating_add(4),
                 }],
                 airborne_hints,
+                contact_hints: vec![],
             }
         })
         .collect()
