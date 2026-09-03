@@ -513,3 +513,36 @@ fn staying_exactly_on_the_ground_threshold_needs_no_jump_hint() {
         Some(0)
     );
 }
+
+/// 接地の判定はどちらの側も境界を含む。トラックが基準ちょうどに立って
+/// いれば地上であり、塊の足元が基準ちょうどに届いていれば空中ではない。
+#[test]
+fn ground_boundary_is_inclusive_on_both_sides() {
+    let ground = config().actor_ground_y;
+
+    // 基準ちょうどのトラックは地上扱いで、空中の塊にはヒントが要る。
+    let at_ground = track_at(0.30, ground);
+    let airborne = vec![region(0.28, 0.38, 0.42, 100)];
+    let assigned = assign_regions(
+        [Some(&at_ground), None],
+        [false, false],
+        [false, false],
+        &airborne,
+        &[0],
+        &config(),
+    );
+    assert_eq!(assigned[0], None, "基準ちょうどを地上と数えていない");
+
+    // 足元が基準ちょうどに届く塊は空中ではないので、ヒント無しで続く。
+    let grounded_region = vec![region(0.28, 0.38, ground, 100)];
+    let from_high = track_at(0.30, 0.9);
+    let assigned = assign_regions(
+        [Some(&from_high), None],
+        [false, false],
+        [false, false],
+        &grounded_region,
+        &[0],
+        &config(),
+    );
+    assert_eq!(assigned[0], Some(0), "基準ちょうどの塊を空中にしている");
+}

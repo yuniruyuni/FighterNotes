@@ -228,6 +228,144 @@ mod tests {
     }
 
     #[test]
+    fn shadow_snapping_targets_the_nearest_cluster_within_reach() {
+        let config = SpatialConfig::default();
+        let mut tracker = ActorTracker {
+            p1: Some(track::from_region(&region(0.31), 10, 0.72)),
+            p2: None,
+        };
+        // 近い方(軽い 0.335)を選ぶ。重い 0.28 ではない。
+        let shadows = [
+            ShadowCandidate {
+                center_x: 0.28,
+                weight: 100.0,
+            },
+            ShadowCandidate {
+                center_x: 0.335,
+                weight: 5.0,
+            },
+        ];
+        let result = tracker.observe(
+            11,
+            &[region(0.31)],
+            &empty_grid(),
+            &shadows,
+            SpatialHints::default(),
+            &config,
+        );
+        assert_eq!(result.p1.unwrap().anchor.x, 0.335);
+        // スナップはトラック本体にも残り、観測が絶えても持ち越される。
+        let carried = tracker.observe(
+            12,
+            &[],
+            &empty_grid(),
+            &[],
+            SpatialHints::default(),
+            &config,
+        );
+        assert_eq!(carried.p1.unwrap().anchor.x, 0.335);
+    }
+
+    #[test]
+    fn shadow_snapping_reach_is_inclusive_and_bounded() {
+        let config = SpatialConfig::default();
+        // 距離ちょうど snap_dx (0.06) は吸着する。f32 で正確に表すため
+        // anchor 0.0 と影 0.06 を使う。
+        let mut tracker = ActorTracker {
+            p1: Some(track::from_region(&region(0.0), 10, 0.72)),
+            p2: None,
+        };
+        let at_reach = [ShadowCandidate {
+            center_x: 0.06,
+            weight: 10.0,
+        }];
+        let result = tracker.observe(
+            11,
+            &[region(0.0)],
+            &empty_grid(),
+            &at_reach,
+            SpatialHints::default(),
+            &config,
+        );
+        assert_eq!(result.p1.unwrap().anchor.x, 0.06);
+
+        // 届かない影には吸着しない。
+        let mut tracker = ActorTracker {
+            p1: Some(track::from_region(&region(0.30), 10, 0.72)),
+            p2: None,
+        };
+        let out_of_reach = [ShadowCandidate {
+            center_x: 0.40,
+            weight: 10.0,
+        }];
+        let result = tracker.observe(
+            11,
+            &[region(0.30)],
+            &empty_grid(),
+            &out_of_reach,
+            SpatialHints::default(),
+            &config,
+        );
+        assert_eq!(result.p1.unwrap().anchor.x, 0.30);
+    }
+
+    #[test]
+    fn anchor_hints_carry_the_frame_identity_through_decay() {
+        let config = SpatialConfig::default();
+        let mut tracker = ActorTracker::default();
+        let hints = SpatialHints {
+            p1: crate::spatial::ActorHint {
+                anchor: Some(crate::spatial::SpatialPoint::new(0.3, 0.9)),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        tracker.observe(100, &[], &empty_grid(), &[], hints, &config);
+        let result = tracker.observe(
+            102,
+            &[],
+            &empty_grid(),
+            &[],
+            SpatialHints::default(),
+            &config,
+        );
+        let p1 = result.p1.unwrap();
+        assert!(
+            (p1.confidence - 0.80 * 0.92f32.powi(2)).abs() < 1e-6,
+            "減衰はヒントを置いたフレームから数える: {p1:?}"
+        );
+    }
+
+    #[test]
+    fn p1_airborne_hint_allows_its_ground_track_to_jump() {
+        let mut tracker = ActorTracker {
+            p1: Some(track::from_region(&region(0.25), 10, 0.72)),
+            p2: Some(track::from_region(&region(0.75), 10, 0.72)),
+        };
+        let mut airborne = region(0.26);
+        airborne.bounds.top = 0.45;
+        airborne.bounds.bottom = 0.62;
+        let hints = SpatialHints {
+            p1: crate::spatial::ActorHint {
+                allow_airborne: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let result = tracker.observe(
+            11,
+            &[airborne, region(0.74)],
+            &empty_grid(),
+            &[],
+            hints,
+            &SpatialConfig::default(),
+        );
+
+        assert!(result.p1.unwrap().observed);
+    }
+
+    #[test]
     fn p2_airborne_hint_allows_its_ground_track_to_jump() {
         let mut tracker = ActorTracker {
             p1: Some(track::from_region(&region(0.25), 10, 0.72)),
@@ -235,7 +373,7 @@ mod tests {
         };
         let mut airborne = region(0.74);
         airborne.bounds.top = 0.45;
-        airborne.bounds.bottom = 0.70;
+        airborne.bounds.bottom = 0.62;
         let hints = SpatialHints {
             p2: crate::spatial::ActorHint {
                 allow_airborne: true,

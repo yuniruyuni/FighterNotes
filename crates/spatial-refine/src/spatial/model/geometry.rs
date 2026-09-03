@@ -84,3 +84,19 @@ pub enum HorizontalMotion {
     Stationary,
     Unknown,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 退化した矩形の幅・高さは負にせず 0 に切り上げる。
+    #[test]
+    fn inverted_rect_extents_clamp_to_zero() {
+        let inverted = SpatialRect::new(0.6, 0.7, 0.4, 0.5);
+        assert_eq!(inverted.width(), 0.0);
+        assert_eq!(inverted.height(), 0.0);
+        let normal = SpatialRect::new(0.2, 0.1, 0.6, 0.4);
+        assert!((normal.width() - 0.4).abs() < 1e-6);
+        assert!((normal.height() - 0.3).abs() < 1e-6);
+    }
+}

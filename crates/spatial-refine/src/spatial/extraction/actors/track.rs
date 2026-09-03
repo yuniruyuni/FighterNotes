@@ -23,37 +23,34 @@ pub(super) struct Appearance {
 }
 
 impl Appearance {
-    fn capture(grid: &CellGrid, bounds: SpatialRect) -> Option<Self> {
-        let cell_left = (bounds.left * grid.width as f32).floor().max(0.0) as usize;
-        let cell_top = (bounds.top * grid.height as f32).floor().max(0.0) as usize;
+    fn capture(grid: &CellGrid, bounds: SpatialRect) -> Self {
+        let cell_left = (bounds.left * grid.width as f32).floor() as usize;
+        let cell_top = (bounds.top * grid.height as f32).floor() as usize;
         let cell_right = ((bounds.right * grid.width as f32).ceil() as usize).min(grid.width);
         let cell_bottom = ((bounds.bottom * grid.height as f32).ceil() as usize).min(grid.height);
-        if cell_right <= cell_left || cell_bottom <= cell_top {
-            return None;
-        }
-        let cell_width = cell_right - cell_left;
-        let cell_height = cell_bottom - cell_top;
-        let mut cells = Vec::with_capacity(cell_width * cell_height);
-        for y in cell_top..cell_bottom {
-            for x in cell_left..cell_right {
-                cells.push(grid.cells[y * grid.width + x]);
-            }
-        }
-        Some(Self {
+        let cell_width = cell_right.saturating_sub(cell_left);
+        let cell_height = cell_bottom.saturating_sub(cell_top);
+        // 退化した範囲は cells が空になり、still_matches が常に false を
+        // 返すことで自然に「確認できない」へ落ちる。
+        let cells = (cell_top..cell_bottom)
+            .flat_map(|y| (cell_left..cell_right).map(move |x| grid.cells[y * grid.width + x]))
+            .collect();
+        Self {
             cell_left,
             cell_top,
             cell_width,
             cell_height,
             cells,
-        })
+        }
     }
 
     /// True when the same cells still show the same colors. VFX overlapping
     /// the patch or a vacated position both fail the match, which correctly
     /// falls back to the decaying carry-forward.
     fn still_matches(&self, grid: &CellGrid, config: &SpatialConfig) -> bool {
-        if self.cells.is_empty()
-            || self.cell_left + self.cell_width > grid.width
+        // 空の記憶は下の分数が 0/0 になり自然に不成立へ落ちる。グリッドが
+        // 記憶時より縮んだ場合だけ、参照前に諦める。
+        if self.cell_left + self.cell_width > grid.width
             || self.cell_top + self.cell_height > grid.height
         {
             return false;
@@ -144,7 +141,7 @@ pub(super) fn update(
         });
         let confidence = if discontinuity { 0.58 } else { 0.72 };
         let mut fresh = from_region(region, frame_index, confidence);
-        fresh.appearance = Appearance::capture(grid, region.bounds);
+        fresh.appearance = Some(Appearance::capture(grid, region.bounds));
         *track = Some(fresh);
         return Some(ActorObservation {
             anchor,
@@ -210,6 +207,290 @@ mod tests {
             width: 0,
             height: 0,
         }
+    }
+
+    /// セル値 = y*width + x の判別可能なグリッド。
+    fn numbered_grid(width: usize, height: usize) -> CellGrid {
+        CellGrid {
+            cells: (0..width * height)
+                .map(|index| CellColor {
+                    r: index as u8,
+                    g: 0,
+                    b: 0,
+                })
+                .collect(),
+            width,
+            height,
+        }
+    }
+
+    #[test]
+    fn capture_reads_the_exact_cell_window() {
+        let grid = numbered_grid(10, 10);
+        let bounds = SpatialRect::new(0.25, 0.35, 0.65, 0.75);
+        let appearance = Appearance::capture(&grid, bounds);
+        assert_eq!(appearance.cell_left, 2);
+        assert_eq!(appearance.cell_top, 3);
+        assert_eq!(appearance.cell_width, 5);
+        assert_eq!(appearance.cell_height, 5);
+        let expected: Vec<u8> = (3..8)
+            .flat_map(|y| (2..7).map(move |x| (y * 10 + x) as u8))
+            .collect();
+        let actual: Vec<u8> = appearance.cells.iter().map(|cell| cell.r).collect();
+        assert_eq!(actual, expected);
+
+        // 右下の境界はグリッド幅・高さで切り詰める。
+        let clamped = Appearance::capture(&grid, SpatialRect::new(0.85, 0.85, 1.3, 1.3));
+        assert_eq!(clamped.cell_left, 8);
+        assert_eq!(clamped.cell_width, 2);
+        assert_eq!(clamped.cell_height, 2);
+    }
+
+    #[test]
+    fn still_match_counts_unchanged_cells_against_the_fraction() {
+        let config = SpatialConfig {
+            motion_threshold: 18,
+            still_match_min_fraction: 0.90,
+            ..SpatialConfig::default()
+        };
+        let grid = numbered_grid(10, 10);
+        // 行 0 の 10 セルを覚える。
+        let appearance = Appearance::capture(&grid, SpatialRect::new(0.0, 0.0, 1.0, 0.1));
+        assert!(appearance.still_matches(&grid, &config));
+
+        // 1 セルだけ閾値未満 (17) 変わっても、変化とは数えない。
+        let mut subtle = numbered_grid(10, 10);
+        subtle.cells[3].r += 17;
+        assert!(appearance.still_matches(&subtle, &config));
+
+        // 1 セルが閾値ちょうど (18) 変わると 9/10 = 0.90 で、まだ一致。
+        let mut one_changed = numbered_grid(10, 10);
+        one_changed.cells[3].r += 18;
+        assert!(appearance.still_matches(&one_changed, &config));
+
+        // 2 セル変わると 8/10 = 0.80 < 0.90 で不一致。
+        let mut two_changed = numbered_grid(10, 10);
+        two_changed.cells[3].r += 18;
+        two_changed.cells[7].r += 18;
+        assert!(!appearance.still_matches(&two_changed, &config));
+    }
+
+    #[test]
+    fn degenerate_or_shrunk_grids_never_confirm_stillness() {
+        let config = SpatialConfig::default();
+        let grid = numbered_grid(10, 10);
+        // 幅 0 の範囲はセルを持たず、静止を確認できない。
+        let empty = Appearance::capture(&grid, SpatialRect::new(0.5, 0.2, 0.5, 0.8));
+        assert!(!empty.still_matches(&grid, &config));
+        // 幅か高さの片方だけが縮んでも確認しない。
+        let appearance = Appearance::capture(&grid, SpatialRect::new(0.5, 0.5, 1.0, 1.0));
+        assert!(!appearance.still_matches(&numbered_grid(5, 20), &config));
+        assert!(!appearance.still_matches(&numbered_grid(20, 5), &config));
+        // グリッドの右下端に接しているだけなら縮小ではない。
+        assert!(appearance.still_matches(&grid, &config));
+        // 和が幅に収まっていれば、積が幅を超えても縮小ではない
+        // (left 3 + width 4 = 7 <= 10)。
+        let offset = Appearance::capture(&grid, SpatialRect::new(0.3, 0.3, 0.7, 0.7));
+        assert!(offset.still_matches(&grid, &config));
+    }
+
+    /// 記憶した窓と現在のグリッドの対応は、セル 1 つ単位で正確でなければ
+    /// ならない。窓の外がいくら変わっても静止は成立し、窓の中が 1 セルでも
+    /// 変われば(全一致を要求する設定では)成立しない。
+    #[test]
+    fn still_match_correspondence_is_cell_exact() {
+        let config = SpatialConfig {
+            still_match_min_fraction: 1.0,
+            ..SpatialConfig::default()
+        };
+        let grid = numbered_grid(10, 10);
+        let window = SpatialRect::new(0.2, 0.3, 0.7, 0.7);
+        let appearance = Appearance::capture(&grid, window);
+
+        // 窓 (x 2..7, y 3..7) の外を全部壊しても一致する。
+        let mut outside_wrecked = numbered_grid(10, 10);
+        for y in 0..10 {
+            for x in 0..10 {
+                if !(2..7).contains(&x) || !(3..7).contains(&y) {
+                    outside_wrecked.cells[y * 10 + x].r ^= 0x80;
+                }
+            }
+        }
+        assert!(appearance.still_matches(&outside_wrecked, &config));
+
+        // 窓の中の 1 セルが変わると全一致では通らない。
+        let mut inside_changed = numbered_grid(10, 10);
+        inside_changed.cells[5 * 10 + 4].r ^= 0x80;
+        assert!(!appearance.still_matches(&inside_changed, &config));
+
+        // 変化は G・B チャネル単独でも数える。
+        let mut green_changed = numbered_grid(10, 10);
+        green_changed.cells[5 * 10 + 4].g = 200;
+        assert!(!appearance.still_matches(&green_changed, &config));
+        let mut blue_changed = numbered_grid(10, 10);
+        blue_changed.cells[5 * 10 + 4].b = 200;
+        assert!(!appearance.still_matches(&blue_changed, &config));
+    }
+
+    /// 静止確認の接地判定は基準ちょうどを含む。
+    #[test]
+    fn grounded_still_confirmation_is_inclusive_at_the_boundary() {
+        let config = SpatialConfig::default();
+        let grid = numbered_grid(10, 10);
+        let at_ground = MotionRegion {
+            bounds: SpatialRect::new(0.2, 0.3, 0.5, config.actor_ground_y),
+            changed_cells: 100,
+            energy: 1_000,
+            effect_cells: 0,
+            effect_x_sum: 0.0,
+            effect_y_sum: 0.0,
+        };
+        let mut track = None;
+        update(
+            &mut track,
+            Some(&at_ground),
+            false,
+            &grid,
+            false,
+            10,
+            &config,
+        )
+        .unwrap();
+        let observed = update(&mut track, None, false, &grid, false, 11, &config).unwrap();
+        assert_eq!(observed.confidence, config.still_confidence);
+        assert!(observed.ground_anchor);
+    }
+
+    #[test]
+    fn merged_region_update_keeps_x_and_reports_merged_evidence() {
+        let config = SpatialConfig::default();
+        let mut track = Some(from_region(&region(0.3, 0.9), 5, 0.72));
+        let merged = MotionRegion {
+            bounds: SpatialRect::new(0.2, 0.4, 0.6, 0.68),
+            changed_cells: 200,
+            energy: 2_000,
+            effect_cells: 0,
+            effect_x_sum: 0.0,
+            effect_y_sum: 0.0,
+        };
+
+        let observed = update(
+            &mut track,
+            Some(&merged),
+            true,
+            &empty_grid(),
+            false,
+            9,
+            &config,
+        )
+        .unwrap();
+        assert_eq!(observed.anchor, SpatialPoint::new(0.3, 0.68));
+        assert_eq!(observed.bounds, merged.bounds);
+        assert_eq!(observed.confidence, config.merged_region_confidence);
+        assert!(observed.observed);
+        assert!(!observed.ground_anchor, "0.68 は接地帯 0.70 より上");
+        assert!(!observed.discontinuity);
+        let stored = track.as_ref().unwrap();
+        assert_eq!(stored.anchor.x, 0.3);
+        assert_eq!(stored.last_observed_frame, 9);
+        assert_eq!(stored.confidence, config.merged_region_confidence);
+
+        // 接地帯ちょうどに届く合体領域は接地とみなす。
+        let grounded = MotionRegion {
+            bounds: SpatialRect::new(0.2, 0.4, 0.6, config.actor_ground_y),
+            ..merged.clone()
+        };
+        let observed = update(
+            &mut track,
+            Some(&grounded),
+            true,
+            &empty_grid(),
+            false,
+            10,
+            &config,
+        )
+        .unwrap();
+        assert!(observed.ground_anchor);
+
+        // トラックが無ければ合体扱いにできず、通常の観測として始まる。
+        let mut vacant: Option<ActorTrack> = None;
+        let observed = update(
+            &mut vacant,
+            Some(&merged),
+            true,
+            &empty_grid(),
+            false,
+            11,
+            &config,
+        )
+        .unwrap();
+        assert_eq!(observed.anchor, merged.anchor());
+    }
+
+    #[test]
+    fn still_confirmation_reports_calibrated_evidence_and_resets_staleness() {
+        let config = SpatialConfig::default();
+        let grid = numbered_grid(10, 10);
+        let body = MotionRegion {
+            bounds: SpatialRect::new(0.2, 0.2, 0.5, 0.9),
+            changed_cells: 100,
+            energy: 1_000,
+            effect_cells: 0,
+            effect_x_sum: 0.0,
+            effect_y_sum: 0.0,
+        };
+        let mut track = None;
+        update(&mut track, Some(&body), false, &grid, false, 10, &config).unwrap();
+
+        // max_stale_frames を超えた後でも、同じ画が残っていれば静止確認。
+        let frame = 10 + config.max_stale_frames + 10;
+        let observed = update(&mut track, None, false, &grid, false, frame, &config).unwrap();
+        assert!(!observed.observed);
+        assert_eq!(observed.confidence, config.still_confidence);
+        assert_eq!(observed.anchor, body.anchor());
+        assert!(observed.ground_anchor);
+        assert!(!observed.discontinuity);
+
+        // 静止確認は staleness を巻き戻す。次のフレームで画が壊れても、
+        // 減衰は直前の確認フレームから 1 フレームぶんだけ進む。
+        let mut wrecked = numbered_grid(10, 10);
+        for cell in &mut wrecked.cells {
+            cell.r = cell.r.wrapping_add(120);
+        }
+        let decayed = update(&mut track, None, false, &wrecked, false, frame + 1, &config).unwrap();
+        assert!(!decayed.observed);
+        assert!(
+            (decayed.confidence - 0.72 * 0.92).abs() < 1e-6,
+            "{decayed:?}"
+        );
+    }
+
+    #[test]
+    fn airborne_still_confirmation_is_not_grounded() {
+        let config = SpatialConfig::default();
+        let grid = numbered_grid(10, 10);
+        let airborne = MotionRegion {
+            bounds: SpatialRect::new(0.2, 0.1, 0.5, 0.5),
+            changed_cells: 100,
+            energy: 1_000,
+            effect_cells: 0,
+            effect_x_sum: 0.0,
+            effect_y_sum: 0.0,
+        };
+        let mut track = None;
+        update(
+            &mut track,
+            Some(&airborne),
+            false,
+            &grid,
+            false,
+            10,
+            &config,
+        )
+        .unwrap();
+        let observed = update(&mut track, None, false, &grid, false, 11, &config).unwrap();
+        assert_eq!(observed.confidence, config.still_confidence);
+        assert!(!observed.ground_anchor);
     }
 
     fn region(x: f32, y: f32) -> MotionRegion {

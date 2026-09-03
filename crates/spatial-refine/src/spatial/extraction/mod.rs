@@ -95,14 +95,7 @@ impl SpatialExtractor {
             hints.contact_effect,
             &self.config,
         );
-        let mut masked_centers: Vec<f32> = [tracked.p1.as_ref(), tracked.p2.as_ref()]
-            .into_iter()
-            .flatten()
-            .map(|actor| actor.anchor.x)
-            .collect();
-        if let Some(contact) = &contact {
-            masked_centers.push(contact.center.x);
-        }
+        let masked_centers = camera::masked_centers(tracked.p1.as_ref(), tracked.p2.as_ref());
         let camera_motion = self
             .previous_strips
             .as_ref()
@@ -155,6 +148,71 @@ impl SpatialExtractor {
 mod tests {
     use super::*;
     use crate::test_support::{blank_frame, hints, rect, test_config, HEIGHT, WIDTH};
+
+    /// 320x180。静的なテクスチャ背景の上を、テクスチャ付きの 2 体が
+    /// 水平移動する。背景は動かないので、正しいカメラ推定は常に静止。
+    fn textured_scene(actor1_x: i32, actor2_x: i32) -> Vec<u8> {
+        const SCENE_WIDTH: usize = 320;
+        const SCENE_HEIGHT: usize = 180;
+        let mut rgba = vec![255u8; SCENE_WIDTH * SCENE_HEIGHT * 4];
+        let inside = |left: i32, x: usize| {
+            let dx = x as i32 - left;
+            (0..80).contains(&dx)
+        };
+        for y in 0..SCENE_HEIGHT {
+            for x in 0..SCENE_WIDTH {
+                // 影閾値(12)未満の振幅で、相関には十分なテクスチャ。
+                let mut value = 40 + ((x * 7 + y * 13) % 11) as u8;
+                if (28..108).contains(&y) {
+                    // 4px ブロックのテクスチャ。4px の移動でブロック 1 個ぶん
+                    // ずれ、全セルが確実に motion 閾値を越える。
+                    if inside(actor1_x, x) {
+                        value = 120 + (((x as i32 - actor1_x) / 4 * 23) % 90) as u8;
+                    } else if inside(actor2_x, x) {
+                        value = 120 + (((x as i32 - actor2_x) / 4 * 29) % 87) as u8;
+                    }
+                }
+                let index = (y * SCENE_WIDTH + x) * 4;
+                rgba[index] = value;
+                rgba[index + 1] = value;
+                rgba[index + 2] = value;
+            }
+        }
+        rgba
+    }
+
+    /// カメラは背景だけを見る。本体(と strip 行にかかるその動き)は
+    /// マスクされるので、静止した背景に対する推定は静止のまま。
+    #[test]
+    fn camera_estimate_ignores_actor_motion() {
+        let mut extractor = SpatialExtractor::new(SpatialConfig::default());
+        extractor
+            .observe_rgba(
+                1,
+                &textured_scene(80, 224),
+                320,
+                180,
+                SpatialHints::default(),
+            )
+            .unwrap();
+        let observed = extractor
+            .observe_rgba(
+                2,
+                &textured_scene(84, 228),
+                320,
+                180,
+                SpatialHints::default(),
+            )
+            .unwrap();
+        // マスクの位置が想定どおりであることも含めて検査する。
+        let p1 = observed.p1.expect("P1 track");
+        let p2 = observed.p2.expect("P2 track");
+        assert!((p1.anchor.x - 0.3875).abs() < 0.03, "{p1:?}");
+        assert!((p2.anchor.x - 0.8313).abs() < 0.03, "{p2:?}");
+        let camera = observed.camera.expect("camera motion");
+        assert!((camera.pan_dx * 320.0).abs() < 0.5, "{camera:?}");
+        assert!((camera.zoom_ratio - 1.0).abs() < 0.01, "{camera:?}");
+    }
 
     #[test]
     fn dimension_validation_stores_both_axes_and_reports_each_change() {

@@ -77,3 +77,47 @@ fn spark_confidence(effect_fraction: f32, effect_cells: u32) -> f32 {
     let size_term = (effect_cells.min(24) as f32 / 24.0) * 0.20;
     (0.35 + 0.35 * effect_fraction.clamp(0.0, 1.0) + size_term).min(0.90)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::super::{SpatialPoint, SpatialRect};
+    use super::*;
+
+    fn actor(x: f32) -> ActorObservation {
+        ActorObservation {
+            anchor: SpatialPoint::new(x, 0.9),
+            bounds: SpatialRect::new(x - 0.05, 0.6, x + 0.05, 0.9),
+            confidence: 0.72,
+            observed: true,
+            ground_anchor: true,
+            discontinuity: false,
+        }
+    }
+
+    #[test]
+    fn actor_span_pads_both_sides_of_the_tracked_interval() {
+        let left = actor(0.3);
+        let right = actor(0.6);
+        let approx = |span: Option<(f32, f32)>, expected: (f32, f32)| {
+            let (lo, hi) = span.expect("span");
+            assert!((lo - expected.0).abs() < 1e-6 && (hi - expected.1).abs() < 1e-6);
+        };
+        approx(actor_span(Some(&left), Some(&right), 0.1), (0.2, 0.7));
+        // 並び順に依存しない。
+        approx(actor_span(Some(&right), Some(&left), 0.1), (0.2, 0.7));
+        // 片方でも欠ければ span は作れない。
+        assert!(actor_span(Some(&left), None, 0.1).is_none());
+        assert!(actor_span(None, Some(&right), 0.1).is_none());
+    }
+
+    #[test]
+    fn spark_confidence_mixes_purity_and_size_with_a_cap() {
+        // 0.35 + 0.35*0.5 + (12/24)*0.20 = 0.625
+        assert!((spark_confidence(0.5, 12) - 0.625).abs() < 1e-6);
+        // サイズ項は 24 セルで頭打ち。
+        assert!((spark_confidence(0.5, 48) - 0.725).abs() < 1e-6);
+        // 純度は 1.0 で clamp し、全体は 0.90 で cap する。
+        assert!((spark_confidence(2.0, 48) - 0.90).abs() < 1e-6);
+        assert!((spark_confidence(0.0, 0) - 0.35).abs() < 1e-6);
+    }
+}
