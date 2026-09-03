@@ -127,6 +127,8 @@ mod tests {
             horizontal_order: Some(HorizontalOrder::P1Left),
             projectile_candidates: vec![],
             motion_regions: vec![],
+            contact: None,
+            camera: None,
         }
     }
 

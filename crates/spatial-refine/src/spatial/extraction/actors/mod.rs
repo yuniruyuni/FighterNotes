@@ -2,7 +2,9 @@ mod assignment;
 mod track;
 
 use super::super::{ActorObservation, SpatialConfig, SpatialHints};
+use super::grid::CellGrid;
 use super::motion::{actor_candidate, MotionRegion};
+use super::shadows::ShadowCandidate;
 use assignment::{assign_regions, initial_tracks};
 use track::{apply_anchor_hint, update, ActorTrack};
 
@@ -28,6 +30,8 @@ impl ActorTracker {
         &mut self,
         frame_index: u32,
         regions: &[MotionRegion],
+        grid: &CellGrid,
+        shadows: &[ShadowCandidate],
         hints: SpatialHints,
         config: &SpatialConfig,
     ) -> ActorTrackingResult {
@@ -38,6 +42,17 @@ impl ActorTracker {
             .iter()
             .enumerate()
             .filter(|(_, region)| actor_candidate(region, config))
+            // Hitstop freezes both bodies, so on a hinted contact frame a
+            // strongly effect-colored region is the spark, not a player.
+            // Without this gate the spark captures a frozen track: the meter
+            // overlay exclusion keeps mid-screen anchors above the ground
+            // band, which disarms the leaves-ground check.
+            .filter(|(_, region)| {
+                let effect_fraction =
+                    region.effect_cells as f32 / region.changed_cells.max(1) as f32;
+                !(hints.contact_effect
+                    && effect_fraction >= config.contact_effect_max_actor_fraction)
+            })
             .map(|(index, _)| index)
             .collect();
         if self.p1.is_none() && self.p2.is_none() && candidates.len() >= 2 {
@@ -61,9 +76,23 @@ impl ActorTracker {
             &candidates,
             config,
         );
+        let merged_with_both = |index: Option<usize>| -> bool {
+            let (Some(index), Some(own), Some(other)) = (index, self.p1.as_ref(), self.p2.as_ref())
+            else {
+                return false;
+            };
+            let bounds = regions[index].bounds;
+            bounds.width() >= config.merged_region_min_width
+                && (bounds.left..=bounds.right).contains(&own.anchor.x)
+                && (bounds.left..=bounds.right).contains(&other.anchor.x)
+        };
+        let p1_merged = merged_with_both(assignments[0]);
+        let p2_merged = merged_with_both(assignments[1]);
         let p1 = update(
             &mut self.p1,
             assignments[0].map(|index| &regions[index]),
+            p1_merged,
+            grid,
             hints.p1.allow_discontinuity,
             frame_index,
             config,
@@ -71,10 +100,14 @@ impl ActorTracker {
         let p2 = update(
             &mut self.p2,
             assignments[1].map(|index| &regions[index]),
+            p2_merged,
+            grid,
             hints.p2.allow_discontinuity,
             frame_index,
             config,
         );
+        let p1 = snap_to_shadow(&mut self.p1, p1, shadows, config);
+        let p2 = snap_to_shadow(&mut self.p2, p2, shadows, config);
         let mut used_regions = Vec::new();
         if let Some(index) = assignments[0] {
             used_regions.push(index);
@@ -90,10 +123,44 @@ impl ActorTracker {
     }
 }
 
+/// 接地影は静止・領域マージ・overlay 除外の影響を受けない毎フレームの
+/// 水平証拠なので、近くに影クラスタがあれば anchor.x をその重心へ寄せる。
+/// 空中でも影は真下に残るため、x の補正としてはジャンプ中も正しい。
+fn snap_to_shadow(
+    track: &mut Option<ActorTrack>,
+    observation: Option<ActorObservation>,
+    shadows: &[ShadowCandidate],
+    config: &SpatialConfig,
+) -> Option<ActorObservation> {
+    let mut observation = observation?;
+    let nearest = shadows.iter().min_by(|a, b| {
+        (a.center_x - observation.anchor.x)
+            .abs()
+            .total_cmp(&(b.center_x - observation.anchor.x).abs())
+    });
+    if let Some(nearest) = nearest {
+        if (nearest.center_x - observation.anchor.x).abs() <= config.shadow_snap_dx {
+            observation.anchor.x = nearest.center_x;
+            if let Some(track) = track.as_mut() {
+                track.anchor.x = nearest.center_x;
+            }
+        }
+    }
+    Some(observation)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::spatial::SpatialRect;
+
+    fn empty_grid() -> CellGrid {
+        CellGrid {
+            cells: Vec::new(),
+            width: 0,
+            height: 0,
+        }
+    }
 
     fn region(x: f32) -> MotionRegion {
         MotionRegion {
@@ -101,6 +168,8 @@ mod tests {
             changed_cells: 100,
             energy: 1_000,
             effect_cells: 0,
+            effect_x_sum: 0.0,
+            effect_y_sum: 0.0,
         }
     }
 
@@ -112,6 +181,8 @@ mod tests {
         let result = tracker.observe(
             42,
             &regions,
+            &empty_grid(),
+            &[],
             SpatialHints::default(),
             &SpatialConfig::default(),
         );
@@ -134,6 +205,8 @@ mod tests {
         let result = tracker.observe(
             11,
             &regions,
+            &empty_grid(),
+            &[],
             SpatialHints::default(),
             &SpatialConfig::default(),
         );
@@ -174,6 +247,8 @@ mod tests {
         let result = tracker.observe(
             11,
             &[region(0.26), airborne],
+            &empty_grid(),
+            &[],
             hints,
             &SpatialConfig::default(),
         );
@@ -195,7 +270,14 @@ mod tests {
             ..Default::default()
         };
 
-        let result = tracker.observe(11, &[region(0.40)], hints, &SpatialConfig::default());
+        let result = tracker.observe(
+            11,
+            &[region(0.40)],
+            &empty_grid(),
+            &[],
+            hints,
+            &SpatialConfig::default(),
+        );
 
         let p2 = result.p2.unwrap();
         assert!(p2.observed);

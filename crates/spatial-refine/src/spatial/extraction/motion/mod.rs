@@ -10,11 +10,26 @@ pub(super) struct MotionRegion {
     pub(super) changed_cells: u32,
     pub(super) energy: u64,
     pub(super) effect_cells: u32,
+    /// Normalized coordinate sums of effect-colored cell centers. Divided by
+    /// `effect_cells` they give the spark centroid, which is a better contact
+    /// point than the bounding-box center once body motion joins the region.
+    pub(super) effect_x_sum: f32,
+    pub(super) effect_y_sum: f32,
 }
 
 impl MotionRegion {
     pub(super) fn center(&self) -> SpatialPoint {
         self.bounds.center()
+    }
+
+    pub(super) fn effect_centroid(&self) -> Option<SpatialPoint> {
+        if self.effect_cells == 0 {
+            return None;
+        }
+        Some(SpatialPoint::new(
+            self.effect_x_sum / self.effect_cells as f32,
+            self.effect_y_sum / self.effect_cells as f32,
+        ))
     }
 
     pub(super) fn anchor(&self) -> SpatialPoint {
@@ -29,6 +44,8 @@ impl MotionRegion {
         self.changed_cells += other.changed_cells;
         self.energy += other.energy;
         self.effect_cells += other.effect_cells;
+        self.effect_x_sum += other.effect_x_sum;
+        self.effect_y_sum += other.effect_y_sum;
     }
 }
 

@@ -40,6 +40,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             SpatialHints {
                 p1: actor_hint(p1_x),
                 p2: actor_hint(p2_x),
+                contact_effect: false,
             }
         } else {
             SpatialHints::default()

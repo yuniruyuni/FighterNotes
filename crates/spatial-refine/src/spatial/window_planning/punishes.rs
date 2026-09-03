@@ -31,6 +31,7 @@ pub(super) fn windows(
                     .min(bounds.end),
                 teleport_hints: vec![],
                 airborne_hints: vec![],
+                contact_hints: vec![],
             }
         })
         .collect()

@@ -59,6 +59,8 @@ fn observation(frame_index: u32, band: DistanceBand, confidence: f32) -> Spatial
         horizontal_order: None,
         projectile_candidates: Vec::new(),
         motion_regions: Vec::new(),
+        contact: None,
+        camera: None,
     }
 }
 

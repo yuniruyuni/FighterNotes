@@ -24,6 +24,8 @@ fn landed_hit_requires_airborne_evidence_until_contact() {
         horizontal_order: Some(HorizontalOrder::P1Left),
         projectile_candidates: vec![],
         motion_regions: vec![],
+        contact: None,
+        camera: None,
     };
     let context = AnalysisContext::from_characters("p1", Some("CHUN_LI"), Some("LUKE"));
 

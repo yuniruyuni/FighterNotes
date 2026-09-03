@@ -69,7 +69,7 @@ const expectedAnalyzerMethods = [
 const expectedSpatialMethods = [
   "constructor(width: number, height: number, training_overlay: boolean);",
   "get_observations_json(): string;",
-  "observe_inplace(frame_index: number, p1_teleport: boolean, p2_teleport: boolean, p1_airborne: boolean, p2_airborne: boolean): void;",
+  "observe_inplace(frame_index: number, p1_teleport: boolean, p2_teleport: boolean, p1_airborne: boolean, p2_airborne: boolean, contact: boolean): void;",
   "reset_window(): void;",
   "rgba_buf_len(): number;",
   "rgba_buf_ptr(): number;",

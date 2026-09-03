@@ -21,6 +21,8 @@ fn naked_teleport_reach_requires_character_profile_and_overlap() {
         horizontal_order: Some(HorizontalOrder::Overlapping),
         projectile_candidates: vec![],
         motion_regions: vec![],
+        contact: None,
+        camera: None,
     }];
 
     let ken = AnalysisContext::from_characters("p1", Some("KEN"), Some("DHALSIM"));

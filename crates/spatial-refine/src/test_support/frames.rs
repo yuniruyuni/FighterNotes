@@ -51,5 +51,6 @@ pub fn hints() -> SpatialHints {
             allow_discontinuity: false,
             allow_airborne: false,
         },
+        contact_effect: false,
     }
 }

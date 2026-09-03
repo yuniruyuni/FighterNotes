@@ -56,6 +56,7 @@ impl SpatialWindowAnalyzer {
         p2_teleport: bool,
         p1_airborne: bool,
         p2_airborne: bool,
+        contact: bool,
     ) -> Result<(), JsValue> {
         let observation = self
             .extractor
@@ -75,6 +76,7 @@ impl SpatialWindowAnalyzer {
                         allow_discontinuity: p2_teleport,
                         allow_airborne: p2_airborne,
                     },
+                    contact_effect: contact,
                 },
             )
             .map_err(|error| JsValue::from_str(&error.to_string()))?;
@@ -99,12 +101,12 @@ mod tests {
         let frame = vec![0u8; 16 * 9 * 4];
         analyzer.rgba_buf.copy_from_slice(&frame);
         analyzer
-            .observe_inplace(10, false, false, false, false)
+            .observe_inplace(10, false, false, false, false, false)
             .unwrap();
         analyzer.reset_window();
         analyzer.rgba_buf.copy_from_slice(&frame);
         analyzer
-            .observe_inplace(20, false, true, false, true)
+            .observe_inplace(20, false, true, false, true, false)
             .unwrap();
 
         let observations: Vec<video_analyzer::SpatialObservation> =

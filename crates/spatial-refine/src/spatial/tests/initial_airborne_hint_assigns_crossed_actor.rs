@@ -24,6 +24,7 @@ fn initial_airborne_hint_assigns_crossed_actor_identity() {
                     allow_airborne: true,
                 },
                 p2: ActorHint::default(),
+                contact_effect: false,
             },
         )
         .unwrap();

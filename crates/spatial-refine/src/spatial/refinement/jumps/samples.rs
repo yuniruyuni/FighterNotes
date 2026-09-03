@@ -141,6 +141,8 @@ mod tests {
             horizontal_order: None,
             projectile_candidates: vec![],
             motion_regions: vec![],
+            contact: None,
+            camera: None,
         }];
 
         let p1 = actor_samples(&observations, 1, 15, 15);

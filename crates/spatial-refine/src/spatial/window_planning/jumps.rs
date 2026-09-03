@@ -29,6 +29,7 @@ pub(super) fn windows(jumps: &[JumpEvent], rounds: &[RoundInfo]) -> Vec<SpatialC
                     start_frame: jump.frame.saturating_add(JUMP_C_PRE_MAX + 1),
                     end_frame: contact.min(jump.air_end),
                 }],
+                contact_hints: vec![],
             }
         })
         .collect()

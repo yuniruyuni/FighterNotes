@@ -33,6 +33,45 @@ pub struct SpatialConfig {
     pub close_distance: f32,
     pub mid_distance: f32,
     pub max_stale_frames: u32,
+    /// Minimum effect-colored changed cells for a region to count as a
+    /// contact spark on a hinted contact frame.
+    pub contact_min_effect_cells: u32,
+    /// Minimum fraction of effect-colored cells among changed cells. Rejects
+    /// body motion that merely brushes a bright costume.
+    pub contact_min_effect_fraction: f32,
+    /// Horizontal slack around the tracked actor span when locating a spark.
+    pub contact_actor_pad: f32,
+    /// On a hinted contact frame, a region at least this effect-colored is
+    /// treated as VFX and never assigned to an actor track. Hitstop freezes
+    /// both bodies, so their regions cannot appear on such frames.
+    pub contact_effect_max_actor_fraction: f32,
+    /// Top of the floor band (normalized y) searched for ground shadows.
+    /// Kept below the frame-meter overlay so the band stays visible.
+    pub shadow_band_top: f32,
+    /// Bottom of the floor band searched for ground shadows.
+    pub shadow_band_bottom: f32,
+    /// How much darker than the row median a cell must be to count as
+    /// shadow. Relative to the local floor, so stage brightness cancels out.
+    pub shadow_min_contrast: u8,
+    /// Minimum shadowed columns for a cluster to become a candidate.
+    pub shadow_min_cells: u32,
+    /// Maximum horizontal distance between a track anchor and a shadow
+    /// centroid for the anchor to snap onto the shadow.
+    pub shadow_snap_dx: f32,
+    /// A region at least this wide that spans both track anchors is treated
+    /// as the two bodies merged into one motion blob. Its center is between
+    /// the players, so each track keeps its own x instead of moving there.
+    pub merged_region_min_width: f32,
+    /// Confidence reported when a track is updated from a merged region.
+    pub merged_region_confidence: f32,
+    /// Fraction of appearance cells that must stay under `motion_threshold`
+    /// for an unobserved track to be confirmed as a stationary actor instead
+    /// of decaying. Guarding, downed and frozen actors produce no motion, so
+    /// an unchanged appearance is positive evidence, not absence of it.
+    pub still_match_min_fraction: f32,
+    /// Confidence reported for a stillness-confirmed frame. Below a fresh
+    /// motion observation, far above a blind carry-forward.
+    pub still_confidence: f32,
 }
 
 impl Default for SpatialConfig {
@@ -45,7 +84,7 @@ impl Default for SpatialConfig {
             excluded_regions: Vec::new(),
             actor_min_changed_cells: 10,
             actor_min_height: 0.065,
-            actor_ground_y: 0.84,
+            actor_ground_y: 0.70,
             max_track_dx: 0.18,
             max_track_dy: 0.30,
             region_merge_gap: 0.045,
@@ -63,6 +102,19 @@ impl Default for SpatialConfig {
             close_distance: 0.22,
             mid_distance: 0.46,
             max_stale_frames: 20,
+            contact_min_effect_cells: 3,
+            contact_min_effect_fraction: 0.30,
+            contact_actor_pad: 0.10,
+            contact_effect_max_actor_fraction: 0.60,
+            shadow_band_top: 0.87,
+            shadow_band_bottom: 0.96,
+            shadow_min_contrast: 12,
+            shadow_min_cells: 2,
+            shadow_snap_dx: 0.06,
+            merged_region_min_width: 0.24,
+            merged_region_confidence: 0.62,
+            still_match_min_fraction: 0.90,
+            still_confidence: 0.68,
         }
     }
 }

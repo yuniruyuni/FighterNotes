@@ -59,6 +59,7 @@ describe("completeAnalysis", () => {
         end_frame: 2,
         teleport_hints: [],
         airborne_hints: [],
+        contact_hints: [],
       },
     ]);
 

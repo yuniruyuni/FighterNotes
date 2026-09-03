@@ -25,11 +25,17 @@ export interface SpatialHintRange {
   readonly end_frame: number;
 }
 
+export interface SpatialFrameRange {
+  readonly start_frame: number;
+  readonly end_frame: number;
+}
+
 export interface SpatialCandidateWindow {
   readonly start_frame: number;
   readonly end_frame: number;
   readonly teleport_hints: readonly SpatialHintRange[];
   readonly airborne_hints: readonly SpatialHintRange[];
+  readonly contact_hints: readonly SpatialFrameRange[];
 }
 
 export interface SpatialFrameHints {
@@ -37,6 +43,8 @@ export interface SpatialFrameHints {
   readonly p2Teleport: boolean;
   readonly p1Airborne: boolean;
   readonly p2Airborne: boolean;
+  /** 第一段が確定した contact(hitstop)区間。スパーク検出を許可する。 */
+  readonly contact: boolean;
 }
 
 export interface TrackedInputRow {

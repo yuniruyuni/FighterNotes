@@ -19,6 +19,8 @@ fn region(left: f32, right: f32, bottom: f32, changed_cells: u32) -> MotionRegio
         changed_cells,
         energy: changed_cells as u64 * 100,
         effect_cells: 0,
+        effect_x_sum: 0.0,
+        effect_y_sum: 0.0,
     }
 }
 
@@ -242,7 +244,7 @@ fn an_explicit_discontinuity_allows_a_distant_reacquire() {
 #[test]
 fn leaving_the_ground_needs_a_jump_hint() {
     let p1 = track_at(0.30, 0.9);
-    let regions = vec![region(0.28, 0.38, 0.75, 100)];
+    let regions = vec![region(0.28, 0.38, 0.62, 100)];
 
     let without_hint = assign_regions(
         [Some(&p1), None],

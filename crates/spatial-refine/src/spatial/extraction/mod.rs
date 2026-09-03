@@ -1,8 +1,11 @@
 mod actors;
+mod camera;
+mod contact;
 mod grid;
 mod motion;
 mod projectiles;
 mod relationship;
+mod shadows;
 
 use actors::ActorTracker;
 use grid::{validate_rgba, CellGrid};
@@ -18,6 +21,7 @@ pub struct SpatialExtractor {
     config: SpatialConfig,
     dimensions: Option<(u32, u32)>,
     previous_grid: Option<CellGrid>,
+    previous_strips: Option<camera::CameraStrips>,
     actors: ActorTracker,
     projectiles: ProjectileTracker,
 }
@@ -29,6 +33,7 @@ impl SpatialExtractor {
             config,
             dimensions: None,
             previous_grid: None,
+            previous_strips: None,
             actors: ActorTracker::default(),
             projectiles: ProjectileTracker::default(),
         }
@@ -41,6 +46,7 @@ impl SpatialExtractor {
     pub fn reset(&mut self) {
         self.dimensions = None;
         self.previous_grid = None;
+        self.previous_strips = None;
         self.actors.reset();
         self.projectiles.reset();
     }
@@ -62,9 +68,15 @@ impl SpatialExtractor {
             .as_ref()
             .map(|previous| motion::regions(previous, &grid, width, height, &self.config))
             .unwrap_or_default();
-        let tracked = self
-            .actors
-            .observe(frame_index, &regions, hints, &self.config);
+        let shadow_candidates = shadows::shadow_candidates(&grid, &self.config);
+        let tracked = self.actors.observe(
+            frame_index,
+            &regions,
+            &grid,
+            &shadow_candidates,
+            hints,
+            &self.config,
+        );
         let projectile_candidates = self.projectiles.observe(
             frame_index,
             &regions,
@@ -74,6 +86,28 @@ impl SpatialExtractor {
         );
         let (screen_distance, distance_band, horizontal_order) =
             spatial_relationship(tracked.p1.as_ref(), tracked.p2.as_ref(), &self.config);
+        let strips = camera::sample_strips(rgba, width, height);
+        let contact = contact::contact_observation(
+            &regions,
+            &tracked.used_regions,
+            tracked.p1.as_ref(),
+            tracked.p2.as_ref(),
+            hints.contact_effect,
+            &self.config,
+        );
+        let mut masked_centers: Vec<f32> = [tracked.p1.as_ref(), tracked.p2.as_ref()]
+            .into_iter()
+            .flatten()
+            .map(|actor| actor.anchor.x)
+            .collect();
+        if let Some(contact) = &contact {
+            masked_centers.push(contact.center.x);
+        }
+        let camera_motion = self
+            .previous_strips
+            .as_ref()
+            .and_then(|previous| camera::estimate(previous, &strips, &masked_centers));
+        self.previous_strips = Some(strips);
         let motion_regions = regions
             .iter()
             .map(|region| MotionRegionObservation {
@@ -95,6 +129,8 @@ impl SpatialExtractor {
             horizontal_order,
             projectile_candidates,
             motion_regions,
+            contact,
+            camera: camera_motion,
         })
     }
 

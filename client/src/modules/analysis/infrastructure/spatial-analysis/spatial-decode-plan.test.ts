@@ -17,6 +17,7 @@ const window: SpatialCandidateWindow = {
   end_frame: 2,
   teleport_hints: [{ side: 2, start_frame: 1, end_frame: 1 }],
   airborne_hints: [{ side: 1, start_frame: 2, end_frame: 3 }],
+  contact_hints: [],
 };
 
 describe("SpatialDecodePlan", () => {
@@ -37,7 +38,17 @@ describe("SpatialDecodePlan", () => {
       p2Teleport: true,
       p1Airborne: false,
       p2Airborne: false,
+      contact: false,
     });
     expect(spatialHintsAt(window, 2).p1Airborne).toBe(true);
+  });
+
+  test("contact hintは範囲内のframeだけで立つ", () => {
+    const withContact: SpatialCandidateWindow = {
+      ...window,
+      contact_hints: [{ start_frame: 2, end_frame: 2 }],
+    };
+    expect(spatialHintsAt(withContact, 1).contact).toBe(false);
+    expect(spatialHintsAt(withContact, 2).contact).toBe(true);
   });
 });

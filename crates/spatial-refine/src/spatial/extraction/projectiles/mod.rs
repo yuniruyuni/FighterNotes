@@ -132,6 +132,8 @@ mod tests {
             changed_cells: 10,
             energy: 1_000,
             effect_cells: 2,
+            effect_x_sum: 0.0,
+            effect_y_sum: 0.0,
         }
     }
 

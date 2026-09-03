@@ -33,6 +33,7 @@ fn far_reacquire_requires_explicit_discontinuity_hint() {
                     allow_airborne: false,
                 },
                 p2: ActorHint::default(),
+                contact_effect: false,
             },
         )
         .unwrap();
