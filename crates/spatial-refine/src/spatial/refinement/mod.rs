@@ -1,4 +1,5 @@
 mod approaches;
+mod corners;
 mod jumps;
 mod observations;
 mod projectiles;
@@ -87,4 +88,5 @@ pub fn refine_match_events_with_spatial(
         &events.segments,
         observations,
     );
+    events.corner_spans = corners::detect(observations);
 }

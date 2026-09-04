@@ -237,6 +237,10 @@ export interface TacticStats {
   raw_drive_rushes_unconfirmed: number;
   dash_throws_faced: number;
   throw_whiffs: number;
+  /** 画面端を背負って受けた被弾。空間解析が端を確認できた場面だけの下限値。 */
+  cornered_hits_taken?: number;
+  /** 相手を画面端に追い込んで与えた被弾。同じく下限値。 */
+  cornered_hits_dealt?: number;
   minus_defense_opportunities: number;
   disadvantage_decisions: number;
   disadvantage_top_option_percent: number;

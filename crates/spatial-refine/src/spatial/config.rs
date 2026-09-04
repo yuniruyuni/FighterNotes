@@ -41,6 +41,16 @@ pub struct SpatialConfig {
     pub contact_min_effect_fraction: f32,
     /// Horizontal slack around the tracked actor span when locating a spark.
     pub contact_actor_pad: f32,
+    /// A single motion region covering at least this fraction of the
+    /// playfield area is a scene disruption (super flash, cinematic cut,
+    /// round transition). Nothing meaningful can be localized in it.
+    /// 大技のヒット VFX は本体と合体して面積の半分程度まで届くため、
+    /// それを演出と混同しない値にする。
+    pub disruption_min_area: f32,
+    /// After a hinted contact frame was disrupted, keep looking for the
+    /// spark this many extra frames past the hint, refreshed while the
+    /// disruption continues.
+    pub contact_disruption_grace: u32,
     /// Minimum spark cells for an embedded spark: one that merged into a
     /// body region because real hitstop still shakes the bodies. Costume
     /// patches are smaller or more dispersed than this.
@@ -118,6 +128,8 @@ impl Default for SpatialConfig {
             contact_min_effect_cells: 3,
             contact_min_effect_fraction: 0.30,
             contact_actor_pad: 0.10,
+            disruption_min_area: 0.75,
+            contact_disruption_grace: 12,
             contact_embedded_min_cells: 6,
             contact_embedded_max_spread: 0.05,
             contact_effect_max_actor_fraction: 0.60,

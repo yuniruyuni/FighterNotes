@@ -423,6 +423,26 @@ export function TacticStatsSection({
       "自分の入力またはフレームメーターの認識率が不足しています。",
     ),
     coverageAwareItem(
+      spatialAvailable,
+      [
+        `${stats.cornered_hits_taken ?? 0} 回以上`,
+        "画面端を背負って受けた被弾",
+        "空間解析が端を確認できた場面だけを数えた下限値です",
+      ],
+      stats.cornered_hits_taken ?? 0,
+      "空間解析の認識率が不足しています。",
+    ),
+    coverageAwareItem(
+      spatialAvailable,
+      [
+        `${stats.cornered_hits_dealt ?? 0} 回以上`,
+        "相手を画面端に追い込んで与えた被弾",
+        "空間解析が端を確認できた場面だけを数えた下限値です",
+      ],
+      stats.cornered_hits_dealt ?? 0,
+      "空間解析の認識率が不足しています。",
+    ),
+    coverageAwareItem(
       ownInputAvailable &&
         meterAvailable &&
         contactsAvailable &&

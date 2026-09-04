@@ -16,7 +16,9 @@ mod contact_hint_keeps_effect_region_off_actor_tracks;
 mod contact_hint_ranges_follow_first_stage_contacts;
 mod contact_hint_yields_spark_centroid;
 mod contact_spark_requires_hint_and_actor_span;
+mod corner_spans_follow_the_camera_clamp;
 mod coverage_records_candidate_and_sampled_frames;
+mod disruption_extends_the_contact_search;
 mod embedded_spark_is_found_inside_a_body_region;
 mod far_reacquire_requires_explicit_discontinuity_hint;
 mod forward_dash_throw_requires_forward_inputs_and_distance_closing;
@@ -40,5 +42,6 @@ mod still_appearance_confirms_a_frozen_actor;
 mod strike_whiff_gets_a_window_through_its_active_frame;
 use crate::test_support as support;
 mod tracks_actor_anchors_and_distance_band;
+mod zoom_correction_reveals_hidden_approach;
 
 use support::*;

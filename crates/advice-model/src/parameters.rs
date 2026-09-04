@@ -2,7 +2,9 @@
 // 接地判定の再較正)と、hitstop 区間のヒットスパーク検出を追加。
 // v17: ガード時の寒色スパーク検出、round 開始で学習した色による
 // 交差 window の P1/P2 同定、頭上スパークによる空中ヒットの確認。
-pub const RULESET_VERSION: u32 = 17;
+// v18: 画面端(corner span)の検出と端での被弾統計、全画面演出の
+// 除外とスパーク探索の猶予、ズーム補正距離による前進判定。
+pub const RULESET_VERSION: u32 = 18;
 
 /// 「大被弾」とみなす HP ドロップ（暴れ指摘の対象）
 pub const BIG_DAMAGE: f32 = 0.10;
@@ -59,3 +61,7 @@ pub const DRIVE_SPEND_MIN: f32 = 0.02;
 /// 3本ぶんなので、これを超える減少はガード削りなどの重畳であり、その行動の
 /// 消費として帰属できない。
 pub const DRIVE_SPEND_MAX: f32 = 0.55;
+/// 端の確認(corner span)はヒットの瞬間に追跡が乱れて閉じることが多い。
+/// 壁はすぐには消えないので、span 終端からこのフレーム数までの被弾は
+/// 端での被弾として数える。
+pub const CORNERED_DAMAGE_TAIL: u32 = 30;

@@ -19,3 +19,17 @@ pub(super) const CONTACT_AIRBORNE_MIN_CONFIDENCE: f32 = 0.5;
 /// Round 開始からこのフレーム数は、初期間合いの広さから側の入れ替わりが
 /// 物理的に起きない。この間だけプレイヤーの色シグネチャを学習する。
 pub(super) const ROUND_OPEN_CERTAIN_FRAMES: u32 = 60;
+/// 画面中点がこの量以上ずれていれば、カメラは壁でクランプされている。
+/// クランプの無いカメラは常に両者の中点を画面中央へ寄せるため、片側へ
+/// 追い込まれた場面だけがこの偏りを作る。3/32 は 2 進で正確に表せる値で、
+/// 境界そのものを検査できる。
+pub(super) const CORNER_MIDPOINT_OFFSET: f32 = 0.09375;
+/// 端を背負っている側の anchor が、画面端からこの距離以内にあること。
+/// 中点の偏りは knockback の土煙などで anchor が流れても起きるため、
+/// 壁の幾何(端側の人物が実際に画面端域にいる)を併せて要求する。
+/// 3/16 は 2 進で正確に表せる値で、境界そのものを検査できる。
+pub(super) const CORNER_EDGE_X: f32 = 0.1875;
+/// corner span を作るのに要する最低サンプル数。
+pub(super) const CORNER_MIN_SAMPLES: usize = 3;
+/// corner span 内で許す未確認フレームの最大ギャップ。
+pub(super) const CORNER_MAX_GAP: u32 = 8;
