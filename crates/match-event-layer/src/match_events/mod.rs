@@ -587,6 +587,7 @@ fn build_match_events_with_optional_fight_markers(
         meter_confidence,
         meter_game_frame: meter_gf,
         spatial_coverage: Default::default(),
+        corner_spans: vec![],
         input_coverage,
         segments,
         hp: mono,

@@ -5,6 +5,16 @@ use super::*;
 ///
 /// `candidate_frames` は重複を統合した候補区間の総フレーム数、
 /// `sampled_frames` は実際に空間観測を受け取れた一意なフレーム数。
+/// 画面端(壁)を背負っていた区間。空間解析の候補 window 内でしか
+/// 観測できないため、span が無いことは「端ではなかった」を意味しない。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CornerSpan {
+    /// 端を背負っている側(1|2)。
+    pub side: u8,
+    pub start_frame: u32,
+    pub end_frame: u32,
+}
+
 /// side 別の値は、補間ではなくそのフレームで人物を直接観測できた数。
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SpatialCoverage {
@@ -93,6 +103,9 @@ pub struct MatchEvents {
     /// 候補区間に限定した空間解析パスのcoverage。
     #[serde(skip)]
     pub spatial_coverage: SpatialCoverage,
+    /// 空間解析が確認した、画面端を背負っていた区間。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub corner_spans: Vec<CornerSpan>,
     /// 確定ラウンド内の入力履歴を、segment化前のフレーム列から数えたcoverage。
     #[serde(skip)]
     pub input_coverage: InputCoverage,

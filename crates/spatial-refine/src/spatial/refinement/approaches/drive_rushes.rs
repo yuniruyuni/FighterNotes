@@ -1,5 +1,5 @@
 use super::super::super::SpatialObservation;
-use super::super::observations::stable_distance_samples;
+use super::super::observations::{stable_distance_samples, zoom_corrected_endpoints};
 use super::direction::is_forward;
 use crate::match_events::{DriveRushEvent, EventConfidence, InputSegment};
 
@@ -20,10 +20,10 @@ fn refine_one(
 ) {
     let sample_end = rush.contact_frame.unwrap_or(rush.frame.saturating_add(60));
     let stable = stable_distance_samples(observations, rush.frame.saturating_sub(8), sample_end);
-    let (Some(first), Some(last)) = (stable.first(), stable.last()) else {
+    let Some(first) = stable.first() else {
         return;
     };
-    let (Some(first_distance), Some(last_distance)) = (first.screen_distance, last.screen_distance)
+    let Some((first_distance, last_distance)) = zoom_corrected_endpoints(observations, &stable)
     else {
         return;
     };

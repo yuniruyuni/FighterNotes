@@ -1,5 +1,5 @@
 use super::super::super::{DistanceBand, SpatialObservation};
-use super::super::observations::stable_distance_samples;
+use super::super::observations::{stable_distance_samples, zoom_corrected_endpoints};
 use super::direction::is_forward;
 use crate::match_events::{
     DriveRushEvent, EventConfidence, InputSegment, ThrowActionEvent, ThrowApproach, ThrowOutcome,
@@ -51,17 +51,17 @@ fn refine_forward_dash(
         .unwrap_or(throw.input_frame)
         .saturating_add(4);
     let stable = stable_distance_samples(observations, start, end);
-    let (Some(first), Some(last)) = (stable.first(), stable.last()) else {
-        return;
-    };
-    let (Some(first_distance), Some(last_distance)) = (first.screen_distance, last.screen_distance)
-    else {
+    let Some(last) = stable.last() else {
         return;
     };
     let final_close = matches!(
         last.distance_band,
         Some(DistanceBand::Overlap | DistanceBand::Close)
     );
+    let Some((first_distance, last_distance)) = zoom_corrected_endpoints(observations, &stable)
+    else {
+        return;
+    };
     if !final_close || first_distance - last_distance < 0.04 {
         return;
     }

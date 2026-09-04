@@ -2,6 +2,7 @@
 
 mod support;
 
+mod cornered_hits_are_lower_bounds;
 mod drive_spend_is_measured_not_assumed;
 mod every_new_tactic_counter_is_pinned;
 mod super_gauge_coverage;

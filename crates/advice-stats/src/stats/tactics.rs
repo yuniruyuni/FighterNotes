@@ -28,6 +28,23 @@ pub fn build_tactic_stats(
         ),
         ..TacticStats::default()
     };
+    // 端での被弾。corner span は候補 window 内でしか観測できないので、
+    // どちらも下限値になる。
+    for damage in events.damage.iter().filter(|damage| {
+        event_in_round(damage.round_no, damage.start_frame)
+            && events.corner_spans.iter().any(|span| {
+                span.side == damage.victim
+                    && damage.start_frame >= span.start_frame
+                    && damage.start_frame <= span.end_frame + crate::CORNERED_DAMAGE_TAIL
+            })
+    }) {
+        if damage.victim == own {
+            stats.cornered_hits_taken += 1;
+        } else {
+            stats.cornered_hits_dealt += 1;
+        }
+    }
+
     for jump in events.jumps.iter().filter(|jump| {
         event_in_round(jump.round_no, jump.frame)
             && jump.side == opponent

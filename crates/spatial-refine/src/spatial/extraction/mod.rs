@@ -26,6 +26,8 @@ pub struct SpatialExtractor {
     actors: ActorTracker,
     projectiles: ProjectileTracker,
     signatures: signatures::PlayerSignatures,
+    /// contact ヒントが演出で潰れた後、スパークを探し続ける残りフレーム数。
+    contact_grace: u32,
 }
 
 impl SpatialExtractor {
@@ -39,6 +41,7 @@ impl SpatialExtractor {
             actors: ActorTracker::default(),
             projectiles: ProjectileTracker::default(),
             signatures: signatures::PlayerSignatures::default(),
+            contact_grace: 0,
         }
     }
 
@@ -62,6 +65,7 @@ impl SpatialExtractor {
         self.previous_strips = None;
         self.actors.reset();
         self.projectiles.reset();
+        self.contact_grace = 0;
     }
 
     pub fn observe_rgba(
@@ -103,12 +107,27 @@ impl SpatialExtractor {
         let (screen_distance, distance_band, horizontal_order) =
             spatial_relationship(tracked.p1.as_ref(), tracked.p2.as_ref(), &self.config);
         let strips = camera::sample_strips(rgba, width, height);
+        // SA 暗転やカットなどの全画面演出がヒントを潰した場合は、演出明けの
+        // 数フレームまでスパークの探索を延長する。演出そのものはスパーク色の
+        // 割合と凝集のゲートが弾くので、検出自体は止めない(大技のヒット VFX
+        // は画面の大半を覆うことがあり、それは正しい衝突の画である)。
+        let playfield_area = self.config.playfield.width() * self.config.playfield.height();
+        let disrupted = regions.iter().any(|region| {
+            region.bounds.width() * region.bounds.height()
+                >= playfield_area * self.config.disruption_min_area
+        });
+        let searching = hints.contact_effect || self.contact_grace > 0;
+        if searching && disrupted {
+            self.contact_grace = self.config.contact_disruption_grace;
+        } else if !hints.contact_effect {
+            self.contact_grace = self.contact_grace.saturating_sub(1);
+        }
         let contact = contact::contact_observation(
             &regions,
             &tracked.used_regions,
             tracked.p1.as_ref(),
             tracked.p2.as_ref(),
-            hints.contact_effect,
+            searching,
             &self.config,
         );
         let masked_centers = camera::masked_centers(tracked.p1.as_ref(), tracked.p2.as_ref());

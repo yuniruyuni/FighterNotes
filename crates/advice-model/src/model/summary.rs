@@ -187,6 +187,13 @@ pub struct TacticStats {
     pub okizeme_decisions: u32,
     #[serde(default)]
     pub okizeme_top_option_percent: u32,
+    /// 自分が画面端を背負って受けた被弾。空間解析が端を確認できた場面に
+    /// 限るため下限値で、0 は「端で被弾しなかった」を意味しない。
+    #[serde(default)]
+    pub cornered_hits_taken: u32,
+    /// 相手を画面端に追い込んで与えた被弾。同じく下限値。
+    #[serde(default)]
+    pub cornered_hits_dealt: u32,
     /// 自分が守る側になった投げ。抜けと被投げの分母。
     /// 相手が届かない位置で振った投げ（空振り）は、守る機会ではないので含めない。
     #[serde(default)]
