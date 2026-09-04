@@ -32,6 +32,7 @@ pub(super) fn windows(
                 teleport_hints: vec![],
                 airborne_hints: vec![],
                 contact_hints: vec![],
+                certain_side_hints: vec![],
             }
         })
         .collect()

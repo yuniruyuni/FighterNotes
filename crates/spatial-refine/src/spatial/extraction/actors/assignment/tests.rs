@@ -21,6 +21,14 @@ fn region(left: f32, right: f32, bottom: f32, changed_cells: u32) -> MotionRegio
         effect_cells: 0,
         effect_x_sum: 0.0,
         effect_y_sum: 0.0,
+        effect_xx_sum: 0.0,
+        effect_yy_sum: 0.0,
+        cold_effect_cells: 0,
+        cold_x_sum: 0.0,
+        cold_y_sum: 0.0,
+        cold_xx_sum: 0.0,
+        cold_yy_sum: 0.0,
+        color_sum: [0, 0, 0],
     }
 }
 
@@ -35,7 +43,7 @@ fn config() -> SpatialConfig {
 fn without_any_hint_the_left_actor_is_the_first_player() {
     let regions = vec![region(0.6, 0.7, 0.9, 100), region(0.2, 0.3, 0.9, 100)];
 
-    let tracks = initial_tracks(&regions, &[0, 1], 0, [false, false], &config())
+    let tracks = initial_tracks(&regions, &[0, 1], 0, [false, false], None, &config())
         .expect("二人を割り当てられる");
 
     assert!(
@@ -53,11 +61,11 @@ fn two_regions_too_close_together_are_not_two_actors() {
     let together = vec![region(0.20, 0.30, 0.9, 100), region(0.31, 0.41, 0.9, 100)];
 
     assert!(
-        initial_tracks(&apart, &[0, 1], 0, [false, false], &config()).is_some(),
+        initial_tracks(&apart, &[0, 1], 0, [false, false], None, &config()).is_some(),
         "離れた二つを割り当てられていない"
     );
     assert!(
-        initial_tracks(&together, &[0, 1], 0, [false, false], &config()).is_none(),
+        initial_tracks(&together, &[0, 1], 0, [false, false], None, &config()).is_none(),
         "近すぎる二つを二人にしている"
     );
 }
@@ -72,7 +80,7 @@ fn the_two_largest_movements_are_the_actors() {
         region(0.70, 0.80, 0.9, 90),
     ];
 
-    let tracks = initial_tracks(&regions, &[0, 1, 2], 0, [false, false], &config())
+    let tracks = initial_tracks(&regions, &[0, 1, 2], 0, [false, false], None, &config())
         .expect("二人を割り当てられる");
 
     assert!(
@@ -92,7 +100,7 @@ fn equal_sizes_are_broken_by_how_much_moved() {
     ];
     regions[2].energy = 1;
 
-    let tracks = initial_tracks(&regions, &[0, 1, 2], 0, [false, false], &config())
+    let tracks = initial_tracks(&regions, &[0, 1, 2], 0, [false, false], None, &config())
         .expect("二人を割り当てられる");
 
     assert!((tracks[0].anchor.x - 0.25).abs() < 1e-6);
@@ -109,7 +117,7 @@ fn a_jump_hint_overrides_the_left_is_first_assumption() {
     // 左が空中、右が地上。P2 だけが飛んでいると分かっている。
     let regions = vec![region(0.20, 0.30, 0.5, 100), region(0.70, 0.80, 0.9, 100)];
 
-    let tracks = initial_tracks(&regions, &[0, 1], 0, [false, true], &config())
+    let tracks = initial_tracks(&regions, &[0, 1], 0, [false, true], None, &config())
         .expect("二人を割り当てられる");
 
     assert!(
@@ -124,7 +132,7 @@ fn a_jump_hint_overrides_the_left_is_first_assumption() {
 fn the_hint_works_for_the_first_player_too() {
     let regions = vec![region(0.20, 0.30, 0.5, 100), region(0.70, 0.80, 0.9, 100)];
 
-    let tracks = initial_tracks(&regions, &[0, 1], 0, [true, false], &config())
+    let tracks = initial_tracks(&regions, &[0, 1], 0, [true, false], None, &config())
         .expect("二人を割り当てられる");
 
     assert!((tracks[0].anchor.x - 0.25).abs() < 1e-6);
@@ -137,7 +145,7 @@ fn the_hint_works_for_the_first_player_too() {
 fn the_hint_does_nothing_when_it_applies_to_both() {
     let regions = vec![region(0.20, 0.30, 0.5, 100), region(0.70, 0.80, 0.9, 100)];
 
-    let tracks = initial_tracks(&regions, &[0, 1], 0, [true, true], &config())
+    let tracks = initial_tracks(&regions, &[0, 1], 0, [true, true], None, &config())
         .expect("二人を割り当てられる");
 
     assert!(
@@ -151,7 +159,7 @@ fn the_hint_does_nothing_when_it_applies_to_both() {
 fn the_hint_does_nothing_when_both_candidates_are_grounded() {
     let regions = vec![region(0.20, 0.30, 0.9, 100), region(0.70, 0.80, 0.9, 100)];
 
-    let tracks = initial_tracks(&regions, &[0, 1], 0, [false, true], &config())
+    let tracks = initial_tracks(&regions, &[0, 1], 0, [false, true], None, &config())
         .expect("二人を割り当てられる");
 
     assert!((tracks[0].anchor.x - 0.25).abs() < 1e-6);
@@ -376,7 +384,7 @@ fn a_side_expecting_a_discontinuity_takes_the_region_first() {
 fn initial_tracks_keep_the_frame_and_include_the_exact_separation() {
     let regions = vec![region(-0.05, 0.05, 0.9, 100), region(0.07, 0.17, 0.9, 100)];
 
-    let tracks = initial_tracks(&regions, &[0, 1], 42, [false, false], &config())
+    let tracks = initial_tracks(&regions, &[0, 1], 42, [false, false], None, &config())
         .expect("exactly separated actors should initialize");
 
     assert_eq!(tracks[0].last_observed_frame, 42);
@@ -484,14 +492,15 @@ fn the_airborne_hint_treats_the_ground_threshold_as_grounded_for_either_candidat
         region(0.70, 0.80, ground, 100),
         region(0.20, 0.30, 0.60, 100),
     ];
-    let tracks = initial_tracks(&first_ground, &[0, 1], 0, [false, true], &config()).unwrap();
+    let tracks = initial_tracks(&first_ground, &[0, 1], 0, [false, true], None, &config()).unwrap();
     assert!((tracks[1].anchor.x - 0.25).abs() < 1e-6);
 
     let second_ground = vec![
         region(0.70, 0.80, 0.60, 100),
         region(0.20, 0.30, ground, 100),
     ];
-    let tracks = initial_tracks(&second_ground, &[0, 1], 0, [true, false], &config()).unwrap();
+    let tracks =
+        initial_tracks(&second_ground, &[0, 1], 0, [true, false], None, &config()).unwrap();
     assert!((tracks[0].anchor.x - 0.75).abs() < 1e-6);
 }
 
@@ -545,4 +554,48 @@ fn ground_boundary_is_inclusive_on_both_sides() {
         &config(),
     );
     assert_eq!(assigned[0], Some(0), "基準ちょうどの塊を空中にしている");
+}
+
+/// 学習済みの色があるときは、入れ替えの対応が明確に良い場合だけ
+/// 「左=P1」を覆す。マージン(2 倍)ちょうどでは覆さない。
+#[test]
+fn known_colors_swap_only_when_decisively_better() {
+    let colored = |x: f32, r: u64| {
+        let mut region = region(x - 0.05, x + 0.05, 0.9, 100);
+        region.color_sum = [r * 100, 0, 0];
+        region
+    };
+    // 左の塊が赤 120、右の塊が赤 0。
+    let regions = vec![colored(0.25, 120), colored(0.75, 0)];
+
+    // P1=赤40 P2=赤80: straight=160, swapped=80。80*2 == 160 は覆さない。
+    let at_margin = initial_tracks(
+        &regions,
+        &[0, 1],
+        0,
+        [false, false],
+        Some([[40.0, 0.0, 0.0], [80.0, 0.0, 0.0]]),
+        &config(),
+    )
+    .expect("二人を割り当てられる");
+    assert!(
+        (at_margin[0].anchor.x - 0.25).abs() < 1e-6,
+        "境界では左=P1 のまま"
+    );
+
+    // P2=赤81: straight=161, swapped=79*2=158 < 161 で覆す。
+    let swapped = initial_tracks(
+        &regions,
+        &[0, 1],
+        0,
+        [false, false],
+        Some([[40.0, 0.0, 0.0], [81.0, 0.0, 0.0]]),
+        &config(),
+    )
+    .expect("二人を割り当てられる");
+    assert!(
+        (swapped[0].anchor.x - 0.75).abs() < 1e-6,
+        "右の塊が P1 になる"
+    );
+    assert!((swapped[1].anchor.x - 0.25).abs() < 1e-6);
 }

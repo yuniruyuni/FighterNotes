@@ -24,6 +24,9 @@ fn main() {
         let mut collected = ScenarioMetrics::new();
         let mut frame_index = 0u32;
         (scenario.run)(&mut |gt, frame, hints| {
+            if gt.window_reset {
+                extractor.reset_window();
+            }
             let observation = extractor
                 .observe_rgba(frame_index, &frame, WIDTH, HEIGHT, hints)
                 .expect("合成フレームの観測に失敗");

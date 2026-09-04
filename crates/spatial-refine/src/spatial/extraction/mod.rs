@@ -6,6 +6,7 @@ mod motion;
 mod projectiles;
 mod relationship;
 mod shadows;
+mod signatures;
 
 use actors::ActorTracker;
 use grid::{validate_rgba, CellGrid};
@@ -24,6 +25,7 @@ pub struct SpatialExtractor {
     previous_strips: Option<camera::CameraStrips>,
     actors: ActorTracker,
     projectiles: ProjectileTracker,
+    signatures: signatures::PlayerSignatures,
 }
 
 impl SpatialExtractor {
@@ -36,6 +38,7 @@ impl SpatialExtractor {
             previous_strips: None,
             actors: ActorTracker::default(),
             projectiles: ProjectileTracker::default(),
+            signatures: signatures::PlayerSignatures::default(),
         }
     }
 
@@ -45,6 +48,16 @@ impl SpatialExtractor {
 
     pub fn reset(&mut self) {
         self.dimensions = None;
+        self.previous_grid = None;
+        self.previous_strips = None;
+        self.actors.reset();
+        self.projectiles.reset();
+        self.signatures = signatures::PlayerSignatures::default();
+    }
+
+    /// 次の候補 window へ移る。追跡と差分は忘れるが、window を跨いで
+    /// 意味を持つプレイヤーの色シグネチャは保持する。
+    pub fn reset_window(&mut self) {
         self.previous_grid = None;
         self.previous_strips = None;
         self.actors.reset();
@@ -72,9 +85,12 @@ impl SpatialExtractor {
         let tracked = self.actors.observe(
             frame_index,
             &regions,
-            &grid,
-            &shadow_candidates,
-            hints,
+            actors::FrameContext {
+                grid: &grid,
+                shadows: &shadow_candidates,
+                hints,
+            },
+            &mut self.signatures,
             &self.config,
         );
         let projectile_candidates = self.projectiles.observe(

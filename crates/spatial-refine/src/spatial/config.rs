@@ -41,6 +41,14 @@ pub struct SpatialConfig {
     pub contact_min_effect_fraction: f32,
     /// Horizontal slack around the tracked actor span when locating a spark.
     pub contact_actor_pad: f32,
+    /// Minimum spark cells for an embedded spark: one that merged into a
+    /// body region because real hitstop still shakes the bodies. Costume
+    /// patches are smaller or more dispersed than this.
+    pub contact_embedded_min_cells: u32,
+    /// Maximum spatial spread (std dev, normalized) of the spark cells for
+    /// an embedded spark. Sparks are compact; costume highlights follow the
+    /// body and spread wider.
+    pub contact_embedded_max_spread: f32,
     /// On a hinted contact frame, a region at least this effect-colored is
     /// treated as VFX and never assigned to an actor track. Hitstop freezes
     /// both bodies, so their regions cannot appear on such frames.
@@ -64,6 +72,11 @@ pub struct SpatialConfig {
     pub merged_region_min_width: f32,
     /// Confidence reported when a track is updated from a merged region.
     pub merged_region_confidence: f32,
+    /// How decisively the swapped signature pairing must beat the straight
+    /// pairing before the left-is-P1 assumption is overridden at window
+    /// initialization. 2.0 requires the swapped total color distance to be
+    /// at most half of the straight one.
+    pub signature_swap_margin: f32,
     /// Fraction of appearance cells that must stay under `motion_threshold`
     /// for an unobserved track to be confirmed as a stationary actor instead
     /// of decaying. Guarding, downed and frozen actors produce no motion, so
@@ -105,6 +118,8 @@ impl Default for SpatialConfig {
             contact_min_effect_cells: 3,
             contact_min_effect_fraction: 0.30,
             contact_actor_pad: 0.10,
+            contact_embedded_min_cells: 6,
+            contact_embedded_max_spread: 0.05,
             contact_effect_max_actor_fraction: 0.60,
             shadow_band_top: 0.87,
             shadow_band_bottom: 0.96,
@@ -113,6 +128,7 @@ impl Default for SpatialConfig {
             shadow_snap_dx: 0.06,
             merged_region_min_width: 0.24,
             merged_region_confidence: 0.62,
+            signature_swap_margin: 2.0,
             still_match_min_fraction: 0.90,
             still_confidence: 0.68,
         }

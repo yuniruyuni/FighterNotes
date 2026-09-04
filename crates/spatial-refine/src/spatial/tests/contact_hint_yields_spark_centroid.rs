@@ -26,6 +26,7 @@ fn contact_hint_yields_spark_centroid() {
             HEIGHT,
             SpatialHints {
                 contact_effect: true,
+                sides_certain: false,
                 ..SpatialHints::default()
             },
         )

@@ -5,6 +5,7 @@ use super::super::{ActorObservation, SpatialConfig, SpatialHints};
 use super::grid::CellGrid;
 use super::motion::{actor_candidate, MotionRegion};
 use super::shadows::ShadowCandidate;
+use super::signatures::PlayerSignatures;
 use assignment::{assign_regions, initial_tracks};
 use track::{apply_anchor_hint, update, ActorTrack};
 
@@ -12,6 +13,13 @@ use track::{apply_anchor_hint, update, ActorTrack};
 pub(super) struct ActorTracker {
     p1: Option<ActorTrack>,
     p2: Option<ActorTrack>,
+}
+
+/// 1 フレームぶんの観測入力。追跡・学習・吸着が同じフレームの材料を見る。
+pub(super) struct FrameContext<'a> {
+    pub(super) grid: &'a CellGrid,
+    pub(super) shadows: &'a [ShadowCandidate],
+    pub(super) hints: SpatialHints,
 }
 
 pub(super) struct ActorTrackingResult {
@@ -30,11 +38,15 @@ impl ActorTracker {
         &mut self,
         frame_index: u32,
         regions: &[MotionRegion],
-        grid: &CellGrid,
-        shadows: &[ShadowCandidate],
-        hints: SpatialHints,
+        context: FrameContext<'_>,
+        signatures: &mut PlayerSignatures,
         config: &SpatialConfig,
     ) -> ActorTrackingResult {
+        let FrameContext {
+            grid,
+            shadows,
+            hints,
+        } = context;
         apply_anchor_hint(&mut self.p1, hints.p1.anchor, frame_index);
         apply_anchor_hint(&mut self.p2, hints.p2.anchor, frame_index);
 
@@ -48,19 +60,27 @@ impl ActorTracker {
             // overlay exclusion keeps mid-screen anchors above the ground
             // band, which disarms the leaves-ground check.
             .filter(|(_, region)| {
-                let effect_fraction =
-                    region.effect_cells as f32 / region.changed_cells.max(1) as f32;
+                let spark_fraction =
+                    region.spark_cells() as f32 / region.changed_cells.max(1) as f32;
                 !(hints.contact_effect
-                    && effect_fraction >= config.contact_effect_max_actor_fraction)
+                    && spark_fraction >= config.contact_effect_max_actor_fraction)
             })
             .map(|(index, _)| index)
             .collect();
         if self.p1.is_none() && self.p2.is_none() && candidates.len() >= 2 {
+            // 側が確定していない window では、学習済みの色シグネチャで
+            // 「左=P1」仮定を照合できる。
+            let known_colors = if hints.sides_certain {
+                None
+            } else {
+                signatures.pair()
+            };
             if let Some([p1, p2]) = initial_tracks(
                 regions,
                 &candidates,
                 frame_index,
                 [hints.p1.allow_airborne, hints.p2.allow_airborne],
+                known_colors,
                 config,
             ) {
                 self.p1 = Some(p1);
@@ -108,6 +128,16 @@ impl ActorTracker {
         );
         let p1 = snap_to_shadow(&mut self.p1, p1, shadows, config);
         let p2 = snap_to_shadow(&mut self.p2, p2, shadows, config);
+        // 側が確定しているフレームの実観測だけからシグネチャを学習する。
+        // 合体領域は 2 人の色が混ざるので使わない。
+        if hints.sides_certain {
+            if let (Some(index), false) = (assignments[0], p1_merged) {
+                signatures.learn(0, regions[index].mean_color());
+            }
+            if let (Some(index), false) = (assignments[1], p2_merged) {
+                signatures.learn(1, regions[index].mean_color());
+            }
+        }
         let mut used_regions = Vec::new();
         if let Some(index) = assignments[0] {
             used_regions.push(index);
@@ -162,6 +192,10 @@ mod tests {
         }
     }
 
+    fn no_signatures() -> PlayerSignatures {
+        PlayerSignatures::default()
+    }
+
     fn region(x: f32) -> MotionRegion {
         MotionRegion {
             bounds: SpatialRect::new(x - 0.05, 0.65, x + 0.05, 0.9),
@@ -170,6 +204,14 @@ mod tests {
             effect_cells: 0,
             effect_x_sum: 0.0,
             effect_y_sum: 0.0,
+            effect_xx_sum: 0.0,
+            effect_yy_sum: 0.0,
+            cold_effect_cells: 0,
+            cold_x_sum: 0.0,
+            cold_y_sum: 0.0,
+            cold_xx_sum: 0.0,
+            cold_yy_sum: 0.0,
+            color_sum: [0, 0, 0],
         }
     }
 
@@ -181,9 +223,12 @@ mod tests {
         let result = tracker.observe(
             42,
             &regions,
-            &empty_grid(),
-            &[],
-            SpatialHints::default(),
+            FrameContext {
+                grid: &empty_grid(),
+                shadows: &[],
+                hints: SpatialHints::default(),
+            },
+            &mut no_signatures(),
             &SpatialConfig::default(),
         );
 
@@ -205,9 +250,12 @@ mod tests {
         let result = tracker.observe(
             11,
             &regions,
-            &empty_grid(),
-            &[],
-            SpatialHints::default(),
+            FrameContext {
+                grid: &empty_grid(),
+                shadows: &[],
+                hints: SpatialHints::default(),
+            },
+            &mut no_signatures(),
             &SpatialConfig::default(),
         );
 
@@ -248,9 +296,12 @@ mod tests {
         let result = tracker.observe(
             11,
             &[region(0.31)],
-            &empty_grid(),
-            &shadows,
-            SpatialHints::default(),
+            FrameContext {
+                grid: &empty_grid(),
+                shadows: &shadows,
+                hints: SpatialHints::default(),
+            },
+            &mut no_signatures(),
             &config,
         );
         assert_eq!(result.p1.unwrap().anchor.x, 0.335);
@@ -258,9 +309,12 @@ mod tests {
         let carried = tracker.observe(
             12,
             &[],
-            &empty_grid(),
-            &[],
-            SpatialHints::default(),
+            FrameContext {
+                grid: &empty_grid(),
+                shadows: &[],
+                hints: SpatialHints::default(),
+            },
+            &mut no_signatures(),
             &config,
         );
         assert_eq!(carried.p1.unwrap().anchor.x, 0.335);
@@ -282,9 +336,12 @@ mod tests {
         let result = tracker.observe(
             11,
             &[region(0.0)],
-            &empty_grid(),
-            &at_reach,
-            SpatialHints::default(),
+            FrameContext {
+                grid: &empty_grid(),
+                shadows: &at_reach,
+                hints: SpatialHints::default(),
+            },
+            &mut no_signatures(),
             &config,
         );
         assert_eq!(result.p1.unwrap().anchor.x, 0.06);
@@ -301,9 +358,12 @@ mod tests {
         let result = tracker.observe(
             11,
             &[region(0.30)],
-            &empty_grid(),
-            &out_of_reach,
-            SpatialHints::default(),
+            FrameContext {
+                grid: &empty_grid(),
+                shadows: &out_of_reach,
+                hints: SpatialHints::default(),
+            },
+            &mut no_signatures(),
             &config,
         );
         assert_eq!(result.p1.unwrap().anchor.x, 0.30);
@@ -320,13 +380,26 @@ mod tests {
             },
             ..Default::default()
         };
-        tracker.observe(100, &[], &empty_grid(), &[], hints, &config);
+        tracker.observe(
+            100,
+            &[],
+            FrameContext {
+                grid: &empty_grid(),
+                shadows: &[],
+                hints,
+            },
+            &mut no_signatures(),
+            &config,
+        );
         let result = tracker.observe(
             102,
             &[],
-            &empty_grid(),
-            &[],
-            SpatialHints::default(),
+            FrameContext {
+                grid: &empty_grid(),
+                shadows: &[],
+                hints: SpatialHints::default(),
+            },
+            &mut no_signatures(),
             &config,
         );
         let p1 = result.p1.unwrap();
@@ -356,9 +429,12 @@ mod tests {
         let result = tracker.observe(
             11,
             &[airborne, region(0.74)],
-            &empty_grid(),
-            &[],
-            hints,
+            FrameContext {
+                grid: &empty_grid(),
+                shadows: &[],
+                hints,
+            },
+            &mut no_signatures(),
             &SpatialConfig::default(),
         );
 
@@ -385,9 +461,12 @@ mod tests {
         let result = tracker.observe(
             11,
             &[region(0.26), airborne],
-            &empty_grid(),
-            &[],
-            hints,
+            FrameContext {
+                grid: &empty_grid(),
+                shadows: &[],
+                hints,
+            },
+            &mut no_signatures(),
             &SpatialConfig::default(),
         );
 
@@ -411,9 +490,12 @@ mod tests {
         let result = tracker.observe(
             11,
             &[region(0.40)],
-            &empty_grid(),
-            &[],
-            hints,
+            FrameContext {
+                grid: &empty_grid(),
+                shadows: &[],
+                hints,
+            },
+            &mut no_signatures(),
             &SpatialConfig::default(),
         );
 

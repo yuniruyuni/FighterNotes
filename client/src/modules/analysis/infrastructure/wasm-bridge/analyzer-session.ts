@@ -190,6 +190,7 @@ export class AnalyzerWasmSession {
       hints.p1Airborne,
       hints.p2Airborne,
       hints.contact,
+      hints.sidesCertain,
     );
   }
 

@@ -36,6 +36,7 @@ export interface SpatialCandidateWindow {
   readonly teleport_hints: readonly SpatialHintRange[];
   readonly airborne_hints: readonly SpatialHintRange[];
   readonly contact_hints: readonly SpatialFrameRange[];
+  readonly certain_side_hints: readonly SpatialFrameRange[];
 }
 
 export interface SpatialFrameHints {
@@ -45,6 +46,8 @@ export interface SpatialFrameHints {
   readonly p2Airborne: boolean;
   /** 第一段が確定した contact(hitstop)区間。スパーク検出を許可する。 */
   readonly contact: boolean;
+  /** round 開始直後で側が確定しており、色シグネチャの学習に使える。 */
+  readonly sidesCertain: boolean;
 }
 
 export interface TrackedInputRow {

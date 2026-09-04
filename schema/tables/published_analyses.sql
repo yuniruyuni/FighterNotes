@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS published_analyses (
   schema_version SMALLINT NOT NULL
     CHECK (schema_version = 1),
   ruleset_version INTEGER NOT NULL
-    CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)),
+    CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17)),
   presentation_revision SMALLINT NOT NULL
     CHECK (presentation_revision IN (1)),
   own_character TEXT NOT NULL
@@ -57,7 +57,7 @@ ALTER TABLE published_analyses
   DROP CONSTRAINT IF EXISTS published_analyses_ruleset_version_check;
 ALTER TABLE published_analyses
   ADD CONSTRAINT published_analyses_ruleset_version_check
-  CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16));
+  CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17));
 -- 既存環境のcharacter制約にも追加キャラクターを反映する。
 ALTER TABLE published_analyses
   DROP CONSTRAINT IF EXISTS published_analyses_own_character_check;

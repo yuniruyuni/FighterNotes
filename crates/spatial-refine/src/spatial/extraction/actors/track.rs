@@ -344,6 +344,14 @@ mod tests {
             effect_cells: 0,
             effect_x_sum: 0.0,
             effect_y_sum: 0.0,
+            effect_xx_sum: 0.0,
+            effect_yy_sum: 0.0,
+            cold_effect_cells: 0,
+            cold_x_sum: 0.0,
+            cold_y_sum: 0.0,
+            cold_xx_sum: 0.0,
+            cold_yy_sum: 0.0,
+            color_sum: [0, 0, 0],
         };
         let mut track = None;
         update(
@@ -372,6 +380,14 @@ mod tests {
             effect_cells: 0,
             effect_x_sum: 0.0,
             effect_y_sum: 0.0,
+            effect_xx_sum: 0.0,
+            effect_yy_sum: 0.0,
+            cold_effect_cells: 0,
+            cold_x_sum: 0.0,
+            cold_y_sum: 0.0,
+            cold_xx_sum: 0.0,
+            cold_yy_sum: 0.0,
+            color_sum: [0, 0, 0],
         };
 
         let observed = update(
@@ -438,6 +454,14 @@ mod tests {
             effect_cells: 0,
             effect_x_sum: 0.0,
             effect_y_sum: 0.0,
+            effect_xx_sum: 0.0,
+            effect_yy_sum: 0.0,
+            cold_effect_cells: 0,
+            cold_x_sum: 0.0,
+            cold_y_sum: 0.0,
+            cold_xx_sum: 0.0,
+            cold_yy_sum: 0.0,
+            color_sum: [0, 0, 0],
         };
         let mut track = None;
         update(&mut track, Some(&body), false, &grid, false, 10, &config).unwrap();
@@ -476,6 +500,14 @@ mod tests {
             effect_cells: 0,
             effect_x_sum: 0.0,
             effect_y_sum: 0.0,
+            effect_xx_sum: 0.0,
+            effect_yy_sum: 0.0,
+            cold_effect_cells: 0,
+            cold_x_sum: 0.0,
+            cold_y_sum: 0.0,
+            cold_xx_sum: 0.0,
+            cold_yy_sum: 0.0,
+            color_sum: [0, 0, 0],
         };
         let mut track = None;
         update(
@@ -501,6 +533,14 @@ mod tests {
             effect_cells: 0,
             effect_x_sum: 0.0,
             effect_y_sum: 0.0,
+            effect_xx_sum: 0.0,
+            effect_yy_sum: 0.0,
+            cold_effect_cells: 0,
+            cold_x_sum: 0.0,
+            cold_y_sum: 0.0,
+            cold_xx_sum: 0.0,
+            cold_yy_sum: 0.0,
+            color_sum: [0, 0, 0],
         }
     }
 

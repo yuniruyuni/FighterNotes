@@ -65,6 +65,7 @@ describe("AnalyzerWorkerSession", () => {
       p1Airborne: false,
       p2Airborne: false,
       contact: false,
+      sidesCertain: false,
     });
     const spatialDrain = workerSession.drainSpatialFrames();
     const result = workerSession.result();
@@ -133,6 +134,7 @@ describe("AnalyzerWorkerSession", () => {
       p1Airborne: false,
       p2Airborne: false,
       contact: false,
+      sidesCertain: false,
     });
     const spatialDrain = workerSession.drainSpatialFrames();
     const result = workerSession.result();
@@ -167,6 +169,7 @@ describe("AnalyzerWorkerSession", () => {
         p1Airborne: false,
         p2Airborne: false,
         contact: false,
+        sidesCertain: false,
       }),
     );
     let acknowledged = 0;
@@ -223,6 +226,7 @@ describe("AnalyzerWorkerSession", () => {
         p1Airborne: false,
         p2Airborne: false,
         contact: false,
+        sidesCertain: false,
       }),
     );
     await Promise.all(initial);
@@ -232,6 +236,7 @@ describe("AnalyzerWorkerSession", () => {
       p1Airborne: false,
       p2Airborne: false,
       contact: false,
+      sidesCertain: false,
     });
     const drained = workerSession.drainSpatialFrames();
 
@@ -269,6 +274,7 @@ describe("AnalyzerWorkerSession", () => {
           p1Airborne: false,
           p2Airborne: false,
           contact: false,
+          sidesCertain: false,
         }),
     );
     await Promise.all(initial);
@@ -287,6 +293,7 @@ describe("AnalyzerWorkerSession", () => {
         p1Airborne: false,
         p2Airborne: false,
         contact: false,
+        sidesCertain: false,
       },
       controller.signal,
     );
@@ -319,6 +326,7 @@ describe("AnalyzerWorkerSession", () => {
           p1Airborne: false,
           p2Airborne: false,
           contact: false,
+          sidesCertain: false,
         },
       ),
     ).rejects.toBe(reason);
@@ -331,6 +339,7 @@ describe("AnalyzerWorkerSession", () => {
       p1Airborne: false,
       p2Airborne: false,
       contact: false,
+      sidesCertain: false,
     });
     worker.receive({ type: "spatialFrameResult" });
     await expect(workerSession.drainSpatialFrames()).resolves.toBeUndefined();
@@ -352,6 +361,7 @@ describe("AnalyzerWorkerSession", () => {
           p1Airborne: false,
           p2Airborne: false,
           contact: false,
+          sidesCertain: false,
         }),
     );
     await Promise.all(initial);
@@ -361,6 +371,7 @@ describe("AnalyzerWorkerSession", () => {
       p1Airborne: false,
       p2Airborne: false,
       contact: false,
+      sidesCertain: false,
     });
     const drain = workerSession.drainSpatialFrames();
 

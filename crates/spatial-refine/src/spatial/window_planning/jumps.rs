@@ -30,6 +30,7 @@ pub(super) fn windows(jumps: &[JumpEvent], rounds: &[RoundInfo]) -> Vec<SpatialC
                     end_frame: contact.min(jump.air_end),
                 }],
                 contact_hints: vec![],
+                certain_side_hints: vec![],
             }
         })
         .collect()

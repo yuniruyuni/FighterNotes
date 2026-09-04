@@ -50,6 +50,7 @@ pub(super) fn windows(
                 }],
                 airborne_hints,
                 contact_hints: vec![],
+                certain_side_hints: vec![],
             }
         })
         .collect()

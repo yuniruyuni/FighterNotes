@@ -27,4 +27,7 @@ pub struct SpatialCandidateWindow {
     pub airborne_hints: Vec<SpatialHintRange>,
     #[serde(default)]
     pub contact_hints: Vec<SpatialFrameRange>,
+    /// Round 開始直後で側が確定しているフレーム区間。
+    #[serde(default)]
+    pub certain_side_hints: Vec<SpatialFrameRange>,
 }

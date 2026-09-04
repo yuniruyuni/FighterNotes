@@ -96,6 +96,8 @@ pub struct Spark {
     pub world_y: f32,
     /// 出現からの経過フレーム。大きさと明るさの脈動に使う。
     pub age: u32,
+    /// true ならガード時の白青スパーク。false はヒットの橙スパーク。
+    pub cold: bool,
 }
 
 /// 1 フレーム分の正解データ。抽出器の出力と突き合わせる。
@@ -115,6 +117,8 @@ pub struct GtFrame {
     /// カメラの正解(中心の world x と scale)。
     pub cam_center_x: f32,
     pub cam_scale: f32,
+    /// このフレームの前に候補 window の切れ目がある(reset_window する)。
+    pub window_reset: bool,
 }
 
 pub struct Scene {
@@ -123,6 +127,8 @@ pub struct Scene {
     pub camera: Camera,
     pub sparks: Vec<Spark>,
     pub frame_index: u32,
+    /// 次に emit するフレームの前に window の切れ目を置く。
+    pub reset_next: bool,
 }
 
 impl Scene {
@@ -133,6 +139,7 @@ impl Scene {
             camera: Camera::follow(p1_x, p2_x),
             sparks: Vec::new(),
             frame_index: 0,
+            reset_next: false,
         }
     }
 
@@ -158,6 +165,7 @@ impl Scene {
             contact,
             cam_center_x: self.camera.center_x,
             cam_scale: self.camera.scale,
+            window_reset: self.reset_next,
         }
     }
 
@@ -280,14 +288,26 @@ fn paint_spark(color: &mut [f32; 3], spark: &Spark, camera: Camera, px: u32, py:
     let spike = 0.60 + 0.40 * (angle * 6.0).cos().abs();
     let v = distance / (radius * spike);
     if v < 1.0 {
-        let flicker = if spark.age.is_multiple_of(2) {
-            1.0
+        if spark.cold {
+            // ガードスパークは白核+淡青のまま明るさを保って明滅する。
+            let flicker = if spark.age.is_multiple_of(2) {
+                1.0
+            } else {
+                0.95
+            };
+            color[0] = (250.0 - 15.0 * v) * flicker;
+            color[1] = (252.0 - 10.0 * v) * flicker;
+            color[2] = 255.0;
         } else {
-            0.82
-        };
-        color[0] = 255.0 * flicker;
-        color[1] = (225.0 - 120.0 * v) * flicker;
-        color[2] = 60.0 * (1.0 - v);
+            let flicker = if spark.age.is_multiple_of(2) {
+                1.0
+            } else {
+                0.82
+            };
+            color[0] = 255.0 * flicker;
+            color[1] = (225.0 - 120.0 * v) * flicker;
+            color[2] = 60.0 * (1.0 - v);
+        }
     }
 }
 

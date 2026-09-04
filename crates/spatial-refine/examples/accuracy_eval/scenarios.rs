@@ -36,8 +36,13 @@ pub fn all() -> Vec<Scenario> {
         },
         Scenario {
             name: "hit_contact",
-            description: "打撃ヒット 3 回。hitstop 中にスパークが出る",
+            description: "打撃 3 回(ヒット2・ガード1)。hitstop 中にスパークが出る",
             run: hit_contact,
+        },
+        Scenario {
+            name: "crossed_window_start",
+            description: "確定 window で色を学習後、入れ替わった状態から次の window が始まる",
+            run: crossed_window_start,
         },
         Scenario {
             name: "corner_clamp",
@@ -60,6 +65,7 @@ fn no_hints() -> SpatialHints {
             allow_airborne: false,
         },
         contact_effect: false,
+        sides_certain: false,
     }
 }
 
@@ -78,6 +84,15 @@ fn airborne_hint_p2() -> SpatialHints {
 fn contact_hint() -> SpatialHints {
     SpatialHints {
         contact_effect: true,
+        sides_certain: false,
+        ..no_hints()
+    }
+}
+
+/// Round 開始直後の、側が確定しているフレームのヒント。
+fn certain_hint() -> SpatialHints {
+    SpatialHints {
+        sides_certain: true,
         ..no_hints()
     }
 }
@@ -88,6 +103,7 @@ fn emit(scene: &mut Scene, measure: bool, hints: SpatialHints, sink: StepSink) {
     scene.p1.advance_phase();
     scene.p2.advance_phase();
     let gt = scene.ground_truth(measure);
+    scene.reset_next = false;
     let frame = scene.render();
     sink(gt, frame, hints);
     scene.frame_index += 1;
@@ -188,7 +204,7 @@ fn jump_crossup(sink: StepSink) {
 fn hit_contact(sink: StepSink) {
     let mut scene = Scene::new(-1.6, 0.6);
     warmup(&mut scene, 14, sink);
-    for _ in 0..3 {
+    for cycle in 0..3 {
         // 密着まで歩く。
         scene.p1.anim = Animation::Full;
         scene.p2.anim = Animation::Subtle;
@@ -204,10 +220,12 @@ fn hit_contact(sink: StepSink) {
         // hitstop。両者とも凍結し、衝突位置にスパークが出る。
         scene.p1.anim = Animation::Frozen;
         scene.p2.anim = Animation::Frozen;
+        // 2 回目はガード(寒色スパーク)、他はヒット(暖色)。
         scene.sparks = vec![Spark {
             world_x: scene.p1.x + 0.75,
             world_y: 1.0,
             age: 0,
+            cold: cycle == 1,
         }];
         for _ in 0..9 {
             emit(&mut scene, true, contact_hint(), sink);
@@ -224,6 +242,27 @@ fn hit_contact(sink: StepSink) {
         for _ in 0..8 {
             emit(&mut scene, true, no_hints(), sink);
         }
+    }
+}
+
+fn crossed_window_start(sink: StepSink) {
+    // 確定 window: 通常の並びで歩き、色を学習させる(集計外)。
+    let mut scene = Scene::new(-1.6, 1.6);
+    scene.p1.anim = Animation::Full;
+    scene.p2.anim = Animation::Full;
+    for _ in 0..20 {
+        scene.p1.x += 0.02;
+        scene.p2.x -= 0.02;
+        emit(&mut scene, false, certain_hint(), sink);
+    }
+    // window の切れ目。次の window は側が入れ替わった状態から始まる。
+    scene.p1.x = 1.4;
+    scene.p2.x = -1.4;
+    scene.reset_next = true;
+    for _ in 0..30 {
+        scene.p1.x -= 0.02;
+        scene.p2.x += 0.02;
+        emit(&mut scene, true, no_hints(), sink);
     }
 }
 
