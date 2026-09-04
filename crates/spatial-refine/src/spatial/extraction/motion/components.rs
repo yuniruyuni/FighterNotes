@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use super::super::grid::CellGrid;
 use super::mask::{neighbors, MotionMask};
-use super::MotionRegion;
+use super::{is_cold_effect, is_warm_effect, MotionRegion};
 use crate::spatial::SpatialRect;
 
 pub(super) fn connected_regions(
@@ -26,6 +26,14 @@ pub(super) fn connected_regions(
         let mut effect_cells = 0u32;
         let mut effect_x_sum = 0.0f32;
         let mut effect_y_sum = 0.0f32;
+        let mut effect_xx_sum = 0.0f32;
+        let mut effect_yy_sum = 0.0f32;
+        let mut cold_effect_cells = 0u32;
+        let mut cold_x_sum = 0.0f32;
+        let mut cold_y_sum = 0.0f32;
+        let mut cold_xx_sum = 0.0f32;
+        let mut cold_yy_sum = 0.0f32;
+        let mut color_sum = [0u64; 3];
         while let Some(index) = queue.pop_front() {
             let x = index % mask.width;
             let y = index / mask.width;
@@ -37,12 +45,25 @@ pub(super) fn connected_regions(
                 changed_cells += 1;
                 total_energy += mask.energy[index] as u64;
                 let cell = current.cells[index];
-                let high = cell.r.max(cell.g).max(cell.b);
-                let low = cell.r.min(cell.g).min(cell.b);
-                if high >= 145 && high.saturating_sub(low) >= 65 {
+                color_sum[0] += cell.r as u64;
+                color_sum[1] += cell.g as u64;
+                color_sum[2] += cell.b as u64;
+                if is_warm_effect(cell) {
+                    let cell_x = (x as f32 + 0.5) * cell_size as f32 / source_width as f32;
+                    let cell_y = (y as f32 + 0.5) * cell_size as f32 / source_height as f32;
                     effect_cells += 1;
-                    effect_x_sum += (x as f32 + 0.5) * cell_size as f32 / source_width as f32;
-                    effect_y_sum += (y as f32 + 0.5) * cell_size as f32 / source_height as f32;
+                    effect_x_sum += cell_x;
+                    effect_y_sum += cell_y;
+                    effect_xx_sum += cell_x * cell_x;
+                    effect_yy_sum += cell_y * cell_y;
+                } else if is_cold_effect(cell) {
+                    let cell_x = (x as f32 + 0.5) * cell_size as f32 / source_width as f32;
+                    let cell_y = (y as f32 + 0.5) * cell_size as f32 / source_height as f32;
+                    cold_effect_cells += 1;
+                    cold_x_sum += cell_x;
+                    cold_y_sum += cell_y;
+                    cold_xx_sum += cell_x * cell_x;
+                    cold_yy_sum += cell_y * cell_y;
                 }
             }
             for neighbor in neighbors(x, y, mask.width, mask.height) {
@@ -67,6 +88,14 @@ pub(super) fn connected_regions(
             effect_cells,
             effect_x_sum,
             effect_y_sum,
+            effect_xx_sum,
+            effect_yy_sum,
+            cold_effect_cells,
+            cold_x_sum,
+            cold_y_sum,
+            cold_xx_sum,
+            cold_yy_sum,
+            color_sum,
         });
     }
     regions

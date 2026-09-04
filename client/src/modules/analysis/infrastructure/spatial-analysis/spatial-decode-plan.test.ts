@@ -18,6 +18,7 @@ const window: SpatialCandidateWindow = {
   teleport_hints: [{ side: 2, start_frame: 1, end_frame: 1 }],
   airborne_hints: [{ side: 1, start_frame: 2, end_frame: 3 }],
   contact_hints: [],
+  certain_side_hints: [],
 };
 
 describe("SpatialDecodePlan", () => {
@@ -39,6 +40,7 @@ describe("SpatialDecodePlan", () => {
       p1Airborne: false,
       p2Airborne: false,
       contact: false,
+      sidesCertain: false,
     });
     expect(spatialHintsAt(window, 2).p1Airborne).toBe(true);
   });
@@ -47,6 +49,7 @@ describe("SpatialDecodePlan", () => {
     const withContact: SpatialCandidateWindow = {
       ...window,
       contact_hints: [{ start_frame: 2, end_frame: 2 }],
+      certain_side_hints: [],
     };
     expect(spatialHintsAt(withContact, 1).contact).toBe(false);
     expect(spatialHintsAt(withContact, 2).contact).toBe(true);

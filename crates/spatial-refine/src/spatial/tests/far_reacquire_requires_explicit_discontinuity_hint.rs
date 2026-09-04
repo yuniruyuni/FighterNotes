@@ -34,6 +34,7 @@ fn far_reacquire_requires_explicit_discontinuity_hint() {
                 },
                 p2: ActorHint::default(),
                 contact_effect: false,
+                sides_certain: false,
             },
         )
         .unwrap();

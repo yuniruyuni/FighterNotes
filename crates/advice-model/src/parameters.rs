@@ -1,6 +1,8 @@
 // v16: 空間解析の追跡改善(静止確認・影アンカー・マージ領域の x 保持・
 // 接地判定の再較正)と、hitstop 区間のヒットスパーク検出を追加。
-pub const RULESET_VERSION: u32 = 16;
+// v17: ガード時の寒色スパーク検出、round 開始で学習した色による
+// 交差 window の P1/P2 同定、頭上スパークによる空中ヒットの確認。
+pub const RULESET_VERSION: u32 = 17;
 
 /// 「大被弾」とみなす HP ドロップ（暴れ指摘の対象）
 pub const BIG_DAMAGE: f32 = 0.10;

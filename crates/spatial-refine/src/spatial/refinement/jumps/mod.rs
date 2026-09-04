@@ -2,6 +2,7 @@ mod direction;
 mod samples;
 
 use super::super::parameters::{
+    CONTACT_AIRBORNE_MAX_Y, CONTACT_AIRBORNE_MIN_CONFIDENCE, CONTACT_HINT_TAIL_FRAMES,
     JUMP_AIR_SAMPLE_LOOKBACK, JUMP_SPATIAL_LOOKAHEAD, JUMP_SPATIAL_LOOKBACK,
 };
 use super::super::SpatialObservation;
@@ -51,11 +52,28 @@ fn refine_one(jump: &mut JumpEvent, observations: &[SpatialObservation]) {
     };
     let actor_samples =
         samples::actor_samples(observations, jump.side, sample_start, contact_frame);
+    let high_spark = high_contact_spark(observations, contact_frame);
     if jump.outcome == JumpOutcome::LandedHit {
-        samples::refine_landed_hit(jump, &actor_samples, contact_frame);
+        samples::refine_landed_hit(jump, &actor_samples, contact_frame, high_spark);
     } else {
-        samples::refine_incoming_hit(jump, &actor_samples);
+        samples::refine_incoming_hit(jump, &actor_samples, high_spark);
     }
+}
+
+/// hitstop 中のスパークが立ち姿勢の頭より明確に上にあれば、その接触は
+/// 空中の身体に当たっている。体の追跡が演出で切れた場面の傍証になる。
+fn high_contact_spark(observations: &[SpatialObservation], contact_frame: u32) -> bool {
+    observations
+        .iter()
+        .filter(|observation| {
+            observation.frame_index >= contact_frame
+                && observation.frame_index <= contact_frame.saturating_add(CONTACT_HINT_TAIL_FRAMES)
+        })
+        .filter_map(|observation| observation.contact.as_ref())
+        .any(|contact| {
+            contact.confidence >= CONTACT_AIRBORNE_MIN_CONFIDENCE
+                && contact.center.y < CONTACT_AIRBORNE_MAX_Y
+        })
 }
 
 #[cfg(test)]

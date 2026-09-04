@@ -60,6 +60,7 @@ describe("completeAnalysis", () => {
         teleport_hints: [],
         airborne_hints: [],
         contact_hints: [],
+        certain_side_hints: [],
       },
     ]);
 

@@ -28,29 +28,49 @@ pub(super) fn contact_observation(
     regions
         .iter()
         .enumerate()
-        // Saturated costumes also pass the effect-color test, so a region
-        // already claimed by an actor track is body motion, not a spark.
-        .filter(|(index, _)| !used_regions.contains(index))
-        .map(|(_, region)| region)
-        .filter(|region| region.effect_cells >= config.contact_min_effect_cells)
-        .filter(|region| {
-            let fraction = region.effect_cells as f32 / region.changed_cells.max(1) as f32;
-            fraction >= config.contact_min_effect_fraction
-        })
-        .filter_map(|region| region.effect_centroid().map(|centroid| (region, centroid)))
+        .filter(|(index, region)| spark_candidate(*index, region, used_regions, config))
+        .filter_map(|(_, region)| region.spark_centroid().map(|centroid| (region, centroid)))
         .filter(|(_, centroid)| {
             span.is_none_or(|(left, right)| centroid.x >= left && centroid.x <= right)
         })
-        .max_by_key(|(region, _)| (region.effect_cells, region.energy))
+        .max_by_key(|(region, _)| (region.spark_cells(), region.energy))
         .map(|(region, centroid)| {
-            let fraction = region.effect_cells as f32 / region.changed_cells.max(1) as f32;
+            let fraction = region.spark_cells() as f32 / region.changed_cells.max(1) as f32;
             ContactObservation {
                 center: centroid,
                 bounds: region.bounds,
-                effect_cells: region.effect_cells,
-                confidence: spark_confidence(fraction, region.effect_cells),
+                effect_cells: region.spark_cells(),
+                confidence: spark_confidence(fraction, region.spark_cells()),
             }
         })
+}
+
+/// スパークとして数えられる領域は 2 種類ある。
+///
+/// 1. 単独のスパーク: 本体が凍結していて、エフェクトだけが動いた領域。
+///    トラック未割り当てで、スパーク色の割合が高い。
+/// 2. 埋め込みスパーク: 実際の hitstop では本体も揺れるため、スパークが
+///    本体のモーション領域へ合体することがある。割合は薄まるが、
+///    スパーク色セルが「多く」て「凝集」していれば衣装の明色と区別できる
+///    (衣装は体に沿って分散する)。こちらはトラック割り当て済みでもよい。
+fn spark_candidate(
+    index: usize,
+    region: &MotionRegion,
+    used_regions: &[usize],
+    config: &SpatialConfig,
+) -> bool {
+    // ヒットの暖色とガードの寒色を合わせてスパークの証拠にする。
+    let cells = region.spark_cells();
+    if cells >= config.contact_min_effect_cells && !used_regions.contains(&index) {
+        let fraction = cells as f32 / region.changed_cells.max(1) as f32;
+        if fraction >= config.contact_min_effect_fraction {
+            return true;
+        }
+    }
+    cells >= config.contact_embedded_min_cells
+        && region
+            .spark_spread()
+            .is_some_and(|spread| spread <= config.contact_embedded_max_spread)
 }
 
 /// A spark must appear between the tracked bodies (with slack). Carried

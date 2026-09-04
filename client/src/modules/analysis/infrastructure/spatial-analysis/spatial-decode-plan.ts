@@ -71,5 +71,6 @@ export function spatialHintsAt(
     p1Airborne: active(window.airborne_hints, 1),
     p2Airborne: active(window.airborne_hints, 2),
     contact: inRange(window.contact_hints),
+    sidesCertain: inRange(window.certain_side_hints),
   };
 }

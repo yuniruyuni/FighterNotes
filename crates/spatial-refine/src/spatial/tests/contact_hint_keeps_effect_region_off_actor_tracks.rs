@@ -23,6 +23,7 @@ fn contact_hint_keeps_effect_region_off_actor_tracks() {
             allow_airborne: false,
         },
         contact_effect: false,
+        sides_certain: false,
     };
     extractor
         .observe_rgba(100, &first, WIDTH, HEIGHT, torso_hints)
@@ -39,6 +40,7 @@ fn contact_hint_keeps_effect_region_off_actor_tracks() {
             HEIGHT,
             SpatialHints {
                 contact_effect: true,
+                sides_certain: false,
                 ..SpatialHints::default()
             },
         )
@@ -78,6 +80,7 @@ fn without_the_hint_the_same_region_captures_the_track() {
             allow_airborne: false,
         },
         contact_effect: false,
+        sides_certain: false,
     };
     extractor
         .observe_rgba(100, &first, WIDTH, HEIGHT, torso_hints)

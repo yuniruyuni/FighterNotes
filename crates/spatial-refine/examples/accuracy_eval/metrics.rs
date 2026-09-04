@@ -94,6 +94,8 @@ pub struct ScenarioMetrics {
     camera_estimated: u32,
     pan_error_px_sum: f32,
     zoom_error_sum: f32,
+    identity_frames: u32,
+    identity_swapped: u32,
 }
 
 impl ScenarioMetrics {
@@ -114,6 +116,8 @@ impl ScenarioMetrics {
             camera_estimated: 0,
             pan_error_px_sum: 0.0,
             zoom_error_sum: 0.0,
+            identity_frames: 0,
+            identity_swapped: 0,
         }
     }
 
@@ -153,6 +157,18 @@ impl ScenarioMetrics {
             .add(gt.p1_anchor, gt.p1_air, actor_tuple(&observation.p1));
         self.p2
             .add(gt.p2_anchor, gt.p2_air, actor_tuple(&observation.p2));
+        // 同定: 両方を追跡できているフレームで、互いに逆の正解へ近ければ
+        // P1/P2 を取り違えている。
+        if let (Some(p1), Some(p2)) = (&observation.p1, &observation.p2) {
+            self.identity_frames += 1;
+            let p1_wrong =
+                (p1.anchor.x - gt.p2_anchor.0).abs() < (p1.anchor.x - gt.p1_anchor.0).abs();
+            let p2_wrong =
+                (p2.anchor.x - gt.p1_anchor.0).abs() < (p2.anchor.x - gt.p2_anchor.0).abs();
+            if p1_wrong && p2_wrong {
+                self.identity_swapped += 1;
+            }
+        }
 
         if let Some(screen_distance) = observation.screen_distance {
             self.distance_pairs.push((screen_distance, gt.separation));
@@ -185,6 +201,14 @@ impl ScenarioMetrics {
         println!("  {}", self.distance_report());
         println!("  {}", self.contact_report());
         println!("  {}", self.camera_report());
+        if self.identity_frames > 0 {
+            println!(
+                "  同定: 取り違え {}f / {}f ({:.1}%)",
+                self.identity_swapped,
+                self.identity_frames,
+                100.0 * self.identity_swapped as f32 / self.identity_frames as f32,
+            );
+        }
         println!();
     }
 

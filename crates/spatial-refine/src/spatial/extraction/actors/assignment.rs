@@ -1,5 +1,6 @@
 use super::super::super::SpatialConfig;
 use super::super::motion::MotionRegion;
+use super::super::signatures::color_distance;
 use super::track::{from_region, ActorTrack};
 
 pub(super) fn initial_tracks(
@@ -7,6 +8,7 @@ pub(super) fn initial_tracks(
     candidates: &[usize],
     frame_index: u32,
     allow_airborne: [bool; 2],
+    known_colors: Option<[[f32; 3]; 2]>,
     config: &SpatialConfig,
 ) -> Option<[ActorTrack; 2]> {
     let mut ranked = candidates.to_vec();
@@ -52,6 +54,24 @@ pub(super) fn initial_tracks(
     {
         std::cmp::Ordering::Less | std::cmp::Ordering::Equal => (first, second),
         std::cmp::Ordering::Greater => (second, first),
+    };
+    // 短い窓は側が入れ替わった状態から始まることがある。確定期間に学習した
+    // プレイヤーの色が「左=P2」の対応を明確に支持するときだけ、左=P1 の
+    // 仮定を覆す。
+    let (left, right) = match known_colors {
+        Some([p1_color, p2_color]) => {
+            let observed = [regions[left].mean_color(), regions[right].mean_color()];
+            let straight =
+                color_distance(observed[0], p1_color) + color_distance(observed[1], p2_color);
+            let swapped =
+                color_distance(observed[0], p2_color) + color_distance(observed[1], p1_color);
+            if swapped * config.signature_swap_margin < straight {
+                (right, left)
+            } else {
+                (left, right)
+            }
+        }
+        None => (left, right),
     };
     Some([
         from_region(&regions[left], frame_index, 0.55),

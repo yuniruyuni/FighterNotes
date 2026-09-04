@@ -26,4 +26,7 @@ pub struct SpatialHints {
     /// contact spark instead of being ignored as noise. Set this only from
     /// meter/HP contact evidence; stage effects can otherwise be misread.
     pub contact_effect: bool,
+    /// The frame is close enough to a round start that the players cannot
+    /// have crossed sides yet. Identity signatures are learned only here.
+    pub sides_certain: bool,
 }

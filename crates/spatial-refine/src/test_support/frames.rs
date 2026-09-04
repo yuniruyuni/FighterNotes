@@ -52,5 +52,6 @@ pub fn hints() -> SpatialHints {
             allow_airborne: false,
         },
         contact_effect: false,
+        sides_certain: false,
     }
 }

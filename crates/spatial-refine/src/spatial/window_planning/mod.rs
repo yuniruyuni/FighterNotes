@@ -4,6 +4,7 @@ mod jumps;
 mod model;
 mod punishes;
 mod round_bounds;
+mod sides;
 mod teleports;
 
 pub use model::{SpatialCandidateWindow, SpatialFrameRange, SpatialHintRange};
@@ -30,6 +31,7 @@ pub fn spatial_candidate_windows(events: &MatchEvents) -> Vec<SpatialCandidateWi
     ));
     let mut windows = merge_adjacent(windows);
     contacts::annotate(&mut windows, &events.contacts);
+    sides::annotate(&mut windows, &events.rounds);
     windows
 }
 
@@ -79,6 +81,7 @@ mod tests {
             }],
             airborne_hints: vec![],
             contact_hints: vec![],
+            certain_side_hints: vec![],
         }
     }
 

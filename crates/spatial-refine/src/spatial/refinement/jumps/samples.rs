@@ -28,6 +28,7 @@ pub(super) fn refine_landed_hit(
     jump: &mut JumpEvent,
     samples: &[(u32, &ActorObservation)],
     contact_frame: u32,
+    high_spark: bool,
 ) {
     let latest_airborne = samples
         .iter()
@@ -50,13 +51,20 @@ pub(super) fn refine_landed_hit(
     });
     if airborne_after_latest_ground >= JUMP_AIR_MIN_SAMPLES && airborne_is_latest {
         jump.takeoff_confirmed = true;
+    } else if high_spark {
+        // 体の追跡が切れていても、頭上のスパークは空中での接触の傍証。
+        jump.takeoff_confirmed = true;
     } else {
         jump.takeoff_confirmed = false;
         jump.outcome = JumpOutcome::Neutral;
     }
 }
 
-pub(super) fn refine_incoming_hit(jump: &mut JumpEvent, samples: &[(u32, &ActorObservation)]) {
+pub(super) fn refine_incoming_hit(
+    jump: &mut JumpEvent,
+    samples: &[(u32, &ActorObservation)],
+    high_spark: bool,
+) {
     // 第一段で「HP は読めないが、確認済み離陸の空中窓にメーター接触あり」
     // とした候補。SF6 は空中ガード不可なので、空間層が明確な接地を示さず
     // 演出で追跡不能な場合はヒットとして復元できる。
@@ -78,6 +86,9 @@ pub(super) fn refine_incoming_hit(jump: &mut JumpEvent, samples: &[(u32, &ActorO
         jump.takeoff_confirmed = false;
         jump.outcome = JumpOutcome::GroundedHit;
     } else if meter_air_contact {
+        jump.outcome = JumpOutcome::GotHit;
+    } else if high_spark {
+        jump.takeoff_confirmed = true;
         jump.outcome = JumpOutcome::GotHit;
     } else {
         // An observed window without stable airborne samples is not enough
@@ -126,7 +137,7 @@ mod tests {
             .map(|(index, actor)| (index as u32, actor))
             .collect();
         let mut jump = jump(outcome, takeoff_confirmed);
-        refine_incoming_hit(&mut jump, &samples);
+        refine_incoming_hit(&mut jump, &samples, false);
         jump
     }
 
@@ -158,13 +169,13 @@ mod tests {
         let airborne = actor(false);
         let recent = [(19, &airborne), (20, &airborne)];
         let mut confirmed = jump(JumpOutcome::LandedHit, false);
-        refine_landed_hit(&mut confirmed, &recent, 20);
+        refine_landed_hit(&mut confirmed, &recent, 20, false);
         assert!(confirmed.takeoff_confirmed);
         assert_eq!(confirmed.outcome, JumpOutcome::LandedHit);
 
         let too_old = [(10, &airborne), (11, &airborne)];
         let mut rejected = jump(JumpOutcome::LandedHit, true);
-        refine_landed_hit(&mut rejected, &too_old, 20);
+        refine_landed_hit(&mut rejected, &too_old, 20, false);
         assert!(!rejected.takeoff_confirmed);
         assert_eq!(rejected.outcome, JumpOutcome::Neutral);
     }
