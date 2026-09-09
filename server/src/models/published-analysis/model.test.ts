@@ -151,6 +151,18 @@ describe("PublishedAnalysis model", () => {
     expect(tsArray(clientShareSource, "SHAREABLE_FINDING_KINDS")).toEqual([
       ...FINDING_KINDS,
     ]);
+    // client の共有ボタンはこの一覧で新しい ruleset を弾く。ここが取り残されると
+    // サーバーが受理できるのに UI だけ共有不可と表示する(v16-v18 で実際に起きた)。
+    const clientGateSource = readFileSync(
+      join(
+        import.meta.dir,
+        "../../../../client/src/modules/sharing/domain/published-analysis.ts",
+      ),
+      "utf8",
+    );
+    expect(
+      tsNumberArray(clientGateSource, "SHAREABLE_RULESET_VERSIONS"),
+    ).toEqual([...SUPPORTED_RULESET_VERSIONS]);
     expect(tsArray(clientShareSource, "SHAREABLE_ASSESSMENTS")).toEqual([
       ...FINDING_ASSESSMENTS,
     ]);
@@ -543,6 +555,14 @@ function tsArray(source: string, name: string): string[] {
   ).exec(source);
   if (!match) throw new Error(`${name} not found`);
   return quotedValues(match[1]);
+}
+
+function tsNumberArray(source: string, name: string): number[] {
+  const match = new RegExp(
+    `export const ${name} = \\[([\\s\\S]*?)\\] as const;`,
+  ).exec(source);
+  if (!match) throw new Error(`${name} not found`);
+  return [...match[1].matchAll(/\d+/g)].map((value) => Number(value[0]));
 }
 
 function tsObjectIds(source: string, name: string): string[] {

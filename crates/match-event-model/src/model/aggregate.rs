@@ -117,6 +117,37 @@ pub struct MatchEvents {
 }
 
 impl MatchEvents {
+    /// frame でその側が画面端を背負っていたと確認できたか。
+    ///
+    /// span は候補 window 内でしか観測できないため、false は「端ではなかった」
+    /// ではなく「端と確認できなかった」を意味する。ヒットの瞬間は追跡が乱れて
+    /// span が閉じやすいので、終端から tail フレームまでは端のままとみなす。
+    pub fn cornered_at(&self, side: u8, frame: u32, tail: u32) -> bool {
+        self.corner_spans.iter().any(|span| {
+            span.side == side
+                && frame >= span.start_frame
+                && frame <= span.end_frame.saturating_add(tail)
+        })
+    }
+
+    /// [start_frame, end_frame] のうち、その側が端を背負っていたと確認できた
+    /// フレーム数。span は下限の観測なので、この値も下限になる。
+    pub fn cornered_frames_between(&self, side: u8, start_frame: u32, end_frame: u32) -> u32 {
+        self.corner_spans
+            .iter()
+            .filter(|span| span.side == side)
+            .map(|span| {
+                let overlap_start = span.start_frame.max(start_frame);
+                let overlap_end = span.end_frame.min(end_frame);
+                if overlap_start > overlap_end {
+                    0
+                } else {
+                    overlap_end - overlap_start + 1
+                }
+            })
+            .sum()
+    }
+
     pub fn attack_evidence_for_damage(
         &self,
         damage: &DamageEvent,
@@ -166,5 +197,62 @@ impl MatchEvents {
         linked
             .exact_damage_is_strictly_reliable()
             .then_some(super_evidence)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn events_with_spans(spans: Vec<CornerSpan>) -> MatchEvents {
+        MatchEvents {
+            corner_spans: spans,
+            ..crate::test_support::empty_events()
+        }
+    }
+
+    #[test]
+    fn cornered_at_requires_matching_side_and_span_range_with_tail() {
+        let events = events_with_spans(vec![CornerSpan {
+            side: 1,
+            start_frame: 100,
+            end_frame: 200,
+        }]);
+        assert!(!events.cornered_at(1, 99, 0));
+        assert!(events.cornered_at(1, 100, 0));
+        assert!(events.cornered_at(1, 200, 0));
+        assert!(!events.cornered_at(1, 201, 0));
+        // 終端の tail 猶予は境界まで含む。
+        assert!(events.cornered_at(1, 230, 30));
+        assert!(!events.cornered_at(1, 231, 30));
+        // 側が違えば同じ区間でも端ではない。
+        assert!(!events.cornered_at(2, 150, 30));
+    }
+
+    #[test]
+    fn cornered_frames_between_sums_clipped_overlaps_for_one_side() {
+        let events = events_with_spans(vec![
+            CornerSpan {
+                side: 1,
+                start_frame: 100,
+                end_frame: 200,
+            },
+            CornerSpan {
+                side: 1,
+                start_frame: 300,
+                end_frame: 400,
+            },
+            CornerSpan {
+                side: 2,
+                start_frame: 100,
+                end_frame: 400,
+            },
+        ]);
+        // 両端が span 内: 包含区間ぶんだけ。境界フレームも 1 と数える。
+        assert_eq!(events.cornered_frames_between(1, 150, 160), 11);
+        // span を跨ぐ区間: それぞれの重なりの和。
+        assert_eq!(events.cornered_frames_between(1, 150, 350), 51 + 51);
+        // 重ならない区間は 0。相手側の span は数えない。
+        assert_eq!(events.cornered_frames_between(1, 210, 290), 0);
     }
 }

@@ -349,3 +349,70 @@ fn a_situation_that_never_happened_has_no_bias() {
     assert_eq!(opportunities(&decisions, DecisionSituation::Advantage), 0);
     assert_eq!(option_bias(&decisions, DecisionSituation::Advantage), None);
 }
+
+/// 端の確認は、その読み合いで圧を受けている側に付く。不利は自分、
+/// 有利と起き攻めは相手。span 終端の直後は追跡の乱れとみなして猶予する。
+#[test]
+fn cornered_follows_the_defending_side_of_each_situation() {
+    use crate::match_events::CornerSpan;
+    let mut events = empty_events();
+    events.corner_spans.push(CornerSpan {
+        side: 1,
+        start_frame: 90,
+        end_frame: 95,
+    });
+    events.corner_spans.push(CornerSpan {
+        side: 2,
+        start_frame: 400,
+        end_frame: 460,
+    });
+    // 不利(圧を受けるのは自分=1): span 終端から猶予内は端、外れれば未確認。
+    events.presses_while_minus.push(minus_press(
+        100,
+        DefensiveActionKind::Strike,
+        MinusPressOutcome::CounterHit,
+    ));
+    events.presses_while_minus.push(minus_press(
+        200,
+        DefensiveActionKind::Strike,
+        MinusPressOutcome::CounterHit,
+    ));
+    // 攻撃しなかった不利場面(NoAttack)にも同じ確認が付く。
+    events.minus_situations.push(MinusSituationEvent {
+        side: 1,
+        frame: 110,
+        minus_frames: 5,
+        fastest_action: None,
+        action_frame: None,
+        pressed: String::new(),
+        outcome: None,
+        drop: 0.0,
+        confidence: EventConfidence::High,
+        source_contact_frame: 100,
+        round_no: 1,
+    });
+    // 有利と起き攻め(圧を受けるのは相手=2): 相手側の span を見る。
+    events
+        .advantage_situations
+        .push(advantage(420, None, AdvantageOutcome::Reset));
+    events
+        .knockdowns
+        .push(knockdown(450, OkizemeOutcome::Meaty));
+
+    let decisions = collect_decisions(&events, 1);
+
+    let cornered: Vec<_> = decisions
+        .iter()
+        .map(|event| (event.frame, event.cornered))
+        .collect();
+    assert_eq!(
+        cornered,
+        vec![
+            (100, true),
+            (110, true),
+            (200, false),
+            (420, true),
+            (450, true)
+        ]
+    );
+}

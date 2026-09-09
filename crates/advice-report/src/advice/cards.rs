@@ -20,6 +20,7 @@ pub(crate) fn build_advice_cards(
         detect_own_jumps(events, own),
         detect_burnout(events, own),
         detect_committed_button_vs_di(events, own, own_index),
+        detect_cornered_di_guard(events, own),
         detect_mashing(features, events, own, own_index),
         detect_press_while_minus(events, own),
         detect_throw_while_minus(events, own),
@@ -153,6 +154,13 @@ fn card_missing_requirements(
             (own_input, OwnInput),
             (opponent_input, OpponentInput),
             (both_meter, FrameMeter),
+            (own_hp, OwnHp),
+        ],
+        // 相手DIの検出は入力とメーター、端の確認は空間観測に依る。
+        "cornered_di_guard" => vec![
+            (opponent_input, OpponentInput),
+            (both_meter, FrameMeter),
+            (spatial, Spatial),
             (own_hp, OwnHp),
         ],
         "mashing"

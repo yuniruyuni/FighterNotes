@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS published_analyses (
   schema_version SMALLINT NOT NULL
     CHECK (schema_version = 1),
   ruleset_version INTEGER NOT NULL
-    CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18)),
+    CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19)),
   presentation_revision SMALLINT NOT NULL
     CHECK (presentation_revision IN (1)),
   own_character TEXT NOT NULL
@@ -57,7 +57,7 @@ ALTER TABLE published_analyses
   DROP CONSTRAINT IF EXISTS published_analyses_ruleset_version_check;
 ALTER TABLE published_analyses
   ADD CONSTRAINT published_analyses_ruleset_version_check
-  CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18));
+  CHECK (ruleset_version IN (3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19));
 -- 既存環境のcharacter制約にも追加キャラクターを反映する。
 ALTER TABLE published_analyses
   DROP CONSTRAINT IF EXISTS published_analyses_own_character_check;
@@ -97,11 +97,11 @@ CREATE TABLE IF NOT EXISTS published_analysis_findings (
   analysis_id TEXT NOT NULL
     REFERENCES published_analyses (id) ON DELETE CASCADE,
   ordinal SMALLINT NOT NULL
-    CHECK (ordinal BETWEEN 0 AND 22),
+    CHECK (ordinal BETWEEN 0 AND 23),
   kind TEXT NOT NULL
     CHECK (kind IN (
       'layered_defense', 'teleport_defense', 'anti_air', 'own_jumps',
-      'burnout', 'committed_button_vs_di', 'mashing',
+      'burnout', 'committed_button_vs_di', 'cornered_di_guard', 'mashing',
       'press_while_minus', 'throw_while_minus',
       'advantage_abandoned',
       'guard_break', 'reversal_punished', 'low_scaling_super',
@@ -133,7 +133,7 @@ ALTER TABLE published_analysis_findings
   ADD CONSTRAINT published_analysis_findings_kind_check
   CHECK (kind IN (
     'layered_defense', 'teleport_defense', 'anti_air', 'own_jumps',
-    'burnout', 'committed_button_vs_di', 'mashing',
+    'burnout', 'committed_button_vs_di', 'cornered_di_guard', 'mashing',
     'press_while_minus', 'throw_while_minus',
     'advantage_abandoned',
     'guard_break', 'reversal_punished', 'low_scaling_super',
@@ -146,7 +146,7 @@ ALTER TABLE published_analysis_findings
   DROP CONSTRAINT IF EXISTS published_analysis_findings_ordinal_check;
 ALTER TABLE published_analysis_findings
   ADD CONSTRAINT published_analysis_findings_ordinal_check
-  CHECK (ordinal BETWEEN 0 AND 22);
+  CHECK (ordinal BETWEEN 0 AND 23);
 GRANT SELECT, INSERT ON published_analysis_findings TO fighter_app;
 
 CREATE TABLE IF NOT EXISTS published_analysis_tactics (

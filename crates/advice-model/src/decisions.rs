@@ -54,11 +54,23 @@ pub struct DecisionEvent {
     pub result: DecisionResult,
     pub drop: f32,
     pub round_no: u32,
+    /// この読み合いで圧を受けている側（Disadvantage は自分、Advantage と
+    /// Okizeme は相手）が画面端を背負っていたと確認できたか。端では後ろ
+    /// 下がりが消え、正解の分布が中央と変わる。corner span は候補 window
+    /// 内でしか観測できないため、false は「端ではなかった」ではなく
+    /// 「端と確認できなかった」を意味する（下限）。
+    pub cornered: bool,
 }
 
 /// 確度の高い判断機会だけを同じ形へ並べる。
 pub fn collect_decisions(events: &MatchEvents, own: u8) -> Vec<DecisionEvent> {
     let mut out = Vec::new();
+    let opponent = 3 - own;
+    // 接触の瞬間は追跡が乱れて span が閉じやすいので、被弾の帰属と同じ
+    // 猶予で端を判定する。
+    let cornered = |side: u8, frame: u32| {
+        events.cornered_at(side, frame, crate::parameters::CORNERED_DAMAGE_TAIL)
+    };
 
     // 不利フレーム後。最速打撃／最速投げを選んだ機会は presses_while_minus が
     // 結果まで持ち、それ以外の回答は minus_situations にだけ残る。
@@ -82,6 +94,7 @@ pub fn collect_decisions(events: &MatchEvents, own: u8) -> Vec<DecisionEvent> {
             },
             drop: press.drop,
             round_no: press.round_no,
+            cornered: cornered(own, press.frame),
         });
     }
     for situation in events
@@ -99,6 +112,7 @@ pub fn collect_decisions(events: &MatchEvents, own: u8) -> Vec<DecisionEvent> {
             result: DecisionResult::Survived,
             drop: 0.0,
             round_no: situation.round_no,
+            cornered: cornered(own, situation.frame),
         });
     }
 
@@ -124,6 +138,7 @@ pub fn collect_decisions(events: &MatchEvents, own: u8) -> Vec<DecisionEvent> {
             },
             drop: advantage.drop,
             round_no: advantage.round_no,
+            cornered: cornered(opponent, advantage.frame),
         });
     }
 
@@ -146,6 +161,7 @@ pub fn collect_decisions(events: &MatchEvents, own: u8) -> Vec<DecisionEvent> {
             result: DecisionResult::Survived,
             drop: 0.0,
             round_no: down.round_no,
+            cornered: cornered(opponent, down.wakeup_frame),
         });
     }
 

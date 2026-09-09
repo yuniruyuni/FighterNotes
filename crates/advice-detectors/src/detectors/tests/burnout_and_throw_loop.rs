@@ -95,6 +95,91 @@ fn the_causes_are_counted_separately() {
     );
 }
 
+/// 端と重なったバーンアウトは、確認できた重なりの秒数を下限として示し、
+/// 該当クリップに端の印を付ける。端の確認が無ければ何も言わない。
+#[test]
+fn corner_overlap_is_reported_as_a_lower_bound() {
+    use crate::match_events::CornerSpan;
+    let mut events = events_with_burnouts(vec![
+        burnout(100, 5, BurnoutCause::SelfInitiated),
+        burnout(1000, 5, BurnoutCause::SelfInitiated),
+    ]);
+    let no_corner = detect_burnout(&events, 1).expect("提示される");
+    assert!(
+        !no_corner.description.contains("画面端"),
+        "端の確認が無いのに言及している: {}",
+        no_corner.description
+    );
+
+    // 期間 [100, 400] のうち [220, 400] と、期間の外の span が重なる。
+    events.corner_spans.push(CornerSpan {
+        side: 1,
+        start_frame: 220,
+        end_frame: 500,
+    });
+    let card = detect_burnout(&events, 1).expect("提示される");
+    assert!(
+        card.description
+            .contains("うち少なくとも 3 秒は画面端を背負ったまま"),
+        "重なりを下限の秒数として示していない: {}",
+        card.description
+    );
+    assert!(card.description.contains("DIをガードしてもスタン"));
+    assert_eq!(card.evidence[0].label, "R1 バーンアウト（画面端）");
+    assert_eq!(
+        card.evidence[1].label, "R1 バーンアウト",
+        "端の確認が無い期間に印を付けている"
+    );
+
+    // 相手側の span は自分のバーンアウトの話ではない。
+    events.corner_spans[0].side = 2;
+    let other_side = detect_burnout(&events, 1).expect("提示される");
+    assert!(!other_side.description.contains("画面端"));
+
+    // ちょうど 1 秒の確認は秒数言及の境界に乗る。
+    events.corner_spans[0] = CornerSpan {
+        side: 1,
+        start_frame: 1000,
+        end_frame: 1059,
+    };
+    let exactly_one_second = detect_burnout(&events, 1).expect("提示される");
+    assert!(
+        exactly_one_second
+            .description
+            .contains("うち少なくとも 1 秒は画面端"),
+        "{}",
+        exactly_one_second.description
+    );
+
+    // 1 秒未満の確認は、秒数を出さずに事実だけ述べる。クリップの
+    // 「画面端」印と本文が食い違わないようにするため。
+    events.corner_spans[0].end_frame = 1029;
+    let under_one_second = detect_burnout(&events, 1).expect("提示される");
+    assert!(
+        !under_one_second.description.contains("秒は画面端"),
+        "1 秒未満に秒数を出している: {}",
+        under_one_second.description
+    );
+    assert!(
+        under_one_second
+            .description
+            .contains("画面端を背負ったまま過ごした時間も確認できています"),
+        "{}",
+        under_one_second.description
+    );
+    assert!(
+        under_one_second
+            .description
+            .contains("DIをガードしてもスタン"),
+        "{}",
+        under_one_second.description
+    );
+    assert_eq!(
+        under_one_second.evidence[1].label,
+        "R1 バーンアウト（画面端）"
+    );
+}
+
 /// 理由を決められなかった期間は保留として残す。無理に振り分けると、
 /// 見直す場面を取り違える。
 #[test]

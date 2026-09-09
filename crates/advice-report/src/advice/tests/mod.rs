@@ -16,6 +16,7 @@ mod super_art_stats_and_advice;
 mod test_anti_air_card;
 mod test_big_hits_card;
 mod test_burnout_card;
+mod test_cornered_di_guard_card;
 mod test_mashing_excludes_beaten_by_invincible;
 mod test_mashing_excludes_jump_attributed_damage;
 mod test_mashing_excludes_minus_press_attributed;

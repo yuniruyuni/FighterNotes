@@ -27,6 +27,14 @@ pub fn detect_throw_while_minus(events: &MatchEvents, own: u8) -> Option<AdviceC
     };
     let hp_lost: f32 = losses.iter().map(|event| event.drop).sum();
     let selection_percent = selections.len() * 100 / opportunities;
+    let cornered_losses = losses.iter().filter(|event| event.cornered).count();
+    let corner_note = if cornered_losses > 0 {
+        format!(
+            "被弾のうち {cornered_losses} 回は画面端を背負っていたと確認できた場面です。端では下がって仕切り直せないぶん最速の回答が読まれやすく、負けたときの被弾も大きくなります。"
+        )
+    } else {
+        String::new()
+    };
     Some(AdviceCard {
         id: "throw_while_minus".to_string(),
         kind,
@@ -46,7 +54,7 @@ pub fn detect_throw_while_minus(events: &MatchEvents, own: u8) -> Option<AdviceC
                 "入力まで確認できた不利フレーム後の判断 {} 回中、{} 回（{}%）で最速投げを選び、そのうち {} 回、合計 {:.0}% 被弾しています。この試合で同様の被弾は {} 回です。この件数だけでは、相手の投げを読んだ回答が打撃に負けたのか、最速投げへ偏っているのかは{OBSERVATION_REVIEW_CAVEAT}。",
                 opportunities, selections.len(), selection_percent, losses.len(), hp_lost * 100.0, losses.len()
             ),
-        },
+        } + &corner_note,
         practice: match kind {
             AdviceKind::Diagnosis => "相手の有利連係を記録し、ガード継続・遅らせ投げ抜け・後退・最速投げを順に試します。同じ回答を連続して選ばず、相手の打撃と投げの比率に合わせて散らしましょう。",
             _ => "クリップで、投げを読んで自分から投げたのかを確認します。意図した読みなら単発の失敗として扱い、同じ不利状況で毎回投げている場合だけ回答を散らしましょう。",
@@ -54,7 +62,11 @@ pub fn detect_throw_while_minus(events: &MatchEvents, own: u8) -> Option<AdviceC
         evidence: losses.iter().map(|event| EvidenceClip {
             frame: event.frame,
             end_frame: None,
-            label: format!("R{} 不利{}Fから最速投げで被弾 -{:.0}%", event.round_no, event.frames, event.drop * 100.0),
+            label: format!(
+                "R{} 不利{}Fから最速投げで被弾 -{:.0}%{}",
+                event.round_no, event.frames, event.drop * 100.0,
+                if event.cornered { "（画面端）" } else { "" }
+            ),
         }).collect(),
     })
 }
