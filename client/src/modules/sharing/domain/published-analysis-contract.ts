@@ -7,6 +7,7 @@ export const SHAREABLE_FINDING_KINDS = [
   "own_jumps",
   "burnout",
   "committed_button_vs_di",
+  "cornered_di_guard",
   "mashing",
   "press_while_minus",
   "throw_while_minus",

@@ -40,6 +40,29 @@ pub fn detect_burnout(events: &MatchEvents, own: u8) -> Option<AdviceCard> {
         "突入直前は自分のゲージ使用 {} 回、ガードで削られた場面 {} 回、両方 {} 回、分類保留 {} 回です",
         self_spent, forced, mixed, unknown
     );
+    // corner span は候補 window 内でしか観測できないため下限。1 秒未満の
+    // 確認は秒数としては意味を持たないので、数字を出さずに事実だけ述べる
+    // (クリップの「画面端」印と本文が食い違わないようにする)。
+    let cornered_frames = |period: &crate::match_events::BurnoutPeriod| {
+        events.cornered_frames_between(period.side, period.start_frame, period.end_frame)
+    };
+    let total_cornered_frames = periods
+        .iter()
+        .map(|period| cornered_frames(period))
+        .sum::<u32>();
+    let cornered_sec = total_cornered_frames as f32 / 60.0;
+    const CORNER_RISK: &str =
+        "端でのバーンアウト中はDIをガードしてもスタンするため、この重なりを最優先で避けましょう。";
+    let corner_note = if cornered_sec >= 1.0 {
+        format!(
+            "うち少なくとも {:.0} 秒は画面端を背負ったままでした。{CORNER_RISK}",
+            cornered_sec
+        )
+    } else if total_cornered_frames > 0 {
+        format!("画面端を背負ったまま過ごした時間も確認できています。{CORNER_RISK}")
+    } else {
+        String::new()
+    };
     Some(AdviceCard {
         id: "burnout".to_string(),
         kind: AdviceKind::Statistic,
@@ -52,15 +75,19 @@ pub fn detect_burnout(events: &MatchEvents, own: u8) -> Option<AdviceCard> {
         severity: hp_lost + 0.03 * periods.len() as f32,
         hp_lost: Some(hp_lost),
         description: format!(
-            "バーンアウトに {} 回入り、{}、その間の被ダメは {:.0}%、与ダメは {:.0}% でした（ラウンド {}）。{}。被ダメだけでなく、攻めのために使い切ったのか、守りで削り切られたのかを分けて見直しましょう。",
+            "バーンアウトに {} 回入り、{}、その間の被ダメは {:.0}%、与ダメは {:.0}% でした（ラウンド {}）。{}。{}被ダメだけでなく、攻めのために使い切ったのか、守りで削り切られたのかを分けて見直しましょう。",
             periods.len(), duration, hp_lost * 100.0, hp_dealt * 100.0,
-            rounds.iter().map(u32::to_string).collect::<Vec<_>>().join(", "), causes
+            rounds.iter().map(u32::to_string).collect::<Vec<_>>().join(", "), causes, corner_note
         ),
         practice: "各クリップの直前 10 秒を見て、攻めを継続するための消費だったか、ガードで使わされたかを分類しましょう。不要だった消費を 1 つだけ減らす方針にすると再現しやすくなります。".to_string(),
         evidence: periods.iter().map(|period| EvidenceClip {
             frame: period.start_frame,
             end_frame: None,
-            label: format!("R{} バーンアウト", period.round_no),
+            label: format!(
+                "R{} バーンアウト{}",
+                period.round_no,
+                if cornered_frames(period) > 0 { "（画面端）" } else { "" }
+            ),
         }).collect(),
     })
 }

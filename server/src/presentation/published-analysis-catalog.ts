@@ -120,6 +120,20 @@ export const FINDING_PRESENTATIONS: Record<FindingKind, FindingPresentation> = {
     },
     tone: "warning",
   },
+  cornered_di_guard: {
+    title: "画面端でDIをガードして壁やられを繰り返している",
+    description:
+      "画面端を背負った状態で相手のDIをガードし、壁やられから確定反撃を受けた場面が複数確認されています。",
+    practice:
+      "端を背負った状態からDI返しを最優先で練習し、間に合わない距離では前ジャンプや垂直ジャンプでの回避も確認します。",
+    observation: {
+      title: "画面端でDIをガードした場面",
+      description: `画面端で相手のDIをガードし、壁やられから被弾した事実です。単発では返しの用意が無かったのか、とっさに間に合わなかっただけなのかを${OBSERVATION_REVIEW_CAVEAT}。`,
+      practice:
+        "DIを見てから返す猶予があったかを確認し、猶予があったならDI返しの反応練習を、無かったなら端での間合い管理を見直します。",
+    },
+    tone: "critical",
+  },
   mashing: {
     title: "守勢でボタンを押して繰り返し被弾している",
     description:

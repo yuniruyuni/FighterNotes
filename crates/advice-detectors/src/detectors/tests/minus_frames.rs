@@ -834,3 +834,80 @@ fn the_throw_practice_changes_when_it_becomes_a_bias() {
         biased.practice
     );
 }
+
+// ── 画面端の注記 ─────────────────────────────────────────────────────────
+
+/// 端と確認できた被弾には、本文で回数を、クリップに印を付ける。
+/// 確認が無いのに端の話をすると、指摘の根拠が崩れる。
+#[test]
+fn cornered_losses_are_annotated_on_both_minus_cards() {
+    use crate::match_events::CornerSpan;
+    let mut events = events_with(
+        vec![
+            press(
+                100,
+                DefensiveActionKind::Strike,
+                MinusPressOutcome::CounterHit,
+                0.12,
+            ),
+            press(
+                300,
+                DefensiveActionKind::Strike,
+                MinusPressOutcome::CounterHit,
+                0.12,
+            ),
+            press(
+                500,
+                DefensiveActionKind::Throw,
+                MinusPressOutcome::CounterHit,
+                0.20,
+            ),
+        ],
+        vec![],
+    );
+    let strike_plain = detect_press_while_minus(&events, 1).expect("提示される");
+    assert!(
+        !strike_plain.description.contains("画面端"),
+        "端の確認が無いのに言及している: {}",
+        strike_plain.description
+    );
+    let throw_plain = detect_throw_while_minus(&events, 1).expect("提示される");
+    assert!(
+        !throw_plain.description.contains("画面端"),
+        "端の確認が無いのに言及している: {}",
+        throw_plain.description
+    );
+
+    // frame 100 と 500 だけが span(+ 終端の猶予)に入る。
+    events.corner_spans.push(CornerSpan {
+        side: 1,
+        start_frame: 80,
+        end_frame: 110,
+    });
+    events.corner_spans.push(CornerSpan {
+        side: 1,
+        start_frame: 400,
+        end_frame: 480,
+    });
+
+    let strike = detect_press_while_minus(&events, 1).expect("提示される");
+    assert!(
+        strike.description.contains("被弾のうち 1 回は画面端"),
+        "端の被弾数を注記していない: {}",
+        strike.description
+    );
+    assert!(strike.evidence[0].label.contains("（画面端）"));
+    assert!(
+        !strike.evidence[1].label.contains("画面端"),
+        "端の確認が無いクリップへ印を付けている: {}",
+        strike.evidence[1].label
+    );
+
+    let throw = detect_throw_while_minus(&events, 1).expect("提示される");
+    assert!(
+        throw.description.contains("被弾のうち 1 回は画面端"),
+        "投げ側にも同じ注記が要る: {}",
+        throw.description
+    );
+    assert!(throw.evidence[0].label.contains("（画面端）"));
+}

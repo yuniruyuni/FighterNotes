@@ -32,11 +32,11 @@ pub fn build_tactic_stats(
     // どちらも下限値になる。
     for damage in events.damage.iter().filter(|damage| {
         event_in_round(damage.round_no, damage.start_frame)
-            && events.corner_spans.iter().any(|span| {
-                span.side == damage.victim
-                    && damage.start_frame >= span.start_frame
-                    && damage.start_frame <= span.end_frame + crate::CORNERED_DAMAGE_TAIL
-            })
+            && events.cornered_at(
+                damage.victim,
+                damage.start_frame,
+                crate::CORNERED_DAMAGE_TAIL,
+            )
     }) {
         if damage.victim == own {
             stats.cornered_hits_taken += 1;

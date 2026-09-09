@@ -172,6 +172,7 @@ describe("published analysis presentation", () => {
       "anti_air",
       "own_jumps",
       "committed_button_vs_di",
+      "cornered_di_guard",
       "mashing",
       "press_while_minus",
       "throw_while_minus",

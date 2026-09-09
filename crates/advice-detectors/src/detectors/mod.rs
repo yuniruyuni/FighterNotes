@@ -18,7 +18,7 @@ pub use big_hits::detect_big_hits;
 pub use burnout::detect_burnout;
 pub use defense::{detect_guard_break, detect_layered_defense, detect_teleport_defense};
 pub use direction::dir_arrow;
-pub use drive_impact::detect_committed_button_vs_di;
+pub use drive_impact::{detect_committed_button_vs_di, detect_cornered_di_guard};
 pub use jumps::{detect_anti_air, detect_own_jumps};
 pub use pressure::{
     detect_advantage_abandoned, detect_mashing, detect_press_while_minus, detect_throw_while_minus,

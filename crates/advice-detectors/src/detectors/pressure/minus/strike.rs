@@ -38,6 +38,14 @@ pub fn detect_press_while_minus(events: &MatchEvents, own: u8) -> Option<AdviceC
                 .count()
         })
         .unwrap_or("?");
+    let cornered_losses = losses.iter().filter(|event| event.cornered).count();
+    let corner_note = if cornered_losses > 0 {
+        format!(
+            "被弾のうち {cornered_losses} 回は画面端を背負っていたと確認できた場面です。端では後ろ下がりで距離を取れないため、同じ暴れがより深く狩られます。"
+        )
+    } else {
+        String::new()
+    };
     Some(AdviceCard {
         id: "press_while_minus".to_string(),
         kind,
@@ -57,7 +65,7 @@ pub fn detect_press_while_minus(events: &MatchEvents, own: u8) -> Option<AdviceC
                 "入力まで確認できた不利フレーム後の判断 {} 回中、{} 回（{}%）で最速打撃を選び、そのうち {} 回、合計 {:.0}% 被弾しています。この試合で同様の被弾は {} 回です。この結果だけでは、投げを読んだ打撃が偶然負けたのか、回答が偏っているのかは{OBSERVATION_REVIEW_CAVEAT}。最も多かった入力は {} でした。",
                 opportunities, selections.len(), selection_percent, losses.len(), hp_lost * 100.0, losses.len(), common_button
             ),
-        },
+        } + &corner_note,
         practice: match kind {
             AdviceKind::Diagnosis => "有利を取る打撃と投げをランダム再生し、ガード継続を基準にします。そこへ遅らせ投げ抜け・後退・最速打撃を混ぜ、同じ回答を連続して選ばない練習をしましょう。",
             _ => "クリップで、投げを読んで押したのか、連係が終わると思って押したのかを確認します。意図した読みなら単発の失敗として扱い、普段も同じ不利幅で押している場合だけ選択率を下げましょう。",
@@ -65,7 +73,11 @@ pub fn detect_press_while_minus(events: &MatchEvents, own: u8) -> Option<AdviceC
         evidence: losses.iter().map(|event| EvidenceClip {
             frame: event.frame,
             end_frame: None,
-            label: format!("R{} 不利{}Fで{}を押して被弾 -{:.0}%", event.round_no, event.frames, event.pressed, event.drop * 100.0),
+            label: format!(
+                "R{} 不利{}Fで{}を押して被弾 -{:.0}%{}",
+                event.round_no, event.frames, event.pressed, event.drop * 100.0,
+                if event.cornered { "（画面端）" } else { "" }
+            ),
         }).collect(),
     })
 }

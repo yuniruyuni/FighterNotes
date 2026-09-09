@@ -8,7 +8,7 @@
 目的は試合を完全再現することではなく、複数の映像証拠が一致した場面を抽出し、
 利用者が動画を見直す順序を作ることである。
 
-判定は決定的なルールベース処理で、現在の `RULESET_VERSION` は 18。
+判定は決定的なルールベース処理で、現在の `RULESET_VERSION` は 19。
 機械学習モデルや外部推論 API は使わない。
 
 ## 入力条件
@@ -269,7 +269,7 @@ coverage は「試合画面を確定ラウンドへ割り当てられた割合�
 中央攻撃表示はHP被弾列への帰属率も検証する。SAゲージを十分に読めない場合、検出イベントが
 無いことを「使用0回」とは扱わない。
 
-現在のカード ID は次の23種である。
+現在のカード ID は次の24種である。
 
 | ID | 対象 |
 | --- | --- |
@@ -279,6 +279,7 @@ coverage は「試合画面を確定ラウンドへ割り当てられた割合�
 | `own_jumps` | 自分の jump が落とされた場面 |
 | `burnout` | burnout 時間、damage 収支、突入原因 |
 | `committed_button_vs_di` | 通常技実行中に受けたDrive Impact |
+| `cornered_di_guard` | 画面端でDrive Impactをガードして受けた壁やられ |
 | `mashing` | 守勢の button 押下と被弾の帰属 |
 | `press_while_minus` | 不利 frame 後の最速打撃 |
 | `throw_while_minus` | 不利 frame 後の最速投げ |

@@ -230,3 +230,92 @@ pub fn detect_committed_button_vs_di(
             .collect(),
     })
 }
+
+/// 壁やられからの確定反撃をこの場面の損失として帰属する窓。壁やられの
+/// のけぞりが数十フレーム続くため、直後被弾の窓(80F)より長く取る。
+const WALL_SPLAT_RESULT_WINDOW: u32 = 150;
+
+/// 画面端で相手のDIをガードした場面。
+///
+/// 中央なら押し返されて終わる同じガードが、端では壁やられになり確定反撃を
+/// 献上する。ガード入力は正しいので操作の失敗ではなく、端を背負ったときに
+/// DIへの返し(DI返し・パリィ・無敵技)を用意していなかったことを指摘する。
+pub fn detect_cornered_di_guard(events: &MatchEvents, own: u8) -> Option<AdviceCard> {
+    let opponent = 3 - own;
+    let mut guarded = Vec::new();
+    for impact in events.drive_impacts.iter().filter(|impact| {
+        impact.side == opponent
+            && impact.outcome == DriveImpactOutcome::Blocked
+            && impact.confidence == EventConfidence::High
+    }) {
+        let Some(contact_frame) = impact.contact_frame else {
+            continue;
+        };
+        if !events.cornered_at(own, contact_frame, crate::CORNERED_DAMAGE_TAIL) {
+            continue;
+        }
+        let drop: f32 = events
+            .damage
+            .iter()
+            .filter(|damage| {
+                damage.victim == own
+                    && damage.round_no == impact.round_no
+                    && damage.start_frame >= contact_frame
+                    && damage.start_frame <= contact_frame.saturating_add(WALL_SPLAT_RESULT_WINDOW)
+            })
+            .map(|damage| damage.drop)
+            .sum();
+        guarded.push((impact, drop));
+    }
+    if guarded.is_empty() {
+        return None;
+    }
+    let repeated = guarded.len() >= MIN_REPEATED_NEGATIVE_OUTCOMES;
+    let kind = if repeated {
+        AdviceKind::Diagnosis
+    } else {
+        AdviceKind::Observation
+    };
+    let hp_lost: f32 = guarded.iter().map(|(_, drop)| drop).sum();
+    Some(AdviceCard {
+        id: "cornered_di_guard".to_string(),
+        kind,
+        confidence: EventConfidence::High,
+        title: match kind {
+            AdviceKind::Diagnosis => "画面端でDIをガードして壁やられを繰り返している",
+            _ => "画面端でDIをガードした場面",
+        }
+        .to_string(),
+        severity: hp_lost + 0.03 * guarded.len() as f32,
+        hp_lost: Some(hp_lost),
+        description: if repeated {
+            format!(
+                "画面端を背負った状態で相手のDIをガードした場面を {} 回確認し、壁やられからの反撃で合計 {:.0}% 被弾しています。中央なら押し返されて終わる同じガードが、端では確定反撃の献上になります。ガードは間違いではないぶん、端でだけ回答を変える必要がある点が改善対象です。",
+                guarded.len(),
+                hp_lost * 100.0
+            )
+        } else {
+            format!(
+                "画面端を背負った状態で相手のDIをガードし、壁やられから {:.0}% 被弾した場面が1回あります。単発では、返しの用意が無かったのか、とっさに間に合わなかっただけなのかは{OBSERVATION_REVIEW_CAVEAT}。",
+                hp_lost * 100.0
+            )
+        },
+        practice: match kind {
+            AdviceKind::Diagnosis => "トレモで相手レコードにDIを仕込み、端を背負った状態からDI返しを最優先で練習します。返しが間に合わない距離では前ジャンプや垂直ジャンプで壁やられだけ回避する選択も確認しましょう。",
+            _ => "クリップで、DIを見てから返す猶予があったかを確認します。猶予があったならDI返しの反応練習を、無かったなら端でDIを撃たれる前の間合い管理を見直しましょう。",
+        }
+        .to_string(),
+        evidence: guarded
+            .iter()
+            .map(|(impact, drop)| EvidenceClip {
+                frame: impact.input_frame,
+                end_frame: None,
+                label: format!(
+                    "R{} 端でDIをガード -{:.0}%",
+                    impact.round_no,
+                    drop * 100.0
+                ),
+            })
+            .collect(),
+    })
+}

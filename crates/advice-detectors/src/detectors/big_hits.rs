@@ -58,6 +58,7 @@ fn evidence_window(card_id: &str, evidence: &EvidenceClip) -> Option<(u32, u32)>
         "layered_defense"
         | "mashing"
         | "committed_button_vs_di"
+        | "cornered_di_guard"
         | "teleport_defense"
         | "reversal_punished"
         | "punish_fail" => Some((
