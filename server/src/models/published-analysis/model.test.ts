@@ -160,9 +160,9 @@ describe("PublishedAnalysis model", () => {
       ),
       "utf8",
     );
-    expect(tsNumberArray(clientGateSource, "SHAREABLE_RULESET_VERSIONS")).toEqual([
-      ...SUPPORTED_RULESET_VERSIONS,
-    ]);
+    expect(
+      tsNumberArray(clientGateSource, "SHAREABLE_RULESET_VERSIONS"),
+    ).toEqual([...SUPPORTED_RULESET_VERSIONS]);
     expect(tsArray(clientShareSource, "SHAREABLE_ASSESSMENTS")).toEqual([
       ...FINDING_ASSESSMENTS,
     ]);
