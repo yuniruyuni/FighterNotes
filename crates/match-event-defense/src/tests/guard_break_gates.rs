@@ -285,6 +285,7 @@ fn a_jump_that_was_anti_aired_belongs_to_the_jump_events() {
         contact_frame: Some(100),
         takeoff_confirmed: true,
         air_end: 140,
+        contact_height: None,
         round_no: 1,
     };
 
@@ -307,6 +308,7 @@ fn an_unconfirmed_jump_leaves_the_break_in_place() {
         contact_frame: Some(100),
         takeoff_confirmed: false,
         air_end: 140,
+        contact_height: None,
         round_no: 1,
     };
 

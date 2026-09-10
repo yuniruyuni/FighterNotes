@@ -353,6 +353,7 @@ fn a_stopped_jump_belongs_to_the_jump_card() {
         contact_frame: Some(1000),
         takeoff_confirmed: true,
         air_end: 1030,
+        contact_height: None,
         round_no: 1,
     }];
 

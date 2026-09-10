@@ -24,6 +24,7 @@ fn projectile_and_teleport_remain_independent_compound_threats() {
         contact_frame: None,
         takeoff_confirmed: true,
         air_end: 210,
+        contact_height: None,
         round_no: 1,
     }];
     let damage = vec![DamageEvent {

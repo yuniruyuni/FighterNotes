@@ -54,9 +54,38 @@ pub fn build_tactic_stats(
     }) {
         stats.anti_air_opportunities += 1;
         match jump.outcome {
-            JumpOutcome::GotHit => stats.anti_air_successes += 1,
+            JumpOutcome::GotHit => {
+                stats.anti_air_successes += 1;
+                // 接触高さは観測できた迎撃だけが持つ。high/deep の合計は
+                // 迎撃総数に届かない下限値になる。
+                if let Some(height) = jump.contact_height {
+                    if height >= crate::JUMP_CONTACT_HIGH {
+                        stats.anti_air_contacts_high += 1;
+                    } else {
+                        stats.anti_air_contacts_deep += 1;
+                    }
+                }
+            }
             JumpOutcome::LandedHit => stats.jump_ins_allowed += 1,
             _ => {}
+        }
+    }
+
+    // 通った自分の飛び込みの当て高さ。早当ては通っていても、ガードされた
+    // ときに反撃を渡す当て方なので、内訳を下限値で数える。
+    for jump in events.jumps.iter().filter(|jump| {
+        event_in_round(jump.round_no, jump.frame)
+            && jump.side == own
+            && jump.takeoff_confirmed
+            && jump.direction != JumpDirection::Backward
+            && jump.outcome == JumpOutcome::LandedHit
+    }) {
+        if let Some(height) = jump.contact_height {
+            if height >= crate::JUMP_CONTACT_HIGH {
+                stats.own_jump_contacts_high += 1;
+            } else {
+                stats.own_jump_contacts_deep += 1;
+            }
         }
     }
 

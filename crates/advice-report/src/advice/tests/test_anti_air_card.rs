@@ -23,6 +23,7 @@ fn test_anti_air_card() {
             contact_frame: None,
             takeoff_confirmed: true,
             air_end: (1000 + 500 * k as u32) + 47,
+            contact_height: None,
             round_no: 1,
         });
     }

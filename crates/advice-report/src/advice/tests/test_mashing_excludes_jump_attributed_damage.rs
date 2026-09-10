@@ -50,6 +50,7 @@ fn test_mashing_excludes_jump_attributed_damage() {
         contact_frame: None,
         takeoff_confirmed: true,
         air_end: (1160) + 47,
+        contact_height: None,
         round_no: 1,
     });
 

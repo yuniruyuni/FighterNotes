@@ -38,6 +38,7 @@ fn damage_breakdown_is_exclusive_and_preserves_all_damage() {
         contact_frame: Some(115),
         takeoff_confirmed: true,
         air_end: 130,
+        contact_height: None,
         round_no: 1,
     });
     ev.throw_actions.push(ThrowActionEvent {

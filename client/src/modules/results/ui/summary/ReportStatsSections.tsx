@@ -443,6 +443,26 @@ export function TacticStatsSection({
       "空間解析の認識率が不足しています。",
     ),
     coverageAwareItem(
+      spatialAvailable,
+      [
+        `引きつけ ${stats.anti_air_contacts_deep ?? 0} / 高め ${stats.anti_air_contacts_high ?? 0}`,
+        "対空の接触高さ",
+        "衝突位置を観測できた迎撃だけの内訳です。高めは相手の身長の1.25倍より上で触った早めの迎撃を指します",
+      ],
+      (stats.anti_air_contacts_deep ?? 0) + (stats.anti_air_contacts_high ?? 0),
+      "空間解析の認識率が不足しています。",
+    ),
+    coverageAwareItem(
+      spatialAvailable,
+      [
+        `深め ${stats.own_jump_contacts_deep ?? 0} / 早当て ${stats.own_jump_contacts_high ?? 0}`,
+        "自分の飛び込みの当て高さ",
+        "衝突位置を観測できた飛び込みだけの内訳です。早当てはガードされたときに反撃を渡しやすい当て方です",
+      ],
+      (stats.own_jump_contacts_deep ?? 0) + (stats.own_jump_contacts_high ?? 0),
+      "空間解析の認識率が不足しています。",
+    ),
+    coverageAwareItem(
       ownInputAvailable &&
         meterAvailable &&
         contactsAvailable &&

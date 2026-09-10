@@ -225,6 +225,7 @@ pub fn extract_jumps(inputs: JumpInputs<'_>) -> Vec<JumpEvent> {
                     contact_frame: None,
                     takeoff_confirmed,
                     air_end,
+                    contact_height: None,
                     round_no,
                 },
                 air_hit_end,

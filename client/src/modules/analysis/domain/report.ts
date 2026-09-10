@@ -241,6 +241,14 @@ export interface TacticStats {
   cornered_hits_taken?: number;
   /** 相手を画面端に追い込んで与えた被弾。同じく下限値。 */
   cornered_hits_dealt?: number;
+  /** 迎撃の接触が防御側の身長の5/4より上だった数。観測できた分だけの下限値。 */
+  anti_air_contacts_high?: number;
+  /** 迎撃の接触が頭の高さ付近まで引きつけられていた数。同じく下限値。 */
+  anti_air_contacts_deep?: number;
+  /** 通った自分の飛び込みのうち高い位置で当てた数。同じく下限値。 */
+  own_jump_contacts_high?: number;
+  /** 通った自分の飛び込みのうち深く当てた数。同じく下限値。 */
+  own_jump_contacts_deep?: number;
   minus_defense_opportunities: number;
   disadvantage_decisions: number;
   disadvantage_top_option_percent: number;

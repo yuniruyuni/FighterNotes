@@ -194,6 +194,21 @@ pub struct TacticStats {
     /// 相手を画面端に追い込んで与えた被弾。同じく下限値。
     #[serde(default)]
     pub cornered_hits_dealt: u32,
+    /// 空中で迎撃した相手ジャンプのうち、接触高さを観測できて「高い位置」
+    /// (防御側の身長の 5/4 以上)だったもの。早めの迎撃を表す。観測は
+    /// 候補 window 内に限るため、deep と合わせても迎撃総数に届かない下限値。
+    #[serde(default)]
+    pub anti_air_contacts_high: u32,
+    /// 同じく、頭の高さ付近まで引きつけて触った迎撃。
+    #[serde(default)]
+    pub anti_air_contacts_deep: u32,
+    /// 通った自分の飛び込みのうち、接触高さを観測できて「高い位置」
+    /// だったもの。早当て気味で、ガードされていれば反撃されやすい当て方。
+    #[serde(default)]
+    pub own_jump_contacts_high: u32,
+    /// 同じく、防御側の体に深く重なる高さで当てた飛び込み。
+    #[serde(default)]
+    pub own_jump_contacts_deep: u32,
     /// 自分が守る側になった投げ。抜けと被投げの分母。
     /// 相手が届かない位置で振った投げ（空振り）は、守る機会ではないので含めない。
     #[serde(default)]

@@ -73,6 +73,7 @@ pub fn jump(frame: u32, outcome: JumpOutcome, input_dir: &str) -> crate::match_e
         contact_frame: Some(frame + 20),
         takeoff_confirmed: false,
         air_end: frame + 47,
+        contact_height: None,
         round_no: 1,
     }
 }
