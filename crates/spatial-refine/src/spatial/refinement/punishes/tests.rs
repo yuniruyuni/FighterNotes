@@ -360,3 +360,211 @@ fn a_landed_punish_is_left_alone() {
 
     assert_eq!(punishes[0].reachability, PunishReachability::Confirmed);
 }
+
+// ── めり込みガードによる確認 ─────────────────────────────────────────────
+
+fn guard_spark(x: f32, confidence: f32) -> crate::spatial::ContactObservation {
+    crate::spatial::ContactObservation {
+        center: SpatialPoint::new(x, 0.75),
+        bounds: SpatialRect::new(x - 0.02, 0.7, x + 0.02, 0.8),
+        effect_cells: 6,
+        confidence,
+    }
+}
+
+/// 攻撃側(P2)の、身長の物差しとして 2 進で正確に割れる立ち姿勢。
+/// anchor 1/2、足元 7/8、頭 3/8 → 身長 1/2。
+fn exact_attacker(top: f32) -> ActorObservation {
+    ActorObservation {
+        anchor: SpatialPoint::new(0.5, 0.875),
+        bounds: SpatialRect::new(0.45, top, 0.55, 0.875),
+        confidence: 0.72,
+        observed: true,
+        ground_anchor: true,
+        discontinuity: false,
+    }
+}
+
+/// 距離帯では断定できない近距離の見逃しでも、ガードスパークが攻撃側の
+/// 体から 1/2 身長以内(めり込み)なら、技は根元で当たっており最速の
+/// 反撃が届いたと確認できる。境界ちょうども確認に入る。
+#[test]
+fn a_deep_guard_spark_confirms_a_missed_punish() {
+    let mut punishes = vec![chance(PunishOutcome::Missed)];
+    let mut observations = vec![
+        observation(89, DistanceBand::Close),
+        observation(91, DistanceBand::Close),
+    ];
+    observations[1].p2 = Some(exact_attacker(0.375));
+    // anchor 0.5 から 0.25 = 身長 0.5 のちょうど半分。
+    observations[1].contact = Some(guard_spark(0.75, 0.8));
+
+    refine(&mut punishes, &observations);
+
+    assert_eq!(punishes[0].reachability, PunishReachability::Confirmed);
+}
+
+/// 先端ガード・弱いスパーク・物差しにならない攻撃側の追跡は、どれも
+/// 何も断定しない(Unknown のまま)。めり込みは確認専用で、先端を
+/// 「届かない」へ倒すことはない。
+#[test]
+fn tip_and_unreliable_evidence_stay_unknown() {
+    let run = |mutate: &dyn Fn(&mut Vec<SpatialObservation>, &mut PunishChance)| {
+        let mut punishes = vec![chance(PunishOutcome::Missed)];
+        let mut observations = vec![
+            observation(89, DistanceBand::Close),
+            observation(91, DistanceBand::Close),
+        ];
+        observations[1].p2 = Some(exact_attacker(0.375));
+        observations[1].contact = Some(guard_spark(0.75, 0.8));
+        mutate(&mut observations, &mut punishes[0]);
+        refine(&mut punishes, &observations);
+        punishes[0].reachability
+    };
+
+    // 境界より遠い先端ガード((0.78125-0.5)/0.5 = 0.5625)。
+    assert_eq!(
+        run(&|o, _| o[1].contact = Some(guard_spark(0.78125, 0.8))),
+        PunishReachability::Unknown
+    );
+    // スパークの確度が足りない(0.5 が境界)。
+    assert_eq!(
+        run(&|o, _| o[1].contact = Some(guard_spark(0.75, 0.49))),
+        PunishReachability::Unknown
+    );
+    assert_eq!(
+        run(&|o, _| o[1].contact = Some(guard_spark(0.75, 0.5))),
+        PunishReachability::Confirmed,
+        "確度の境界ちょうどは使う"
+    );
+    // 攻撃側の箱が最低身長(1/8)を割る。ちょうどなら物差しになる。
+    assert_eq!(
+        run(&|o, _| {
+            o[1].p2 = Some(exact_attacker(0.775));
+            o[1].contact = Some(guard_spark(0.5625, 0.8));
+        }),
+        PunishReachability::Unknown
+    );
+    assert_eq!(
+        run(&|o, _| {
+            o[1].p2 = Some(exact_attacker(0.75));
+            o[1].contact = Some(guard_spark(0.5625, 0.8));
+        }),
+        PunishReachability::Confirmed,
+        "身長 1/8 ちょうど、スパーク 0.0625 = 1/2 身長"
+    );
+    // 空中の攻撃側は立ち姿勢の物差しにならない。
+    assert_eq!(
+        run(&|o, _| {
+            let mut airborne = exact_attacker(0.375);
+            airborne.ground_anchor = false;
+            o[1].p2 = Some(airborne);
+            o[0].p2 = None;
+        }),
+        PunishReachability::Unknown
+    );
+    // ガード起点の接触フレームが無ければ、どのスパークの話か分からない。
+    assert_eq!(
+        run(&|_, p| p.source_contact_frame = None),
+        PunishReachability::Unknown
+    );
+}
+
+/// スパークは接触から hitstop 尾部(10F)までのものだけを使い、複数ある
+/// ときは最も確かな観測に従う。攻撃側のサンプルは接触の 20F 前まで遡る。
+#[test]
+fn spark_and_attacker_sample_windows_are_bounded() {
+    let run = |spark_frame: u32, attacker_frame: u32, spark_x: f32| {
+        let mut punishes = vec![chance(PunishOutcome::Missed)];
+        let mut observations = vec![
+            observation(attacker_frame, DistanceBand::Close),
+            observation(spark_frame, DistanceBand::Close),
+        ];
+        observations[0].p2 = Some(exact_attacker(0.375));
+        observations[1].p1 = None;
+        observations[1].p2 = None;
+        observations[1].contact = Some(guard_spark(spark_x, 0.8));
+        refine(&mut punishes, &observations);
+        punishes[0].reachability
+    };
+
+    // 接触(90)から +10F までのスパークは使う。+11F は別の接触かもしれない。
+    assert_eq!(run(100, 91, 0.75), PunishReachability::Confirmed);
+    assert_eq!(run(101, 91, 0.75), PunishReachability::Unknown);
+    // 接触より前のスパークはこのガードのものではない。
+    assert_eq!(run(89, 91, 0.75), PunishReachability::Unknown);
+    // 攻撃側のサンプルは接触の 20F 前(70)まで。それより古い立ち姿勢は
+    // 歩き・しゃがみで既に別の姿勢になっている可能性が高い。
+    assert_eq!(run(91, 70, 0.75), PunishReachability::Confirmed);
+    assert_eq!(run(91, 69, 0.75), PunishReachability::Unknown);
+
+    // 複数のスパークは最も確かな観測に従う。確かな方が先端なら断定しない。
+    let mut punishes = vec![chance(PunishOutcome::Missed)];
+    let mut observations = vec![
+        observation(91, DistanceBand::Close),
+        observation(93, DistanceBand::Close),
+    ];
+    observations[0].p2 = Some(exact_attacker(0.375));
+    observations[0].contact = Some(guard_spark(0.78125, 0.9));
+    observations[1].contact = Some(guard_spark(0.75, 0.6));
+    refine(&mut punishes, &observations);
+    assert_eq!(punishes[0].reachability, PunishReachability::Unknown);
+}
+
+/// めり込みの確認は、距離帯で答えが出なかった見逃しにだけ足す。
+/// 技を出した空振りは既存の距離帯判断が担い、離れていたと確定した
+/// 場面を上書きすることもない。
+#[test]
+fn deep_contact_only_upgrades_an_unknown_missed_punish() {
+    let deep = |outcome, band| {
+        let mut punishes = vec![chance(outcome)];
+        let mut observations = vec![observation(89, band), observation(91, band)];
+        observations[1].p2 = Some(exact_attacker(0.375));
+        observations[1].contact = Some(guard_spark(0.75, 0.8));
+        refine(&mut punishes, &observations);
+        punishes[0].reachability
+    };
+
+    // 中〜遠距離が続いた見逃しは届かないままにする。スパークの座標より
+    // 距離帯の継続観測の方が強い証拠になる。
+    assert_eq!(
+        deep(PunishOutcome::Missed, DistanceBand::Mid),
+        PunishReachability::OutOfRange
+    );
+    // 空振りは技の到達距離の話で、めり込みの確認対象ではない。
+    // Far 連続で離れていたと確定する場面を触らない。
+    assert_eq!(
+        deep(PunishOutcome::WhiffFail, DistanceBand::Far),
+        PunishReachability::OutOfRange
+    );
+}
+
+/// P2 側の見逃しでは攻撃側は P1。side を取り違えると、関係ない方の体を
+/// 物差しにしてしまう。
+#[test]
+fn a_deep_spark_is_measured_against_the_p1_attacker_for_a_p2_punish() {
+    let mut punishes = vec![PunishChance {
+        side: 2,
+        ..chance(PunishOutcome::Missed)
+    }];
+    let mut observations = vec![
+        observation(89, DistanceBand::Close),
+        observation(91, DistanceBand::Close),
+    ];
+    // 攻撃側 P1 を 2 進で正確な立ち姿勢に置き、その 1/2 身長以内に
+    // スパークを置く。P2(anchor 0.6、身長 0.2)からは遠い。
+    let attacker = ActorObservation {
+        anchor: SpatialPoint::new(0.25, 0.875),
+        bounds: SpatialRect::new(0.2, 0.375, 0.3, 0.875),
+        confidence: 0.72,
+        observed: true,
+        ground_anchor: true,
+        discontinuity: false,
+    };
+    observations[1].p1 = Some(attacker);
+    observations[1].contact = Some(guard_spark(0.5, 0.8));
+
+    refine(&mut punishes, &observations);
+
+    assert_eq!(punishes[0].reachability, PunishReachability::Confirmed);
+}
