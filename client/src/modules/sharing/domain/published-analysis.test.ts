@@ -535,7 +535,9 @@ describe("share projection", () => {
     }
 
     // v9以降はSA/CA集計を必須にするため、同じ形で個別に確認する。
-    for (const rulesetVersion of [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]) {
+    for (const rulesetVersion of [
+      9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+    ]) {
       const current = report();
       current.ruleset_version = rulesetVersion;
       Object.assign(current.tactic_stats, {
