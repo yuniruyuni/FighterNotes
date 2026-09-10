@@ -192,6 +192,16 @@ pub(super) fn classify_digit(
         return Some(0);
     }
 
+    // 2 と 3 は左上(上端の横棒と中段の横棒の間)が空くフォント。
+    // ここまで塗られた塊は、ヒットエフェクトの白が数字と結合した
+    // 偽グリフであり、塗り率の消去法が中身の詰まった塊を 3 と断定して
+    // しまう。判らないものとして確定させない。連結していない背景の
+    // 白は実在の数字を弾く理由にならないため、かたまり本体だけを見る。
+    let mask = component_mask(rgba, frame_width, patch, component)?;
+    if mask_region_fill(&mask, component, (0.00, 0.38, 0.25, 0.42)) >= 0.30 {
+        return None;
+    }
+
     let right_upper = region_fill(
         rgba,
         frame_width,
@@ -223,14 +233,15 @@ pub(super) fn classify_digit(
     }
 }
 
-/// かたまりの内側に、外へ通じていない領域があるか。0 と A を
-/// 3 や C から見分ける手がかり。
-fn has_enclosed_hole(
+/// 外接矩形の中の白画素のうち、かたまり本体(seed と連結した部分)だけを
+/// true にしたマスク。外接矩形にはステージやエフェクトの白画素も入るため、
+/// 形の判定はこのマスクを基準にする。seed が白くない場合は None。
+fn component_mask(
     rgba: &[u8],
     frame_width: usize,
     patch: Patch,
     component: WhiteComponent,
-) -> bool {
+) -> Option<Vec<bool>> {
     let width = component.width();
     let height = component.height();
     let mut near_white = vec![false; width * height];
@@ -245,13 +256,11 @@ fn has_enclosed_hole(
         }
     }
 
-    // 外接矩形の中にはステージやエフェクトの白画素も入る。文字の seed と
-    // 繋がっている部分だけに限定し、背景が穴を閉じたように見えるのを防ぐ。
     let seed_x = component.seed_x - component.x0;
     let seed_y = component.seed_y - component.y0;
     let seed = seed_y * width + seed_x;
     if !near_white[seed] {
-        return false;
+        return None;
     }
     let mut white = vec![false; width * height];
     white[seed] = true;
@@ -266,6 +275,24 @@ fn has_enclosed_hole(
             }
         }
     }
+    Some(white)
+}
+
+/// かたまりの内側に、外へ通じていない領域があるか。0 と A を
+/// 3 や C から見分ける手がかり。
+fn has_enclosed_hole(
+    rgba: &[u8],
+    frame_width: usize,
+    patch: Patch,
+    component: WhiteComponent,
+) -> bool {
+    let width = component.width();
+    let height = component.height();
+    // 背景が穴を閉じたように見えるのを防ぐため、文字の seed と繋がって
+    // いる部分だけを見る。
+    let Some(mut white) = component_mask(rgba, frame_width, patch, component) else {
+        return false;
+    };
 
     // アンチエイリアスで輪郭に生じる 1px 程度の隙間だけを閉じる。
     let original = white.clone();
@@ -326,6 +353,34 @@ fn enqueue_background(
 }
 
 /// かたまりの外接矩形を割合で切った区画の、白画素の占める割合。
+/// かたまり本体の画素だけを数えた、外接矩形内の部分領域の塗り率。
+fn mask_region_fill(
+    mask: &[bool],
+    component: WhiteComponent,
+    normalized: (f32, f32, f32, f32),
+) -> f32 {
+    let width = component.width();
+    let height = component.height();
+    let (nx0, nx1, ny0, ny1) = normalized;
+    let x0 = (width as f32 * nx0) as usize;
+    let x1 = ((width as f32 * nx1).ceil() as usize).min(width);
+    let y0 = (height as f32 * ny0) as usize;
+    let y1 = ((height as f32 * ny1).ceil() as usize).min(height);
+    let mut white = 0usize;
+    let mut total = 0usize;
+    for y in y0..y1 {
+        for x in x0..x1 {
+            white += usize::from(mask[y * width + x]);
+            total += 1;
+        }
+    }
+    if total == 0 {
+        0.0
+    } else {
+        white as f32 / total as f32
+    }
+}
+
 fn region_fill(
     rgba: &[u8],
     frame_width: usize,

@@ -74,6 +74,35 @@ fn three_with_leftward_serifs_is_not_mistaken_for_zero() {
     assert_eq!(read.value, 3.0);
 }
 
+/// ヒットエフェクトの白が数字と結合して幅広の塊になった場面。実映像では
+/// OD 技の炎が「1」と繋がった塊が、塗り率の消去法で「3」と確信されて
+/// 偽の SA 消費(3.00 → 実値)を作った。2 と 3 は左上が空くフォント
+/// なので、そこまで塗られた塊は数字として確定させない。
+#[test]
+fn a_digit_merged_with_effect_white_is_uncertain_not_three() {
+    let mut rgba = vec![0; WIDTH * HEIGHT * 4];
+    paint_gauge(&mut rgba, "right", 1, 0.3);
+    let (label_x, label_y, _, label_height) = PACKED_LABEL_RIGHT;
+    let digit_x = label_x + 11;
+    let digit_y = label_y + 8;
+    let digit_height = label_height - 12;
+
+    // 「1」(右端の縦棒)の左へ、数字と連結した白い塊(エフェクト)を
+    // 足す。結合した塊は縦棒より幅広で、左上まで塗られている。
+    fill_rect(
+        &mut rgba,
+        digit_x,
+        digit_y,
+        26,
+        digit_height,
+        [245, 245, 245],
+    );
+
+    let read = super_gauge_read_from_hud_strip(&rgba, WIDTH as u32, "right");
+    assert!(read.uncertain, "結合した塊を数字として確定させている");
+    assert_eq!(read.displayed_level, None);
+}
+
 #[test]
 fn detached_bright_background_does_not_close_the_three_glyph() {
     let mut rgba = vec![0; WIDTH * HEIGHT * 4];

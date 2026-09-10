@@ -74,7 +74,7 @@ function issues(value: unknown) {
 
 describe("publishedAnalysisCandidateSchema refinements", () => {
   test("support外rulesetのfieldと理由を返す", () => {
-    for (const rulesetVersion of [2, 22, 999]) {
+    for (const rulesetVersion of [2, 23, 999]) {
       expect(issues({ ...candidate(), rulesetVersion })).toEqual([
         {
           code: "custom",
