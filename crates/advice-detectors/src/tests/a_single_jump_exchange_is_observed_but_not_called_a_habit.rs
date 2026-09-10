@@ -11,6 +11,7 @@ fn a_single_jump_exchange_is_observed_but_not_called_a_habit() {
         contact_frame: Some(frame + 20),
         takeoff_confirmed: true,
         air_end: frame + 47,
+        contact_height: None,
         round_no: 1,
     };
 

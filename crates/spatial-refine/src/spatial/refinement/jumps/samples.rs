@@ -125,6 +125,7 @@ mod tests {
             contact_frame: Some(20),
             takeoff_confirmed,
             air_end: 40,
+            contact_height: None,
             round_no: 1,
         }
     }

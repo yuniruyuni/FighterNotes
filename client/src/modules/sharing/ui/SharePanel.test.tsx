@@ -175,7 +175,7 @@ describe("SharePanel", () => {
             <SharePanel
               context={context}
               manageHref="/manage"
-              report={syntheticAdviceReport({ ruleset_version: 20 })}
+              report={syntheticAdviceReport({ ruleset_version: 21 })}
             />
           </PublicationProvider>
         </SharingServicesProvider>

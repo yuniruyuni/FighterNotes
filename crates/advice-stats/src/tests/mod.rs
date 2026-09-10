@@ -5,6 +5,7 @@ mod support;
 mod cornered_hits_are_lower_bounds;
 mod drive_spend_is_measured_not_assumed;
 mod every_new_tactic_counter_is_pinned;
+mod jump_contact_heights_are_lower_bounds;
 mod super_gauge_coverage;
 mod tactic_stats_count_every_drive_outcome;
 mod tactic_stats_count_every_pressure_variant;

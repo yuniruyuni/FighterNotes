@@ -12,6 +12,7 @@ fn backward_jump_hit_does_not_emit_approach_advice() {
         contact_frame: Some(120),
         takeoff_confirmed: true,
         air_end: 147,
+        contact_height: None,
         round_no: 1,
     });
     ev.damage.push(DamageEvent {

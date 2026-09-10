@@ -114,6 +114,7 @@ fn jump(side: u8, frame: u32, outcome: JumpOutcome) -> JumpEvent {
         contact_frame: Some(frame + 20),
         takeoff_confirmed: true,
         air_end: frame + 45,
+        contact_height: None,
         round_no: 1,
     }
 }

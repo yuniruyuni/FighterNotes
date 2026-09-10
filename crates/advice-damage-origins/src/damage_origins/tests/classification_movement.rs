@@ -37,6 +37,7 @@ fn teleport_and_opponent_jump_in_are_classified() {
         contact_frame: Some(300),
         takeoff_confirmed: true,
         air_end: 310,
+        contact_height: None,
         round_no: 1,
     });
 

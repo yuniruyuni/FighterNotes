@@ -17,6 +17,7 @@ fn tactic_stats_only_count_confirmed_interactions() {
         contact_frame: Some(frame + 20),
         takeoff_confirmed: true,
         air_end: frame + 44,
+        contact_height: None,
         round_no: 1,
     };
     ev.jumps = vec![
