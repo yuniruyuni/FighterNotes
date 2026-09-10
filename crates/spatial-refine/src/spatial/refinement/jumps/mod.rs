@@ -2,8 +2,8 @@ mod direction;
 mod samples;
 
 use super::super::parameters::{
-    CONTACT_AIRBORNE_MAX_Y, CONTACT_AIRBORNE_MIN_CONFIDENCE, CONTACT_HEIGHT_DEFENDER_LOOKBACK,
-    CONTACT_HEIGHT_MIN_DEFENDER_HEIGHT, CONTACT_HINT_TAIL_FRAMES, JUMP_AIR_SAMPLE_LOOKBACK,
+    CONTACT_ACTOR_SAMPLE_LOOKBACK, CONTACT_AIRBORNE_MAX_Y, CONTACT_AIRBORNE_MIN_CONFIDENCE,
+    CONTACT_HINT_TAIL_FRAMES, HEIGHT_REFERENCE_MIN_ACTOR_HEIGHT, JUMP_AIR_SAMPLE_LOOKBACK,
     JUMP_SPATIAL_LOOKAHEAD, JUMP_SPATIAL_LOOKBACK,
 };
 use super::super::SpatialObservation;
@@ -84,7 +84,7 @@ fn contact_height(
         .filter(|contact| contact.confidence >= CONTACT_AIRBORNE_MIN_CONFIDENCE)
         .max_by(|a, b| a.confidence.total_cmp(&b.confidence))?;
     let defender = 3 - jumper_side;
-    let sample_start = contact_frame.saturating_sub(CONTACT_HEIGHT_DEFENDER_LOOKBACK);
+    let sample_start = contact_frame.saturating_sub(CONTACT_ACTOR_SAMPLE_LOOKBACK);
     let sample_end = contact_frame.saturating_add(CONTACT_HINT_TAIL_FRAMES);
     let defender_samples = samples::actor_samples(observations, defender, sample_start, sample_end);
     let (_, standing) = defender_samples
@@ -92,7 +92,7 @@ fn contact_height(
         .rev()
         .find(|(_, actor)| actor.ground_anchor)?;
     let defender_height = standing.bounds.bottom - standing.bounds.top;
-    if defender_height < CONTACT_HEIGHT_MIN_DEFENDER_HEIGHT {
+    if defender_height < HEIGHT_REFERENCE_MIN_ACTOR_HEIGHT {
         return None;
     }
     Some((standing.bounds.bottom - spark.center.y) / defender_height)
