@@ -37,6 +37,7 @@ fn corner(start_frame: u32, end_frame: u32) -> CornerSpan {
         side: 1,
         start_frame,
         end_frame,
+        ending: CornerEnding::Unobserved,
     }
 }
 

@@ -1,5 +1,5 @@
 use super::common::is_biased;
-use crate::match_events::{AdvantageOutcome, EventConfidence, MatchEvents};
+use crate::match_events::{AdvantageOutcome, CornerEnding, EventConfidence, MatchEvents};
 use crate::{AdviceCard, AdviceKind, EvidenceClip, OBSERVATION_REVIEW_CAVEAT};
 
 /// ガードさせて有利を取ったのに攻めを継続せず、ターンを返した場面。
@@ -38,6 +38,32 @@ pub fn detect_advantage_abandoned(events: &MatchEvents, own: u8) -> Option<Advic
     let abandoned_percent = abandoned.len() * 100 / opportunities.len();
     let average_plus = abandoned.iter().map(|event| event.plus_frames).sum::<u32>() as f32
         / abandoned.len() as f32;
+    // 位置の観点。相手を端に追い込んだ区間の終わり方は、攻めの放棄と
+    // 地続きの話なので、確認できた分だけをこのカードに添える。
+    let corner_ending = |ending: CornerEnding| {
+        events
+            .corner_spans
+            .iter()
+            .filter(|span| span.side != own && span.ending == ending)
+            .count()
+    };
+    let escapes = corner_ending(CornerEnding::SideSwap);
+    let releases = corner_ending(CornerEnding::Separated);
+    let mut endings = Vec::new();
+    if escapes > 0 {
+        endings.push(format!("{escapes} 回は左右の入れ替えを許して"));
+    }
+    if releases > 0 {
+        endings.push(format!("{releases} 回は距離が開いて"));
+    }
+    let corner_note = if endings.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "また、相手を画面端に追い込んだ区間のうち、終わり方を確認できた範囲で {}終わっています。端の優位は入れ替え 1 回で失われるため、追い込んだ後の維持も合わせて見直す価値があります。",
+            endings.join("、")
+        )
+    };
     Some(AdviceCard {
         id: "advantage_abandoned".to_string(),
         kind,
@@ -70,7 +96,7 @@ pub fn detect_advantage_abandoned(events: &MatchEvents, own: u8) -> Option<Advic
                 average_plus,
                 continued
             ),
-        },
+        } + &corner_note,
         practice: match kind {
             AdviceKind::Diagnosis => "該当クリップと同じ技をガードさせた状況をトレーニングで作り、そこから繋がる打撃と投げを1つずつ決めておきます。有利を確認したら必ずどちらかを出す、を先に体に入れてから選択肢を増やしましょう。",
             _ => "クリップで、有利を取った時点の距離とドライブゲージを確認します。離れていて届かない・回復を優先したなら問題ありません。密着で止まっている場合だけ、その状況からの攻め継続を1つ用意しましょう。",

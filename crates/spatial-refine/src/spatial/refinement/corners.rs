@@ -10,51 +10,110 @@
 //! 無いことは「端ではなかった」を意味しない。
 
 use super::super::parameters::{
-    CORNER_EDGE_X, CORNER_MAX_GAP, CORNER_MIDPOINT_OFFSET, CORNER_MIN_SAMPLES,
+    CORNER_EDGE_X, CORNER_END_LOOKAHEAD, CORNER_MAX_GAP, CORNER_MIDPOINT_OFFSET, CORNER_MIN_SAMPLES,
 };
 use super::super::{DistanceBand, SpatialObservation};
 use super::observations::reliable_actor_pair;
-use crate::match_events::CornerSpan;
+use crate::match_events::{CornerEnding, CornerSpan};
+
+/// 組み立て中の span。wall_sign は壁の向き(中点の偏りの符号。
+/// 正なら右の壁)で、終わり方の分類に使う。
+struct BuildingSpan {
+    side: u8,
+    start_frame: u32,
+    end_frame: u32,
+    samples: usize,
+    wall_sign: f32,
+}
 
 pub(super) fn detect(observations: &[SpatialObservation]) -> Vec<CornerSpan> {
     let mut spans = Vec::new();
-    let mut current: Option<(u8, u32, u32, usize)> = None;
+    let mut current: Option<BuildingSpan> = None;
     for observation in observations {
-        let Some(side) = cornered_side(observation) else {
+        let Some((side, offset)) = cornered_side(observation) else {
             continue;
         };
         let frame = observation.frame_index;
         match &mut current {
-            Some((span_side, _, end, samples))
-                if *span_side == side && frame.saturating_sub(*end) <= CORNER_MAX_GAP =>
+            Some(span)
+                if span.side == side && frame.saturating_sub(span.end_frame) <= CORNER_MAX_GAP =>
             {
-                *end = frame;
-                *samples += 1;
+                // 同じ側が連続して端を背負っている間、壁の向きは変わらない。
+                span.end_frame = frame;
+                span.samples += 1;
             }
             _ => {
-                flush(&mut spans, current.take());
-                current = Some((side, frame, frame, 1));
+                flush(&mut spans, current.take(), observations);
+                current = Some(BuildingSpan {
+                    side,
+                    start_frame: frame,
+                    end_frame: frame,
+                    samples: 1,
+                    wall_sign: offset.signum(),
+                });
             }
         }
     }
-    flush(&mut spans, current);
+    flush(&mut spans, current, observations);
     spans
 }
 
-fn flush(spans: &mut Vec<CornerSpan>, current: Option<(u8, u32, u32, usize)>) {
-    if let Some((side, start_frame, end_frame, samples)) = current {
-        if samples >= CORNER_MIN_SAMPLES {
+fn flush(
+    spans: &mut Vec<CornerSpan>,
+    current: Option<BuildingSpan>,
+    observations: &[SpatialObservation],
+) {
+    if let Some(span) = current {
+        if span.samples >= CORNER_MIN_SAMPLES {
             spans.push(CornerSpan {
-                side,
-                start_frame,
-                end_frame,
+                side: span.side,
+                start_frame: span.start_frame,
+                end_frame: span.end_frame,
+                ending: classify_ending(observations, &span),
             });
         }
     }
 }
 
-/// このフレームで端を背負っている側。確認できなければ None。
-fn cornered_side(observation: &SpatialObservation) -> Option<u8> {
+/// span の終わり方。終端直後の観測で、端側とそうでない側の左右が
+/// 入れ替わったか、両者が壁から離れて中点の偏りが解けたかを確認する。
+/// window 切れで直後の観測が無い(または確認に足りない)場合は
+/// Unobserved に残し、終わり方を語らない。
+fn classify_ending(observations: &[SpatialObservation], span: &BuildingSpan) -> CornerEnding {
+    let mut swapped = 0usize;
+    let mut separated = 0usize;
+    for observation in observations.iter().filter(|observation| {
+        observation.frame_index > span.end_frame
+            && observation.frame_index <= span.end_frame.saturating_add(CORNER_END_LOOKAHEAD)
+    }) {
+        let Some((p1, p2)) = reliable_actor_pair(observation) else {
+            continue;
+        };
+        let (cornered, other) = if span.side == 1 { (p1, p2) } else { (p2, p1) };
+        // span 中は端側の人物が壁方向にいる。符号が反転していれば
+        // 左右が入れ替わっている。
+        if (cornered.anchor.x - other.anchor.x) * span.wall_sign < 0.0 {
+            swapped += 1;
+            continue;
+        }
+        // 左右そのままで中点の偏りが解けた = camera のクランプが外れる
+        // ところまで壁から離れた。
+        let midpoint = (p1.anchor.x + p2.anchor.x) / 2.0;
+        if (midpoint - 0.5).abs() < CORNER_MIDPOINT_OFFSET {
+            separated += 1;
+        }
+    }
+    if swapped >= CORNER_MIN_SAMPLES {
+        CornerEnding::SideSwap
+    } else if separated >= CORNER_MIN_SAMPLES && swapped == 0 {
+        CornerEnding::Separated
+    } else {
+        CornerEnding::Unobserved
+    }
+}
+
+/// このフレームで端を背負っている側と、中点の偏り。確認できなければ None。
+fn cornered_side(observation: &SpatialObservation) -> Option<(u8, f32)> {
     let (p1, p2) = reliable_actor_pair(observation)?;
     // 最大ズームアウトの端寄りと壁を混同しない。
     if observation.distance_band? == DistanceBand::Far {
@@ -78,5 +137,5 @@ fn cornered_side(observation: &SpatialObservation) -> Option<u8> {
     // 寄った位置)へ入っていることも要求する。offset の符号で壁の向きを
     // 織り込んだ 1 つの比較にする。
     let near_edge = (wall_x - 0.5) * offset >= (0.5 - CORNER_EDGE_X) * offset.abs();
-    near_edge.then_some(side)
+    near_edge.then_some((side, offset))
 }

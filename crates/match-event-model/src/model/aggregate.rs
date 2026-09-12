@@ -1,10 +1,6 @@
 use super::super::threats::{CompoundThreat, ProjectileThreat, TeleportEvent};
 use super::*;
 
-/// 候補区間だけを復号する空間解析パスの実行状況。
-///
-/// `candidate_frames` は重複を統合した候補区間の総フレーム数、
-/// `sampled_frames` は実際に空間観測を受け取れた一意なフレーム数。
 /// 画面端(壁)を背負っていた区間。空間解析の候補 window 内でしか
 /// 観測できないため、span が無いことは「端ではなかった」を意味しない。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -13,8 +9,31 @@ pub struct CornerSpan {
     pub side: u8,
     pub start_frame: u32,
     pub end_frame: u32,
+    /// この区間がどう終わったか。終端直後の観測で確認できた場合だけ
+    /// 分類され、window 切れで見えなかった終わりは Unobserved に残る。
+    #[serde(default)]
+    pub ending: CornerEnding,
 }
 
+/// 端を背負った区間の終わり方。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CornerEnding {
+    /// 終端直後の観測が無い、または確認に足りない。終わり方は不明。
+    #[default]
+    Unobserved,
+    /// 端側とそうでない側の左右が入れ替わって終わった。追い込んだ側から
+    /// 見れば、入れ替え(端替え・めくり・通り抜け)を許した終わり。
+    SideSwap,
+    /// 左右はそのままに、両者が壁から離れて camera の偏りが解けた終わり。
+    /// 攻めた側が下がったか、切り返しで押し戻されたかまでは断定しない。
+    Separated,
+}
+
+/// 候補区間だけを復号する空間解析パスの実行状況。
+///
+/// `candidate_frames` は重複を統合した候補区間の総フレーム数、
+/// `sampled_frames` は実際に空間観測を受け取れた一意なフレーム数。
 /// side 別の値は、補間ではなくそのフレームで人物を直接観測できた数。
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SpatialCoverage {
@@ -217,6 +236,7 @@ mod tests {
             side: 1,
             start_frame: 100,
             end_frame: 200,
+            ending: CornerEnding::Unobserved,
         }]);
         assert!(!events.cornered_at(1, 99, 0));
         assert!(events.cornered_at(1, 100, 0));
@@ -236,16 +256,19 @@ mod tests {
                 side: 1,
                 start_frame: 100,
                 end_frame: 200,
+                ending: CornerEnding::Unobserved,
             },
             CornerSpan {
                 side: 1,
                 start_frame: 300,
                 end_frame: 400,
+                ending: CornerEnding::Unobserved,
             },
             CornerSpan {
                 side: 2,
                 start_frame: 100,
                 end_frame: 400,
+                ending: CornerEnding::Unobserved,
             },
         ]);
         // 両端が span 内: 包含区間ぶんだけ。境界フレームも 1 と数える。

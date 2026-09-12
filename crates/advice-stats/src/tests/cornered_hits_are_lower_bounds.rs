@@ -1,5 +1,5 @@
 use super::support::*;
-use crate::match_events::{CornerSpan, DamageEvent, RoundInfo};
+use crate::match_events::{CornerEnding, CornerSpan, DamageEvent, RoundInfo};
 
 fn damage(frame: u32, victim: u8) -> DamageEvent {
     DamageEvent {
@@ -33,11 +33,13 @@ fn cornered_hits_are_lower_bounds() {
             side: 1,
             start_frame: 100,
             end_frame: 150,
+            ending: CornerEnding::Unobserved,
         },
         CornerSpan {
             side: 2,
             start_frame: 300,
             end_frame: 350,
+            ending: CornerEnding::Unobserved,
         },
     ];
     events.damage = vec![

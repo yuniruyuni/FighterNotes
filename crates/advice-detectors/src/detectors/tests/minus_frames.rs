@@ -841,7 +841,7 @@ fn the_throw_practice_changes_when_it_becomes_a_bias() {
 /// 確認が無いのに端の話をすると、指摘の根拠が崩れる。
 #[test]
 fn cornered_losses_are_annotated_on_both_minus_cards() {
-    use crate::match_events::CornerSpan;
+    use crate::match_events::{CornerEnding, CornerSpan};
     let mut events = events_with(
         vec![
             press(
@@ -883,11 +883,13 @@ fn cornered_losses_are_annotated_on_both_minus_cards() {
         side: 1,
         start_frame: 80,
         end_frame: 110,
+        ending: CornerEnding::Unobserved,
     });
     events.corner_spans.push(CornerSpan {
         side: 1,
         start_frame: 400,
         end_frame: 480,
+        ending: CornerEnding::Unobserved,
     });
 
     let strike = detect_press_while_minus(&events, 1).expect("提示される");

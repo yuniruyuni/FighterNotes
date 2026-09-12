@@ -241,6 +241,10 @@ export interface TacticStats {
   cornered_hits_taken?: number;
   /** 相手を画面端に追い込んで与えた被弾。同じく下限値。 */
   cornered_hits_dealt?: number;
+  /** 相手を端に追い込んだ区間のうち、入れ替えを許して終わった数。観測できた分だけの下限値。 */
+  corner_escapes_allowed?: number;
+  /** 同じく、距離が開いて終わった数。同じく下限値。 */
+  corner_pressure_released?: number;
   /** 迎撃の接触が防御側の身長の5/4より上だった数。観測できた分だけの下限値。 */
   anti_air_contacts_high?: number;
   /** 迎撃の接触が頭の高さ付近まで引きつけられていた数。同じく下限値。 */

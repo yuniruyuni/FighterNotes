@@ -99,7 +99,7 @@ fn the_causes_are_counted_separately() {
 /// 該当クリップに端の印を付ける。端の確認が無ければ何も言わない。
 #[test]
 fn corner_overlap_is_reported_as_a_lower_bound() {
-    use crate::match_events::CornerSpan;
+    use crate::match_events::{CornerEnding, CornerSpan};
     let mut events = events_with_burnouts(vec![
         burnout(100, 5, BurnoutCause::SelfInitiated),
         burnout(1000, 5, BurnoutCause::SelfInitiated),
@@ -116,6 +116,7 @@ fn corner_overlap_is_reported_as_a_lower_bound() {
         side: 1,
         start_frame: 220,
         end_frame: 500,
+        ending: CornerEnding::Unobserved,
     });
     let card = detect_burnout(&events, 1).expect("提示される");
     assert!(
@@ -141,6 +142,7 @@ fn corner_overlap_is_reported_as_a_lower_bound() {
         side: 1,
         start_frame: 1000,
         end_frame: 1059,
+        ending: CornerEnding::Unobserved,
     };
     let exactly_one_second = detect_burnout(&events, 1).expect("提示される");
     assert!(

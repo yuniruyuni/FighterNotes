@@ -71,6 +71,19 @@ pub fn build_tactic_stats(
         }
     }
 
+    // 相手を端に追い込んだ攻めの終わり方。終端直後まで観測できた区間だけ
+    // 分類されるため、どちらも下限値になる。
+    for span in events.corner_spans.iter().filter(|span| {
+        span.side == opponent
+            && crate::match_events::round_of(&events.rounds, span.end_frame).is_some()
+    }) {
+        match span.ending {
+            crate::match_events::CornerEnding::SideSwap => stats.corner_escapes_allowed += 1,
+            crate::match_events::CornerEnding::Separated => stats.corner_pressure_released += 1,
+            crate::match_events::CornerEnding::Unobserved => {}
+        }
+    }
+
     // 通った自分の飛び込みの当て高さ。早当ては通っていても、ガードされた
     // ときに反撃を渡す当て方なので、内訳を下限値で数える。
     for jump in events.jumps.iter().filter(|jump| {
