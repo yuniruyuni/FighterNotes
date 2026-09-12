@@ -449,7 +449,8 @@ export function TacticStatsSection({
         "相手を端に追い込んだ攻めの終わり方",
         "終わり方を観測できた区間だけの下限値です。入れ替えられは左右の入れ替え(端替え)を許した終わり、解除は左右そのままに距離が開いた終わりです",
       ],
-      (stats.corner_escapes_allowed ?? 0) + (stats.corner_pressure_released ?? 0),
+      (stats.corner_escapes_allowed ?? 0) +
+        (stats.corner_pressure_released ?? 0),
       "空間解析の認識率が不足しています。",
     ),
     coverageAwareItem(
