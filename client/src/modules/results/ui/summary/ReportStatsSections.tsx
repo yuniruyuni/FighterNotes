@@ -445,6 +445,17 @@ export function TacticStatsSection({
     coverageAwareItem(
       spatialAvailable,
       [
+        `入れ替えられ ${stats.corner_escapes_allowed ?? 0} / 解除 ${stats.corner_pressure_released ?? 0}`,
+        "相手を端に追い込んだ攻めの終わり方",
+        "終わり方を観測できた区間だけの下限値です。入れ替えられは左右の入れ替え(端替え)を許した終わり、解除は左右そのままに距離が開いた終わりです",
+      ],
+      (stats.corner_escapes_allowed ?? 0) +
+        (stats.corner_pressure_released ?? 0),
+      "空間解析の認識率が不足しています。",
+    ),
+    coverageAwareItem(
+      spatialAvailable,
+      [
         `引きつけ ${stats.anti_air_contacts_deep ?? 0} / 高め ${stats.anti_air_contacts_high ?? 0}`,
         "対空の接触高さ",
         "衝突位置を観測できた迎撃だけの内訳です。高めは相手の身長の1.25倍より上で触った早めの迎撃を指します",

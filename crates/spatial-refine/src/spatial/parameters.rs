@@ -44,5 +44,9 @@ pub(super) const CORNER_MIDPOINT_OFFSET: f32 = 0.09375;
 pub(super) const CORNER_EDGE_X: f32 = 0.1875;
 /// corner span を作るのに要する最低サンプル数。
 pub(super) const CORNER_MIN_SAMPLES: usize = 3;
+/// span の終わり方(入れ替え・離脱)を探す、終端からの猶予フレーム数。
+/// 入れ替えの最中は overlap と演出で追跡が乱れるため、落ち着いた後の
+/// 観測まで待つ。これを超えたら window 切れとして Unobserved に残す。
+pub(super) const CORNER_END_LOOKAHEAD: u32 = 90;
 /// corner span 内で許す未確認フレームの最大ギャップ。
 pub(super) const CORNER_MAX_GAP: u32 = 8;

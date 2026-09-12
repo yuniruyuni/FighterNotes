@@ -1,4 +1,5 @@
 use super::*;
+use crate::match_events::CornerEnding;
 
 /// カメラのクランプで画面中点が片側へ寄った区間を corner span にする。
 /// 中点の偏り・バンド・サンプル数・ギャップの各条件を確かめる。
@@ -73,21 +74,25 @@ fn corner_spans_follow_the_camera_clamp() {
                 side: 2,
                 start_frame: 100,
                 end_frame: 120,
+                ending: CornerEnding::Unobserved,
             },
             crate::match_events::CornerSpan {
                 side: 2,
                 start_frame: 200,
                 end_frame: 202,
+                ending: CornerEnding::Unobserved,
             },
             crate::match_events::CornerSpan {
                 side: 2,
                 start_frame: 270,
                 end_frame: 272,
+                ending: CornerEnding::Unobserved,
             },
             crate::match_events::CornerSpan {
                 side: 1,
                 start_frame: 280,
                 end_frame: 282,
+                ending: CornerEnding::Unobserved,
             },
         ]
     );
@@ -105,6 +110,7 @@ fn corner_spans_follow_the_camera_clamp() {
             side: 2,
             start_frame: 600,
             end_frame: 602,
+            ending: CornerEnding::Unobserved,
         }]
     );
 
@@ -122,11 +128,13 @@ fn corner_spans_follow_the_camera_clamp() {
                 side: 1,
                 start_frame: 100,
                 end_frame: 102,
+                ending: CornerEnding::Unobserved,
             },
             crate::match_events::CornerSpan {
                 side: 1,
                 start_frame: 111,
                 end_frame: 113,
+                ending: CornerEnding::Unobserved,
             },
         ]
     );

@@ -194,6 +194,14 @@ pub struct TacticStats {
     /// 相手を画面端に追い込んで与えた被弾。同じく下限値。
     #[serde(default)]
     pub cornered_hits_dealt: u32,
+    /// 相手を画面端に追い込んだ区間のうち、左右の入れ替え(端替え)を
+    /// 許して終わったもの。終わり方を観測できた区間だけの下限値。
+    #[serde(default)]
+    pub corner_escapes_allowed: u32,
+    /// 同じく、左右はそのままに距離が開いて終わったもの。攻めた側が
+    /// 下がったか、切り返しで押し戻されたかまでは断定しない。
+    #[serde(default)]
+    pub corner_pressure_released: u32,
     /// 空中で迎撃した相手ジャンプのうち、接触高さを観測できて「高い位置」
     /// (防御側の身長の 5/4 以上)だったもの。早めの迎撃を表す。観測は
     /// 候補 window 内に限るため、deep と合わせても迎撃総数に届かない下限値。

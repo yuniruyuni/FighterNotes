@@ -354,17 +354,19 @@ fn a_situation_that_never_happened_has_no_bias() {
 /// 有利と起き攻めは相手。span 終端の直後は追跡の乱れとみなして猶予する。
 #[test]
 fn cornered_follows_the_defending_side_of_each_situation() {
-    use crate::match_events::CornerSpan;
+    use crate::match_events::{CornerEnding, CornerSpan};
     let mut events = empty_events();
     events.corner_spans.push(CornerSpan {
         side: 1,
         start_frame: 90,
         end_frame: 95,
+        ending: CornerEnding::Unobserved,
     });
     events.corner_spans.push(CornerSpan {
         side: 2,
         start_frame: 400,
         end_frame: 460,
+        ending: CornerEnding::Unobserved,
     });
     // 不利(圧を受けるのは自分=1): span 終端から猶予内は端、外れれば未確認。
     events.presses_while_minus.push(minus_press(

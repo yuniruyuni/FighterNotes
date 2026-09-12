@@ -2,6 +2,7 @@
 
 mod support;
 
+mod corner_endings_are_counted_for_the_opponent_side;
 mod cornered_hits_are_lower_bounds;
 mod drive_spend_is_measured_not_assumed;
 mod every_new_tactic_counter_is_pinned;

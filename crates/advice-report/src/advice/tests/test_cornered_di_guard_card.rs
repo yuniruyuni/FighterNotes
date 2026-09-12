@@ -1,5 +1,5 @@
 use super::support::*;
-use crate::match_events::{CornerSpan, DriveImpactEvent, DriveImpactOutcome};
+use crate::match_events::{CornerEnding, CornerSpan, DriveImpactEvent, DriveImpactOutcome};
 
 /// 端でのDIガードは、イベントと corner span の交差からカードになって
 /// レポートへ届く。結線を忘れても例外は出ず、カードが黙って消えるだけ
@@ -11,6 +11,7 @@ fn test_cornered_di_guard_card() {
         side: 1,
         start_frame: 950,
         end_frame: 1000,
+        ending: CornerEnding::Unobserved,
     });
     ev.drive_impacts.push(DriveImpactEvent {
         side: 2,

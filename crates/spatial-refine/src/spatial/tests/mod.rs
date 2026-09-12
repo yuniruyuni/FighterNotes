@@ -16,6 +16,7 @@ mod contact_hint_keeps_effect_region_off_actor_tracks;
 mod contact_hint_ranges_follow_first_stage_contacts;
 mod contact_hint_yields_spark_centroid;
 mod contact_spark_requires_hint_and_actor_span;
+mod corner_span_endings_follow_the_post_span_geometry;
 mod corner_spans_follow_the_camera_clamp;
 mod coverage_records_candidate_and_sampled_frames;
 mod disruption_extends_the_contact_search;
