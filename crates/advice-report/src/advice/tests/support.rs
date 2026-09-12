@@ -36,6 +36,9 @@ pub(super) fn detector_test_report_with_character(
         usable_frames: FRAMES,
         p1_observed_frames: FRAMES,
         p2_observed_frames: FRAMES,
+        periodic_pair_samples: 0,
+        p1_cornered_samples: 0,
+        p2_cornered_samples: 0,
     };
     let features: Vec<_> = (0..FRAMES)
         .map(|frame_index| FrameFeatures {

@@ -45,9 +45,15 @@ fn refinement_records_candidate_and_unique_sampled_frames() {
         &AnalysisContext::default(),
     );
 
-    assert_eq!(events.spatial_coverage.candidate_frames, 46);
+    // 46 フレームのイベント駆動 window に、round 内の定周期サンプリング
+    // window(240F おきに 6F: 0..=5 と 240..=245)が 2 本 = 12 フレーム
+    // 加わる。
+    assert_eq!(events.spatial_coverage.candidate_frames, 58);
     assert_eq!(events.spatial_coverage.sampled_frames, 2);
     assert_eq!(events.spatial_coverage.usable_frames, 1);
     assert_eq!(events.spatial_coverage.p1_observed_frames, 1);
     assert_eq!(events.spatial_coverage.p2_observed_frames, 1);
+    // frame 86 は周期サンプルの位相(round 開始から 240F おきの 6F)に
+    // 載っていないため、時間比の分母には入らない。
+    assert_eq!(events.spatial_coverage.periodic_pair_samples, 0);
 }

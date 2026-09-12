@@ -194,6 +194,25 @@ pub struct TacticStats {
     /// 相手を画面端に追い込んで与えた被弾。同じく下限値。
     #[serde(default)]
     pub cornered_hits_dealt: u32,
+    /// 被弾直前の間合いを観測できた被弾のうち、密着(身長の 3/4 未満)
+    /// だったもの。観測できた被弾だけの下限値。
+    #[serde(default)]
+    pub hits_taken_close_range: u32,
+    /// 同じく、差し合いの間合い(身長の 3/4 以上 3/2 未満)だったもの。
+    #[serde(default)]
+    pub hits_taken_mid_range: u32,
+    /// 同じく、遠め(身長の 3/2 以上)だったもの。
+    #[serde(default)]
+    pub hits_taken_far_range: u32,
+    /// 定周期サンプリングで両者を追跡できたフレーム数。端滞在時間比の分母。
+    #[serde(default)]
+    pub corner_time_samples: u32,
+    /// 周期サンプルのうち、自分が端を背負っていると確認できた数(下限)。
+    #[serde(default)]
+    pub own_corner_time_samples: u32,
+    /// 周期サンプルのうち、相手を端に追い込んでいたと確認できた数(下限)。
+    #[serde(default)]
+    pub opponent_corner_time_samples: u32,
     /// 相手を画面端に追い込んだ区間のうち、左右の入れ替え(端替え)を
     /// 許して終わったもの。終わり方を観測できた区間だけの下限値。
     #[serde(default)]

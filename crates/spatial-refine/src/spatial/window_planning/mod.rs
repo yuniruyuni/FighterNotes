@@ -4,6 +4,7 @@ mod jumps;
 mod model;
 mod punishes;
 mod round_bounds;
+mod sampling;
 mod sides;
 mod teleports;
 
@@ -13,6 +14,16 @@ use crate::match_events::MatchEvents;
 
 /// Builds candidate-driven second-pass windows from input and meter events.
 pub fn spatial_candidate_windows(events: &MatchEvents) -> Vec<SpatialCandidateWindow> {
+    assemble(events, false)
+}
+
+/// 第二段で実際に復号する window 計画。イベント駆動の候補に、被弾直前の
+/// 間合いと時間比のための薄いサンプリング window を加えて統合したもの。
+pub fn spatial_decode_windows(events: &MatchEvents) -> Vec<SpatialCandidateWindow> {
+    assemble(events, true)
+}
+
+fn assemble(events: &MatchEvents, include_sampling: bool) -> Vec<SpatialCandidateWindow> {
     let mut windows = teleports::windows(
         &events.teleports,
         &events.compound_threats,
@@ -29,6 +40,10 @@ pub fn spatial_candidate_windows(events: &MatchEvents) -> Vec<SpatialCandidateWi
         &events.drive_rushes,
         &events.rounds,
     ));
+    if include_sampling {
+        windows.extend(sampling::damage_windows(&events.damage, &events.rounds));
+        windows.extend(sampling::periodic_windows(&events.rounds));
+    }
     let mut windows = merge_adjacent(windows);
     contacts::annotate(&mut windows, &events.contacts);
     sides::annotate(&mut windows, &events.rounds);

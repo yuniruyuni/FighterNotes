@@ -30,6 +30,19 @@ pub enum CornerEnding {
     Separated,
 }
 
+/// 被弾直前の両者の間合い。差し合いの距離帯を測るための観測で、
+/// 地上の両者の anchor 間距離を「体の平均身長」で割った単位を持つ
+/// (画面座標のままではカメラのズームで揺れるため)。
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct DamageDistance {
+    /// 被弾側(1|2)。対応する DamageEvent と同じ。
+    pub victim: u8,
+    /// 対応する DamageEvent の start_frame。
+    pub damage_start_frame: u32,
+    /// 被弾直前の間合い(身長単位)。
+    pub distance: f32,
+}
+
 /// 候補区間だけを復号する空間解析パスの実行状況。
 ///
 /// `candidate_frames` は重複を統合した候補区間の総フレーム数、
@@ -43,6 +56,14 @@ pub struct SpatialCoverage {
     pub usable_frames: u32,
     pub p1_observed_frames: u32,
     pub p2_observed_frames: u32,
+    /// 定周期サンプリング window のうち、両者を追跡できたフレーム数。
+    /// 時間比(端滞在時間など)の分母。イベント駆動の window は攻防の
+    /// 瞬間へ偏るため、割合はこの周期サンプルだけから数える。
+    pub periodic_pair_samples: u32,
+    /// 周期サンプルのうち、その側が端を背負っていると確認できた数。
+    /// 端の確認は下限なので、時間比も下限になる。
+    pub p1_cornered_samples: u32,
+    pub p2_cornered_samples: u32,
 }
 
 /// 入力確定層をフレーム単位で数えたcoverage。
@@ -125,6 +146,9 @@ pub struct MatchEvents {
     /// 空間解析が確認した、画面端を背負っていた区間。
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub corner_spans: Vec<CornerSpan>,
+    /// 被弾直前の間合い(身長単位)。観測できた被弾だけが持つ。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub damage_distances: Vec<DamageDistance>,
     /// 確定ラウンド内の入力履歴を、segment化前のフレーム列から数えたcoverage。
     #[serde(skip)]
     pub input_coverage: InputCoverage,

@@ -108,6 +108,9 @@ fn report_exposes_detector_specific_numerators_and_attack_states() {
         usable_frames: 6,
         p1_observed_frames: 8,
         p2_observed_frames: 7,
+        periodic_pair_samples: 0,
+        p1_cornered_samples: 0,
+        p2_cornered_samples: 0,
     };
     events.damage = vec![damage(10), damage(20), damage(30)];
     events.attack_evidence.damage = vec![
@@ -318,6 +321,9 @@ fn decoded_spatial_frames_without_usable_actor_pair_suppress_reach_card() {
         usable_frames: 0,
         p1_observed_frames: 0,
         p2_observed_frames: 0,
+        periodic_pair_samples: 0,
+        p1_cornered_samples: 0,
+        p2_cornered_samples: 0,
     };
     let features: Vec<_> = (0..100).map(feature).collect();
 
@@ -380,6 +386,9 @@ fn p2_coverage_maps_sides_and_includes_both_round_endpoints() {
         usable_frames: 5,
         p1_observed_frames: 4,
         p2_observed_frames: 2,
+        periodic_pair_samples: 0,
+        p1_cornered_samples: 0,
+        p2_cornered_samples: 0,
     };
     let mut own_damage = damage(10);
     own_damage.victim = 1;

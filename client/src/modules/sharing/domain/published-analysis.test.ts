@@ -520,7 +520,7 @@ describe("share projection", () => {
     ).toEqual({ detected: 255, won: 0, lost: 0, unresolved: 255 });
   });
 
-  test("ruleset v3からv23を共有し、それ以外は理由付きで拒否する", () => {
+  test("ruleset v3からv24を共有し、それ以外は理由付きで拒否する", () => {
     const context: AnalysisContext = {
       ownSide: "p1",
       p1: { character: "LUKE" },
@@ -536,7 +536,7 @@ describe("share projection", () => {
 
     // v9以降はSA/CA集計を必須にするため、同じ形で個別に確認する。
     for (const rulesetVersion of [
-      9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+      9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
     ]) {
       const current = report();
       current.ruleset_version = rulesetVersion;
@@ -558,7 +558,7 @@ describe("share projection", () => {
     }
 
     const unsupported = report();
-    unsupported.ruleset_version = 24;
+    unsupported.ruleset_version = 25;
     expect(() => PublishedAnalysisCandidate.from(context, unsupported)).toThrow(
       "この解析ルール世代は共有に対応していません",
     );

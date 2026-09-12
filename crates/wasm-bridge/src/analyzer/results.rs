@@ -209,7 +209,7 @@ impl Analyzer {
         self.ensure_events()
             .map_err(|error| JsValue::from_str(&error))?;
         Ok(
-            serde_json::to_string(&video_analyzer::spatial_candidate_windows(
+            serde_json::to_string(&video_analyzer::spatial_decode_windows(
                 self.events.as_ref().expect("finalized events"),
             ))
             .unwrap_or_else(|error| format!(r#"[{{"error":"{error}"}}]"#)),
