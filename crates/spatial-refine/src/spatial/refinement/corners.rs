@@ -113,7 +113,7 @@ fn classify_ending(observations: &[SpatialObservation], span: &BuildingSpan) -> 
 }
 
 /// このフレームで端を背負っている側と、中点の偏り。確認できなければ None。
-fn cornered_side(observation: &SpatialObservation) -> Option<(u8, f32)> {
+pub(super) fn cornered_side(observation: &SpatialObservation) -> Option<(u8, f32)> {
     let (p1, p2) = reliable_actor_pair(observation)?;
     // 最大ズームアウトの端寄りと壁を混同しない。
     if observation.distance_band? == DistanceBand::Far {

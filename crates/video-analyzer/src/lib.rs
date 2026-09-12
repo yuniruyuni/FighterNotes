@@ -70,10 +70,10 @@ pub use round_start::{
     FIGHT_PATCH_HEIGHT, FIGHT_PATCH_WIDTH, FIGHT_PATCH_X, FIGHT_PATCH_Y, FIGHT_SAMPLE_INTERVAL,
 };
 pub use spatial::{
-    refine_match_events_with_spatial, spatial_candidate_windows, ActorHint, ActorObservation,
-    DistanceBand, HorizontalMotion, HorizontalOrder, MotionRegionObservation, ProjectileCandidate,
-    SpatialCandidateWindow, SpatialConfig, SpatialError, SpatialExtractor, SpatialHintRange,
-    SpatialHints, SpatialObservation, SpatialPoint, SpatialRect,
+    refine_match_events_with_spatial, spatial_candidate_windows, spatial_decode_windows, ActorHint,
+    ActorObservation, DistanceBand, HorizontalMotion, HorizontalOrder, MotionRegionObservation,
+    ProjectileCandidate, SpatialCandidateWindow, SpatialConfig, SpatialError, SpatialExtractor,
+    SpatialHintRange, SpatialHints, SpatialObservation, SpatialPoint, SpatialRect,
 };
 pub use temporal::{
     clean_drive_temporal, clean_super_temporal, confirm_hp, confirm_hp_with_fight_markers,

@@ -1,11 +1,13 @@
 mod approaches;
 mod corners;
+mod distances;
 mod jumps;
 mod observations;
 mod projectiles;
 mod punishes;
 mod teleports;
 
+use super::parameters::{PERIODIC_SAMPLE_LEN, PERIODIC_SAMPLE_PERIOD};
 use super::SpatialObservation;
 use crate::context::AnalysisContext;
 use crate::match_events::{MatchEvents, SpatialCoverage};
@@ -17,7 +19,7 @@ pub fn refine_match_events_with_spatial(
     observations: &[SpatialObservation],
     context: &AnalysisContext,
 ) {
-    let windows = crate::spatial_candidate_windows(events);
+    let windows = crate::spatial_decode_windows(events);
     let candidate_frames = windows
         .iter()
         .map(|window| {
@@ -62,12 +64,39 @@ pub fn refine_match_events_with_spatial(
             .collect::<BTreeSet<_>>()
             .len() as u32
     };
+    // 時間比の分母になる周期サンプル。round 開始からの位相で window 計画と
+    // 同じフレーム集合を復元する。イベント駆動 window と重なって復号された
+    // フレームも、位相が合っていれば周期サンプルとして数えてよい。
+    let is_periodic_sample = |frame: u32| {
+        events.rounds.iter().any(|round| {
+            frame >= round.start_frame
+                && frame <= round.end_frame
+                && (frame - round.start_frame) % PERIODIC_SAMPLE_PERIOD < PERIODIC_SAMPLE_LEN
+        })
+    };
+    let mut periodic_pair_samples = 0;
+    let mut cornered_samples = [0u32; 2];
+    for observation in observations
+        .iter()
+        .filter(|observation| is_periodic_sample(observation.frame_index))
+    {
+        if self::observations::reliable_actor_pair(observation).is_none() {
+            continue;
+        }
+        periodic_pair_samples += 1;
+        if let Some((side, _)) = corners::cornered_side(observation) {
+            cornered_samples[side as usize - 1] += 1;
+        }
+    }
     events.spatial_coverage = SpatialCoverage {
         candidate_frames,
         sampled_frames: sampled.len() as u32,
         usable_frames: usable.len() as u32,
         p1_observed_frames: observed_for(1),
         p2_observed_frames: observed_for(2),
+        periodic_pair_samples,
+        p1_cornered_samples: cornered_samples[0],
+        p2_cornered_samples: cornered_samples[1],
     };
 
     jumps::refine(&mut events.jumps, observations);
@@ -89,4 +118,5 @@ pub fn refine_match_events_with_spatial(
         observations,
     );
     events.corner_spans = corners::detect(observations);
+    distances::attach(events, observations);
 }

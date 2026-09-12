@@ -241,6 +241,18 @@ export interface TacticStats {
   cornered_hits_taken?: number;
   /** 相手を画面端に追い込んで与えた被弾。同じく下限値。 */
   cornered_hits_dealt?: number;
+  /** 被弾直前の間合いが密着(身長の3/4未満)だった被弾数。観測できた分だけの下限値。 */
+  hits_taken_close_range?: number;
+  /** 同じく差し合いの間合い(身長の3/4以上3/2未満)だった被弾数。 */
+  hits_taken_mid_range?: number;
+  /** 同じく遠め(身長の3/2以上)だった被弾数。 */
+  hits_taken_far_range?: number;
+  /** 定周期サンプリングで両者を追跡できたフレーム数。端滞在時間比の分母。 */
+  corner_time_samples?: number;
+  /** 周期サンプルのうち自分が端を背負っていた数(下限)。 */
+  own_corner_time_samples?: number;
+  /** 周期サンプルのうち相手を端に追い込んでいた数(下限)。 */
+  opponent_corner_time_samples?: number;
   /** 相手を端に追い込んだ区間のうち、入れ替えを許して終わった数。観測できた分だけの下限値。 */
   corner_escapes_allowed?: number;
   /** 同じく、距離が開いて終わった数。同じく下限値。 */

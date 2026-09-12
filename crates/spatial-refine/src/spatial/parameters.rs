@@ -44,6 +44,22 @@ pub(super) const CORNER_MIDPOINT_OFFSET: f32 = 0.09375;
 pub(super) const CORNER_EDGE_X: f32 = 0.1875;
 /// corner span を作るのに要する最低サンプル数。
 pub(super) const CORNER_MIN_SAMPLES: usize = 3;
+/// 被弾直前の間合いを観測する薄い window の、被弾開始からの遡り幅。
+/// 差し合いの距離は技が届く直前の立ち位置に表れる。
+pub(super) const DAMAGE_DISTANCE_LOOKBACK: u32 = 24;
+/// 被弾の直前は攻撃側が伸び切っており間合いが縮んで見えるため、
+/// 接触へ近すぎるサンプルは使わない。
+pub(super) const DAMAGE_DISTANCE_MIN_LEAD: u32 = 2;
+/// 間合いとして採用する最低サンプル数。1 サンプルの anchor 揺れから
+/// 断定しない。
+pub(super) const DAMAGE_DISTANCE_MIN_SAMPLES: usize = 2;
+/// 「割合」を偏りなく測るための定周期サンプリングの間隔と長さ。
+/// イベント駆動の window は攻防の瞬間へ偏るため、時間比はこの薄い
+/// window のフレームだけから数える。window 1 本ごとに直前 keyframe からの
+/// 復号が要るため、費用は本数で決まる。4 秒間隔で試合あたり 40〜100 本
+/// = 分母 40〜100 サンプルになり、下限の割合表示には足りる。
+pub(super) const PERIODIC_SAMPLE_PERIOD: u32 = 240;
+pub(super) const PERIODIC_SAMPLE_LEN: u32 = 6;
 /// span の終わり方(入れ替え・離脱)を探す、終端からの猶予フレーム数。
 /// 入れ替えの最中は overlap と演出で追跡が乱れるため、落ち着いた後の
 /// 観測まで待つ。これを超えたら window 切れとして Unobserved に残す。

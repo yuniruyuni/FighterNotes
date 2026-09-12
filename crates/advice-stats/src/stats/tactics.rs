@@ -71,6 +71,34 @@ pub fn build_tactic_stats(
         }
     }
 
+    // 被弾直前の間合いの分布。間合いを観測できた被弾だけの下限値。
+    for distance in events.damage_distances.iter().filter(|distance| {
+        distance.victim == own
+            && events.damage.iter().any(|damage| {
+                damage.victim == distance.victim
+                    && damage.start_frame == distance.damage_start_frame
+                    && event_in_round(damage.round_no, damage.start_frame)
+            })
+    }) {
+        if distance.distance < crate::RANGE_CLOSE_MAX {
+            stats.hits_taken_close_range += 1;
+        } else if distance.distance < crate::RANGE_MID_MAX {
+            stats.hits_taken_mid_range += 1;
+        } else {
+            stats.hits_taken_far_range += 1;
+        }
+    }
+
+    // 端滞在時間比。定周期サンプルだけを分母にする(イベント駆動の window は
+    // 攻防の瞬間へ偏る)。端の確認は下限なので、時間比も下限になる。
+    stats.corner_time_samples = events.spatial_coverage.periodic_pair_samples;
+    let cornered_samples = [
+        events.spatial_coverage.p1_cornered_samples,
+        events.spatial_coverage.p2_cornered_samples,
+    ];
+    stats.own_corner_time_samples = cornered_samples[own as usize - 1];
+    stats.opponent_corner_time_samples = cornered_samples[opponent as usize - 1];
+
     // 相手を端に追い込んだ攻めの終わり方。終端直後まで観測できた区間だけ
     // 分類されるため、どちらも下限値になる。
     for span in events.corner_spans.iter().filter(|span| {

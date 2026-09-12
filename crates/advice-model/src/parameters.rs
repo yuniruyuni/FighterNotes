@@ -14,7 +14,9 @@
 // 確信しないようにし、OD 技を SA/CA 使用と誤認する偽イベントを除去。
 // v23: 相手を端に追い込んだ区間の終わり方(入れ替え/離脱)を分類し、
 // 統計と advantage_abandoned カードへ位置の観点を足す。
-pub const RULESET_VERSION: u32 = 23;
+// v24: damage 起点+定周期の薄いサンプリング window を追加し、被弾直前の
+// 間合いの距離帯分布と、画面端の滞在時間比(下限)を統計にする。
+pub const RULESET_VERSION: u32 = 24;
 
 /// 「大被弾」とみなす HP ドロップ（暴れ指摘の対象）
 pub const BIG_DAMAGE: f32 = 0.10;
@@ -80,3 +82,8 @@ pub const CORNERED_DAMAGE_TAIL: u32 = 30;
 /// 飛び込みなら早当てを表す。5/4 は 2 進で正確に表せる値で、境界そのものを
 /// 検査できる。
 pub const JUMP_CONTACT_HIGH: f32 = 1.25;
+/// 被弾直前の間合い(身長単位)の距離帯境界。3/4 未満は密着(投げ・小技圏)、
+/// 3/2 以上は遠め(大技の先端や差し返し圏)。どちらも 2 進で正確に表せる値で、
+/// 境界そのものを検査できる。
+pub const RANGE_CLOSE_MAX: f32 = 0.75;
+pub const RANGE_MID_MAX: f32 = 1.5;

@@ -25,5 +25,6 @@ pub use model::{
 };
 pub use refinement::refine_match_events_with_spatial;
 pub use window_planning::{
-    spatial_candidate_windows, SpatialCandidateWindow, SpatialFrameRange, SpatialHintRange,
+    spatial_candidate_windows, spatial_decode_windows, SpatialCandidateWindow, SpatialFrameRange,
+    SpatialHintRange,
 };

@@ -68,6 +68,14 @@ function explicitOrLegacyAvailability(
 
 type StatItem = [string, string, string?];
 
+function cornerTimePercent(
+  cornered: number | undefined,
+  samples: number | undefined,
+): string {
+  if (!samples) return "-";
+  return `${Math.round(((cornered ?? 0) * 100) / samples)}%以上`;
+}
+
 function coverageAwareItem(
   available: boolean,
   item: StatItem,
@@ -440,6 +448,29 @@ export function TacticStatsSection({
         "空間解析が端を確認できた場面だけを数えた下限値です",
       ],
       stats.cornered_hits_dealt ?? 0,
+      "空間解析の認識率が不足しています。",
+    ),
+    coverageAwareItem(
+      spatialAvailable,
+      [
+        `密着 ${stats.hits_taken_close_range ?? 0} / 差し合い ${stats.hits_taken_mid_range ?? 0} / 遠め ${stats.hits_taken_far_range ?? 0}`,
+        "被弾直前の間合い",
+        "間合いを観測できた被弾だけの内訳です。身長を物差しに、密着は3/4未満、遠めは3/2以上を指します",
+      ],
+      (stats.hits_taken_close_range ?? 0) +
+        (stats.hits_taken_mid_range ?? 0) +
+        (stats.hits_taken_far_range ?? 0),
+      "空間解析の認識率が不足しています。",
+    ),
+    coverageAwareItem(
+      spatialAvailable && (stats.corner_time_samples ?? 0) > 0,
+      [
+        `自分 ${cornerTimePercent(stats.own_corner_time_samples, stats.corner_time_samples)} / 相手 ${cornerTimePercent(stats.opponent_corner_time_samples, stats.corner_time_samples)}`,
+        "画面端を背負っていた時間",
+        "定周期サンプルに占める、端と確認できた時間の割合です。確認できた分だけの下限値です",
+      ],
+      (stats.own_corner_time_samples ?? 0) +
+        (stats.opponent_corner_time_samples ?? 0),
       "空間解析の認識率が不足しています。",
     ),
     coverageAwareItem(

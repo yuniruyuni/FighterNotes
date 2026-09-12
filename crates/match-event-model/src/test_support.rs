@@ -48,6 +48,7 @@ pub fn empty_events() -> MatchEvents {
         meter_game_frame: [vec![], vec![]],
         spatial_coverage: Default::default(),
         corner_spans: vec![],
+        damage_distances: vec![],
         input_coverage: Default::default(),
         segments: [vec![], vec![]],
         hp: [vec![1.0; 6000], vec![1.0; 6000]],
