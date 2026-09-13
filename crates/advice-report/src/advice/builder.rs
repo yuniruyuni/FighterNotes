@@ -79,6 +79,11 @@ pub fn build_report_with_context(
         cards,
         suppressed_cards,
         round_summaries,
+        opponent_move_stats: detectors::build_opponent_move_stats(
+            events,
+            own,
+            context.opponent_character(),
+        ),
         input_stats,
         tactic_stats,
         coverage,

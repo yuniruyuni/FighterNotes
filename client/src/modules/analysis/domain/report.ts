@@ -220,6 +220,20 @@ export interface InputStats {
   crouch_ratio: number;
 }
 
+/** 同定できた相手の技 1 つぶんの、触られ方と回答の収支。どの値も下限。 */
+export interface OpponentMoveStat {
+  /** frame_data の記譜(例: 2MK, 236HP)。 */
+  name: string;
+  /** 弾として届いた接触を含むか。 */
+  projectile: boolean;
+  touches: number;
+  hits_taken: number;
+  hp_lost: number;
+  blocked: number;
+  punished: number;
+  punish_missed: number;
+}
+
 export interface TacticStats {
   anti_air_opportunities: number;
   anti_air_successes: number;
@@ -371,6 +385,8 @@ export interface AdviceReport {
   /** ruleset v8以前の保存済みレポートでは省略。 */
   suppressed_cards?: SuppressedAdviceCard[];
   round_summaries: RoundSummary[];
+  /** 同定できた相手の技ごとの、触られ方と回答の収支(触られた回数順、下限値)。 */
+  opponent_move_stats?: OpponentMoveStat[];
   input_stats: InputStats | null;
   tactic_stats: TacticStats;
   coverage?: AnalysisCoverage;

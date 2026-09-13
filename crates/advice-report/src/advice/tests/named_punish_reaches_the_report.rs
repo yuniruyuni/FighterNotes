@@ -1,6 +1,7 @@
 use super::support::*;
 use crate::match_events::{
-    InputSegment, MeterState, PunishChance, PunishOrigin, PunishOutcome, PunishReachability,
+    ContactEvent, InputSegment, MeterState, PunishChance, PunishOrigin, PunishOutcome,
+    PunishReachability,
 };
 
 /// 相手キャラがレポートの文脈から検出器まで届き、同定できた技名が
@@ -23,6 +24,14 @@ fn named_punish_reaches_the_report() {
         reachability: PunishReachability::Confirmed,
         punished_drop: 0.0,
         pressed: String::new(),
+        round_no: 1,
+    });
+    ev.contacts.push(ContactEvent {
+        frame: 200,
+        attacker: 2,
+        victim: 1,
+        hit: false,
+        projectile: false,
         round_no: 1,
     });
     // 相手(P2)のしゃがみ中K(発生 7)の実測列と入力表示。
@@ -55,4 +64,9 @@ fn named_punish_reaches_the_report() {
         "相手キャラが検出器へ届いていない: {}",
         card.evidence[0].label
     );
+    // 同じ同定は「相手の技の内訳」にも届く。
+    assert_eq!(report.opponent_move_stats.len(), 1);
+    assert_eq!(report.opponent_move_stats[0].name, "2MK");
+    assert_eq!(report.opponent_move_stats[0].blocked, 1);
+    assert_eq!(report.opponent_move_stats[0].punish_missed, 1);
 }

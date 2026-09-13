@@ -149,6 +149,28 @@ pub struct InputStats {
     pub crouch_ratio: f32,
 }
 
+/// 同定できた相手の技 1 つぶんの、触られ方と回答の収支。
+///
+/// 技の同定は入力表示と実測発生の二重整合が取れた接触に限るため、
+/// どの値も下限になる。
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct OpponentMoveStat {
+    /// frame_data の記譜(例: 2MK, 236HP)。
+    pub name: String,
+    /// 弾として届いた接触を含むか(遠距離のガードを密着と区別する材料)。
+    pub projectile: bool,
+    /// この技に触られた回数(ヒット + ガード)。
+    pub touches: u32,
+    pub hits_taken: u32,
+    /// ヒットに帰属できた HP 損失。
+    pub hp_lost: f32,
+    pub blocked: u32,
+    /// ガード後に確定反撃を取った回数。
+    pub punished: u32,
+    /// ガード後、反撃猶予と近距離を確認できたのに反撃しなかった回数。
+    pub punish_missed: u32,
+}
+
 /// 指摘の有無とは独立した、戦術ごとの遭遇数と結果。
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
