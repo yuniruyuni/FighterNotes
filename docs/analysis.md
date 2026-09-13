@@ -8,7 +8,7 @@
 目的は試合を完全再現することではなく、複数の映像証拠が一致した場面を抽出し、
 利用者が動画を見直す順序を作ることである。
 
-判定は決定的なルールベース処理で、現在の `RULESET_VERSION` は 24。
+判定は決定的なルールベース処理で、現在の `RULESET_VERSION` は 25。
 機械学習モデルや外部推論 API は使わない。
 
 ## 入力条件
@@ -296,7 +296,7 @@ coverage は「試合画面を確定ラウンドへ割り当てられた割合�
 | `reversal_punished` | 無敵技を防がれた後の反撃 |
 | `low_scaling_super` | 低い補正率でSA/CAを組み込み、KOしなかった場面 |
 | `punish_fail` | 時間は間に合ったが届かなかった反撃 |
-| `punish_missed` | 到達可能な確定反撃機会の見逃し |
+| `punish_missed` | 到達可能な確定反撃機会の見逃し(相手の技を一意に同定できた場面は技名付き) |
 | `low_conversion` | 確定反撃の低い return |
 | `throw_interrupted_by_invincible` | 投げ実行直後に相手の無敵技で被弾した場面 |
 | `throw_whiff_punished` | 投げ空振り後に反撃を受けた場面 |

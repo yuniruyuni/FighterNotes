@@ -16,7 +16,9 @@
 // 統計と advantage_abandoned カードへ位置の観点を足す。
 // v24: damage 起点+定周期の薄いサンプリング window を追加し、被弾直前の
 // 間合いの距離帯分布と、画面端の滞在時間比(下限)を統計にする。
-pub const RULESET_VERSION: u32 = 24;
+// v25: ガードした相手の技を入力表示と実測発生で同定し(一意時のみ)、
+// 確反見逃しを技名で指摘する。
+pub const RULESET_VERSION: u32 = 25;
 
 /// 「大被弾」とみなす HP ドロップ（暴れ指摘の対象）
 pub const BIG_DAMAGE: f32 = 0.10;

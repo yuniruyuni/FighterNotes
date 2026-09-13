@@ -49,7 +49,7 @@ fn opportunity_cost_cards_do_not_claim_hp() {
 
     for card in [
         detect_low_conversion(&events, 1),
-        detect_punish_missed(&events, 1, None),
+        detect_punish_missed(&events, 1, None, None),
         detect_low_scaling_super(&events, 1),
         detect_throw_loop(&events, 2),
     ]

@@ -11,6 +11,7 @@ mod detector_coverage;
 mod diagnoses_sort_before_higher_severity_observations;
 mod input_stats_and_coverage_use_only_validated_rounds;
 mod legacy_card_without_classification_deserializes_conservatively;
+mod named_punish_reaches_the_report;
 mod single_minus_read_loss_is_observed_but_not_called_a_habit;
 mod super_art_stats_and_advice;
 mod test_anti_air_card;

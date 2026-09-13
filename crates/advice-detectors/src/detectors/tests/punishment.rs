@@ -48,7 +48,7 @@ fn events_with(chances: Vec<PunishChance>) -> MatchEvents {
 /// 機会が無ければ何も出さない。
 #[test]
 fn nothing_is_reported_without_a_missed_chance() {
-    assert!(detect_punish_missed(&empty_events(), 1, None).is_none());
+    assert!(detect_punish_missed(&empty_events(), 1, None, None).is_none());
 }
 
 /// 反撃を取れていれば見逃しではない。
@@ -56,7 +56,7 @@ fn nothing_is_reported_without_a_missed_chance() {
 fn a_punish_that_landed_is_not_a_miss() {
     let events = events_with(vec![chance(100, PunishOutcome::Success, 10)]);
 
-    assert!(detect_punish_missed(&events, 1, None).is_none());
+    assert!(detect_punish_missed(&events, 1, None, None).is_none());
 }
 
 /// 位置まで確認できていない機会は使わない。長い技の先端をガードした
@@ -66,7 +66,7 @@ fn a_chance_whose_range_was_not_confirmed_is_not_used() {
     let mut events = events_with(vec![chance(100, PunishOutcome::Missed, 10)]);
     events.punishes[0].reachability = PunishReachability::Unknown;
 
-    assert!(detect_punish_missed(&events, 1, None).is_none());
+    assert!(detect_punish_missed(&events, 1, None, None).is_none());
 }
 
 /// 相手の機会は自分の話ではない。
@@ -75,7 +75,7 @@ fn the_opponents_chances_are_not_yours() {
     let mut events = events_with(vec![chance(100, PunishOutcome::Missed, 10)]);
     events.punishes[0].side = 2;
 
-    assert!(detect_punish_missed(&events, 1, None).is_none());
+    assert!(detect_punish_missed(&events, 1, None, None).is_none());
 }
 
 /// 一度でも見逃していれば指摘する。相手の技を覚えているかどうかの
@@ -84,7 +84,7 @@ fn the_opponents_chances_are_not_yours() {
 fn one_missed_punish_is_already_worth_saying() {
     let events = events_with(vec![chance(100, PunishOutcome::Missed, 10)]);
 
-    let card = detect_punish_missed(&events, 1, None).expect("提示される");
+    let card = detect_punish_missed(&events, 1, None, None).expect("提示される");
 
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Diagnosis);
@@ -98,7 +98,7 @@ fn one_missed_punish_is_already_worth_saying() {
 fn a_missed_punish_reports_no_health_lost() {
     let events = events_with(vec![chance(100, PunishOutcome::Missed, 10)]);
 
-    let card = detect_punish_missed(&events, 1, None).expect("提示される");
+    let card = detect_punish_missed(&events, 1, None, None).expect("提示される");
 
     assert_eq!(card.hp_lost, None, "機会の損失を被ダメとして出している");
     assert!(card.severity > 0.0, "重みが付いていない");
@@ -113,8 +113,8 @@ fn missing_more_often_weighs_more() {
         chance(600, PunishOutcome::Missed, 10),
     ]);
 
-    let once = detect_punish_missed(&once, 1, None).expect("提示される");
-    let twice = detect_punish_missed(&twice, 1, None).expect("提示される");
+    let once = detect_punish_missed(&once, 1, None, None).expect("提示される");
+    let twice = detect_punish_missed(&twice, 1, None, None).expect("提示される");
 
     assert!(twice.severity > once.severity, "回数が重みに効いていない");
     assert_ne!(once.title, twice.title, "見出しを書き分けていない");
@@ -125,8 +125,8 @@ fn missing_more_often_weighs_more() {
 fn the_reachable_moves_are_suggested_when_the_character_is_known() {
     let events = events_with(vec![chance(100, PunishOutcome::Missed, 12)]);
 
-    let known = detect_punish_missed(&events, 1, Some("LUKE")).expect("提示される");
-    let unknown = detect_punish_missed(&events, 1, None).expect("提示される");
+    let known = detect_punish_missed(&events, 1, Some("LUKE"), None).expect("提示される");
+    let unknown = detect_punish_missed(&events, 1, None, None).expect("提示される");
 
     assert!(
         known.description.contains("威力"),
@@ -145,7 +145,7 @@ fn the_reachable_moves_are_suggested_when_the_character_is_known() {
 fn an_unknown_character_gets_general_advice_instead() {
     let events = events_with(vec![chance(100, PunishOutcome::Missed, 12)]);
 
-    let card = detect_punish_missed(&events, 1, Some("だれか")).expect("提示される");
+    let card = detect_punish_missed(&events, 1, Some("だれか"), None).expect("提示される");
 
     assert!(
         !card.description.contains("威力"),
@@ -163,7 +163,7 @@ fn the_suggestions_fit_the_tightest_chance() {
         chance(600, PunishOutcome::Missed, 5),
     ]);
 
-    let card = detect_punish_missed(&events, 1, Some("LUKE")).expect("提示される");
+    let card = detect_punish_missed(&events, 1, Some("LUKE"), None).expect("提示される");
 
     assert!(
         card.description.contains("有利 5F"),
@@ -178,7 +178,7 @@ fn the_suggestions_fit_the_tightest_chance() {
 fn the_missed_clip_says_how_much_time_there_was() {
     let events = events_with(vec![chance(100, PunishOutcome::Missed, 12)]);
 
-    let card = detect_punish_missed(&events, 1, None).expect("提示される");
+    let card = detect_punish_missed(&events, 1, None, None).expect("提示される");
 
     assert!(
         card.evidence[0].label.contains("+12F"),

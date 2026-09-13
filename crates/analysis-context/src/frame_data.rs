@@ -123,6 +123,127 @@ pub fn strike_kind_for_input(
         .then_some(kind)
 }
 
+/// 技名の記譜と実測発生の照合を許す誤差。データの発生は素の値で、実測は
+/// 表示遅延や読み取りで 1〜2F 揺れる。
+const IDENTIFY_STARTUP_TOLERANCE: u32 = 2;
+
+/// ガードされた相手の技を、入力表示(Classic のバッジと方向)と実測発生
+/// フレームで同定する。
+///
+/// frame_data の技名は「モーション数字 + ボタン」の記譜(例: 2MK, 236HP,
+/// [4]6LP)で、Classic のバッジとは 1:1 に対応する。派生(~)や択一(/)の
+/// 記譜、Modern・AUTO の入力は対応が曖昧なので同定しない。候補が一つの
+/// 技名に絞れたときだけ返し、絞れない場面で技名を語らない。
+pub fn identify_move(
+    character: &str,
+    dir: &str,
+    badges: &[String],
+    auto: bool,
+    observed_startup: u32,
+) -> Option<&'static MoveData> {
+    if auto || input_is_classic(badges) != Some(true) {
+        return None;
+    }
+    let moves = table().get(&character.to_uppercase())?;
+    let candidates: Vec<&MoveData> = moves
+        .iter()
+        .filter(|move_data| {
+            move_data.startup.abs_diff(observed_startup) <= IDENTIFY_STARTUP_TOLERANCE
+        })
+        .filter(|move_data| notation_matches(&move_data.name, dir, badges))
+        .collect();
+    let first = candidates.first()?;
+    candidates
+        .iter()
+        .all(|move_data| move_data.name == first.name)
+        .then_some(first)
+}
+
+/// 記譜がバッジ列と方向に一致するか。読めない記譜は一致しない。
+fn notation_matches(name: &str, dir: &str, badges: &[String]) -> bool {
+    let Some((motion, button)) = parse_notation(name) else {
+        return false;
+    };
+    button_matches(button, badges) && motion_matches(motion, dir)
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum NotationButton {
+    Single(&'static str),
+    /// OD 版(同種 2 ボタン同時)。
+    Double(char),
+    /// 強度不問の 1 ボタン(スーパー等の P / K)。
+    Any(char),
+}
+
+/// 「モーション数字(溜め括弧は除去) + ボタン」へ分解する。派生(~)・
+/// 択一(/)・投げなどの記譜は、モーション部が数字にならないため
+/// ここで自然に None になる。
+fn parse_notation(name: &str) -> Option<(Option<char>, NotationButton)> {
+    // 溜め表記 [4]6LP は保持方向を除いた最終方向で照合する。
+    let mut flat = String::new();
+    let mut in_bracket = false;
+    for ch in name.chars() {
+        match ch {
+            '[' => in_bracket = true,
+            ']' => in_bracket = false,
+            _ if !in_bracket => flat.push(ch),
+            _ => {}
+        }
+    }
+    const BUTTONS: [(&str, NotationButton); 10] = [
+        ("LP", NotationButton::Single("弱P")),
+        ("MP", NotationButton::Single("中P")),
+        ("HP", NotationButton::Single("強P")),
+        ("LK", NotationButton::Single("弱K")),
+        ("MK", NotationButton::Single("中K")),
+        ("HK", NotationButton::Single("強K")),
+        ("PP", NotationButton::Double('P')),
+        ("KK", NotationButton::Double('K')),
+        ("P", NotationButton::Any('P')),
+        ("K", NotationButton::Any('K')),
+    ];
+    for (suffix, button) in BUTTONS {
+        if let Some(motion) = flat.strip_suffix(suffix) {
+            // ボタン文字は数字と重ならないため、長い候補でモーション部が
+            // 数字にならなかった名前は、短い候補でも数字にならない。
+            return motion
+                .chars()
+                .all(|ch| ch.is_ascii_digit())
+                .then(|| (motion.chars().last(), button));
+        }
+    }
+    None
+}
+
+fn button_matches(button: NotationButton, badges: &[String]) -> bool {
+    let strength_of = |badge: &str| badge.chars().next();
+    let kind_of = |badge: &str| badge.chars().last();
+    match button {
+        NotationButton::Single(expected) => badges.len() == 1 && badges[0] == expected,
+        NotationButton::Double(kind) => {
+            badges.len() == 2
+                && badges.iter().all(|badge| kind_of(badge) == Some(kind))
+                && strength_of(&badges[0]) != strength_of(&badges[1])
+        }
+        NotationButton::Any(kind) => badges.len() == 1 && kind_of(&badges[0]) == Some(kind),
+    }
+}
+
+/// モーションの最終方向とバッジ時点の方向表示の整合。左右どちらを向いて
+/// いるかは画面表示から確定できないため、前後(4/6)は水平方向として扱う。
+fn motion_matches(motion: Option<char>, dir: &str) -> bool {
+    match motion {
+        // モーション無しの通常技は、立ち(歩き中を含む)での押下。
+        None => matches!(dir, "N" | "L" | "R"),
+        Some('2') => matches!(dir, "D" | "DL" | "DR"),
+        Some('1') | Some('3') => matches!(dir, "DL" | "DR"),
+        Some('4') | Some('6') => matches!(dir, "L" | "R"),
+        // 360 系や 8 終端は最終方向を縛らない(? だけは読めない入力)。
+        _ => dir != "?",
+    }
+}
+
 fn input_is_classic(badges: &[String]) -> Option<bool> {
     if badges.is_empty() {
         return None;
@@ -246,6 +367,105 @@ pub fn rising_reversal_kind(character: &str) -> Option<RisingReversalKind> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn badges(labels: &[&str]) -> Vec<String> {
+        labels.iter().map(|label| label.to_string()).collect()
+    }
+
+    /// 記譜(モーション + ボタン)と実測発生で一意に絞れた技だけを返す。
+    /// 実データのケンで、通常技・必殺技・OD 版のそれぞれを確かめる。
+    #[test]
+    fn identify_move_returns_only_a_unique_notation_match() {
+        let name = |result: Option<&'static MoveData>| result.map(|m| m.name.as_str());
+        // しゃがみ中K(発生 7)。実測は ±2 まで許す。
+        assert_eq!(
+            name(identify_move("KEN", "D", &badges(&["中K"]), false, 7)),
+            Some("2MK")
+        );
+        assert_eq!(
+            name(identify_move("KEN", "D", &badges(&["中K"]), false, 9)),
+            Some("2MK")
+        );
+        assert_eq!(
+            name(identify_move("KEN", "D", &badges(&["中K"]), false, 10)),
+            None
+        );
+        // OD 波動(236PP、発生 12)。同種 2 ボタンの同時押し。強度が同じ
+        // 2 バッジは同時押し表示ではないので一致しない。
+        assert_eq!(
+            name(identify_move(
+                "KEN",
+                "R",
+                &badges(&["弱P", "強P"]),
+                false,
+                12
+            )),
+            Some("236PP")
+        );
+        assert_eq!(
+            name(identify_move(
+                "KEN",
+                "R",
+                &badges(&["強P", "強P"]),
+                false,
+                12
+            )),
+            None
+        );
+        // 斜め下 + 強P 発生 7 は 623HP(昇竜)と 2HP(発生 8)の両方に
+        // 一致しうる。絞れない場面では技名を語らない。
+        assert_eq!(
+            name(identify_move("KEN", "DR", &badges(&["強P"]), false, 7)),
+            None
+        );
+        // Modern のバッジと AUTO は記譜と 1:1 でないため同定しない。
+        assert_eq!(
+            name(identify_move("KEN", "D", &badges(&["中"]), false, 7)),
+            None
+        );
+        assert_eq!(
+            name(identify_move("KEN", "D", &badges(&["中K"]), true, 7)),
+            None
+        );
+        // 未知のキャラは同定しない。
+        assert_eq!(
+            name(identify_move("UNKNOWN", "D", &badges(&["中K"]), false, 7)),
+            None
+        );
+    }
+
+    /// 記譜の分解。派生・択一は読めない記譜として扱い、溜め表記は保持
+    /// 方向を除いた最終方向で照合する。
+    #[test]
+    fn notation_parsing_covers_the_data_alphabet() {
+        assert!(notation_matches("2MK", "D", &badges(&["中K"])));
+        assert!(notation_matches("236LP", "R", &badges(&["弱P"])));
+        assert!(!notation_matches("236LP", "D", &badges(&["弱P"])));
+        assert!(notation_matches("623MP", "DL", &badges(&["中P"])));
+        assert!(notation_matches("214KK", "L", &badges(&["弱K", "強K"])));
+        // 溜め: [4]6LP は最終方向 6(水平)で照合する。ボタン溜め
+        // ([H]HP)は方向が残らず、立ち通常技として照合される。
+        assert!(notation_matches("[4]6LP", "R", &badges(&["弱P"])));
+        assert!(!notation_matches("[4]6LP", "D", &badges(&["弱P"])));
+        assert!(notation_matches("[H]HP", "N", &badges(&["強P"])));
+        // 360 系は最終方向を縛らないが、読めない方向(?)は使わない。
+        assert!(notation_matches("360LP", "D", &badges(&["弱P"])));
+        assert!(!notation_matches("360LP", "?", &badges(&["弱P"])));
+        // スーパーの P / K は強度不問の 1 ボタン。2 ボタンは一致しない。
+        assert!(notation_matches("236236K", "R", &badges(&["中K"])));
+        assert!(!notation_matches("236236K", "R", &badges(&["中K", "強K"])));
+        // 単ボタン記譜に 2 バッジ、OD 記譜に 1 バッジは一致しない。
+        assert!(!notation_matches("2MK", "D", &badges(&["中K", "強K"])));
+        assert!(!notation_matches("214KK", "L", &badges(&["弱K"])));
+        // OD 記譜は同種 2 ボタン。種が混ざる同時押しは一致しない。
+        assert!(!notation_matches("214KK", "L", &badges(&["弱K", "強P"])));
+        // 派生・択一・投げ表記は同定に使わない。
+        assert!(!notation_matches("MP~HP", "N", &badges(&["中P"])));
+        assert!(!notation_matches("5/6LPLK", "N", &badges(&["弱P"])));
+        // 立ち通常技は立ち(歩き含む)でのみ。しゃがみ表示とは一致しない。
+        assert!(notation_matches("HP", "N", &badges(&["強P"])));
+        assert!(!notation_matches("HP", "D", &badges(&["強P"])));
+    }
 
     #[test]
     fn test_frame_data_loads() {

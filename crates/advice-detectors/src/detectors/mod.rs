@@ -6,6 +6,7 @@ mod defense;
 mod direction;
 mod drive_impact;
 mod jumps;
+mod move_identity;
 mod pressure;
 mod punishment;
 mod rounds;
