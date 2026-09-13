@@ -23,6 +23,10 @@ pub struct AdviceReport {
     #[serde(default)]
     pub suppressed_cards: Vec<SuppressedAdviceCard>,
     pub round_summaries: Vec<RoundSummary>,
+    /// 同定できた相手の技ごとの、触られ方と回答の収支。同定できた接触
+    /// だけの下限値で、触られた回数の多い順。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub opponent_move_stats: Vec<OpponentMoveStat>,
     /// 入力読み取りが無いパイプラインでは None
     pub input_stats: Option<InputStats>,
     #[serde(default)]

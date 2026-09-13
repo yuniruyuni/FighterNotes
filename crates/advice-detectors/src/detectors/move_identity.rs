@@ -7,8 +7,85 @@
 //! ときだけ技名を返し、絞れない場面は None のままにする。
 
 use crate::frame_data::{self, MoveData};
-use crate::match_events::{MatchEvents, MeterState};
+use crate::match_events::{round_of, MatchEvents, MeterState, PunishOutcome, PunishReachability};
+use crate::model::OpponentMoveStat;
 use crate::MASH_METER_CONFIDENCE;
+
+/// ヒットの HP 損失を接触へ帰属する窓。既存の被弾帰属(±25F)と同じ。
+const HIT_DAMAGE_WINDOW: u32 = 25;
+
+/// 同定できた相手の技ごとの、触られ方と回答の収支。
+///
+/// 同定は入力表示と実測発生の二重整合が取れた接触に限るため、どの値も
+/// 下限になる。触られた回数の多い順に返す。
+pub fn build_opponent_move_stats(
+    events: &MatchEvents,
+    own: u8,
+    opponent_character: Option<&str>,
+) -> Vec<OpponentMoveStat> {
+    let opponent = 3 - own;
+    let mut stats: Vec<OpponentMoveStat> = Vec::new();
+    for contact in events.contacts.iter().filter(|contact| {
+        contact.attacker == opponent
+            && contact.victim == own
+            && round_of(&events.rounds, contact.frame) == Some(contact.round_no)
+    }) {
+        let Some(move_data) =
+            identify_contact_move(events, opponent, opponent_character, contact.frame)
+        else {
+            continue;
+        };
+        let entry = match stats.iter_mut().find(|entry| entry.name == move_data.name) {
+            Some(entry) => entry,
+            None => {
+                stats.push(OpponentMoveStat {
+                    name: move_data.name.clone(),
+                    projectile: false,
+                    touches: 0,
+                    hits_taken: 0,
+                    hp_lost: 0.0,
+                    blocked: 0,
+                    punished: 0,
+                    punish_missed: 0,
+                });
+                stats.last_mut().expect("直前に push した")
+            }
+        };
+        entry.touches += 1;
+        entry.projectile |= contact.projectile;
+        if contact.hit {
+            entry.hits_taken += 1;
+            entry.hp_lost += events
+                .damage
+                .iter()
+                .filter(|damage| {
+                    damage.victim == own
+                        && damage.round_no == contact.round_no
+                        && damage.start_frame.abs_diff(contact.frame) <= HIT_DAMAGE_WINDOW
+                })
+                .min_by_key(|damage| damage.start_frame.abs_diff(contact.frame))
+                .map_or(0.0, |damage| damage.drop);
+        } else {
+            entry.blocked += 1;
+            // このガードを起点にした確反機会の結末。
+            if let Some(punish) = events.punishes.iter().find(|punish| {
+                punish.side == own && punish.source_contact_frame == Some(contact.frame)
+            }) {
+                match punish.outcome {
+                    PunishOutcome::Success => entry.punished += 1,
+                    PunishOutcome::Missed
+                        if punish.reachability == PunishReachability::Confirmed =>
+                    {
+                        entry.punish_missed += 1
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    stats.sort_by(|a, b| b.touches.cmp(&a.touches).then(a.name.cmp(&b.name)));
+    stats
+}
 
 /// 実測発生を数えるとき、接触から Startup まで遡って良い距離。持続
 /// (Active)は長い技でもこの範囲に収まり、これを超えて遡ると別の行動の
@@ -19,7 +96,7 @@ const ACTIVE_SKIP_MAX: usize = 16;
 const PRESS_SLACK: u32 = 4;
 
 /// 接触へ至った相手の技を同定する。
-pub(crate) fn identify_blocked_move(
+pub(crate) fn identify_contact_move(
     events: &MatchEvents,
     attacker: u8,
     attacker_character: Option<&str>,
@@ -62,25 +139,21 @@ fn measured_startup(states: &[MeterState], confidence: &[f32], contact_frame: u3
                 .get(index)
                 .is_some_and(|value| *value >= MASH_METER_CONFIDENCE)
     };
-    let mut index = contact_frame as usize;
-    let mut skipped = 0usize;
-    while states.get(index) != Some(&MeterState::Startup) {
-        if index == 0 || skipped >= ACTIVE_SKIP_MAX {
-            return None;
-        }
-        index -= 1;
-        skipped += 1;
-    }
+    let contact = contact_frame as usize;
+    // 接触から ACTIVE_SKIP_MAX まで遡り、最初に見つかる Startup が
+    // この技の発生の終端。
+    let run_end = (contact.saturating_sub(ACTIVE_SKIP_MAX)..=contact)
+        .rev()
+        .find(|&index| states.get(index) == Some(&MeterState::Startup))?;
     let mut length = 0u32;
-    while states.get(index) == Some(&MeterState::Startup) {
+    for index in (0..=run_end).rev() {
+        if states.get(index) != Some(&MeterState::Startup) {
+            break;
+        }
         if !reliable(index) {
             return None;
         }
         length += 1;
-        if index == 0 {
-            break;
-        }
-        index -= 1;
     }
     Some(length)
 }

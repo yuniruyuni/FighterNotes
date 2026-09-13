@@ -2,6 +2,7 @@ import type {
   AnalysisAvailability,
   AnalysisCoverage,
   InputStats,
+  OpponentMoveStat,
   TacticStats,
 } from "~/modules/analysis/contracts.js";
 import {
@@ -630,6 +631,59 @@ export function TacticStatsSection({
     <section className="summary-section" data-wm="Tactics">
       <h2>戦術別の結果</h2>
       <StatGrid items={items} />
+    </section>
+  );
+}
+
+export function OpponentMovesSection({
+  stats,
+}: {
+  stats?: OpponentMoveStat[];
+}) {
+  if (!stats || stats.length === 0) return null;
+  return (
+    <section className="summary-section" data-wm="OpponentMoves">
+      <h2>相手の技の内訳</h2>
+      <p className="muted-note">
+        入力表示と実測発生から技を同定できた接触だけの下限値です。技名は Classic
+        記譜(2MK = しゃがみ中K など)で示します。
+      </p>
+      <div className="table-scroll">
+        <table className="round-table">
+          <thead>
+            <tr>
+              <th>技</th>
+              <th>触られた</th>
+              <th>被弾</th>
+              <th>ガード</th>
+              <th>ガード後の確反</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stats.map((move) => (
+              <tr key={move.name}>
+                <td>
+                  {move.name}
+                  {move.projectile ? "(弾)" : ""}
+                </td>
+                <td>{move.touches} 回</td>
+                <td>
+                  {move.hits_taken} 回
+                  {move.hp_lost > 0
+                    ? `(-${Math.round(move.hp_lost * 100)}%)`
+                    : ""}
+                </td>
+                <td>{move.blocked} 回</td>
+                <td>
+                  {move.blocked > 0
+                    ? `取った ${move.punished} / 見逃し ${move.punish_missed}`
+                    : "-"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

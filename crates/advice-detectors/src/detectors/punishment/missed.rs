@@ -1,4 +1,4 @@
-use super::super::move_identity::identify_blocked_move;
+use super::super::move_identity::identify_contact_move;
 use super::options::missed_option_text;
 use crate::match_events::{EventConfidence, MatchEvents, PunishOutcome, PunishReachability};
 use crate::{AdviceCard, AdviceKind, EvidenceClip};
@@ -27,7 +27,7 @@ pub fn detect_punish_missed(
         .iter()
         .map(|punish| {
             punish.source_contact_frame.and_then(|contact| {
-                identify_blocked_move(events, opponent, opponent_character, contact)
+                identify_contact_move(events, opponent, opponent_character, contact)
             })
         })
         .collect();
