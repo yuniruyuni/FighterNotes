@@ -1,12 +1,14 @@
 use super::*;
 use std::cmp::Ordering;
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build_advice_cards(
     features: &[FrameFeatures],
     events: &MatchEvents,
     own: u8,
     own_index: usize,
     own_character: Option<&str>,
+    opponent_character: Option<&str>,
     round_summaries: &[RoundSummary],
     coverage: &AnalysisCoverage,
 ) -> (Vec<AdviceCard>, Vec<SuppressedAdviceCard>) {
@@ -29,7 +31,7 @@ pub(crate) fn build_advice_cards(
         detect_reversal_punished(events, own),
         detect_low_scaling_super(events, own),
         detect_punish_fail(events, own, own_character),
-        detect_punish_missed(events, own, own_character),
+        detect_punish_missed(events, own, own_character, opponent_character),
         detect_low_conversion(events, own),
         detect_throw_interrupted_by_invincible(events, own),
         detect_throw_whiff_punished(events, own),
@@ -311,6 +313,7 @@ mod tests {
                 fixture.own,
                 fixture.own_index,
                 fixture.own_character,
+                None,
                 &fixture.round_summaries,
                 &coverage,
             );

@@ -50,6 +50,7 @@ pub fn build_report_with_context(
         own,
         own_index,
         context.own_character(),
+        context.opponent_character(),
         &round_summaries,
         &coverage,
     );
