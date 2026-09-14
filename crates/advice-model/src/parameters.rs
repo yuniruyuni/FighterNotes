@@ -20,7 +20,9 @@
 // 確反見逃しを技名で指摘する。
 // v26: 同定できた相手の技ごとの触られ方と回答の収支(相手の技の内訳)を
 // レポートへ追加。
-pub const RULESET_VERSION: u32 = 26;
+// v27: Modern 入力の技同定。attack_data の入力パターンを Classic 記譜へ
+// 橋渡しし、Modern 相手でも確反知識と技の内訳を出せるようにする。
+pub const RULESET_VERSION: u32 = 27;
 
 /// 「大被弾」とみなす HP ドロップ（暴れ指摘の対象）
 pub const BIG_DAMAGE: f32 = 0.10;
