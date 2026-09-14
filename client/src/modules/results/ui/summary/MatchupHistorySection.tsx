@@ -4,7 +4,10 @@ import type {
   AnalysisContext,
 } from "~/modules/analysis/contracts.js";
 import { formatCharacterId } from "~/modules/analysis/contracts.js";
-import type { AnalysisHistoryRecord } from "../../domain/history.js";
+import type {
+  AnalysisHistoryRecord,
+  MatchupSummary,
+} from "../../domain/history.js";
 import { defensiveResponseBias } from "../../domain/history.js";
 import { formatTacticRateWithCount } from "./tactic-stat-format.js";
 import { useMatchupHistory } from "./use-matchup-history.js";
@@ -302,11 +305,13 @@ function MatchupHistorySummary({
           <tr>
             <th>組み合わせ</th>
             <th>試合</th>
+            <th>ラウンド</th>
             <th>対空</th>
             <th>DI返し</th>
             <th>生ラッシュ対処</th>
             <th>不利後の回答偏り</th>
             <th>バーンアウト収支</th>
+            <th>最も触られた技(通算)</th>
           </tr>
         </thead>
         <tbody>
@@ -322,6 +327,7 @@ function MatchupHistorySummary({
                   {formatCharacterId(summary.opponentCharacter)}
                 </td>
                 <td>{summary.matches}</td>
+                <td>{formatRoundRecord(summary)}</td>
                 <td>
                   {formatTacticRateWithCount(
                     summary.antiAirSuccesses,
@@ -347,6 +353,7 @@ function MatchupHistorySummary({
                   {burnoutBalance > 0 ? "+" : ""}
                   {burnoutBalance}%
                 </td>
+                <td>{formatTopMove(summary)}</td>
               </tr>
             );
           })}
@@ -354,6 +361,21 @@ function MatchupHistorySummary({
       </table>
     </div>
   );
+}
+
+function formatRoundRecord(summary: MatchupSummary): string {
+  if (summary.matchesWithResults === 0) return "-";
+  return `${summary.roundsWon}勝${summary.roundsLost}敗`;
+}
+
+// 通算で最も触られた技と、そのガード後の確反収支。同定できた接触だけの
+// 下限値なので、件数は控えめに出る。
+function formatTopMove(summary: MatchupSummary): string {
+  const top = summary.opponentMoves[0];
+  if (!top) return "-";
+  const name = `${top.name}${top.projectile ? "(弾)" : ""} ×${top.touches}`;
+  if (top.blocked === 0) return name;
+  return `${name}（確反 取${top.punished}・逃${top.punish_missed}）`;
 }
 
 function formatResponseBias(

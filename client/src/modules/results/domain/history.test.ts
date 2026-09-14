@@ -127,6 +127,10 @@ describe("analysis history aggregation", () => {
       ownCharacter: "LUKE",
       opponentCharacter: "CHUN_LI",
       rounds: 3,
+      // round 要約の無い旧形式レポートでは勝敗 0、内訳は空。
+      roundsWon: 0,
+      roundsLost: 0,
+      opponentMoves: [],
     });
     expect(history.id).toMatch(/^v2:[0-9a-f]{64}$/);
     expect(history.id).not.toContain(video.name);
@@ -175,6 +179,41 @@ describe("analysis history aggregation", () => {
       new Date("2026-07-22T00:00:00.000Z"),
     );
     expect(missingOpponent.opponentCharacter).toBe("未指定");
+
+    const withResults = await createAnalysisHistoryRecord(
+      { size: 1, lastModified: 2 },
+      { ownSide: "p1", p1: { character: "LUKE" }, p2: { character: "KEN" } },
+      {
+        ruleset_version: 26,
+        rounds_detected: 3,
+        tactic_stats: emptyTactics(),
+        round_summaries: [
+          { won: true },
+          { won: true },
+          { won: false },
+          // 不明 round は勝ちにも負けにも数えない(won === true の厳密比較を
+          // 非対称な件数で確かめる)。
+          { won: null },
+          { won: null },
+        ],
+        opponent_move_stats: [
+          {
+            name: "2MK",
+            projectile: false,
+            touches: 3,
+            hits_taken: 1,
+            hp_lost: 0.1,
+            blocked: 2,
+            punished: 0,
+            punish_missed: 1,
+          },
+        ],
+      } as AdviceReport,
+      new Date("2026-07-22T00:00:00.000Z"),
+    );
+    expect(withResults.roundsWon).toBe(2);
+    expect(withResults.roundsLost).toBe(1);
+    expect(withResults.opponentMoves?.[0]?.name).toBe("2MK");
     expect(missingOpponent.id).toMatch(/^v2:[0-9a-f]{64}$/);
     expect(missingOpponent.id).not.toBe(history.id);
   });
@@ -254,7 +293,135 @@ describe("analysis history aggregation", () => {
       burnoutSeconds: 32,
       burnoutHpLost: 34,
       burnoutHpDealt: 36,
+      roundsWon: 0,
+      roundsLost: 0,
+      matchesWithResults: 0,
+      opponentMoves: [],
     });
+  });
+
+  test("ラウンド勝敗と相手の技の内訳を通算する。旧レコードは勝敗の分母に入らない", () => {
+    const first = {
+      ...record("a", "KEN", {}),
+      roundsWon: 2,
+      roundsLost: 1,
+      opponentMoves: [
+        // 触られた回数の少ない技を先に保存し、通算では回数順に並び替え
+        // られることを確かめる。
+        {
+          name: "236PP",
+          projectile: true,
+          touches: 2,
+          hits_taken: 1,
+          hp_lost: 0.05,
+          blocked: 1,
+          punished: 1,
+          punish_missed: 0,
+        },
+        {
+          name: "2MK",
+          projectile: false,
+          touches: 3,
+          hits_taken: 1,
+          hp_lost: 0.25,
+          blocked: 2,
+          punished: 1,
+          punish_missed: 1,
+        },
+      ],
+    };
+    const second = {
+      ...record("b", "KEN", {}),
+      roundsWon: 0,
+      roundsLost: 2,
+      opponentMoves: [
+        {
+          name: "2MK",
+          projectile: false,
+          touches: 4,
+          hits_taken: 2,
+          hp_lost: 0.5,
+          blocked: 2,
+          punished: 2,
+          punish_missed: 2,
+        },
+        // 既に弾の印が立った技は、弾でない接触が混ざっても印を保つ。
+        {
+          name: "236PP",
+          projectile: false,
+          touches: 1,
+          hits_taken: 0,
+          hp_lost: 0,
+          blocked: 1,
+          punished: 0,
+          punish_missed: 1,
+        },
+      ],
+    };
+    // 勝敗も内訳も持たない旧レコード。
+    const legacy = record("c", "KEN", {});
+    // 片側しか勝敗を持たない壊れたレコードは分母に入れない。
+    const halfBroken = { ...record("d", "KEN", {}), roundsWon: 5 };
+    const halfBrokenMirror = { ...record("e", "KEN", {}), roundsLost: 4 };
+
+    const [summary] = aggregateMatchups(
+      [first, second, legacy, halfBroken, halfBrokenMirror],
+      2,
+    );
+    expect(summary.roundsWon).toBe(2);
+    expect(summary.roundsLost).toBe(3);
+    expect(summary.matchesWithResults).toBe(2);
+    expect(summary.opponentMoves).toEqual([
+      {
+        name: "2MK",
+        projectile: false,
+        touches: 7,
+        hits_taken: 3,
+        hp_lost: 0.75,
+        blocked: 4,
+        punished: 3,
+        punish_missed: 3,
+      },
+      {
+        name: "236PP",
+        projectile: true,
+        touches: 3,
+        hits_taken: 1,
+        hp_lost: 0.05,
+        blocked: 2,
+        punished: 1,
+        punish_missed: 1,
+      },
+    ]);
+  });
+
+  test("触られた回数が同じ技は記譜の辞書順で安定して並ぶ", () => {
+    const move = (name: string) => ({
+      name,
+      projectile: false,
+      touches: 2,
+      hits_taken: 0,
+      hp_lost: 0,
+      blocked: 2,
+      punished: 0,
+      punish_missed: 0,
+    });
+    // 正解の並びが「挿入順」とも「挿入順の逆」とも一致しない 3 技で、
+    // 比較関数そのものの正しさを確かめる。
+    const [summary] = aggregateMatchups(
+      [
+        {
+          ...record("a", "KEN", {}),
+          opponentMoves: [move("5MK"), move("MK"), move("2MK")],
+        },
+      ],
+      2,
+    );
+    expect(summary.opponentMoves.map((entry) => entry.name)).toEqual([
+      "2MK",
+      "5MK",
+      "MK",
+    ]);
   });
 
   test("異なるルール世代を混ぜない", () => {
