@@ -16,6 +16,7 @@ mod mashing_pressure;
 mod mashing_requires_direct_input_and_reliable_linked_startup;
 mod one_early_hit_is_kept_as_an_observation;
 mod opponent_move_stats;
+mod own_move_usage;
 mod repeated_guard_direction_and_reversal_are_required_for_diagnosis;
 mod test_layered_defense_card_requires_short_parry_and_damage;
 mod test_lead_loss_clip_range;

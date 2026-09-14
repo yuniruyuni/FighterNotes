@@ -11,6 +11,7 @@ import { PracticeSection } from "./PracticeSection.js";
 import {
   InputStatsSection,
   OpponentMovesSection,
+  OwnMoveUsageSection,
   TacticStatsSection,
 } from "./ReportStatsSections.js";
 import { RoundSection } from "./RoundSection.js";
@@ -73,6 +74,7 @@ export function SummaryView({
         coverage={report.coverage}
       />
       <OpponentMovesSection stats={report.opponent_move_stats} />
+      <OwnMoveUsageSection usage={report.own_move_usage} />
       <MatchupHistorySection file={file} context={context} report={report} />
       <PracticeSection items={report.practice_items} />
     </section>

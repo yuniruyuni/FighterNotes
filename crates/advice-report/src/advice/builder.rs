@@ -84,6 +84,7 @@ pub fn build_report_with_context(
             own,
             context.opponent_character(),
         ),
+        own_move_usage: detectors::build_own_move_usage(events, own, context.own_character()),
         input_stats,
         tactic_stats,
         coverage,

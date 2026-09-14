@@ -3,6 +3,7 @@ import type {
   AnalysisCoverage,
   InputStats,
   OpponentMoveStat,
+  OwnMoveUsage,
   TacticStats,
 } from "~/modules/analysis/contracts.js";
 import {
@@ -679,6 +680,37 @@ export function OpponentMovesSection({
                     ? `取った ${move.punished} / 見逃し ${move.punish_missed}`
                     : "-"}
                 </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+export function OwnMoveUsageSection({ usage }: { usage?: OwnMoveUsage[] }) {
+  if (!usage || usage.length === 0) return null;
+  return (
+    <section className="summary-section" data-wm="OwnMoveUsage">
+      <h2>自分の技の使用分布</h2>
+      <p className="muted-note">
+        入力表示と実測発生から技を同定できた実行だけの下限値です。使い方の
+        良し悪しではなく、偏りを眺めるための統計です。
+      </p>
+      <div className="table-scroll">
+        <table className="round-table">
+          <thead>
+            <tr>
+              <th>技</th>
+              <th>使用回数</th>
+            </tr>
+          </thead>
+          <tbody>
+            {usage.map((move) => (
+              <tr key={move.name}>
+                <td>{move.name}</td>
+                <td>{move.uses} 回</td>
               </tr>
             ))}
           </tbody>
