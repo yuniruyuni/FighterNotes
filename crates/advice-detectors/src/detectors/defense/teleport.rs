@@ -1,3 +1,4 @@
+use crate::detectors::opponent_suffix;
 use crate::match_events::{
     DefenseResponseKind, DpReachability, EventConfidence, MatchEvents, TeleportContext,
     ThreatOutcome,
@@ -6,7 +7,11 @@ use crate::{AdviceCard, AdviceKind, EvidenceClip};
 
 /// A naked attacking teleport that a calibrated anti-air can reach.
 /// Unknown spatial reach deliberately abstains.
-pub fn detect_teleport_defense(events: &MatchEvents, own: u8) -> Option<AdviceCard> {
+pub fn detect_teleport_defense(
+    events: &MatchEvents,
+    own: u8,
+    opponent_character: Option<&str>,
+) -> Option<AdviceCard> {
     let missed: Vec<_> = events
         .teleports
         .iter()
@@ -34,11 +39,14 @@ pub fn detect_teleport_defense(events: &MatchEvents, own: u8) -> Option<AdviceCa
         id: "teleport_defense".to_string(),
         kind: AdviceKind::Diagnosis,
         confidence: EventConfidence::High,
-        title: match missed.len() {
-            1 => "裸テレポートを迎撃できなかった場面",
-            _ => "裸テレポートへの迎撃が遅れている",
-        }
-        .to_string(),
+        title: format!(
+            "{}{}",
+            match missed.len() {
+                1 => "裸テレポートを迎撃できなかった場面",
+                _ => "裸テレポートへの迎撃が遅れている",
+            },
+            opponent_suffix(opponent_character),
+        ),
         severity: hp_lost + 0.02 * missed.len() as f32,
         hp_lost: Some(hp_lost),
         description: format!(

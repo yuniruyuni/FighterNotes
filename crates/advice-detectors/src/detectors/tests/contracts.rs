@@ -6,7 +6,10 @@ fn detectors_abstain_without_relevant_events() {
     let events = empty_events();
     let cases = [
         ("layered_defense", detect_layered_defense(&events, 1)),
-        ("teleport_defense", detect_teleport_defense(&events, 1)),
+        (
+            "teleport_defense",
+            detect_teleport_defense(&events, 1, None),
+        ),
         ("anti_air", detect_anti_air(&events, 1, 2)),
         ("own_jumps", detect_own_jumps(&events, 1)),
         ("burnout", detect_burnout(&events, 1)),

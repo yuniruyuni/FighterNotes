@@ -240,7 +240,11 @@ const WALL_SPLAT_RESULT_WINDOW: u32 = 150;
 /// 中央なら押し返されて終わる同じガードが、端では壁やられになり確定反撃を
 /// 献上する。ガード入力は正しいので操作の失敗ではなく、端を背負ったときに
 /// DIへの返し(DI返し・パリィ・無敵技)を用意していなかったことを指摘する。
-pub fn detect_cornered_di_guard(events: &MatchEvents, own: u8) -> Option<AdviceCard> {
+pub fn detect_cornered_di_guard(
+    events: &MatchEvents,
+    own: u8,
+    opponent_character: Option<&str>,
+) -> Option<AdviceCard> {
     let opponent = 3 - own;
     let mut guarded = Vec::new();
     for impact in events.drive_impacts.iter().filter(|impact| {
@@ -281,11 +285,14 @@ pub fn detect_cornered_di_guard(events: &MatchEvents, own: u8) -> Option<AdviceC
         id: "cornered_di_guard".to_string(),
         kind,
         confidence: EventConfidence::High,
-        title: match kind {
-            AdviceKind::Diagnosis => "画面端でDIをガードして壁やられを繰り返している",
-            _ => "画面端でDIをガードした場面",
-        }
-        .to_string(),
+        title: format!(
+            "{}{}",
+            match kind {
+                AdviceKind::Diagnosis => "画面端でDIをガードして壁やられを繰り返している",
+                _ => "画面端でDIをガードした場面",
+            },
+            crate::detectors::opponent_suffix(opponent_character),
+        ),
         severity: hp_lost + 0.03 * guarded.len() as f32,
         hp_lost: Some(hp_lost),
         description: if repeated {

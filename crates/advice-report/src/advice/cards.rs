@@ -17,12 +17,12 @@ pub(crate) fn build_advice_cards(
     let opp = 3 - own;
     let candidates = [
         detect_layered_defense(events, own),
-        detect_teleport_defense(events, own),
+        detect_teleport_defense(events, own, opponent_character),
         detect_anti_air(events, own, opp),
         detect_own_jumps(events, own),
         detect_burnout(events, own),
         detect_committed_button_vs_di(events, own, own_index),
-        detect_cornered_di_guard(events, own),
+        detect_cornered_di_guard(events, own, opponent_character),
         detect_mashing(features, events, own, own_index),
         detect_press_while_minus(events, own),
         detect_throw_while_minus(events, own),

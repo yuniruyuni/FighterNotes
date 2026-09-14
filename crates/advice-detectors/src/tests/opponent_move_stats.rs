@@ -241,3 +241,16 @@ fn measured_startup_respects_scan_bounds_and_confidence() {
         }
     }));
 }
+
+/// カード文言用のキャラ表記。下線区切りの id を履歴画面と同じ
+/// ハイフン表記へ直し、接尾辞は未指定なら何も足さない。
+#[test]
+fn character_labels_match_the_history_screen_notation() {
+    use crate::detectors::{display_character, opponent_suffix};
+
+    assert_eq!(display_character("CHUN_LI"), "CHUN-LI");
+    assert_eq!(display_character("KEN"), "KEN");
+    assert_eq!(display_character("A_K_I"), "A-K-I");
+    assert_eq!(opponent_suffix(Some("E_HONDA")), "(相手: E-HONDA)");
+    assert_eq!(opponent_suffix(None), "");
+}
