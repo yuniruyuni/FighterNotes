@@ -6,6 +6,7 @@ import type {
 import type { SceneSelection } from "../../domain/scene-selection.js";
 import { AdviceSection } from "./AdviceSection.js";
 import { DamageOriginsSection } from "./DamageOriginsSection.js";
+import { MatchupGuideSection } from "./MatchupGuideSection.js";
 import { MatchupHistorySection } from "./MatchupHistorySection.js";
 import { PracticeSection } from "./PracticeSection.js";
 import {
@@ -75,6 +76,7 @@ export function SummaryView({
       />
       <OpponentMovesSection stats={report.opponent_move_stats} />
       <OwnMoveUsageSection usage={report.own_move_usage} />
+      <MatchupGuideSection report={report} context={context} />
       <MatchupHistorySection file={file} context={context} report={report} />
       <PracticeSection items={report.practice_items} />
     </section>
