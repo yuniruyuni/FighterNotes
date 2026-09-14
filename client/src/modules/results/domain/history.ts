@@ -68,7 +68,8 @@ export async function createAnalysisHistoryRecord(
     opponentCharacter,
     report.ruleset_version,
   );
-  const rounds = report.round_summaries ?? [];
+  // 旧形式(v8 以前の保存物)には round 要約が無い。
+  const rounds = report.round_summaries;
   return {
     id,
     createdAt: now.toISOString(),
@@ -76,8 +77,10 @@ export async function createAnalysisHistoryRecord(
     ownCharacter,
     opponentCharacter,
     rounds: report.rounds_detected,
-    roundsWon: rounds.filter((round) => round.won === true).length,
-    roundsLost: rounds.filter((round) => round.won === false).length,
+    roundsWon: rounds ? rounds.filter((round) => round.won === true).length : 0,
+    roundsLost: rounds
+      ? rounds.filter((round) => round.won === false).length
+      : 0,
     tactics: report.tactic_stats,
     opponentMoves: report.opponent_move_stats ?? [],
   };
