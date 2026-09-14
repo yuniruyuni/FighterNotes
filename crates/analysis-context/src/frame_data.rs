@@ -127,12 +127,13 @@ pub fn strike_kind_for_input(
 /// 表示遅延や読み取りで 1〜2F 揺れる。
 const IDENTIFY_STARTUP_TOLERANCE: u32 = 2;
 
-/// ガードされた相手の技を、入力表示(Classic のバッジと方向)と実測発生
-/// フレームで同定する。
+/// 接触した相手の技を、入力表示のバッジ・方向と実測発生フレームで
+/// 同定する。
 ///
-/// frame_data の技名は「モーション数字 + ボタン」の記譜(例: 2MK, 236HP,
-/// [4]6LP)で、Classic のバッジとは 1:1 に対応する。派生(~)や択一(/)の
-/// 記譜、Modern・AUTO の入力は対応が曖昧なので同定しない。候補が一つの
+/// Classic は frame_data の記譜(例: 2MK, 236HP, [4]6LP)と 1:1 に対応する。
+/// Modern は attack_data の入力パターン(AUTO の別を含む)で照合し、Classic
+/// 記譜へ一意に橋渡しできた技だけを名前つきで扱う。派生(~)や択一(/)の
+/// 記譜は対応が曖昧なので同定しない。どちらの経路でも、候補が一つの
 /// 技名に絞れたときだけ返し、絞れない場面で技名を語らない。
 pub fn identify_move(
     character: &str,
@@ -141,22 +142,119 @@ pub fn identify_move(
     auto: bool,
     observed_startup: u32,
 ) -> Option<&'static MoveData> {
-    if auto || input_is_classic(badges) != Some(true) {
-        return None;
-    }
-    let moves = table().get(&character.to_uppercase())?;
-    let candidates: Vec<&MoveData> = moves
-        .iter()
-        .filter(|move_data| {
-            move_data.startup.abs_diff(observed_startup) <= IDENTIFY_STARTUP_TOLERANCE
-        })
-        .filter(|move_data| notation_matches(&move_data.name, dir, badges))
-        .collect();
+    let candidates: Vec<&MoveData> = match input_is_classic(badges)? {
+        // Classic は記譜と 1:1。AUTO(アシスト)は Classic には無い表示
+        // なので、付いていたら読み違いとして扱う。
+        true => {
+            if auto {
+                return None;
+            }
+            table()
+                .get(&character.to_uppercase())?
+                .iter()
+                .filter(|move_data| {
+                    move_data.startup.abs_diff(observed_startup) <= IDENTIFY_STARTUP_TOLERANCE
+                })
+                .filter(|move_data| notation_matches(&move_data.name, dir, badges))
+                .collect()
+        }
+        // Modern は attack_data の入力パターン(AUTO の別も持つ)で照合し、
+        // Classic 記譜へ一意に橋渡しできた技だけを名前つき候補にする。
+        false => modern_table()
+            .get(&character.to_uppercase())?
+            .iter()
+            .filter(|(attack, _)| {
+                attack.startup.abs_diff(observed_startup) <= IDENTIFY_STARTUP_TOLERANCE
+            })
+            .filter(|(attack, _)| {
+                attack
+                    .modern_inputs
+                    .iter()
+                    .any(|pattern| input_matches(pattern, dir, badges, auto))
+            })
+            .map(|(_, move_data)| *move_data)
+            .collect(),
+    };
     let first = candidates.first()?;
     candidates
         .iter()
         .all(|move_data| move_data.name == first.name)
         .then_some(first)
+}
+
+/// Modern 入力を持つ attack_data の技を、Classic 記譜(frame_data の技名)へ
+/// 橋渡しした表。発生が等しく、Classic 入力パターンが記譜と一致する
+/// frame_data の技が一意に決まる項目だけを載せる。
+fn modern_table() -> &'static HashMap<String, Vec<(&'static AttackMoveData, &'static MoveData)>> {
+    static TABLE: OnceLock<HashMap<String, Vec<(&'static AttackMoveData, &'static MoveData)>>> =
+        OnceLock::new();
+    TABLE.get_or_init(|| {
+        let mut bridged = HashMap::new();
+        for (character, attacks) in attack_table() {
+            let Some(moves) = table().get(character) else {
+                continue;
+            };
+            let mut pairs = Vec::new();
+            for attack in attacks {
+                if attack.modern_inputs.is_empty() {
+                    continue;
+                }
+                let names: Vec<&MoveData> = moves
+                    .iter()
+                    .filter(|move_data| move_data.startup == attack.startup)
+                    .filter(|move_data| {
+                        attack
+                            .classic_inputs
+                            .iter()
+                            .filter(|pattern| !pattern.auto)
+                            .any(|pattern| {
+                                classic_pattern_matches_notation(&move_data.name, pattern)
+                            })
+                    })
+                    .collect();
+                let Some(first) = names.first() else {
+                    continue;
+                };
+                if names.iter().all(|move_data| move_data.name == first.name) {
+                    pairs.push((attack, *first));
+                }
+            }
+            bridged.insert(character.clone(), pairs);
+        }
+        bridged
+    })
+}
+
+/// Classic 入力パターンが、この記譜の押し方と同じか。橋渡し専用で、
+/// 実測の方向表示ではなくパターンの方向区分と突き合わせる。
+fn classic_pattern_matches_notation(name: &str, pattern: &AttackInputPattern) -> bool {
+    let Some((motion, button)) = parse_notation(name) else {
+        return false;
+    };
+    if !button_matches(button, &pattern.buttons) {
+        return false;
+    }
+    match motion {
+        None => matches!(
+            pattern.direction,
+            AttackInputDirection::Standing
+                | AttackInputDirection::Neutral
+                | AttackInputDirection::Any
+        ),
+        Some('2') => matches!(
+            pattern.direction,
+            AttackInputDirection::Down | AttackInputDirection::Any
+        ),
+        Some('1') | Some('3') => matches!(
+            pattern.direction,
+            AttackInputDirection::DownDiagonal | AttackInputDirection::Any
+        ),
+        Some('4') | Some('6') => matches!(
+            pattern.direction,
+            AttackInputDirection::Horizontal | AttackInputDirection::Any
+        ),
+        _ => true,
+    }
 }
 
 /// 記譜がバッジ列と方向に一致するか。読めない記譜は一致しない。
@@ -418,11 +516,7 @@ mod tests {
             name(identify_move("KEN", "DR", &badges(&["強P"]), false, 7)),
             None
         );
-        // Modern のバッジと AUTO は記譜と 1:1 でないため同定しない。
-        assert_eq!(
-            name(identify_move("KEN", "D", &badges(&["中"]), false, 7)),
-            None
-        );
+        // Classic に AUTO 表示は無い。付いていたら読み違いとして同定しない。
         assert_eq!(
             name(identify_move("KEN", "D", &badges(&["中K"]), true, 7)),
             None
@@ -431,6 +525,33 @@ mod tests {
         assert_eq!(
             name(identify_move("UNKNOWN", "D", &badges(&["中K"]), false, 7)),
             None
+        );
+    }
+
+    /// Modern は attack_data の入力パターン(AUTO の別も持つ)で照合し、
+    /// Classic 記譜へ一意に橋渡しできた技だけを名前つきで返す。
+    #[test]
+    fn identify_move_bridges_modern_inputs_to_notation_names() {
+        let name = |result: Option<&'static MoveData>| result.map(|m| m.name.as_str());
+        // 立ち中(手動、発生 8)= 中K = MK。同じ立ち中でもアシスト
+        // (AUTO、発生 5)は中P = MP に対応する。
+        assert_eq!(
+            name(identify_move("KEN", "N", &badges(&["中"]), false, 8)),
+            Some("MK")
+        );
+        assert_eq!(
+            name(identify_move("KEN", "N", &badges(&["中"]), true, 5)),
+            Some("MP")
+        );
+        // AUTO の別と発生が食い違う組み合わせは同定しない。
+        assert_eq!(
+            name(identify_move("KEN", "N", &badges(&["中"]), false, 5)),
+            None
+        );
+        // しゃがみ中(手動、発生 7)= 2MK。
+        assert_eq!(
+            name(identify_move("KEN", "D", &badges(&["中"]), false, 7)),
+            Some("2MK")
         );
     }
 
