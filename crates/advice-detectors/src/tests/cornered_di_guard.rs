@@ -57,11 +57,14 @@ fn only_a_corner_confirmed_di_guard_is_reported() {
     events.drive_impacts.push(blocked_di(1000));
     events.damage.push(wall_splat_damage(1080, 0.30));
 
-    let card = detect_cornered_di_guard(&events, 1).expect("端でのDIガードを提示");
+    let card = detect_cornered_di_guard(&events, 1, None).expect("端でのDIガードを提示");
     assert_eq!(card.id, "cornered_di_guard");
     assert_eq!(card.kind, AdviceKind::Observation);
     assert_eq!(card.confidence, EventConfidence::High);
-    assert_eq!(card.title, "画面端でDIをガードした場面");
+    assert_eq!(
+        card.title, "画面端でDIをガードした場面",
+        "相手キャラ未指定なら接尾辞を付けない"
+    );
     assert!(card.practice.contains("DI返し"), "{}", card.practice);
     assert_eq!(card.hp_lost, Some(0.30));
     assert_eq!(card.evidence.len(), 1, "中央のガードを混ぜない");
@@ -88,9 +91,13 @@ fn repeated_cornered_guards_become_a_diagnosis() {
     // 窓の外の被弾はこの場面の損失として帰属しない。
     events.damage.push(wall_splat_damage(1300, 0.10));
 
-    let card = detect_cornered_di_guard(&events, 1).expect("繰り返した端DIガードを提示");
+    let card =
+        detect_cornered_di_guard(&events, 1, Some("ZANGIEF")).expect("繰り返した端DIガードを提示");
     assert_eq!(card.kind, AdviceKind::Diagnosis);
-    assert_eq!(card.title, "画面端でDIをガードして壁やられを繰り返している");
+    assert_eq!(
+        card.title,
+        "画面端でDIをガードして壁やられを繰り返している(相手: ZANGIEF)"
+    );
     assert!(card.practice.contains("DI返し"), "{}", card.practice);
     assert!((card.hp_lost.unwrap() - 0.50).abs() < 1e-6);
     assert!(
@@ -112,26 +119,26 @@ fn tail_grace_other_outcomes_and_low_confidence_are_excluded() {
     // 終端 + 30F 以内なので端のまま。
     events.drive_impacts.push(blocked_di(1000));
 
-    let card = detect_cornered_di_guard(&events, 1).expect("猶予内の接触を端として扱う");
+    let card = detect_cornered_di_guard(&events, 1, None).expect("猶予内の接触を端として扱う");
     assert_eq!(card.evidence.len(), 1);
     assert_eq!(card.hp_lost, Some(0.0), "反撃が無くても場面自体は提示する");
 
     // 猶予を超えると端と確認できない。
     events.corner_spans[0].end_frame = 900;
-    assert!(detect_cornered_di_guard(&events, 1).is_none());
+    assert!(detect_cornered_di_guard(&events, 1, None).is_none());
 
     // 端でも、ガード以外の結末は別のカードの領分。
     events.corner_spans[0].end_frame = 970;
     events.drive_impacts[0].outcome = DriveImpactOutcome::Hit;
-    assert!(detect_cornered_di_guard(&events, 1).is_none());
+    assert!(detect_cornered_di_guard(&events, 1, None).is_none());
 
     // 低確度の検出から断定しない。
     events.drive_impacts[0].outcome = DriveImpactOutcome::Blocked;
     events.drive_impacts[0].confidence = EventConfidence::Medium;
-    assert!(detect_cornered_di_guard(&events, 1).is_none());
+    assert!(detect_cornered_di_guard(&events, 1, None).is_none());
 
     // 自分のDIがガードされた場面は対象外。
     events.drive_impacts[0].confidence = EventConfidence::High;
     events.drive_impacts[0].side = 1;
-    assert!(detect_cornered_di_guard(&events, 1).is_none());
+    assert!(detect_cornered_di_guard(&events, 1, None).is_none());
 }

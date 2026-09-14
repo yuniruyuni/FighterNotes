@@ -57,10 +57,17 @@ pub fn detect_punish_missed(
                 .count();
             (count >= 2).then_some((name, count))
         });
+    // 技を同定できた時点で相手キャラは既知だが、表記の分岐は明示しておく。
+    let opponent_label = opponent_character.map(crate::detectors::display_character);
     let move_note = match repeated_move {
-        Some((name, count)) => format!(
-            "特に相手の {name} は {count} 回ガードして、いずれも反撃していません。この技はガード後に反撃が確定します。"
-        ),
+        Some((name, count)) => match &opponent_label {
+            Some(label) => format!(
+                "特に {label} の {name} は {count} 回ガードして、いずれも反撃していません。この技はガード後に反撃が確定します。"
+            ),
+            None => format!(
+                "特に相手の {name} は {count} 回ガードして、いずれも反撃していません。この技はガード後に反撃が確定します。"
+            ),
+        },
         None => String::new(),
     };
     Some(AdviceCard {
@@ -78,7 +85,13 @@ pub fn detect_punish_missed(
             "相手の技をガードした後、フレーム上の反撃猶予があり、位置解析でも近距離だったのに反撃していない場面が {} 回あります。{}相手の危険な技を覚えて、ガードしたら反撃する意識を持ちましょう。{}",
             missed.len(), move_note, option_text
         ),
-        practice: "対戦相手がよく振る技のうち、ガードして確反が取れるものを 2-3 個に絞って覚えましょう。トレモでその技をガード → 最速で確反、を反復して実戦でも無意識に確反をとれるようにしましょう。".to_string(),
+        practice: format!(
+            "{}がよく振る技のうち、ガードして確反が取れるものを 2-3 個に絞って覚えましょう。トレモでその技をガード → 最速で確反、を反復して実戦でも無意識に確反をとれるようにしましょう。",
+            match &opponent_label {
+                Some(label) => format!("{label} "),
+                None => "対戦相手".to_string(),
+            },
+        ),
         evidence: missed.iter().zip(&identified).map(|(punish, move_data)| EvidenceClip {
             frame: punish.frame,
             end_frame: None,

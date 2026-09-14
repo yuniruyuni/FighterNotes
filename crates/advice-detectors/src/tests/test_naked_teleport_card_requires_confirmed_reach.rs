@@ -22,15 +22,15 @@ fn test_naked_teleport_card_requires_confirmed_reach() {
         confidence: 0.9,
     });
 
-    assert!(detect_teleport_defense(&ev, 1).is_none());
+    assert!(detect_teleport_defense(&ev, 1, None).is_none());
     ev.teleports[0].dp_reachability = DpReachability::Confirmed;
     assert_eq!(
-        detect_teleport_defense(&ev, 1).map(|card| card.id),
+        detect_teleport_defense(&ev, 1, None).map(|card| card.id),
         Some("teleport_defense".to_string())
     );
 
     ev.teleports[0].context = TeleportContext::ProjectileCovered;
-    assert!(detect_teleport_defense(&ev, 1).is_none());
+    assert!(detect_teleport_defense(&ev, 1, None).is_none());
     ev.teleports[0].context = TeleportContext::DefenderUnavailable;
-    assert!(detect_teleport_defense(&ev, 1).is_none());
+    assert!(detect_teleport_defense(&ev, 1, None).is_none());
 }

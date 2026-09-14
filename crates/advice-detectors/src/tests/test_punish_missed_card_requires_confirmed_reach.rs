@@ -84,9 +84,14 @@ fn identified_moves_are_named_and_repeats_are_called_out() {
     let card = detect_punish_missed(&ev, 1, Some("LUKE"), Some("KEN")).expect("提示される");
     assert!(
         card.description
-            .contains("特に相手の 2MK は 2 回ガードして、いずれも反撃していません"),
-        "反復した技を名指ししていない: {}",
+            .contains("特に KEN の 2MK は 2 回ガードして、いずれも反撃していません"),
+        "反復した技を相手キャラ名で名指ししていない: {}",
         card.description
+    );
+    assert!(
+        card.practice.starts_with("KEN がよく振る技のうち、"),
+        "練習文が相手キャラ名で始まっていない: {}",
+        card.practice
     );
     assert!(card.evidence[0]
         .label
@@ -101,10 +106,16 @@ fn identified_moves_are_named_and_repeats_are_called_out() {
     // 1 回だけなら名指しの反復注記は付けない(クリップには技名が付く)。
     ev.punishes.truncate(1);
     let single = detect_punish_missed(&ev, 1, Some("LUKE"), Some("KEN")).expect("提示される");
+    assert!(!single.description.contains("特に KEN の"));
     assert!(!single.description.contains("特に相手の"));
     assert!(single.evidence[0].label.contains("相手の 2MK"));
 
-    // 相手キャラが未指定なら同定しない。
+    // 相手キャラが未指定なら同定せず、練習文も従来表現に留める。
     let unknown = detect_punish_missed(&ev, 1, Some("LUKE"), None).expect("提示される");
     assert!(unknown.evidence[0].label.contains("近距離確認"));
+    assert!(
+        unknown.practice.starts_with("対戦相手がよく振る技のうち、"),
+        "未指定時の練習文が従来表現でない: {}",
+        unknown.practice
+    );
 }

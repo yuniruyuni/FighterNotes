@@ -49,7 +49,7 @@ fn events_with(teleports: Vec<TeleportEvent>) -> MatchEvents {
 /// テレポートが無ければ何も出さない。
 #[test]
 fn nothing_is_reported_without_a_teleport() {
-    assert!(detect_teleport_defense(&empty_events(), 1).is_none());
+    assert!(detect_teleport_defense(&empty_events(), 1, None).is_none());
 }
 
 /// 迎撃できていれば指摘しない。
@@ -58,7 +58,7 @@ fn a_teleport_that_was_stopped_is_not_reported() {
     let mut events = events_with(vec![missed_teleport(100)]);
     events.teleports[0].outcome = ThreatOutcome::Defended;
 
-    assert!(detect_teleport_defense(&events, 1).is_none());
+    assert!(detect_teleport_defense(&events, 1, None).is_none());
 }
 
 /// 飛び道具と挟まれていれば、対空を振れる場面ではない。パリィや
@@ -68,7 +68,7 @@ fn a_teleport_covered_by_a_projectile_is_not_this_card() {
     let mut events = events_with(vec![missed_teleport(100)]);
     events.teleports[0].context = TeleportContext::ProjectileCovered;
 
-    assert!(detect_teleport_defense(&events, 1).is_none());
+    assert!(detect_teleport_defense(&events, 1, None).is_none());
 }
 
 /// 攻撃を伴わないテレポートは迎撃する対象ではない。
@@ -78,7 +78,7 @@ fn a_teleport_without_an_attack_is_not_this_card() {
     events.teleports[0].context = TeleportContext::MovementOnly;
     events.teleports[0].followup_attack_frame = None;
 
-    assert!(detect_teleport_defense(&events, 1).is_none());
+    assert!(detect_teleport_defense(&events, 1, None).is_none());
 }
 
 /// 硬直中で動けなかったなら、迎撃できなかったのは当然。
@@ -87,7 +87,7 @@ fn a_teleport_arriving_while_you_could_not_act_is_not_a_failure() {
     let mut events = events_with(vec![missed_teleport(100)]);
     events.teleports[0].defender_actionable = false;
 
-    assert!(detect_teleport_defense(&events, 1).is_none());
+    assert!(detect_teleport_defense(&events, 1, None).is_none());
 }
 
 /// 昇竜が届かない位置なら、振っても当たらない。
@@ -96,7 +96,7 @@ fn a_teleport_out_of_the_anti_airs_reach_is_not_a_failure() {
     let mut events = events_with(vec![missed_teleport(100)]);
     events.teleports[0].dp_reachability = DpReachability::OutOfRange;
 
-    assert!(detect_teleport_defense(&events, 1).is_none());
+    assert!(detect_teleport_defense(&events, 1, None).is_none());
 }
 
 /// 位置を確認できていない場面では何も言わない。届いたかどうかが
@@ -106,7 +106,7 @@ fn an_unmeasured_position_makes_the_card_abstain() {
     let mut events = events_with(vec![missed_teleport(100)]);
     events.teleports[0].dp_reachability = DpReachability::Unknown;
 
-    assert!(detect_teleport_defense(&events, 1).is_none());
+    assert!(detect_teleport_defense(&events, 1, None).is_none());
 }
 
 /// パリィで受けていれば、対空を選ばなかっただけで回答はしている。
@@ -120,7 +120,7 @@ fn parrying_it_is_still_an_answer() {
         end_frame: 150,
     });
 
-    assert!(detect_teleport_defense(&events, 1).is_none());
+    assert!(detect_teleport_defense(&events, 1, None).is_none());
 }
 
 /// 無敵技で受けていれば、対空そのものを振っている。
@@ -134,7 +134,7 @@ fn answering_with_an_invincible_move_is_still_an_answer() {
         end_frame: 150,
     });
 
-    assert!(detect_teleport_defense(&events, 1).is_none());
+    assert!(detect_teleport_defense(&events, 1, None).is_none());
 }
 
 /// ガードで受けたのなら、対空は振っていない。迎撃できたはずの場面
@@ -150,7 +150,7 @@ fn blocking_it_still_counts_as_not_intercepting() {
     });
 
     assert!(
-        detect_teleport_defense(&events, 1).is_some(),
+        detect_teleport_defense(&events, 1, None).is_some(),
         "ガードを対空と同じ扱いにしている"
     );
 }
@@ -161,7 +161,7 @@ fn a_teleport_that_cost_nothing_is_not_reported() {
     let mut events = events_with(vec![missed_teleport(100)]);
     events.teleports[0].damage = 0.0;
 
-    assert!(detect_teleport_defense(&events, 1).is_none());
+    assert!(detect_teleport_defense(&events, 1, None).is_none());
 }
 
 /// 相手が受けたテレポートは自分の話ではない。
@@ -170,7 +170,7 @@ fn a_teleport_the_opponent_defended_is_not_yours() {
     let mut events = events_with(vec![missed_teleport(100)]);
     events.teleports[0].defender = 2;
 
-    assert!(detect_teleport_defense(&events, 1).is_none());
+    assert!(detect_teleport_defense(&events, 1, None).is_none());
 }
 
 /// 条件が揃っていれば、一度でも指摘する。迎撃できたと言い切れる場面
@@ -179,7 +179,7 @@ fn a_teleport_the_opponent_defended_is_not_yours() {
 fn one_confirmed_miss_is_already_worth_saying() {
     let events = events_with(vec![missed_teleport(100)]);
 
-    let card = detect_teleport_defense(&events, 1).expect("提示される");
+    let card = detect_teleport_defense(&events, 1, None).expect("提示される");
 
     assert_usable(&card);
     assert_eq!(card.kind, AdviceKind::Diagnosis);
@@ -194,12 +194,27 @@ fn the_wording_changes_when_it_repeats() {
     let once = events_with(vec![missed_teleport(100)]);
     let twice = events_with(vec![missed_teleport(100), missed_teleport(1000)]);
 
-    let once = detect_teleport_defense(&once, 1).expect("提示される");
-    let twice = detect_teleport_defense(&twice, 1).expect("提示される");
+    let once = detect_teleport_defense(&once, 1, None).expect("提示される");
+    let twice = detect_teleport_defense(&twice, 1, None).expect("提示される");
 
     assert_eq!(once.id, twice.id);
     assert_ne!(once.title, twice.title, "見出しを書き分けていない");
     assert!((twice.hp_lost.expect("損失がある") - 0.40).abs() < 1e-6);
+}
+
+/// 相手キャラが分かっていれば見出しへ差し込み、未指定なら足さない。
+#[test]
+fn the_title_names_the_opponent_character_when_known() {
+    let events = events_with(vec![missed_teleport(100)]);
+
+    let named = detect_teleport_defense(&events, 1, Some("DHALSIM")).expect("提示される");
+    let anonymous = detect_teleport_defense(&events, 1, None).expect("提示される");
+
+    assert_eq!(
+        named.title,
+        "裸テレポートを迎撃できなかった場面(相手: DHALSIM)"
+    );
+    assert_eq!(anonymous.title, "裸テレポートを迎撃できなかった場面");
 }
 
 /// 回数も重みに効く。
@@ -211,8 +226,8 @@ fn missing_more_often_weighs_more() {
     }]);
     let twice = events_with(vec![missed_teleport(100), missed_teleport(1000)]);
 
-    let once = detect_teleport_defense(&once, 1).expect("提示される");
-    let twice = detect_teleport_defense(&twice, 1).expect("提示される");
+    let once = detect_teleport_defense(&once, 1, None).expect("提示される");
+    let twice = detect_teleport_defense(&twice, 1, None).expect("提示される");
 
     assert_eq!(once.hp_lost, twice.hp_lost, "損失は同じはず");
     assert!((once.severity - 0.42).abs() < 1e-6);
@@ -224,8 +239,8 @@ fn missing_more_often_weighs_more() {
 /// しているわけではない。
 #[test]
 fn the_description_says_what_was_left_out() {
-    let card =
-        detect_teleport_defense(&events_with(vec![missed_teleport(100)]), 1).expect("提示される");
+    let card = detect_teleport_defense(&events_with(vec![missed_teleport(100)]), 1, None)
+        .expect("提示される");
 
     assert!(
         card.description.contains("含めていません"),
@@ -238,8 +253,8 @@ fn the_description_says_what_was_left_out() {
 /// 反応する時間があったのかが分からない。
 #[test]
 fn the_clip_starts_at_the_teleport_input() {
-    let card =
-        detect_teleport_defense(&events_with(vec![missed_teleport(100)]), 1).expect("提示される");
+    let card = detect_teleport_defense(&events_with(vec![missed_teleport(100)]), 1, None)
+        .expect("提示される");
     let clip = &card.evidence[0];
 
     assert_eq!(clip.frame, 100, "入力から始まっていない");

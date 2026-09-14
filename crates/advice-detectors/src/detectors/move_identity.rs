@@ -14,6 +14,19 @@ use crate::MASH_METER_CONFIDENCE;
 /// ヒットの HP 損失を接触へ帰属する窓。既存の被弾帰属(±25F)と同じ。
 const HIT_DAMAGE_WINDOW: u32 = 25;
 
+/// キャラクター id(例: CHUN_LI)をカード文言用の表記(CHUN-LI)へ直す。
+/// client の formatCharacterId と同じ規則で、履歴画面の表記と揃える。
+pub fn display_character(id: &str) -> String {
+    id.replace('_', "-")
+}
+
+/// カード題名へ相手キャラ名を差し込む接尾辞。未指定なら何も足さない。
+pub fn opponent_suffix(opponent_character: Option<&str>) -> String {
+    opponent_character
+        .map(|id| format!("(相手: {})", display_character(id)))
+        .unwrap_or_default()
+}
+
 /// 同定できた相手の技ごとの、触られ方と回答の収支。
 ///
 /// 同定は入力表示と実測発生の二重整合が取れた接触に限るため、どの値も
