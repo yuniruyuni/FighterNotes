@@ -32,6 +32,7 @@ export type {
   EvidenceRequirement,
   InputStats,
   OpponentMoveStat,
+  OwnMoveUsage,
   RoundSummary,
   StrikeKind,
   SuppressedAdviceCard,

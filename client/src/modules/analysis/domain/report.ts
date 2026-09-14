@@ -234,6 +234,14 @@ export interface OpponentMoveStat {
   punish_missed: number;
 }
 
+/** 自分が実際に出した技 1 つぶんの使用回数。同定できた実行だけの下限。 */
+export interface OwnMoveUsage {
+  /** frame_data の記譜(例: 2MK, 236HP)。 */
+  name: string;
+  /** 実行を確認できた回数。 */
+  uses: number;
+}
+
 export interface TacticStats {
   anti_air_opportunities: number;
   anti_air_successes: number;
@@ -387,6 +395,8 @@ export interface AdviceReport {
   round_summaries: RoundSummary[];
   /** 同定できた相手の技ごとの、触られ方と回答の収支(触られた回数順、下限値)。 */
   opponent_move_stats?: OpponentMoveStat[];
+  /** 自分の技の使用分布(回数順、下限値)。結果には紐づけない。 */
+  own_move_usage?: OwnMoveUsage[];
   input_stats: InputStats | null;
   tactic_stats: TacticStats;
   coverage?: AnalysisCoverage;

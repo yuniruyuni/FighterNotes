@@ -171,6 +171,18 @@ pub struct OpponentMoveStat {
     pub punish_missed: u32,
 }
 
+/// 自分が実際に出した技 1 つぶんの使用回数。
+///
+/// フレームメーターの発生表示と入力表示の二重整合で同定できた実行だけを
+/// 数えるため下限になる。結果(ヒット/ガード)には紐づけず、処方もしない。
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct OwnMoveUsage {
+    /// frame_data の記譜(例: 2MK, 236HP)。
+    pub name: String,
+    /// 実行を確認できた回数。
+    pub uses: u32,
+}
+
 /// 指摘の有無とは独立した、戦術ごとの遭遇数と結果。
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(default)]

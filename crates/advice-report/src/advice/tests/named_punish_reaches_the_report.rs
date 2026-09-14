@@ -70,3 +70,31 @@ fn named_punish_reaches_the_report() {
     assert_eq!(report.opponent_move_stats[0].blocked, 1);
     assert_eq!(report.opponent_move_stats[0].punish_missed, 1);
 }
+
+/// 自キャラもレポートの文脈から使用分布の集計まで届く。結線を忘れても
+/// 例外は出ず、分布が黙って空になるだけなので、レポート境界で固定する。
+#[test]
+fn own_move_usage_reaches_the_report() {
+    let mut ev = empty_events();
+    // 自分(P1 ルーク)のしゃがみ中K(発生 8)の実測列と入力表示。
+    ev.meter_state[0] = vec![MeterState::Free; 300];
+    for frame in 200..208 {
+        ev.meter_state[0][frame] = MeterState::Startup;
+    }
+    ev.meter_state[0][208] = MeterState::Active;
+    ev.meter_confidence[0] = vec![1.0; 300];
+    ev.segments[0] = vec![InputSegment {
+        start_frame: 200,
+        end_frame: 204,
+        dir: "D".to_string(),
+        badges: vec!["中K".to_string()],
+        auto: false,
+        throw: false,
+        evidence: Default::default(),
+    }];
+
+    let report = detector_test_report_with_players(&ev, "p1", Some("LUKE"), Some("KEN"));
+    assert_eq!(report.own_move_usage.len(), 1, "自分の技が届いていない");
+    assert_eq!(report.own_move_usage[0].name, "2MK");
+    assert_eq!(report.own_move_usage[0].uses, 1);
+}

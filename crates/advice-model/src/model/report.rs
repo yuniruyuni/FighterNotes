@@ -27,6 +27,10 @@ pub struct AdviceReport {
     /// だけの下限値で、触られた回数の多い順。
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub opponent_move_stats: Vec<OpponentMoveStat>,
+    /// 自分の技の使用分布。同定できた実行だけの下限値で、回数の多い順。
+    /// 流派があるため処方には使わず、偏りを眺める統計に留める。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub own_move_usage: Vec<OwnMoveUsage>,
     /// 入力読み取りが無いパイプラインでは None
     pub input_stats: Option<InputStats>,
     #[serde(default)]

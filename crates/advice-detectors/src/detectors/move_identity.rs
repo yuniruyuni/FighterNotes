@@ -8,7 +8,7 @@
 
 use crate::frame_data::{self, MoveData};
 use crate::match_events::{round_of, MatchEvents, MeterState, PunishOutcome, PunishReachability};
-use crate::model::OpponentMoveStat;
+use crate::model::{OpponentMoveStat, OwnMoveUsage};
 use crate::MASH_METER_CONFIDENCE;
 
 /// ヒットの HP 損失を接触へ帰属する窓。既存の被弾帰属(±25F)と同じ。
@@ -98,6 +98,90 @@ pub fn build_opponent_move_stats(
     }
     stats.sort_by(|a, b| b.touches.cmp(&a.touches).then(a.name.cmp(&b.name)));
     stats
+}
+
+/// 自分の技の使用分布。フレームメーターの Startup 連続表示を 1 回の
+/// 実行として列挙し、その長さ(実測発生)と直前の入力表示の二重整合で
+/// 技名を同定する。一意に絞れた実行だけを数えるため、どの回数も下限に
+/// なる。結果(ヒット/ガード)には紐づけない。
+pub fn build_own_move_usage(
+    events: &MatchEvents,
+    own: u8,
+    own_character: Option<&str>,
+) -> Vec<OwnMoveUsage> {
+    let Some(character) = own_character else {
+        return Vec::new();
+    };
+    let own_index = own as usize - 1;
+    let Some(states) = events.meter_state.get(own_index) else {
+        return Vec::new();
+    };
+    let Some(confidence) = events.meter_confidence.get(own_index) else {
+        return Vec::new();
+    };
+    let reliable = |index: usize| {
+        confidence.is_empty()
+            || confidence
+                .get(index)
+                .is_some_and(|value| *value >= MASH_METER_CONFIDENCE)
+    };
+    // Startup の連続区間 = 1 回の実行。区間 [start, end) を列挙する。
+    let mut runs: Vec<(usize, usize)> = Vec::new();
+    for (index, state) in states.iter().enumerate() {
+        if *state != MeterState::Startup {
+            continue;
+        }
+        match runs.last_mut() {
+            Some((_, end)) if *end == index => *end += 1,
+            _ => runs.push((index, index + 1)),
+        }
+    }
+    let mut usage: Vec<OwnMoveUsage> = Vec::new();
+    for (start, end) in runs {
+        // round 確定外の表示は数えず、読み取り信頼度の足りない区間は
+        // 実測として使わない。
+        if round_of(&events.rounds, start as u32).is_none() {
+            continue;
+        }
+        if (start..end).any(|frame| !reliable(frame)) {
+            continue;
+        }
+        let startup = (end - start) as u32;
+        // 押下はおよそ Startup 表示の開始フレーム。その近傍で直接観測
+        // できた攻撃入力を探す(接触起点の同定と同じ許容)。
+        let press = start as u32;
+        let Some(segment) = events.segments.get(own_index).and_then(|segments| {
+            segments
+                .iter()
+                .filter(|segment| {
+                    segment.evidence.has_direct_observation()
+                        && !segment.badges.is_empty()
+                        && segment.start_frame <= press.saturating_add(PRESS_SLACK)
+                        && segment.end_frame.saturating_add(PRESS_SLACK) >= press
+                })
+                .max_by_key(|segment| segment.start_frame)
+        }) else {
+            continue;
+        };
+        let Some(move_data) = frame_data::identify_move(
+            character,
+            &segment.dir,
+            &segment.badges,
+            segment.auto,
+            startup,
+        ) else {
+            continue;
+        };
+        match usage.iter_mut().find(|entry| entry.name == move_data.name) {
+            Some(entry) => entry.uses += 1,
+            None => usage.push(OwnMoveUsage {
+                name: move_data.name.clone(),
+                uses: 1,
+            }),
+        }
+    }
+    usage.sort_by(|a, b| b.uses.cmp(&a.uses).then(a.name.cmp(&b.name)));
+    usage
 }
 
 /// 実測発生を数えるとき、接触から Startup まで遡って良い距離。持続

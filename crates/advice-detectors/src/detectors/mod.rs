@@ -7,7 +7,9 @@ mod direction;
 mod drive_impact;
 mod jumps;
 mod move_identity;
-pub use move_identity::{build_opponent_move_stats, display_character, opponent_suffix};
+pub use move_identity::{
+    build_opponent_move_stats, build_own_move_usage, display_character, opponent_suffix,
+};
 mod pressure;
 mod punishment;
 mod rounds;
