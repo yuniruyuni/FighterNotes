@@ -127,6 +127,10 @@ describe("analysis history aggregation", () => {
       ownCharacter: "LUKE",
       opponentCharacter: "CHUN_LI",
       rounds: 3,
+      // round 要約の無い旧形式レポートでは勝敗 0、内訳は空。
+      roundsWon: 0,
+      roundsLost: 0,
+      opponentMoves: [],
     });
     expect(history.id).toMatch(/^v2:[0-9a-f]{64}$/);
     expect(history.id).not.toContain(video.name);
@@ -175,6 +179,33 @@ describe("analysis history aggregation", () => {
       new Date("2026-07-22T00:00:00.000Z"),
     );
     expect(missingOpponent.opponentCharacter).toBe("未指定");
+
+    const withResults = await createAnalysisHistoryRecord(
+      { size: 1, lastModified: 2 },
+      { ownSide: "p1", p1: { character: "LUKE" }, p2: { character: "KEN" } },
+      {
+        ruleset_version: 26,
+        rounds_detected: 3,
+        tactic_stats: emptyTactics(),
+        round_summaries: [{ won: true }, { won: false }, { won: null }],
+        opponent_move_stats: [
+          {
+            name: "2MK",
+            projectile: false,
+            touches: 3,
+            hits_taken: 1,
+            hp_lost: 0.1,
+            blocked: 2,
+            punished: 0,
+            punish_missed: 1,
+          },
+        ],
+      } as AdviceReport,
+      new Date("2026-07-22T00:00:00.000Z"),
+    );
+    expect(withResults.roundsWon).toBe(1);
+    expect(withResults.roundsLost).toBe(1);
+    expect(withResults.opponentMoves?.[0]?.name).toBe("2MK");
     expect(missingOpponent.id).toMatch(/^v2:[0-9a-f]{64}$/);
     expect(missingOpponent.id).not.toBe(history.id);
   });
@@ -254,7 +285,63 @@ describe("analysis history aggregation", () => {
       burnoutSeconds: 32,
       burnoutHpLost: 34,
       burnoutHpDealt: 36,
+      roundsWon: 0,
+      roundsLost: 0,
+      matchesWithResults: 0,
+      opponentMoves: [],
     });
+  });
+
+  test("ラウンド勝敗と相手の技の内訳を通算する。旧レコードは勝敗の分母に入らない", () => {
+    const move = (touches: number, punishMissed: number) => ({
+      name: "2MK",
+      projectile: false,
+      touches,
+      hits_taken: 1,
+      hp_lost: 0.1,
+      blocked: touches - 1,
+      punished: 0,
+      punish_missed: punishMissed,
+    });
+    const first = {
+      ...record("a", "KEN", {}),
+      roundsWon: 2,
+      roundsLost: 1,
+      opponentMoves: [
+        move(3, 1),
+        {
+          name: "236PP",
+          projectile: true,
+          touches: 1,
+          hits_taken: 0,
+          hp_lost: 0,
+          blocked: 1,
+          punished: 1,
+          punish_missed: 0,
+        },
+      ],
+    };
+    const second = {
+      ...record("b", "KEN", {}),
+      roundsWon: 0,
+      roundsLost: 2,
+      opponentMoves: [move(4, 2)],
+    };
+    // 勝敗も内訳も持たない旧レコード。
+    const legacy = record("c", "KEN", {});
+
+    const [summary] = aggregateMatchups([first, second, legacy], 2);
+    expect(summary.roundsWon).toBe(2);
+    expect(summary.roundsLost).toBe(3);
+    expect(summary.matchesWithResults).toBe(2);
+    expect(
+      summary.opponentMoves.map((entry) => [entry.name, entry.touches]),
+    ).toEqual([
+      ["2MK", 7],
+      ["236PP", 1],
+    ]);
+    expect(summary.opponentMoves[0].punish_missed).toBe(3);
+    expect(summary.opponentMoves[1].projectile).toBe(true);
   });
 
   test("異なるルール世代を混ぜない", () => {

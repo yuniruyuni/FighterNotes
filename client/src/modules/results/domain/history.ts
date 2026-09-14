@@ -1,6 +1,7 @@
 import type {
   AdviceReport,
   AnalysisContext,
+  OpponentMoveStat,
   TacticStats,
 } from "~/modules/analysis/contracts.js";
 
@@ -18,7 +19,12 @@ export interface AnalysisHistoryRecord {
   ownCharacter: string;
   opponentCharacter: string;
   rounds: number;
+  /** 勝ち/負けが確定したラウンド数。旧レコードは省略。 */
+  roundsWon?: number;
+  roundsLost?: number;
   tactics: TacticStats;
+  /** 同定できた相手の技の内訳(v26+)。旧レコードは省略。 */
+  opponentMoves?: OpponentMoveStat[];
 }
 
 async function createAnalysisHistoryId(
@@ -62,6 +68,7 @@ export async function createAnalysisHistoryRecord(
     opponentCharacter,
     report.ruleset_version,
   );
+  const rounds = report.round_summaries ?? [];
   return {
     id,
     createdAt: now.toISOString(),
@@ -69,7 +76,10 @@ export async function createAnalysisHistoryRecord(
     ownCharacter,
     opponentCharacter,
     rounds: report.rounds_detected,
+    roundsWon: rounds.filter((round) => round.won === true).length,
+    roundsLost: rounds.filter((round) => round.won === false).length,
     tactics: report.tactic_stats,
+    opponentMoves: report.opponent_move_stats ?? [],
   };
 }
 
@@ -97,6 +107,12 @@ export interface MatchupSummary {
   burnoutSeconds: number;
   burnoutHpLost: number;
   burnoutHpDealt: number;
+  roundsWon: number;
+  roundsLost: number;
+  /** 勝敗を記録できたレコード数。旧レコードは分母に入らない。 */
+  matchesWithResults: number;
+  /** 同定できた相手の技の通算(触られた回数順)。 */
+  opponentMoves: OpponentMoveStat[];
 }
 
 export function aggregateMatchups(
@@ -131,6 +147,10 @@ export function aggregateMatchups(
       burnoutSeconds: 0,
       burnoutHpLost: 0,
       burnoutHpDealt: 0,
+      roundsWon: 0,
+      roundsLost: 0,
+      matchesWithResults: 0,
+      opponentMoves: [],
     };
     current.matches += 1;
     current.rounds += record.rounds;
@@ -153,6 +173,31 @@ export function aggregateMatchups(
     current.burnoutSeconds += record.tactics.burnout_seconds;
     current.burnoutHpLost += record.tactics.burnout_hp_lost;
     current.burnoutHpDealt += record.tactics.burnout_hp_dealt;
+    if (record.roundsWon !== undefined && record.roundsLost !== undefined) {
+      current.roundsWon += record.roundsWon;
+      current.roundsLost += record.roundsLost;
+      current.matchesWithResults += 1;
+    }
+    for (const move of record.opponentMoves ?? []) {
+      const merged = current.opponentMoves.find(
+        (entry) => entry.name === move.name,
+      );
+      if (merged) {
+        merged.projectile = merged.projectile || move.projectile;
+        merged.touches += move.touches;
+        merged.hits_taken += move.hits_taken;
+        merged.hp_lost += move.hp_lost;
+        merged.blocked += move.blocked;
+        merged.punished += move.punished;
+        merged.punish_missed += move.punish_missed;
+      } else {
+        current.opponentMoves.push({ ...move });
+      }
+    }
+    current.opponentMoves.sort(
+      (left, right) =>
+        right.touches - left.touches || left.name.localeCompare(right.name),
+    );
     groups.set(key, current);
   }
   return [...groups.values()].sort(
