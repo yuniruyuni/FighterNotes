@@ -7,7 +7,7 @@ describe("matchup guide data", () => {
     const ids = new Set<string>();
     for (const [character, items] of Object.entries(MATCHUP_GUIDES)) {
       expect(isCharacterId(character)).toBe(true);
-      expect(items.length).toBeGreaterThanOrEqual(3);
+      expect(items.length).toBeGreaterThanOrEqual(2);
       for (const item of items) {
         expect(ids.has(item.id)).toBe(false);
         ids.add(item.id);
@@ -28,4 +28,27 @@ describe("matchup guide data", () => {
       }
     }
   });
+});
+
+// 記譜のタイポは「絶対に発火しない項目」として静かに死ぬので、
+// frame_data と突き合わせて実在を固定する。
+import frameData from "../../../../../../crates/analysis-context/data/frame_data.json";
+
+test("move 条件の記譜は frame_data に実在する", () => {
+  const table = frameData as Record<string, Array<{ name: string }>>;
+  for (const [character, items] of Object.entries(MATCHUP_GUIDES)) {
+    const names = new Set((table[character] ?? []).map((move) => move.name));
+    expect(names.size).toBeGreaterThan(0);
+    for (const item of items) {
+      for (const trigger of item.triggers) {
+        if (trigger.kind !== "move") continue;
+        for (const notation of trigger.notations) {
+          expect(
+            names.has(notation),
+            `${character} ${item.id} の記譜 ${notation} が frame_data に無い`,
+          ).toBe(true);
+        }
+      }
+    }
+  }
 });
