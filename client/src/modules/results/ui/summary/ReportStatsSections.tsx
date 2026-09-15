@@ -636,6 +636,36 @@ export function TacticStatsSection({
   );
 }
 
+const GUARD_LABELS: Record<string, string> = {
+  high: "上段",
+  low: "下段(しゃがみガード)",
+  overhead: "中段(立ちガード)",
+  air: "飛び込み",
+};
+
+/** 統計を行動へ変える回答列。実測できた事実からだけ組み立てる。 */
+export function moveAnswer(move: OpponentMoveStat): string {
+  const parts: string[] = [];
+  const guard = move.guard ? GUARD_LABELS[move.guard] : undefined;
+  if (guard) parts.push(guard);
+  if (move.blocked_advantage !== undefined) {
+    const counters = move.counters ?? [];
+    parts.push(
+      counters.length > 0
+        ? `ガード後 +${move.blocked_advantage}F → ${counters.join("・")} で確反`
+        : `ガード後 +${move.blocked_advantage}F(実測)`,
+    );
+  }
+  return parts.length > 0 ? parts.join(" / ") : "-";
+}
+
+export function punishSummary(move: OpponentMoveStat): string {
+  if (move.blocked === 0) return "-";
+  const unconfirmed = move.punish_unconfirmed ?? 0;
+  const base = `取った ${move.punished} / 見逃し ${move.punish_missed}`;
+  return unconfirmed > 0 ? `${base} / 未確認 ${unconfirmed}` : base;
+}
+
 export function OpponentMovesSection({
   stats,
 }: {
@@ -647,7 +677,9 @@ export function OpponentMovesSection({
       <h2>相手の技の内訳</h2>
       <p className="muted-note">
         入力表示と実測発生から技を同定できた接触だけの下限値です。技名は Classic
-        記譜(2MK = しゃがみ中K など)で示します。
+        記譜(2MK = しゃがみ中K など)で示します。回答列は実測(ガード区分・
+        ガード後の有利フレーム)から引いた確反候補です。「未確認」は反撃猶予は
+        あったが距離を確認できなかった見逃し候補を指します。
       </p>
       <div className="table-scroll">
         <table className="round-table">
@@ -658,6 +690,7 @@ export function OpponentMovesSection({
               <th>被弾</th>
               <th>ガード</th>
               <th>ガード後の確反</th>
+              <th>回答</th>
             </tr>
           </thead>
           <tbody>
@@ -675,11 +708,8 @@ export function OpponentMovesSection({
                     : ""}
                 </td>
                 <td>{move.blocked} 回</td>
-                <td>
-                  {move.blocked > 0
-                    ? `取った ${move.punished} / 見逃し ${move.punish_missed}`
-                    : "-"}
-                </td>
+                <td>{punishSummary(move)}</td>
+                <td>{moveAnswer(move)}</td>
               </tr>
             ))}
           </tbody>

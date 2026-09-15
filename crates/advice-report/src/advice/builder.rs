@@ -82,6 +82,7 @@ pub fn build_report_with_context(
         opponent_move_stats: detectors::build_opponent_move_stats(
             events,
             own,
+            context.own_character(),
             context.opponent_character(),
         ),
         own_move_usage: detectors::build_own_move_usage(events, own, context.own_character()),

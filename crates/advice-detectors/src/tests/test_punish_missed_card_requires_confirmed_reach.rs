@@ -31,6 +31,86 @@ fn test_punish_missed_card_requires_confirmed_reach() {
     assert!(detect_punish_missed(&ev, 1, Some("BLANKA"), None).is_none());
 }
 
+/// 距離を確認できない見逃し候補は、単発では出さず、繰り返したときだけ
+/// 断定しない観察としてシーンを示す。距離を確認できた見逃しがあるなら
+/// 従来の診断が優先される。
+#[test]
+fn unconfirmed_misses_become_an_observation_only_when_repeated() {
+    let unknown_missed = |frame: u32, advantage: u32| PunishChance {
+        frame,
+        side: 1,
+        advantage,
+        outcome: PunishOutcome::Missed,
+        origin: PunishOrigin::BlockedMove,
+        recovery_start_frame: frame.saturating_sub(4),
+        recovery_end_frame: frame + 3,
+        source_contact_frame: Some(frame.saturating_sub(5)),
+        attack_start_frame: None,
+        attack_active_frame: None,
+        reachability: PunishReachability::Unknown,
+        punished_drop: 0.0,
+        pressed: String::new(),
+        round_no: 1,
+    };
+
+    // 1 回だけでは出さない(先端ガードの可能性が高いまま)。
+    let mut ev = empty_events();
+    ev.punishes.push(unknown_missed(200, 8));
+    assert!(detect_punish_missed(&ev, 1, Some("LUKE"), None).is_none());
+
+    // 2 回で観察に昇格。断定はしない。
+    ev.punishes.push(unknown_missed(600, 6));
+    let card = detect_punish_missed(&ev, 1, Some("LUKE"), None).expect("観察として提示する");
+    assert_eq!(card.id, "punish_missed");
+    assert_eq!(card.kind, AdviceKind::Observation);
+    assert_eq!(card.confidence, EventConfidence::Medium);
+    assert_eq!(card.title, "確定反撃の猶予を見逃した可能性");
+    assert!(
+        (card.severity - 0.04).abs() < 1e-6,
+        "重みは件数に比例する: {}",
+        card.severity
+    );
+    assert!(
+        card.description
+            .contains("攻撃していない場面が 2 回あります"),
+        "件数が本文に無い: {}",
+        card.description
+    );
+    assert!(
+        card.description.contains("距離までは確認できていない"),
+        "断定を避ける文言が無い: {}",
+        card.description
+    );
+    // 回答候補は最小の実測有利(+6F)を物差しにする。
+    assert!(
+        card.description.contains("有利 6F"),
+        "最小猶予で候補を出していない: {}",
+        card.description
+    );
+    assert!(
+        card.practice.contains("クリップで距離を確認し"),
+        "観察の練習文が無い: {}",
+        card.practice
+    );
+    assert_eq!(card.evidence.len(), 2);
+    assert!(card.evidence[0]
+        .label
+        .contains("確反猶予 +8F を見逃した可能性(距離未確認)"));
+
+    // OutOfRange(届かないと確認済み)は数えない。
+    ev.punishes[1].reachability = PunishReachability::OutOfRange;
+    assert!(detect_punish_missed(&ev, 1, Some("LUKE"), None).is_none());
+    ev.punishes[1].reachability = PunishReachability::Unknown;
+
+    // 距離を確認できた見逃しが 1 つでもあれば、従来の診断だけを出す。
+    let mut confirmed = unknown_missed(900, 7);
+    confirmed.reachability = PunishReachability::Confirmed;
+    ev.punishes.push(confirmed);
+    let card = detect_punish_missed(&ev, 1, Some("LUKE"), None).expect("診断を出す");
+    assert_eq!(card.kind, AdviceKind::Diagnosis);
+    assert_eq!(card.evidence.len(), 1, "診断の証拠は確認済みの場面だけ");
+}
+
 /// ガードした相手の技を、入力表示と実測発生から同定できた場面は技名で
 /// 指摘する。同じ技の反復は本文で名指しし、同定できない場面は従来の
 /// 実測表現に留める。

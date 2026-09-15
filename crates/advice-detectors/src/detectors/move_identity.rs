@@ -34,6 +34,7 @@ pub fn opponent_suffix(opponent_character: Option<&str>) -> String {
 pub fn build_opponent_move_stats(
     events: &MatchEvents,
     own: u8,
+    own_character: Option<&str>,
     opponent_character: Option<&str>,
 ) -> Vec<OpponentMoveStat> {
     let opponent = 3 - own;
@@ -60,6 +61,11 @@ pub fn build_opponent_move_stats(
                     blocked: 0,
                     punished: 0,
                     punish_missed: 0,
+                    punish_unconfirmed: 0,
+                    guard: opponent_character
+                        .and_then(|character| frame_data::guard_kind(character, move_data)),
+                    blocked_advantage: None,
+                    counters: Vec::new(),
                 });
                 stats.last_mut().expect("直前に push した")
             }
@@ -84,6 +90,15 @@ pub fn build_opponent_move_stats(
             if let Some(punish) = events.punishes.iter().find(|punish| {
                 punish.side == own && punish.source_contact_frame == Some(contact.frame)
             }) {
+                // このガードには実測の反撃猶予があった。回答候補の物差しには
+                // 最小値(どの場面でも確定する猶予)を使う。
+                entry.blocked_advantage = Some(
+                    entry
+                        .blocked_advantage
+                        .map_or(punish.advantage, |advantage| {
+                            advantage.min(punish.advantage)
+                        }),
+                );
                 match punish.outcome {
                     PunishOutcome::Success => entry.punished += 1,
                     PunishOutcome::Missed
@@ -91,9 +106,24 @@ pub fn build_opponent_move_stats(
                     {
                         entry.punish_missed += 1
                     }
+                    PunishOutcome::Missed if punish.reachability == PunishReachability::Unknown => {
+                        entry.punish_unconfirmed += 1
+                    }
                     _ => {}
                 }
             }
+        }
+    }
+    // 実測猶予が付いた技へ、自分の確定候補(発生 ≤ 猶予)を添える。
+    for entry in &mut stats {
+        if let (Some(character), Some(advantage)) = (own_character, entry.blocked_advantage) {
+            // 一時値に名前を付ける。式の途中で借りたままにすると、ソースを
+            // 変換する解析ツールの下で寿命が足りなくなる。
+            let options = frame_data::punish_options(character, advantage, 2);
+            entry.counters = options
+                .iter()
+                .map(|move_data| move_data.name.clone())
+                .collect();
         }
     }
     stats.sort_by(|a, b| b.touches.cmp(&a.touches).then(a.name.cmp(&b.name)));

@@ -1,3 +1,5 @@
+use crate::frame_data;
+
 /// ラウンドごとのサマリー。
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RoundSummary {
@@ -169,6 +171,19 @@ pub struct OpponentMoveStat {
     pub punished: u32,
     /// ガード後、反撃猶予と近距離を確認できたのに反撃しなかった回数。
     pub punish_missed: u32,
+    /// 反撃猶予はあったが、距離を確認できず断定を保留した見逃し候補の数。
+    #[serde(default)]
+    pub punish_unconfirmed: u32,
+    /// attack_data から一意に引けたガード区分(上/中/下/空中)。
+    #[serde(default)]
+    pub guard: Option<frame_data::StrikeKind>,
+    /// この技のガードを起点にした確反機会の実測有利(F)の最小値。
+    /// 機会が観測されなかった技は None(ガードで有利かは断定しない)。
+    #[serde(default)]
+    pub blocked_advantage: Option<u32>,
+    /// 実測有利以下の発生を持つ自分の技(確反候補、記譜)。
+    #[serde(default)]
+    pub counters: Vec<String>,
 }
 
 /// 自分が実際に出した技 1 つぶんの使用回数。

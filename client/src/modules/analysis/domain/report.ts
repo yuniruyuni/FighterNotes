@@ -232,6 +232,14 @@ export interface OpponentMoveStat {
   blocked: number;
   punished: number;
   punish_missed: number;
+  /** 反撃猶予はあったが距離を確認できなかった見逃し候補の数(v30+)。 */
+  punish_unconfirmed?: number;
+  /** attack_data から一意に引けたガード区分(v30+)。 */
+  guard?: StrikeKind;
+  /** ガードを起点にした確反機会の実測有利(F)の最小値(v30+)。 */
+  blocked_advantage?: number;
+  /** 実測有利以下の発生を持つ自分の技(確反候補、記譜、v30+)。 */
+  counters?: string[];
 }
 
 /** 自分が実際に出した技 1 つぶんの使用回数。同定できた実行だけの下限。 */
