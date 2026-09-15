@@ -123,6 +123,39 @@ pub fn strike_kind_for_input(
         .then_some(kind)
 }
 
+/// 同定済みの技(記譜と発生)のガード区分を引く。attack_data のうち
+/// 同じ発生で同じ Classic 入力パターンに一致する候補が、一意の区分に
+/// 揃うときだけ返す(曖昧なら None。誤った「しゃがみガードで防げる」は
+/// 誤同定より高くつく)。
+pub fn guard_kind(character: &str, move_data: &MoveData) -> Option<StrikeKind> {
+    // 入力方向と 1:1 に対応する単純モーションだけを橋渡しする。720 や
+    // 溜め上要素([2]8)は最終数字が方向カテゴリへ写らず、任意方向の
+    // パターンと誤って一致する(コマ投げに「上段」が付く実測バグ)。
+    let (motion, _) = parse_notation(&move_data.name)?;
+    if !matches!(
+        motion,
+        None | Some('1') | Some('2') | Some('3') | Some('4') | Some('6')
+    ) {
+        return None;
+    }
+    let moves = attack_table().get(&character.to_uppercase())?;
+    let mut kinds = moves
+        .iter()
+        // 空中技は direction が any で全モーションに一致してしまうが、
+        // 記譜で同定できるのは地上技だけなので候補から外す。
+        .filter(|attack| attack.kind != StrikeKind::Air)
+        .filter(|attack| attack.startup == move_data.startup)
+        .filter(|attack| {
+            attack
+                .classic_inputs
+                .iter()
+                .any(|pattern| classic_pattern_matches_notation(&move_data.name, pattern))
+        })
+        .map(|attack| attack.kind);
+    let first = kinds.next()?;
+    kinds.all(|kind| kind == first).then_some(first)
+}
+
 /// 技名の記譜と実測発生の照合を許す誤差。データの発生は素の値で、実測は
 /// 表示遅延や読み取りで 1〜2F 揺れる。
 const IDENTIFY_STARTUP_TOLERANCE: u32 = 2;
@@ -468,6 +501,29 @@ mod tests {
 
     fn badges(labels: &[&str]) -> Vec<String> {
         labels.iter().map(|label| label.to_string()).collect()
+    }
+
+    /// 同定済みの技のガード区分。一意に揃うときだけ返し、発生やキャラが
+    /// 合わない・複数区分に割れる場合は None に倒す。
+    #[test]
+    fn guard_kind_returns_a_unique_guard_level() {
+        let move_data = |name: &str, startup: u32| MoveData {
+            name: name.to_string(),
+            startup,
+            damage: 0,
+            category: "normal".to_string(),
+        };
+        let kind = |name: &str, startup: u32| guard_kind("KEN", &move_data(name, startup));
+        assert_eq!(kind("2MK", 7), Some(StrikeKind::Low));
+        assert_eq!(kind("MK", 8), Some(StrikeKind::High));
+        // 方向カテゴリへ写らないモーション(720 コマ投げ・溜め上)は
+        // 橋渡ししない。ガードできない技へ「上段」を付けない。
+        assert_eq!(guard_kind("ZANGIEF", &move_data("720P", 6)), None);
+        assert_eq!(guard_kind("GUILE", &move_data("[2]8HK", 7)), None);
+        // 発生がデータと合わない照合は信用しない。
+        assert_eq!(kind("2MK", 9), None);
+        // 実在しないキャラは None。
+        assert_eq!(guard_kind("NOBODY", &move_data("2MK", 7)), None);
     }
 
     /// 記譜(モーション + ボタン)と実測発生で一意に絞れた技だけを返す。

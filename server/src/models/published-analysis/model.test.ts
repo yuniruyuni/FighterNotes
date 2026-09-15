@@ -119,9 +119,13 @@ describe("PublishedAnalysis model", () => {
       join(crates, "advice-model/src/parameters.rs"),
       "utf8",
     );
-    const rustFindingKinds = [...detectors.matchAll(/id: "([^"]+)"/g)]
-      .map((match) => match[1])
-      .sort();
+    // 同じ id を複数の経路(診断と観察など)で使う検出器があるため、
+    // id は集合として比較する。
+    const rustFindingKinds = [
+      ...new Set(
+        [...detectors.matchAll(/id: "([^"]+)"/g)].map((match) => match[1]),
+      ),
+    ].sort();
     expect(rustFindingKinds).toEqual([...FINDING_KINDS].sort());
     // Rustが生成するrulesetは、常に共有側が受理する最新版と一致させる。
     const newestSupported = Math.max(...SUPPORTED_RULESET_VERSIONS);

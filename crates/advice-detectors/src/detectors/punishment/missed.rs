@@ -20,7 +20,9 @@ pub fn detect_punish_missed(
         })
         .collect();
     if missed.is_empty() {
-        return None;
+        // 距離を確認できた見逃しが無くても、反撃猶予そのものは実測できて
+        // いる場面が繰り返しあれば、断定しない観察としてシーンを示す。
+        return detect_unconfirmed_misses(events, own, own_character);
     }
     // ガードした技の同定。一意に絞れた場面だけ技名を持つ。
     let identified: Vec<Option<&crate::frame_data::MoveData>> = missed
@@ -106,5 +108,59 @@ pub fn detect_punish_missed(
                 ),
             },
         }).collect(),
+    })
+}
+
+/// 距離を確認できなかった確反見逃し候補。ガード(接触で確認済み)後に
+/// 実測の反撃猶予があり、攻撃していない場面が繰り返しあるときだけ、
+/// 断定しない観察として提示する。先端ガードで届かなかった可能性が
+/// 残るため、診断には昇格させない。
+fn detect_unconfirmed_misses(
+    events: &MatchEvents,
+    own: u8,
+    own_character: Option<&str>,
+) -> Option<AdviceCard> {
+    let unconfirmed: Vec<_> = events
+        .punishes
+        .iter()
+        .filter(|punish| {
+            punish.side == own
+                && punish.outcome == PunishOutcome::Missed
+                && punish.reachability == PunishReachability::Unknown
+        })
+        .collect();
+    if unconfirmed.len() < crate::MIN_REPEATED_NEGATIVE_OUTCOMES {
+        return None;
+    }
+    let min_advantage = unconfirmed
+        .iter()
+        .map(|punish| punish.advantage)
+        .min()
+        .unwrap_or(0);
+    let option_text = super::options::failed_option_text(own_character, min_advantage);
+    Some(AdviceCard {
+        id: "punish_missed".to_string(),
+        kind: AdviceKind::Observation,
+        confidence: EventConfidence::Medium,
+        title: "確定反撃の猶予を見逃した可能性".to_string(),
+        severity: 0.02 * unconfirmed.len() as f32,
+        hp_lost: None,
+        description: format!(
+            "相手の技をガードした後、フレーム上は反撃の猶予があったのに攻撃していない場面が {} 回あります。距離までは確認できていないため、先端ガードで届かなかった可能性は残ります。各クリップで反撃が届く距離だったかを確認してください。{}",
+            unconfirmed.len(),
+            option_text
+        ),
+        practice: "クリップで距離を確認し、届いていた場面があれば「ガードしたら最速の確反」をトレモで反復します。先端ガードだった場面は、届く技への置き換えか、歩いてからの反撃を検討しましょう。".to_string(),
+        evidence: unconfirmed
+            .iter()
+            .map(|punish| EvidenceClip {
+                frame: punish.frame,
+                end_frame: None,
+                label: format!(
+                    "R{} 確反猶予 +{}F を見逃した可能性(距離未確認)",
+                    punish.round_no, punish.advantage
+                ),
+            })
+            .collect(),
     })
 }

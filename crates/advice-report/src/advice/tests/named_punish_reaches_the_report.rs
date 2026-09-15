@@ -69,6 +69,12 @@ fn named_punish_reaches_the_report() {
     assert_eq!(report.opponent_move_stats[0].name, "2MK");
     assert_eq!(report.opponent_move_stats[0].blocked, 1);
     assert_eq!(report.opponent_move_stats[0].punish_missed, 1);
+    // 回答列の材料(自キャラの確定候補)も自キャラ文脈から届く。
+    assert_eq!(report.opponent_move_stats[0].blocked_advantage, Some(8));
+    assert_eq!(
+        report.opponent_move_stats[0].counters,
+        vec!["623PP", "5/6LPLK"]
+    );
 }
 
 /// 自キャラもレポートの文脈から使用分布の集計まで届く。結線を忘れても

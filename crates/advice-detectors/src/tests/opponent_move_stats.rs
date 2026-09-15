@@ -101,7 +101,7 @@ fn opponent_move_stats_tally_touches_and_answers() {
         ..contact(1_200, false)
     });
 
-    let stats = build_opponent_move_stats(&ev, 1, Some("KEN"));
+    let stats = build_opponent_move_stats(&ev, 1, Some("LUKE"), Some("KEN"));
     assert_eq!(stats.len(), 1);
     let stat = &stats[0];
     assert_eq!(stat.name, "2MK");
@@ -112,6 +112,11 @@ fn opponent_move_stats_tally_touches_and_answers() {
     assert_eq!(stat.blocked, 2);
     assert_eq!(stat.punished, 1);
     assert_eq!(stat.punish_missed, 1);
+    assert_eq!(stat.punish_unconfirmed, 0);
+    // 回答列の材料: ガード区分と実測有利、そこから引ける自分の確定候補。
+    assert_eq!(stat.guard, Some(crate::frame_data::StrikeKind::Low));
+    assert_eq!(stat.blocked_advantage, Some(8));
+    assert_eq!(stat.counters, vec!["623PP", "5/6LPLK"]);
 }
 
 /// 触られた回数の多い順に並び、Missed でも近距離を確認できていない
@@ -169,7 +174,7 @@ fn stats_are_sorted_and_only_confirmed_misses_count() {
         ..contact(900, false)
     });
 
-    let stats = build_opponent_move_stats(&ev, 1, Some("KEN"));
+    let stats = build_opponent_move_stats(&ev, 1, Some("LUKE"), Some("KEN"));
     assert_eq!(
         stats
             .iter()
@@ -182,6 +187,15 @@ fn stats_are_sorted_and_only_confirmed_misses_count() {
         stats[1].punish_missed, 0,
         "Unknown の機会を見逃しに数えている"
     );
+    assert_eq!(
+        stats[1].punish_unconfirmed, 1,
+        "Unknown の機会は距離未確認の見逃し候補として数える"
+    );
+    // 実測有利は Unknown の機会からも取れる(距離と猶予は別の観測)。
+    assert_eq!(stats[1].blocked_advantage, Some(8));
+    // 反撃猶予の観測が無い技には回答を付けない。
+    assert_eq!(stats[0].blocked_advantage, None);
+    assert!(stats[0].counters.is_empty());
 }
 
 /// 実測発生の走査境界。接触から 16F までの遡りで Startup に届かなければ
@@ -204,7 +218,7 @@ fn measured_startup_respects_scan_bounds_and_confidence() {
             evidence: Default::default(),
         });
         setup(&mut ev);
-        !build_opponent_move_stats(&ev, 1, Some("KEN")).is_empty()
+        !build_opponent_move_stats(&ev, 1, Some("LUKE"), Some("KEN")).is_empty()
     };
     let plant_run = |ev: &mut MatchEvents, end: usize, len: usize| {
         for frame in end + 1 - len..=end {
