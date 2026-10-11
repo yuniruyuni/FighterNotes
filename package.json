@@ -42,7 +42,7 @@
   },
   "overrides": {
     "brace-expansion": "5.0.9",
-    "fast-uri": "3.1.7",
+    "fast-uri": "3.1.8",
     "ip-address": "10.4.0",
     "qs": "6.16.0",
     "undici": "6.28.0"
