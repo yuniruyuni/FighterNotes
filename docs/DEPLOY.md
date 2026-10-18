@@ -84,9 +84,10 @@ release が配置するのは、その commit SHA を tag として GHCR へ pus
 PostgreSQL integration testで確認する。`/ready`はruntime app roleからのread-only query、利用列の
 型/nullability、critical constraint/default、PK/FK/indexと最小grantを短いtimeout内に確認する。
 
-`deploy-yunirun.yml` は `main` への push で走り、同じ push の `CI` workflow とは並行する。CI の成功は
-デプロイの前提になっていない。壊れた commit を `main` へ入れないことは pull request 側の必須 check で
-担保する。branch protection では `CI / test`、`CI / security`、`CI / docker` と、全 pull request で
+`main` への push では、`ci.yml` の `deploy` job が `test`、`security`、`docker` の成功を待ってから
+`deploy-yunirun.yml` を `workflow_call` で呼ぶ。どれかが落ちた commit はデプロイされない。
+呼び出された workflow の OIDC `sub` は呼び出し元の ref で決まるので、VPS 側の認可は変わらない。
+加えて、壊れた commit を `main` へ入れないことは pull request 側の必須 check で担保する。branch protection では `CI / test`、`CI / security`、`CI / docker` と、全 pull request で
 `Schema Plan / plan` を必須にする。GitHub の live branch rule は repository 外の状態なので、
 設定変更後と四半期棚卸し時に実在を確認する。
 
@@ -122,7 +123,8 @@ production DB へ入る。したがって schema 変更は、少なくとも直�
 
 ## 自動デプロイ
 
-`main` への push、または `main` に対する `workflow_dispatch` で `deploy-yunirun.yml` が走る。
+`main` への push で CI が通った後 (`ci.yml` の `deploy` job から呼ぶ)、または `main` に対する
+`workflow_dispatch` で `deploy-yunirun.yml` が走る。
 VPS 側の認可は `main` の ref に限ってあるので、別 branch から起動しても ssh に入れない。
 
 1. `build-ghcr.yml` を2回呼び、`Dockerfile` と `Dockerfile.migration` から image を build して
@@ -146,7 +148,7 @@ VPS 側の `yunirun deploy` は次の順で進む。
 新旧が食い違う。片側が healthy になる前にもう片側を落とすと無停止でなくなる。migration が失敗した
 時点で停止し、稼働中のコンテナには触れない。
 
-concurrency group は `deploy-yunirun-<ref>` で、`cancel-in-progress: false` にする。途中で中断すると
+deploy job の concurrency group は `deploy-yunirun` で、`cancel-in-progress: false` にする。途中で中断すると
 blue/green の入れ替えが片側だけ終わった状態で止まりうる。
 
 ## 依存の固定
@@ -215,7 +217,7 @@ active 100,000件よりexpires_at順で後方にあるretention対象をcreated_
 ## Rollback
 
 1. 直前に正常だった commit を特定する。
-2. その状態へ戻す revert commit を `main` へ入れる。deploy は `main` の push で走り、VPS 側の認可も
+2. その状態へ戻す revert commit を `main` へ入れる。deploy は `main` の push の CI 成功後に走り、VPS 側の認可も
    `main` の ref に限られているので、過去の commit や別 branch を選んで deploy する経路は無い。
 3. `/health` だけでなく共有 read / create / delete と browser 解析を確認する。
 
@@ -228,10 +230,9 @@ rollback でも migration は旧 commit の schema で走り直す。後方互�
 
 ## Repository から確認できる残余リスク
 
-- deploy は同じ push の CI 成功を待たない。壊れた commit を `main` へ入れないことは pull request 側の
-  必須 check に依存する。
 - image は commit SHA tag で指しており、digest 固定ではない。
-- CI の dependency 検査は `bun audit` が中心で、Rust audit、secret scan、container scan はない。
+- dependency 検査は CI の `bun audit` と、`security.yml` の週次 `bun audit` / `cargo audit`
+  (workspace と `crates/shader-conformance`) である。secret scan、container scan はない。
 - SBOM、provenance、署名、attestation の生成・検証はない。
 - browser E2E と visual regression は release gate にない。
 - edge rate limit、VPS 上の unit / timer / 秘密 / DB backup の live 状態は、この repository では証明できない。

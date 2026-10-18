@@ -132,6 +132,40 @@ describe("release workflow safety contracts", () => {
     expect(deploy).toContain("https://fighter.yuniruyuni.net/health");
   });
 
+  test("デプロイは main への push で CI が通った後にだけ走る", () => {
+    // 以前は push で独立に走り、CI が赤い commit でもデプロイされていた。
+    const deploy = read(".github/workflows/deploy-yunirun.yml");
+    const onBlock = deploy.slice(
+      deploy.indexOf("\non:\n"),
+      deploy.indexOf("\npermissions:"),
+    );
+    expect(onBlock).toContain("workflow_call:");
+    expect(onBlock).toContain("workflow_dispatch:");
+    expect(onBlock).not.toMatch(/^\s+push:/m);
+
+    const ci = read(".github/workflows/ci.yml");
+    const job = ci.slice(ci.indexOf("\n  deploy:\n"));
+    expect(job).toContain("needs: [test, security, docker]");
+    expect(job).toContain(
+      "if: github.event_name == 'push' && github.ref == 'refs/heads/main'",
+    );
+    expect(job).toContain("uses: ./.github/workflows/deploy-yunirun.yml");
+    expect(job).toContain("id-token: write");
+    // CI 全体の既定は読み取りのみ。権限は job ごとに足す。
+    expect(ci).toMatch(/^permissions:\n {2}contents: read$/m);
+  });
+
+  test("定期の依存監査はデプロイに関与しない", () => {
+    const audit = read(".github/workflows/security.yml");
+    expect(audit).toMatch(/^ {2}schedule:$/m);
+    expect(audit).toContain("bun audit");
+    expect(audit).toContain("rustsec/audit-check@");
+    expect(audit).toContain("crates/shader-conformance");
+    expect(audit).not.toContain("deploy-yunirun");
+    expect(audit).not.toContain("id-token");
+    expect(audit).not.toContain("packages: write");
+  });
+
   test("デプロイ job に environment を付けない", () => {
     // environment を使うと OIDC の sub が ...:environment:<name> に変わり、
     // VPS 側の認可と一致しなくなって ssh に入れなくなる。
