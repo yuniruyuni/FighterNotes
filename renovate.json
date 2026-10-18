@@ -1,16 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended",
-    "helpers:pinGitHubActionDigests"
-  ],
+  "extends": ["local>yuniruyuni/renovate-config"],
   "packageRules": [
     {
       "description": "Review release infrastructure updates together",
-      "matchManagers": [
-        "github-actions",
-        "dockerfile"
-      ],
+      "matchManagers": ["github-actions", "dockerfile"],
       "groupName": "release supply chain"
     }
   ]
