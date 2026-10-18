@@ -13,8 +13,8 @@ Declared SPDX expressions are preserved without selecting an OR alternative.
 Every packaged license document is retained for inspection; AND denotes terms
 that apply together, while OR preserves the alternatives offered upstream.
 
-- bun.lock SHA-256: `0d9dae87b4360075feab589c9438e75596bca945110ff332ee1c5527446b82af`
-- Cargo.lock SHA-256: `83a9386b0f693886ea90652af139a16029e2beb5e5e60b685d03cfd5c0d0d2bc`
+- bun.lock SHA-256: `64c4bf366691ab342edfc46d877e48668b600ff0b77ddd99a84f39377e2a4a27`
+- Cargo.lock SHA-256: `e3edeb3c303ce98ee955bfc647d1174f28e87d4e3ef0552127ea4c048e555863`
 - npm scanner: `license-checker-rseidelsohn 5.0.1`
 - Cargo scanner: `cargo-about 0.9.1`
 
@@ -54,7 +54,7 @@ that apply together, while OR preserves the alternatives offered upstream.
 - Treatment: Bundled npm/Cargo portions retain the licenses listed below; the build does not replace those terms.
 - Reference: /THIRD_PARTY_NOTICES.txt
 
-### Bun 1.3.14 runtime
+### Bun 1.4.3 runtime
 
 - Category: Runtime/platform
 - Location: Compiled server executable
@@ -64,7 +64,7 @@ that apply together, while OR preserves the alternatives offered upstream.
 ### Distroless/Debian runtime image
 
 - Category: Runtime/platform
-- Location: gcr.io/distroless/cc-debian12:nonroot@sha256:ce0d66bc0f64aae46e6a03add867b07f42cc7b8799c949c2e898057b7f75a151
+- Location: gcr.io/distroless/cc-debian12:nonroot@sha256:9dac0a79194e45a7da0158a9c6da57b217585af0786db3845d1f0ec1a0dd182f
 - Treatment: Base-container operating-system packages are outside the application-package inventory and remain subject to their upstream notices.
 - Reference: https://github.com/GoogleContainerTools/distroless
 
@@ -77,16 +77,16 @@ that apply together, while OR preserves the alternatives offered upstream.
 - once_cell 1.21.4 (Cargo; browser/WASM) — MIT OR Apache-2.0
 - proc-macro2 1.0.106 (Cargo; browser/WASM) — MIT OR Apache-2.0
 - quote 1.0.45 (Cargo; browser/WASM) — MIT OR Apache-2.0
-- serde 1.0.228 (Cargo; browser/WASM) — MIT OR Apache-2.0
-- serde_core 1.0.228 (Cargo; browser/WASM) — MIT OR Apache-2.0
-- serde_derive 1.0.228 (Cargo; browser/WASM) — MIT OR Apache-2.0
-- serde_json 1.0.150 (Cargo; browser/WASM) — MIT OR Apache-2.0
-- syn 2.0.117 (Cargo; browser/WASM) — MIT OR Apache-2.0
+- serde 1.0.229 (Cargo; browser/WASM) — MIT OR Apache-2.0
+- serde_core 1.0.229 (Cargo; browser/WASM) — MIT OR Apache-2.0
+- serde_derive 1.0.229 (Cargo; browser/WASM) — MIT OR Apache-2.0
+- serde_json 1.0.154 (Cargo; browser/WASM) — MIT OR Apache-2.0
+- syn 3.0.9 (Cargo; browser/WASM) — MIT OR Apache-2.0
 - unicode-ident 1.0.24 (Cargo; browser/WASM) — (MIT OR Apache-2.0) AND Unicode-3.0
-- wasm-bindgen 0.2.127 (Cargo; browser/WASM) — MIT OR Apache-2.0
-- wasm-bindgen-macro 0.2.127 (Cargo; browser/WASM) — MIT OR Apache-2.0
-- wasm-bindgen-macro-support 0.2.127 (Cargo; browser/WASM) — MIT OR Apache-2.0
-- wasm-bindgen-shared 0.2.127 (Cargo; browser/WASM) — MIT OR Apache-2.0
+- wasm-bindgen 0.2.129 (Cargo; browser/WASM) — MIT OR Apache-2.0
+- wasm-bindgen-macro 0.2.129 (Cargo; browser/WASM) — MIT OR Apache-2.0
+- wasm-bindgen-macro-support 0.2.129 (Cargo; browser/WASM) — MIT OR Apache-2.0
+- wasm-bindgen-shared 0.2.129 (Cargo; browser/WASM) — MIT OR Apache-2.0
 - zmij 1.0.21 (Cargo; browser/WASM) — MIT
 - @hono/trpc-server 0.4.2 (npm; server) — MIT
 - @trpc/client 11.18.0 (npm; browser) — MIT
@@ -218,7 +218,7 @@ that apply together, while OR preserves the alternatives offered upstream.
 
 ---
 
-## serde 1.0.228
+## serde 1.0.229
 
 - Ecosystem: Cargo
 - Used by: browser/WASM
@@ -233,7 +233,7 @@ that apply together, while OR preserves the alternatives offered upstream.
 
 ---
 
-## serde_core 1.0.228
+## serde_core 1.0.229
 
 - Ecosystem: Cargo
 - Used by: browser/WASM
@@ -248,7 +248,7 @@ that apply together, while OR preserves the alternatives offered upstream.
 
 ---
 
-## serde_derive 1.0.228
+## serde_derive 1.0.229
 
 - Ecosystem: Cargo
 - Used by: browser/WASM
@@ -263,22 +263,21 @@ that apply together, while OR preserves the alternatives offered upstream.
 
 ---
 
-## serde_json 1.0.150
+## serde_json 1.0.154
 
 - Ecosystem: Cargo
 - Used by: browser/WASM
 - Declared license: MIT OR Apache-2.0
 - Source: https://github.com/serde-rs/json
 - Copyright / attribution:
-  - Package author: Erick Tryzelaar <erick.tryzelaar@gmail.com>
-  - Package author: David Tolnay <dtolnay@gmail.com>
+  - Not separately stated in the distributed files; see the complete license and notice text.
 
 - LICENSE-APACHE (package file): [license text b30df9a48463](#license-text-b30df9a48463d1c99c6a66cdee623b1b0832c3811d58a80b338268d71cea190e)
 - LICENSE-MIT (package file): [license text 23f18e03dc49](#license-text-23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3)
 
 ---
 
-## syn 2.0.117
+## syn 3.0.9
 
 - Ecosystem: Cargo
 - Used by: browser/WASM
@@ -307,7 +306,7 @@ that apply together, while OR preserves the alternatives offered upstream.
 
 ---
 
-## wasm-bindgen 0.2.127
+## wasm-bindgen 0.2.129
 
 - Ecosystem: Cargo
 - Used by: browser/WASM
@@ -321,7 +320,7 @@ that apply together, while OR preserves the alternatives offered upstream.
 
 ---
 
-## wasm-bindgen-macro 0.2.127
+## wasm-bindgen-macro 0.2.129
 
 - Ecosystem: Cargo
 - Used by: browser/WASM
@@ -335,12 +334,12 @@ that apply together, while OR preserves the alternatives offered upstream.
 
 ---
 
-## wasm-bindgen-macro-support 0.2.127
+## wasm-bindgen-macro-support 0.2.129
 
 - Ecosystem: Cargo
 - Used by: browser/WASM
 - Declared license: MIT OR Apache-2.0
-- Source: https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro-support
+- Source: https://github.com/wasm-bindgen/wasm-bindgen/tree/main/crates/macro-support
 - Copyright / attribution:
   - Copyright (c) 2014 Alex Crichton
 
@@ -349,7 +348,7 @@ that apply together, while OR preserves the alternatives offered upstream.
 
 ---
 
-## wasm-bindgen-shared 0.2.127
+## wasm-bindgen-shared 0.2.129
 
 - Ecosystem: Cargo
 - Used by: browser/WASM
@@ -798,10 +797,10 @@ Referenced by:
 - bumpalo 3.20.3 — LICENSE-APACHE
 - cfg-if 1.0.4 — LICENSE-APACHE
 - once_cell 1.21.4 — LICENSE-APACHE
-- wasm-bindgen 0.2.127 — LICENSE-APACHE
-- wasm-bindgen-macro 0.2.127 — LICENSE-APACHE
-- wasm-bindgen-macro-support 0.2.127 — LICENSE-APACHE
-- wasm-bindgen-shared 0.2.127 — LICENSE-APACHE
+- wasm-bindgen 0.2.129 — LICENSE-APACHE
+- wasm-bindgen-macro 0.2.129 — LICENSE-APACHE
+- wasm-bindgen-macro-support 0.2.129 — LICENSE-APACHE
+- wasm-bindgen-shared 0.2.129 — LICENSE-APACHE
 
     Apache License
                             Version 2.0, January 2004
@@ -1112,11 +1111,11 @@ Referenced by:
 - once_cell 1.21.4 — LICENSE-MIT
 - proc-macro2 1.0.106 — LICENSE-MIT
 - quote 1.0.45 — LICENSE-MIT
-- serde 1.0.228 — LICENSE-MIT
-- serde_core 1.0.228 — LICENSE-MIT
-- serde_derive 1.0.228 — LICENSE-MIT
-- serde_json 1.0.150 — LICENSE-MIT
-- syn 2.0.117 — LICENSE-MIT
+- serde 1.0.229 — LICENSE-MIT
+- serde_core 1.0.229 — LICENSE-MIT
+- serde_derive 1.0.229 — LICENSE-MIT
+- serde_json 1.0.154 — LICENSE-MIT
+- syn 3.0.9 — LICENSE-MIT
 - unicode-ident 1.0.24 — LICENSE-MIT
 - zmij 1.0.21 — LICENSE-MIT
 
@@ -1185,10 +1184,10 @@ Document names: LICENSE-MIT
 Referenced by:
 
 - cfg-if 1.0.4 — LICENSE-MIT
-- wasm-bindgen 0.2.127 — LICENSE-MIT
-- wasm-bindgen-macro 0.2.127 — LICENSE-MIT
-- wasm-bindgen-macro-support 0.2.127 — LICENSE-MIT
-- wasm-bindgen-shared 0.2.127 — LICENSE-MIT
+- wasm-bindgen 0.2.129 — LICENSE-MIT
+- wasm-bindgen-macro 0.2.129 — LICENSE-MIT
+- wasm-bindgen-macro-support 0.2.129 — LICENSE-MIT
+- wasm-bindgen-shared 0.2.129 — LICENSE-MIT
 
     Copyright (c) 2014 Alex Crichton
 
@@ -1532,11 +1531,11 @@ Referenced by:
 - itoa 1.0.18 — LICENSE-APACHE
 - proc-macro2 1.0.106 — LICENSE-APACHE
 - quote 1.0.45 — LICENSE-APACHE
-- serde 1.0.228 — LICENSE-APACHE
-- serde_core 1.0.228 — LICENSE-APACHE
-- serde_derive 1.0.228 — LICENSE-APACHE
-- serde_json 1.0.150 — LICENSE-APACHE
-- syn 2.0.117 — LICENSE-APACHE
+- serde 1.0.229 — LICENSE-APACHE
+- serde_core 1.0.229 — LICENSE-APACHE
+- serde_derive 1.0.229 — LICENSE-APACHE
+- serde_json 1.0.154 — LICENSE-APACHE
+- syn 3.0.9 — LICENSE-APACHE
 - unicode-ident 1.0.24 — LICENSE-APACHE
 
     Apache License
