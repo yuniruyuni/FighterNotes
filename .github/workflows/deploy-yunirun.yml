@@ -1,7 +1,16 @@
 # yunirun 経由での VPS デプロイ。
 #
+# push では起動しない。ci.yml が test / security / docker の成功後に
+# workflow_call で呼ぶ。以前は push で独立に走っていたため、CI が赤い
+# commit でもデプロイされていた。workflow_dispatch は手動の再デプロイ用に残す。
+#
 # 認証に長期の SSH 秘密鍵は使わない。GitHub Actions の OIDC トークンから
 # opkssh が短命の SSH 証明書を発行し、それで VPS に入る。
+#
+# VPS 側 (yuniruyuni.net の nixos/services/yunirun.nix) は OIDC の sub を
+#   repo:yuniruyuni@85034901/FighterNotes@1313852776:ref:refs/heads/main
+# と完全一致で照合する。呼び出された workflow の sub も呼び出し元の ref で
+# 決まるので、ci.yml から呼んでも変わらない。
 #
 # 注意: この job に environment: を付けてはいけない。environment を使うと
 # sub が ...:environment:<name> に変わり、VPS 側の認可と一致しなくなる。
@@ -11,15 +20,8 @@
 name: Deploy via yunirun
 
 on:
-  push:
-    branches: [main]
+  workflow_call:
   workflow_dispatch:
-
-concurrency:
-  # デプロイの中断は blue/green の入れ替えを中途半端な状態で止めうるので
-  # 途中キャンセルはしない。
-  group: deploy-yunirun-${{ github.ref }}
-  cancel-in-progress: false
 
 permissions: {}
 
@@ -45,11 +47,17 @@ jobs:
   deploy:
     needs: [build, build-migration]
     runs-on: ubuntu-latest
+    # デプロイの中断は blue/green の入れ替えを中途半端な状態で止めうるので
+    # 途中キャンセルはしない。
+    concurrency:
+      group: deploy-yunirun
+      cancel-in-progress: false
     permissions:
       # opkssh が OIDC トークンを取得するのに必須
       id-token: write
       contents: read
-      # VPS が GHCR から pull するためのトークンを渡すのに使う
+      # VPS が GHCR から pull するためのトークンを渡すのに使う。push は build
+      # job だけが行うので、VPS に渡るトークンには write を持たせない。
       packages: read
 
     steps:

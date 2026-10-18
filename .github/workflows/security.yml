@@ -1,0 +1,66 @@
+# 依存の脆弱性監査を定期的に回す。
+#
+# ci.yml の security job は push / PR のときしか走らないので、依存を
+# 変えない期間に公開された advisory はそのままでは誰も気付かない。
+# Rust は workspace と、別 lock を持つ crates/shader-conformance の両方を見る。
+# デプロイには関与しない (deploy は ci.yml の main への push からのみ呼ばれる)。
+name: Dependency audit
+
+on:
+  schedule:
+    - cron: "23 18 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bun:
+    name: bun audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        run: npm install -g bun@1.3.11
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run security audit
+        run: bun audit
+
+  cargo:
+    name: cargo audit (${{ matrix.directory }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # audit-check は結果を check run に、schedule では advisory ごとの issue に書く。
+      checks: write
+      issues: write
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: [".", crates/shader-conformance]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Run cargo audit
+        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: ${{ matrix.directory }}
