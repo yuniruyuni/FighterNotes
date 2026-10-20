@@ -51,6 +51,6 @@
     "dependency-cruiser": "^18.0.0",
     "happy-dom": "^20.8.9",
     "npm-run-all2": "^9.0.0",
-    "typescript": "^5.4.0"
+    "typescript": "^7.0.0"
   }
 }
