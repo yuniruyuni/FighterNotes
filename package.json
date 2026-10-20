@@ -34,7 +34,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
-    "@stryker-mutator/core": "9.6.1",
+    "@stryker-mutator/core": "10.0.0",
     "@types/spdx-expression-parse": "4.0.0",
     "license-checker-rseidelsohn": "5.0.1",
     "spdx-expression-parse": "4.0.0",

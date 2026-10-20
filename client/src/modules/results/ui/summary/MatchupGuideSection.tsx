@@ -1,8 +1,8 @@
-import type {
-  AdviceReport,
-  AnalysisContext,
+import {
+  type AdviceReport,
+  type AnalysisContext,
+  formatCharacterId,
 } from "~/modules/analysis/contracts.js";
-import { formatCharacterId } from "~/modules/analysis/domain/character.js";
 import { selectMatchupGuide } from "~/modules/results/domain/matchup-guide.js";
 import { MATCHUP_GUIDE_VERSION, MATCHUP_GUIDES } from "./matchup-guide-data.js";
 
