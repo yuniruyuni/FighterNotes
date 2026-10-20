@@ -128,5 +128,10 @@ module.exports = {
     doNotFollow: { path: "node_modules" },
     tsConfig: { fileName: "tsconfig.json" },
     tsPreCompilationDeps: true,
+    // TypeScript 7 (ネイティブ実装) は dependency-cruiser が使う JS API を持たない
+    // (dependency-cruiser 18.7 の対応範囲は typescript >=2 <7)。tsc で解析させると
+    // .ts を 1 つも読まずに「0 modules cruised」で素通りするため、swc で解析する。
+    // tsc パーサ (TypeScript 6 API) と抽出結果が同一 (267 modules / 786 deps) なのは確認済み。
+    parser: "swc",
   },
 };
