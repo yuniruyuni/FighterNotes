@@ -7,7 +7,7 @@
     "server"
   ],
   "scripts": {
-    "build": "bun run --filter '*' build",
+    "build": "bun run generate:licenses && bun run --filter '*' build",
     "check": "bun run prepare:check && bun run --parallel 'check:*'",
     "check:arch": "bun run --filter @fighter-notes/client check:arch",
     "check:functions": "bun run --filter '*' check:functions",
@@ -29,8 +29,8 @@
     "mutation:ts:client": "stryker run stryker.client.config.mjs && bun scripts/check-stryker-results.ts \"reports/mutation/client${MUTATION_SCOPE:+-$MUTATION_SCOPE}.json\"",
     "mutation:ts:server-models": "stryker run stryker.server-models.config.mjs && bun scripts/check-stryker-results.ts reports/mutation/server-models.json",
     "mutation:ts:server-repositories": "stryker run stryker.server-repositories.config.mjs && bun scripts/check-stryker-results.ts reports/mutation/server-repositories.json",
-    "prepare:check": "bun run --filter @fighter-notes/client build:wasm",
-    "watch:run": "bun run --filter '*' --parallel watch:run"
+    "prepare:check": "bun run generate:licenses && bun run --filter @fighter-notes/client build:wasm",
+    "watch:run": "bun run generate:licenses && bun run --filter '*' --parallel watch:run"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

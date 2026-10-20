@@ -94,7 +94,9 @@ jobs:
       - name: Run Rust checks
         run: bun run check:rust
 
-      - name: Verify third-party notices
+      # 通知そのものは commit せず、次の build が生成する。ここでは書き出さずに
+      # license policy (許可リスト外・本文欠落・override の不整合) だけを検査する。
+      - name: Check third-party license policy
         run: bun run check:licenses
 
       - name: Build project
@@ -110,6 +112,9 @@ jobs:
 
       - name: Run linter
         run: bun run check:lint
+
+      - name: Run architecture check
+        run: bun run check:arch
 
       - name: Run tests
         run: bun run check:test

@@ -38,6 +38,12 @@ crates/shader-conformance/target/
 # Temporary output created by the schema-plan workflow
 /plan_output.txt
 
-# Generated files required for reproducible builds and distribution are
-# intentionally versioned. Do not ignore THIRD_PARTY_NOTICES.md,
-# client/src/generated/, or crates/video-analyzer/data/*.json.
+# Third-party license notices are generated from bun.lock / Cargo.lock at
+# build and check time (`bun run generate:licenses`, run by `build`,
+# `prepare:check`, `watch:run` and the Dockerfile). Committing them made every
+# lockfile-only change (e.g. Renovate) fail the freshness check.
+/THIRD_PARTY_NOTICES.md
+/client/src/generated/
+
+# Other generated files required for reproducible builds are intentionally
+# versioned. Do not ignore crates/video-analyzer/data/*.json.

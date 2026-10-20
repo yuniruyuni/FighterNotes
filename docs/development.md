@@ -92,9 +92,10 @@ bun run build
 bun audit
 ```
 
-`bun run check` はWASM bindingを生成した後、Rustのformat、全警告をエラー扱いするclippy、
-全crate test、WASM公開API契約、clientとserverのtype check、Biome、workspaceとroot `scripts/` の
-unit testを実行する。`check:scripts`は`*.test.ts`だけを選ぶため、実動画を必要とするrunner本体は起動しない。
+`bun run check` は第三者license通知とWASM bindingを生成した後、Rustのformat、全警告をエラー扱いするclippy、
+全crate test、WASM公開API契約、clientとserverのtype check、Biome、clientの層構造（`check:arch`）、
+workspaceとroot `scripts/` のunit testを実行する。`check:arch`はdependency-cruiserが読んだmoduleが
+0件のときも失敗する（TypeScript 7でparserが黙って何も読まなくなった前例があるため）。`check:scripts`は`*.test.ts`だけを選ぶため、実動画を必要とするrunner本体は起動しない。
 frame data validator はnetworkへ接続せず、公開dataのschema、意味制約、件数、checksumを検証する。
 
 ### 使用コンポーネントのライセンスinventory
@@ -110,24 +111,33 @@ closureの解決にはlockfileと実際のpackage配置を併用する。Rust側
 - `THIRD_PARTY_NOTICES.md`: 完全なlicense・NOTICE本文を含む配布用通知
 - `client/src/generated/third-party-licenses.ts`: `/licenses`表示用の一覧、license全文とlockfile hash
 
+この2ファイルは生成物としてgitに含めない（`.gitignore`済み）。lockfileから毎回作り直すので、
+Renovateなどlockfileだけを変える変更でも手で再生成する必要はない。生成は次で自動的に走る。
+
+- `bun run build` / `bun run check`（`prepare:check`） / `bun run watch:run`
+- `Dockerfile`の`build-notices` stage。生成した2ファイルをclient buildへ渡し、image内の
+  `/THIRD_PARTY_NOTICES.txt`と`/licenses`に載せる
+
+`client`だけを単独でbuild・型検査する場合は、先にrootで`bun run generate:licenses`を実行する。
+
 `cargo-about`はCIと同じversionを使用する。
 
 ```bash
 cargo install cargo-about --version 0.9.1 --locked --features cli
 ```
 
-dependency、lockfile、配布画像、icon、font方針または生成物の構成を変更した場合は、依存を
-installした状態で次を実行し、2ファイルを同じcommitへ含める。
+手元で生成・検査する場合は、依存をinstallした状態で次を実行する。
 
 ```bash
-bun run generate:licenses
-bun run check:licenses
+bun run generate:licenses   # 2ファイルを書き出す
+bun run check:licenses      # 書き出さずにlicense policyだけを検査する
 ```
 
 許可するSPDX identifierは`scripts/license-policy.json`で管理し、Cargo向けの同じ一覧を
 `about.toml`へ設定する。testは両者のずれを拒否する。`check:licenses`は標準SPDX parser、
 `license-checker-rseidelsohn`と`cargo-about`を使い、未知・禁止license、license本文欠落、
-manual override、asset inventory、lockfile hashおよび生成差分を検査する。許可リスト外の
+manual override、asset inventoryを検査する。生成物はcommitしないため、commit済みファイルとの
+差分は検査しない。許可リスト外の
 dependencyを追加するとCIは失敗し、方針のreviewと明示的な更新が必要になる。
 
 packageに専用のlicense・NOTICE文が欠ける場合だけ`scripts/license-overrides/`へversion固定の

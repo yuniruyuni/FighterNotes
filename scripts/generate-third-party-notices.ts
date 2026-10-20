@@ -1099,15 +1099,12 @@ function formatTypeScript(content: string): string {
   return new TextDecoder().decode(result.stdout);
 }
 
-function verifyOrWrite(path: string, content: string): void {
-  if (checkOnly) {
-    if (!existsSync(path) || readFileSync(path, "utf8") !== content) {
-      throw new Error(
-        `${path} is stale. Run: bun scripts/generate-third-party-notices.ts`,
-      );
-    }
-    return;
-  }
+// 生成物は commit しない (.gitignore 済み)。build / check の前にこの script が毎回作る。
+// `--check` は書き出さずに inventory の収集と license policy の検証だけを行う。
+// `bun run check` は型検査などと並列に走らせるので、読まれている最中のファイルを
+// 書き換えないためにこの形にしてある。
+function write(path: string, content: string): void {
+  if (checkOnly) return;
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content);
 }
@@ -1123,11 +1120,11 @@ const lockHashes = {
   bun: sha256(join(projectRoot, "bun.lock")),
   cargo: sha256(join(projectRoot, "Cargo.lock")),
 };
-verifyOrWrite(noticeFile, renderNotice(components, materials, lockHashes));
-verifyOrWrite(
+write(noticeFile, renderNotice(components, materials, lockHashes));
+write(
   generatedSource,
   formatTypeScript(renderGeneratedSource(components, materials, lockHashes)),
 );
 console.log(
-  `${checkOnly ? "Verified" : "Generated"} third-party notices for ${components.length} components.`,
+  `${checkOnly ? "Checked license policy for" : "Generated third-party notices for"} ${components.length} components.`,
 );
