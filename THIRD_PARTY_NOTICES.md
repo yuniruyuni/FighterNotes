@@ -13,7 +13,7 @@ Declared SPDX expressions are preserved without selecting an OR alternative.
 Every packaged license document is retained for inspection; AND denotes terms
 that apply together, while OR preserves the alternatives offered upstream.
 
-- bun.lock SHA-256: `03465b239b275ba2664f21d56f810a45fe391b5bdab7a54cd1d93797802c9c8f`
+- bun.lock SHA-256: `c3ad0c8bc847a87056579060c692c143a62ad33f830618a176b5d979ac029afa`
 - Cargo.lock SHA-256: `e3edeb3c303ce98ee955bfc647d1174f28e87d4e3ef0552127ea4c048e555863`
 - npm scanner: `license-checker-rseidelsohn 5.0.1`
 - Cargo scanner: `cargo-about 0.9.1`
