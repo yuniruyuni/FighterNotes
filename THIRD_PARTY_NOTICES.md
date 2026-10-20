@@ -13,7 +13,7 @@ Declared SPDX expressions are preserved without selecting an OR alternative.
 Every packaged license document is retained for inspection; AND denotes terms
 that apply together, while OR preserves the alternatives offered upstream.
 
-- bun.lock SHA-256: `c26744ba0ad763f64c8bc81c9b4b3d3698331254a20c83fe375c96ba8d2c78c8`
+- bun.lock SHA-256: `55f8d83dc602598f565ef44ce33122dc30221d8aeb12a89c8d6758b5549a3a5f`
 - Cargo.lock SHA-256: `e3edeb3c303ce98ee955bfc647d1174f28e87d4e3ef0552127ea4c048e555863`
 - npm scanner: `license-checker-rseidelsohn 5.0.1`
 - Cargo scanner: `cargo-about 0.9.1`
@@ -26,7 +26,7 @@ that apply together, while OR preserves the alternatives offered upstream.
 - Location: CSS font-family declarations
 - Treatment: No font binary or external Web font is distributed; glyphs come from the user’s OS/browser.
 
-### Lucide icons (lucide-react 0.575.0)
+### Lucide icons (lucide-react 0.577.0)
 
 - Category: Icon
 - Location: Browser JavaScript bundle
@@ -92,7 +92,7 @@ that apply together, while OR preserves the alternatives offered upstream.
 - @trpc/client 11.18.0 (npm; browser) — MIT
 - @trpc/server 11.18.0 (npm; server) — MIT
 - hono 4.13.7 (npm; server) — MIT
-- lucide-react 0.575.0 (npm; browser) — ISC
+- lucide-react 0.577.0 (npm; browser) — ISC
 - mitt 3.0.1 (npm; browser) — MIT
 - mp4box 2.4.1 (npm; browser) — BSD-3-Clause
 - pg 8.22.0 (npm; server) — MIT
@@ -427,7 +427,7 @@ that apply together, while OR preserves the alternatives offered upstream.
 
 ---
 
-## lucide-react 0.575.0
+## lucide-react 0.577.0
 
 - Ecosystem: npm
 - Used by: browser
@@ -1347,7 +1347,7 @@ Document names: LICENSE
 
 Referenced by:
 
-- lucide-react 0.575.0 — LICENSE
+- lucide-react 0.577.0 — LICENSE
 
     ISC License
 
