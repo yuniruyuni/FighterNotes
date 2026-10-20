@@ -136,13 +136,14 @@ CI/CD、SQL schema、CSS、HTMLおよび文書は
 - `crates/analysis-context/data/`以下の正規化済みframe dataとmanifest
 - 実ゲーム撮影動画から生成した認識用の数値・統計モデル
 - `client/src/shared/assets/`以下の画像その他のmedia asset
-- `THIRD_PARTY_NOTICES.md`および第三者のlicense・NOTICE本文
+- 第三者のlicense・NOTICE本文（build時に生成する`THIRD_PARTY_NOTICES`を含む）
 - npm / Cargo dependencyと、bundle、WASM、binaryに含まれる第三者component
 - 製品名、会社名、ロゴ、商標、ゲーム由来要素その他の第三者の権利
 
 正規化済みデータと認識用統計モデルについては [DATA_NOTICE.md](DATA_NOTICE.md)、
-第三者componentについては [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)を
-確認してください。生成された成果物のうちFighter Notesが権利を持つ部分には
+第三者componentについては公開サイトの`/licenses`と`/THIRD_PARTY_NOTICES.txt`を
+確認してください。これらは`bun.lock`と`Cargo.lock`からbuild時に生成しており、手元では
+`bun run generate:licenses`で`THIRD_PARTY_NOTICES.md`を作れます。生成された成果物のうちFighter Notesが権利を持つ部分には
 MIT Licenseが適用されますが、第三者componentにはそれぞれのlicenseが引き続き適用されます。
 
 Contributionの条件は [CONTRIBUTING.md](CONTRIBUTING.md)を確認してください。

@@ -13,3 +13,5 @@ node_modules
 **/node_modules
 *.log
 *.mp4
+THIRD_PARTY_NOTICES.md
+client/src/generated
