@@ -190,7 +190,7 @@ jobs:
       # mutest はコンパイラ内部 API を使うため、固定の nightly が要る。
       - uses: dtolnay/rust-toolchain@f133eefe930d61f0d9371efd474daf0125ed3dd1
         with:
-          toolchain: nightly-2026-10-17
+          toolchain: nightly-2026-10-18
           components: rustc-dev, llvm-tools
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
