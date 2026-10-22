@@ -16,6 +16,6 @@ hud-vision = { path = "../hud-vision" }
 [dev-dependencies]
 # 走らせるのは CI とローカルの Vulkan だけ。既定の機能のままだと他の
 # プラットフォーム向けの依存まで lock に入り、CI の取得が止まる。
-wgpu = { version = "27", default-features = false, features = ["vulkan", "wgsl"] }
+wgpu = { version = "30", default-features = false, features = ["vulkan", "wgsl"] }
 pollster = "0.4"
 bytemuck = "1"
