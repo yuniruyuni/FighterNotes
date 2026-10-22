@@ -51,3 +51,12 @@ exposure, so prefer a forward fix if a provider rejects identity responses.
 - https://github.com/oven-sh/bun/blob/bun-v1.4.3/scripts/build/deps/brotli.ts
 - https://github.com/google/brotli/commit/0ed4268a4401abcb44720963
 - https://bun.com/docs/runtime/networking/fetch
+
+## Hono dependency security correction
+
+The deployment audit also identified GHSA-5r4p-p66f-jhc7 in Hono 4.13.7.
+This branch pins Hono 4.13.11, the first patched stable release, without
+updating other locked dependencies. This fixes the static path middleware
+bypass independently of the Bun response-decompression mitigation.
+
+Source: https://github.com/advisories/GHSA-5r4p-p66f-jhc7
