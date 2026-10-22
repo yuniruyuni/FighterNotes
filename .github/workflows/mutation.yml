@@ -44,7 +44,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BUN_VERSION: 1.3.11
+  BUN_VERSION: 1.4.3
   # mutest-rs は crates.io に無いので git から入れる。研究段階のツールで
   # 破壊的な変更が入りうるため、追跡する版を固定する。
   MUTEST_REF: "a55cb8abc50dcbc1687abf5d6c49efa737c9880a"

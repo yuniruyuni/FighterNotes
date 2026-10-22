@@ -1,3 +1,4 @@
+import "./infra/http/install-fetch-guard";
 import { parseBatchCommand, runBatchCommand } from "./batch";
 import { RuntimeConfig } from "./config";
 import { createContext } from "./context";
