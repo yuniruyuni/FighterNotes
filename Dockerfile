@@ -17,7 +17,7 @@ RUN wasm-pack build crates/wasm-bridge --target web
 # 許可されていない license が混ざっていればここで build が失敗する。
 FROM rust:1.99@sha256:e259494b14672950a909b4c54527e19d29cae6ebf980672114c8bb85e5594e4a AS build-notices
 WORKDIR /work
-COPY --from=oven/bun:1.4.3@sha256:ec06c3b6cea04192ae6770c434f668ca41d343ad19fa6472216c7b48be39c598 /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=oven/bun:1.4.4@sha256:1d22548f177f4ff38e0c15baa3c2c46c6c2060ba2d1bc573bb4720b407548f1d /usr/local/bin/bun /usr/local/bin/bun
 # node_modules/.bin の shim (biome など) は `#!/usr/bin/env node` で起動する。
 # oven/bun の image と同じく node を bun に向けておく。
 RUN ln -s bun /usr/local/bin/node
@@ -31,7 +31,7 @@ RUN cargo fetch --locked \
  && bun scripts/generate-third-party-notices.ts
 
 # ---- Client build (Bun bundler; consumes wasm pkg) ----------------------
-FROM oven/bun:1.4.3@sha256:ec06c3b6cea04192ae6770c434f668ca41d343ad19fa6472216c7b48be39c598 AS build-client
+FROM oven/bun:1.4.4@sha256:1d22548f177f4ff38e0c15baa3c2c46c6c2060ba2d1bc573bb4720b407548f1d AS build-client
 WORKDIR /work
 COPY package.json bun.lock /work/
 COPY client/package.json /work/client/
@@ -48,7 +48,7 @@ WORKDIR /work/client
 RUN bun run build:app
 
 # ---- Server build (Hono → single binary) --------------------------------
-FROM oven/bun:1.4.3@sha256:ec06c3b6cea04192ae6770c434f668ca41d343ad19fa6472216c7b48be39c598 AS build-server
+FROM oven/bun:1.4.4@sha256:1d22548f177f4ff38e0c15baa3c2c46c6c2060ba2d1bc573bb4720b407548f1d AS build-server
 WORKDIR /work
 COPY package.json bun.lock /work/
 COPY client/package.json /work/client/
@@ -57,6 +57,9 @@ RUN bun install --frozen-lockfile
 COPY server/ /work/server/
 WORKDIR /work/server
 RUN NODE_ENV=production bun build src/index.ts --compile --outfile /work/dist/server
+# Prove the embedded runtime matches the pinned compiler and retains the guard.
+RUN /work/dist/server --runtime-info > /tmp/runtime-info.json \
+ && bun -e 'const r = await Bun.file("/tmp/runtime-info.json").json(); if (r.bun !== Bun.version || r.bunRevision !== Bun.revision || r.outboundFetchDecompression !== false) throw new Error("Compiled runtime/guard mismatch"); console.log(JSON.stringify(r));'
 
 # ---- Runtime (distroless) -----------------------------------------------
 FROM gcr.io/distroless/cc-debian12:nonroot@sha256:9dac0a79194e45a7da0158a9c6da57b217585af0786db3845d1f0ec1a0dd182f
