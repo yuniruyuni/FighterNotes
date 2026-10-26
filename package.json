@@ -48,7 +48,7 @@
     "postcss-selector-parser": "7.1.7",
     "qs": "6.16.1",
     "shell-quote": "1.12.0",
-    "undici": "6.29.1"
+    "undici": "8.12.3"
   },
   "trustedDependencies": [
     "@biomejs/biome"
