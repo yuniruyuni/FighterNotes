@@ -195,6 +195,7 @@ impl Gpu {
             power_preference: wgpu::PowerPreference::None,
             force_fallback_adapter: false,
             compatible_surface: None,
+            apply_limit_buckets: false,
         }))
         .ok()?;
         let (device, queue) =
@@ -326,7 +327,10 @@ impl Gpu {
         self.device
             .poll(wgpu::PollType::wait_indefinitely())
             .expect("読み戻し");
-        let values = bytemuck::cast_slice::<u8, u32>(&slice.get_mapped_range()).to_vec();
+        let values = {
+            let mapped = slice.get_mapped_range().expect("読み戻し範囲");
+            bytemuck::cast_slice::<u8, u32>(&mapped).to_vec()
+        };
         staging.unmap();
         values
     }
