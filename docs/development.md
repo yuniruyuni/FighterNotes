@@ -165,6 +165,10 @@ Rust 側は mutest-rs を最初に導入する。crates.io に無いので git �
 コンパイラ内部 API を使うため nightly の版が固定されており、`rust-toolchain.toml`
 の指定に従って rustup が自動で用意する。追跡する版は
 `.github/workflows/mutation.yml` の `MUTEST_REF` が正本。
+同 workflow の `rust` job の `RUSTUP_TOOLCHAIN` は、その固定 commit の
+`rust-toolchain.toml` と一致させる。CI は action の選択版・実際の active toolchain・
+mutest source の指定を検査し、compiler と mutest commit を両方 cache key に含める。
+compiler を更新する場合は対応する mutest revision と組にして、cache なしの install と全 shard を検証する。
 
 ```bash
 git clone https://github.com/zalanlevai/mutest-rs
