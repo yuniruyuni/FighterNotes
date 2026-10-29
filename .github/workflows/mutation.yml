@@ -161,6 +161,8 @@ jobs:
     # 1 は mutest の timeout 監視が使えないので、安定する最小値の 2 にする。
     env:
       RUST_TEST_THREADS: "2"
+      # MUTEST_REF の rust-toolchain.toml と一致させる。単独で更新しない。
+      RUSTUP_TOOLCHAIN: nightly-2026-07-18
     strategy:
       fail-fast: false
       matrix:
@@ -188,13 +190,26 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # mutest はコンパイラ内部 API を使うため、固定の nightly が要る。
-      - uses: dtolnay/rust-toolchain@f133eefe930d61f0d9371efd474daf0125ed3dd1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
+        id: mutest-toolchain
         with:
-          toolchain: nightly-2026-10-18
+          toolchain: ${{ env.RUSTUP_TOOLCHAIN }}
           components: rustc-dev, llvm-tools
+      - name: Verify mutation toolchain
+        env:
+          ACTION_TOOLCHAIN: ${{ steps.mutest-toolchain.outputs.name }}
+        run: |
+          test "$ACTION_TOOLCHAIN" = "$RUSTUP_TOOLCHAIN"
+          active_toolchain="$(rustup show active-toolchain)"
+          case "$active_toolchain" in
+            "$RUSTUP_TOOLCHAIN"-*) ;;
+            *) echo "Unexpected active toolchain: $active_toolchain" >&2; exit 1 ;;
+          esac
+          printf 'Mutation toolchain: %s\n' "$active_toolchain"
+          rustc -vV
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          shared-key: mutest
+          shared-key: mutest-${{ env.RUSTUP_TOOLCHAIN }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26.12.1
@@ -212,7 +227,7 @@ jobs:
             ~/.cargo/bin/mutest-driver
             ~/.cargo/bin/cargo-mutest
             ~/mutest-artifacts
-          key: mutest-${{ env.MUTEST_REF }}-nightly-2026-07-18
+          key: mutest-v2-${{ runner.os }}-${{ runner.arch }}-${{ env.MUTEST_REF }}-${{ env.RUSTUP_TOOLCHAIN }}
       - name: Install mutest-rs
         if: steps.mutest-cache.outputs.cache-hit != 'true'
         run: |
@@ -223,9 +238,12 @@ jobs:
           git remote add origin https://github.com/zalanlevai/mutest-rs
           git fetch -q --depth 1 origin "$MUTEST_REF"
           git checkout -q FETCH_HEAD
-          cargo build --release -p mutest-runtime
-          cargo install --force --path mutest-driver
-          cargo install --force --path cargo-mutest
+          test "$(git rev-parse HEAD)" = "$MUTEST_REF"
+          declared_toolchain="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
+          test "$declared_toolchain" = "$RUSTUP_TOOLCHAIN"
+          cargo build --locked --release -p mutest-runtime
+          cargo install --locked --force --path mutest-driver
+          cargo install --locked --force --path cargo-mutest
           mkdir -p ~/mutest-artifacts
           cp -r target/release/. ~/mutest-artifacts/
       - name: Mutate shard ${{ matrix.name }}
