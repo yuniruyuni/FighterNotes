@@ -1,4 +1,4 @@
-FROM pgplex/pgschema:1.13.3@sha256:b56bbd164153c94adee2dca4b43d425a18a3daf65b957b67996d4f50aecb8066
+FROM pgplex/pgschema:1.13.4@sha256:4e77c22878120b38f8548d6ea62b3b1564438a5fbe84fcde3019684a638f60b7
 USER root
 RUN apk add --no-cache postgresql-client
 USER pgschema
