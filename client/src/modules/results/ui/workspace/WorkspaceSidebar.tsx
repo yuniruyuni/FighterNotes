@@ -1,6 +1,6 @@
 import {
   ArrowLeft,
-  BarChart3,
+  ChartColumn,
   CircleAlert,
   Play,
   Search,
@@ -40,7 +40,7 @@ export function WorkspaceSidebar(props: WorkspaceSidebarProps) {
             selected={props.selected === "summary"}
             controls="view-summary"
             label="解析サマリー"
-            icon={<BarChart3 size={16} aria-hidden="true" />}
+            icon={<ChartColumn size={16} aria-hidden="true" />}
             onClick={props.onSummary}
           />
           {props.cards.map((card, index) => (
