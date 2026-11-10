@@ -18,7 +18,7 @@
   "dependencies": {
     "@hono/trpc-server": "^0.4.2",
     "@trpc/server": "^11.10.0",
-    "hono": "4.13.16",
+    "hono": "4.13.17",
     "pg": "^8.20.0",
     "zod": "4.6.7"
   },
