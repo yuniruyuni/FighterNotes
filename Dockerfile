@@ -1,5 +1,5 @@
 # ---- WASM build (Rust → wasm-pack) --------------------------------------
-FROM rust:1.99@sha256:09027f873d45b8ecd1dc86f1fa13b7a62b875c961f017a0e331267b350430137 AS build-wasm
+FROM rust:1.99@sha256:8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07 AS build-wasm
 WORKDIR /work
 RUN rustup target add wasm32-unknown-unknown \
  && cargo install wasm-pack --version 0.15.0 --locked
@@ -15,7 +15,7 @@ RUN wasm-pack build crates/wasm-bridge --target web
 # 通知は commit せず、image を作るたびに lockfile から生成する。npm 側は
 # node_modules を、Cargo 側は cargo-about を読むので、Rust と Bun の両方が要る。
 # 許可されていない license が混ざっていればここで build が失敗する。
-FROM rust:1.99@sha256:09027f873d45b8ecd1dc86f1fa13b7a62b875c961f017a0e331267b350430137 AS build-notices
+FROM rust:1.99@sha256:8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07 AS build-notices
 WORKDIR /work
 COPY --from=oven/bun:1.4.4@sha256:1d22548f177f4ff38e0c15baa3c2c46c6c2060ba2d1bc573bb4720b407548f1d /usr/local/bin/bun /usr/local/bin/bun
 # node_modules/.bin の shim (biome など) は `#!/usr/bin/env node` で起動する。
