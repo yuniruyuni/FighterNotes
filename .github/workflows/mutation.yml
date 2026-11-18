@@ -64,7 +64,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 26.13.0
+          node-version: 26.13.1
       - name: Setup Bun
         run: npm install -g bun@${BUN_VERSION}
       - name: Install dependencies
@@ -88,7 +88,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 26.13.0
+          node-version: 26.13.1
       - name: Setup Bun
         run: npm install -g bun@${BUN_VERSION}
       - name: Install dependencies
@@ -108,7 +108,7 @@ jobs:
     timeout-minutes: 30
     services:
       postgres:
-        image: postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+        image: postgres:18.7@sha256:2ea8630df176ad090ec92136dee850397c5af8781e4bcf2e4162593691c61bbc
         env:
           POSTGRES_USER: fighter_test
           POSTGRES_PASSWORD: fighter_test
@@ -126,7 +126,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 26.13.0
+          node-version: 26.13.1
       - name: Setup Bun
         run: npm install -g bun@${BUN_VERSION}
       - name: Install dependencies
@@ -212,7 +212,7 @@ jobs:
           shared-key: mutest-${{ env.RUSTUP_TOOLCHAIN }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 26.13.0
+          node-version: 26.13.1
       - name: Setup Bun
         run: npm install -g bun@${BUN_VERSION}
       # mutest 自体のビルドに 80 秒かかる。追跡している版と toolchain が
