@@ -46,7 +46,7 @@
     "glob": "14.0.6",
     "http-cache-semantics": "4.3.0",
     "ip-address": "10.7.6",
-    "minimatch": "11.0.8",
+    "minimatch": "11.0.9",
     "postcss-selector-parser": "7.2.1",
     "qs": "6.17.1",
     "shell-quote": "1.12.0",
