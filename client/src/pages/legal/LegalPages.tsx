@@ -56,9 +56,9 @@ export function PrivacyPage() {
     <LegalDocument
       title="プライバシーポリシー"
       summary="Fighter Notes が動画や解析結果などの情報をどのように取り扱うかを説明します。"
-      version="1.1"
-      lastUpdated="2026-08-03"
-      lastUpdatedLabel="2026年8月3日"
+      version="1.2"
+      lastUpdated="2026-11-22"
+      lastUpdatedLabel="2026年11月22日"
     >
       <p>
         Fighter
@@ -131,7 +131,7 @@ export function PrivacyPage() {
           Cloudを利用しています。本サービスでは、接続情報を広告、マーケティングまたは販売に利用しません。
         </p>
         <p>
-          本サービスには、広告配信サービスや、利用者の行動追跡を目的とするアクセス解析ツールを導入していません。
+          利用状況を把握するため、日本時間の日ごとにブラウザ数を集計します。ブラウザが生成する当日用のランダムIDを本サービスに送り、アプリ専用の鍵で日別に仮名化した値を自営の集計システムに最大30日間保存します。動画や解析履歴はこの集計に含めません。
         </p>
       </section>
 
@@ -141,7 +141,7 @@ export function PrivacyPage() {
           機能や情報の取り扱いを変更した場合は、本ポリシーを改定し、このページの文書バージョンと最終更新日を更新します。
         </p>
         <p>制定日: 2026年7月25日</p>
-        <p>改定日: 2026年8月3日</p>
+        <p>改定日: 2026年11月22日</p>
       </section>
     </LegalDocument>
   );
