@@ -189,7 +189,7 @@ describe("React frontend routes", () => {
     expect(
       screen.getByText(/原則として作成から30日間保存し/),
     ).toBeInTheDocument();
-    expect(screen.getByText(/文書バージョン: 1.1/)).toBeInTheDocument();
+    expect(screen.getByText(/文書バージョン: 1.2/)).toBeInTheDocument();
     expect(
       screen.getByText(/解析だけを行う場合、解析結果はサーバーへ送信されず/),
     ).toBeInTheDocument();
@@ -233,15 +233,15 @@ describe("React frontend routes", () => {
     ).toHaveTextContent("Google Cloud");
     expect(
       screen.getByText(
-        /行動追跡を目的とするアクセス解析ツールを導入していません/,
+        /日別に仮名化した値を自営の集計システムに最大30日間保存/,
       ),
     ).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(
       /PostgreSQL|IndexedDB|localStorage|Argon2id|cf-connecting-ip/,
     );
     expect(screen.getByText("制定日: 2026年7月25日")).toBeInTheDocument();
-    expect(screen.getByText("改定日: 2026年8月3日")).toBeInTheDocument();
-    expect(screen.getByText(/最終更新:/)).toHaveTextContent("2026年8月3日");
+    expect(screen.getByText("改定日: 2026年11月22日")).toBeInTheDocument();
+    expect(screen.getByText(/最終更新:/)).toHaveTextContent("2026年11月22日");
     expect(document.body).not.toHaveTextContent(
       "削除コードそのものは、サーバーに保存しません",
     );
