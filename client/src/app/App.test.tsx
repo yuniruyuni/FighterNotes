@@ -189,7 +189,7 @@ describe("React frontend routes", () => {
     expect(
       screen.getByText(/原則として作成から30日間保存し/),
     ).toBeInTheDocument();
-    expect(screen.getByText(/文書バージョン: 1.2/)).toBeInTheDocument();
+    expect(screen.getByText(/文書バージョン: 1\.3/)).toBeInTheDocument();
     expect(
       screen.getByText(/解析だけを行う場合、解析結果はサーバーへ送信されず/),
     ).toBeInTheDocument();
@@ -233,7 +233,7 @@ describe("React frontend routes", () => {
     ).toHaveTextContent("Google Cloud");
     expect(
       screen.getByText(
-        /日別に仮名化した値を自営の集計システムに最大30日間保存/,
+        /Yuniview は日別の識別用の値を最大30日間保存.*別の日の利用を結び付けることはありません/,
       ),
     ).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(
