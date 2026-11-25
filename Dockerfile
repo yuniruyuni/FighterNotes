@@ -17,7 +17,7 @@ RUN wasm-pack build crates/wasm-bridge --target web
 # 許可されていない license が混ざっていればここで build が失敗する。
 FROM rust:1.100@sha256:223cc32ddca8f3ee90c436dbc94b6b5f052ea7f9653c5201e9612f08ad7d21b8 AS build-notices
 WORKDIR /work
-COPY --from=oven/bun:1.4.4@sha256:1d22548f177f4ff38e0c15baa3c2c46c6c2060ba2d1bc573bb4720b407548f1d /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=oven/bun:1.4.5@sha256:3aa040e5445efa09d75bb428a64ba50db13e2b3ac9b6b0c7f145615f62b2ee18 /usr/local/bin/bun /usr/local/bin/bun
 # node_modules/.bin の shim (biome など) は `#!/usr/bin/env node` で起動する。
 # oven/bun の image と同じく node を bun に向けておく。
 RUN ln -s bun /usr/local/bin/node
@@ -31,7 +31,7 @@ RUN cargo fetch --locked \
  && bun scripts/generate-third-party-notices.ts
 
 # ---- Client build (Bun bundler; consumes wasm pkg) ----------------------
-FROM oven/bun:1.4.4@sha256:1d22548f177f4ff38e0c15baa3c2c46c6c2060ba2d1bc573bb4720b407548f1d AS build-client
+FROM oven/bun:1.4.5@sha256:3aa040e5445efa09d75bb428a64ba50db13e2b3ac9b6b0c7f145615f62b2ee18 AS build-client
 WORKDIR /work
 COPY package.json bun.lock /work/
 COPY client/package.json /work/client/
@@ -48,7 +48,7 @@ WORKDIR /work/client
 RUN bun run build:app
 
 # ---- Server build (Hono → single binary) --------------------------------
-FROM oven/bun:1.4.4@sha256:1d22548f177f4ff38e0c15baa3c2c46c6c2060ba2d1bc573bb4720b407548f1d AS build-server
+FROM oven/bun:1.4.5@sha256:3aa040e5445efa09d75bb428a64ba50db13e2b3ac9b6b0c7f145615f62b2ee18 AS build-server
 WORKDIR /work
 COPY package.json bun.lock /work/
 COPY client/package.json /work/client/
